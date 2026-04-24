@@ -334,6 +334,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <option value="30s">30-30초</option>
         <option value="20s">20-20초</option>
         <option value="15s">15-15초</option>
+        <option value="rhie5">⚡ RHIE 5초 스프린트</option>
+        <option value="rhie3">⚡ RHIE 3초 스프린트</option>
       </select>
     </div>
   </div>
@@ -3271,6 +3273,8 @@ function onPlayerSelect(){
   document.getElementById('info-asr').textContent=(player.mss-player.mas).toFixed(1);
   document.getElementById('info-pos').textContent=player.position;
   renderIntervalConfig();
+  // RHIE 세트 설정 갱신
+  if(itype==='rhie5'||itype==='rhie3') renderRhieSetConfig();
 }
 
 // ── 인터벌 세부 설정 동적 렌더링 ─────────────
@@ -3282,7 +3286,45 @@ function renderIntervalConfig(){
   const cfg = document.getElementById('interval-config');
   if(!cfg) return;
 
-  if(itype==='4min' || itype==='2min'){
+  if(itype==='rhie5'||itype==='rhie3'){
+    const workSec = itype==='rhie5' ? 5 : 3;
+    const defaultPct = itype==='rhie5' ? 95 : 100;
+    cfg.innerHTML=`
+      <div style="font-size:12px;font-weight:600;color:#fbbf24;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
+        ⚡ RHIE ${workSec}초 스프린트 설정
+      </div>
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>Rep 수</label>
+          <select id="cfg-reps">
+            ${[3,4,5,6,7,8].map(n=>`<option value="${n}" ${n===5?'selected':''}>${n}회</option>`).join('')}
+          </select>
+        </div>
+        <div class="ctrl">
+          <label>세트 수</label>
+          <select id="cfg-sets" onchange="renderRhieSetConfig()">
+            ${[2,3,4,5,6].map(n=>`<option value="${n}" ${n===3?'selected':''}>${n}세트</option>`).join('')}
+          </select>
+        </div>
+        <div class="ctrl">
+          <label>Rep 간 휴식 (초)</label>
+          <input type="number" id="cfg-rep-rest" value="${workSec==='5'?25:20}" min="10" max="120" step="1"
+            style="width:100%;font-size:14px;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
+        </div>
+        <div class="ctrl">
+          <label>세트 간 휴식 (초)</label>
+          <input type="number" id="cfg-set-rest" value="180" min="60" max="600" step="10"
+            style="width:100%;font-size:14px;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">세트별 스프린트 강도 (%MSS)</div>
+      <div id="rhie-set-config" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);line-height:1.7">
+        스프린트 ${workSec}초 · 권장 강도 ${defaultPct}%MSS${mas?` = ${+(mas*(defaultPct/100)).toFixed(1)} km/h`:''}
+        ${workSec===5?'<br>5초 스프린트: 최대속도 자극 + 신경근 적응 목적':'<br>3초 스프린트: 짧은 시간 최대출력 — 폭발력 개발 목적'}
+      </div>`;
+    renderRhieSetConfig();
+  } else if(itype==='4min' || itype==='2min'){
     const workSec = itype==='4min' ? 240 : 120;
     const restOpts = itype==='4min'
       ? `<option value="1:1">1:1 (${workSec}초 휴식)</option><option value="1:0.75">1:0.75 (${Math.round(workSec*0.75)}초 휴식)</option>`
@@ -3344,6 +3386,119 @@ function renderIntervalConfig(){
   }
 }
 
+function renderRhieSetConfig(){
+  const sets = parseInt(document.getElementById('cfg-sets')?.value||3);
+  const itype = document.getElementById('cardio-itype')?.value||'rhie5';
+  const defaultPct = itype==='rhie5' ? 95 : 100;
+  const playerId = document.getElementById('cardio-player')?.value;
+  const player = _players.find(p=>p.id===playerId);
+  const mss = player ? parseFloat(player.mss) : null;
+  const wrap = document.getElementById('rhie-set-config');
+  if(!wrap) return;
+  wrap.innerHTML = Array.from({length:sets},(_,i)=>`
+    <div style="display:flex;flex-direction:column;align-items:center;gap:4px">
+      <label style="font-size:11px;color:var(--text3)">Set ${i+1}</label>
+      <input type="number" id="rhie-pct-${i}" value="${defaultPct}" min="80" max="105" step="1"
+        style="width:70px;font-size:14px;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);text-align:center;font-family:inherit;outline:none"
+        oninput="updateRhiePreview(${i})">
+      <div id="rhie-speed-${i}" style="font-size:11px;color:#fbbf24;min-height:14px">
+        ${mss?`${+(mss*defaultPct/100).toFixed(1)} km/h`:''}
+      </div>
+    </div>`).join('');
+}
+
+function updateRhiePreview(i){
+  const playerId = document.getElementById('cardio-player')?.value;
+  const player = _players.find(p=>p.id===playerId);
+  const mss = player ? parseFloat(player.mss) : null;
+  const pct = parseFloat(document.getElementById(`rhie-pct-${i}`)?.value||95);
+  const el = document.getElementById(`rhie-speed-${i}`);
+  if(el && mss) el.textContent = `${+(mss*pct/100).toFixed(1)} km/h`;
+}
+
+function buildRhieSection(mas, mss, itype, unit){
+  const workSec = itype==='rhie5' ? 5 : 3;
+  const reps = parseInt(document.getElementById('cfg-reps')?.value||5);
+  const sets = parseInt(document.getElementById('cfg-sets')?.value||3);
+  const repRest = parseInt(document.getElementById('cfg-rep-rest')?.value||25);
+  const setRest = parseInt(document.getElementById('cfg-set-rest')?.value||180);
+
+  // 세트별 강도 수집
+  const setData = Array.from({length:sets},(_,i)=>{
+    const pct = parseFloat(document.getElementById(`rhie-pct-${i}`)?.value||(itype==='rhie5'?95:100));
+    const speed = +(mss*pct/100).toFixed(1);
+    const dist = calcDist(speed, workSec);
+    return {pct, speed, dist};
+  });
+
+  const typeName = `RHIE ${workSec}초 스프린트`;
+  const totalSprints = reps * sets;
+  const totalDist = setData.reduce((s,d)=>s+d.dist*reps,0);
+
+  return `
+    <div style="background:var(--surface);border:1px solid #d97706;border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:#fbbf24">${typeName}</div>
+        <div style="font-size:11px;color:var(--text3)">Rep 간 ${repRest}초 · 세트 간 ${setRest}초</div>
+      </div>
+
+      <!-- 처방 요약 -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#fbbf24">${workSec}초</div>
+          <div style="font-size:11px;color:var(--text3)">스프린트</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${reps}rep × ${sets}set</div>
+          <div style="font-size:11px;color:var(--text3)">구성</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${repRest}초</div>
+          <div style="font-size:11px;color:var(--text3)">Rep 간 휴식</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--amber)">${setRest}초</div>
+          <div style="font-size:11px;color:var(--text3)">세트 간 휴식</div>
+        </div>
+      </div>
+
+      <!-- 세트별 표 -->
+      ${setData.map((d,s)=>`
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px">
+          Set ${s+1} — ${d.pct}%MSS
+          <span style="color:#fbbf24;font-weight:700;margin-left:8px">${d.speed} km/h</span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">Rep</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">스프린트</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">속도</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">거리</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">Rep 간 휴식</th>
+          </tr>
+          ${Array.from({length:reps},(_,i)=>`
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 8px;text-align:center;color:var(--text2)">${i+1}</td>
+            <td style="padding:6px 8px;text-align:center;color:#fbbf24;font-weight:600">${workSec}초</td>
+            <td style="padding:6px 8px;text-align:center;color:#f59e0b">${d.speed} km/h</td>
+            <td style="padding:6px 8px;text-align:center;color:var(--accent2)">${d.dist}m</td>
+            <td style="padding:6px 8px;text-align:center;color:var(--text3)">${i<reps-1?repRest+'초':'—'}</td>
+          </tr>`).join('')}
+        </table>
+        ${s<setData.length-1?`<div style="font-size:11px;color:var(--amber);padding:5px 0">⏱ 세트 간 휴식 ${setRest}초 (완전 회복 필수)</div>`:''}
+      </div>`).join('')}
+
+      <!-- 총 볼륨 -->
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:12px">
+        <div><div style="font-weight:600;color:#fbbf24">${totalSprints}회</div><div style="color:var(--text3)">총 스프린트</div></div>
+        <div><div style="font-weight:600;color:var(--accent2)">${totalDist}m</div><div style="color:var(--text3)">총 스프린트 거리</div></div>
+        <div><div style="font-weight:600;color:var(--text)">${totalSprints*workSec}초</div><div style="color:var(--text3)">총 Work 시간</div></div>
+        <div><div style="font-weight:600;color:var(--text3)">${Math.round((totalSprints*workSec + (reps-1)*repRest*sets + setRest*(sets-1))/60)}분</div><div style="color:var(--text3)">총 소요 시간</div></div>
+      </div>
+    </div>`;
+}
+
 function renderSetIntensity(){
   const sets = parseInt(document.getElementById('cfg-sets')?.value||3);
   const playerId = document.getElementById('cardio-player')?.value;
@@ -3403,6 +3558,8 @@ async function generateCardio(){
 
   if(itype==='4min'||itype==='2min'){
     html += buildLongInterval(mas, itype, unit, md);
+  } else if(itype==='rhie5'||itype==='rhie3'){
+    html += buildRhieSection(mas, parseFloat(player.mss), itype, unit);
   } else {
     html += buildShortInterval(mas, itype, unit, md);
   }
@@ -3543,6 +3700,20 @@ function buildShortInterval(mas, itype, unit, md){
 
 function buildCardioCoaching2(itype, md){
   const tips={
+    'rhie5':{
+      MD5:'저볼륨 RHIE. 스프린트 메커니즘 유지 목적. 피로 유발 금지.',
+      MD4:'반복 스프린트 능력 개발. 세트 간 완전 회복 필수. 첫 rep과 마지막 rep 속도 차 < 5% 목표.',
+      MD3:'최대 부하일. 모든 rep 전력 질주. GPS로 실제 속도 확인. 속도 저하 10% 이상 시 중단.',
+      MD2:'경기 특이적 고강도. 세트 수 조절로 질 보장. Rep 간 완전 수동 회복.',
+      MD1:'활성화. 2세트만. 스프린트 패턴 유지 목적.',
+    },
+    'rhie3':{
+      MD5:'3초 최대 폭발력 유지 세션. 가볍게.',
+      MD4:'짧고 강하게. 매 rep 최대 출력 가능 여부 확인.',
+      MD3:'최대 폭발력 반복. 세트 내 속도 감소 없이 유지.',
+      MD2:'순간 파워 + 반복 능력. Rep 간 휴식 충분히.',
+      MD1:'1~2세트 활성화만.',
+    },
     '4min':{
       MD5:'회복 목적. 100%MAS 이하 유지. 마지막 세트까지 일정 속도 가능 여부 모니터링.',
       MD4:'볼륨 축적. 세트 간 동적 휴식 철저히. GPS로 실제 속도 확인.',
