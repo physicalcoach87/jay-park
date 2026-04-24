@@ -291,6 +291,88 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 </div>
 
+<!-- 선수 관리 탭 -->
+<div id="tab-players" style="display:none">
+  <div class="vm-bar">
+    <h3>📊 선수 통합 관리</h3>
+    <div style="display:flex;gap:8px">
+      <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">팀 요약</button>
+      <button class="btn-exp" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">선수 대시보드</button>
+      <button class="btn-exp" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
+    </div>
+  </div>
+
+  <!-- 팀 요약 뷰 -->
+  <div id="pv-team" style="display:block">
+    <div class="ctrls g2" style="margin-bottom:12px">
+      <div class="ctrl">
+        <label>날짜</label>
+        <input type="date" id="team-date" style="width:100%">
+      </div>
+      <div class="ctrl" style="display:flex;align-items:flex-end">
+        <button class="btn-gen" style="margin:0;padding:10px 20px" onclick="loadTeamSummary()">조회</button>
+      </div>
+    </div>
+    <div id="team-summary-output"></div>
+  </div>
+
+  <!-- 선수 대시보드 뷰 -->
+  <div id="pv-dashboard" style="display:none">
+    <div class="ctrls g2" style="margin-bottom:12px">
+      <div class="ctrl">
+        <label>선수 선택</label>
+        <select id="dashboard-player" onchange="loadPlayerDashboard()">
+          <option value="">선수를 선택하세요</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label>기간</label>
+        <select id="dashboard-period" onchange="loadPlayerDashboard()">
+          <option value="7">최근 7일</option>
+          <option value="14">최근 14일</option>
+          <option value="28" selected>최근 28일</option>
+          <option value="90">최근 3개월</option>
+        </select>
+      </div>
+    </div>
+    <div id="player-dashboard-output"></div>
+  </div>
+
+  <!-- GPS 업로드 뷰 -->
+  <div id="pv-upload" style="display:none">
+    <div class="coaching-box" style="margin-bottom:1rem">
+      <p>BePro GPS Excel 파일을 업로드하면 자동으로 파싱해서 Supabase에 저장합니다.<br>
+      선수명이 <strong style="color:var(--accent2)">player_profiles</strong>에 등록된 이름과 일치해야 합니다.</p>
+    </div>
+
+    <!-- 파일 업로드 영역 -->
+    <div id="upload-drop-zone"
+      style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
+      onclick="document.getElementById('gps-file-input').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
+      ondragleave="this.style.borderColor='var(--border2)'"
+      ondrop="handleFileDrop(event)">
+      <div style="font-size:32px;margin-bottom:8px">📂</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text2)">GPS Excel 파일 클릭 또는 드래그</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
+    </div>
+    <input type="file" id="gps-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)">
+
+    <!-- 파싱 결과 미리보기 -->
+    <div id="upload-preview" style="display:none">
+      <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="upload-preview-title"></div>
+      <div style="overflow-x:auto;margin-bottom:12px">
+        <table id="upload-preview-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px"></table>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="saveGpsData()" class="btn-exp pri" style="flex:2;padding:11px" id="upload-save-btn">💾 Supabase에 저장</button>
+        <button onclick="cancelUpload()" class="btn-exp" style="flex:1;padding:11px">취소</button>
+      </div>
+      <div id="upload-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+    </div>
+  </div>
+</div>
+
 <!-- 앱 메인 콘텐츠 시작 -->
 
 <!-- 유산소 처방 탭 -->
@@ -417,6 +499,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab active" onclick="switchTab('gym',this)">GYM 근력</button>
   <button class="tab" onclick="switchTab('preact',this)">Pre-activation</button>
   <button class="tab" onclick="switchTab('cardio',this)">🏃 유산소</button>
+  <button class="tab admin-only" onclick="switchTab('players',this)">📊 선수 관리</button>
   <button class="tab admin-only" onclick="switchTab('videos',this)">영상 관리</button>
   <button class="tab admin-only" onclick="switchTab('custom',this)">커스텀 운동</button>
   <button class="tab admin-only" onclick="switchTab('cprog',this)">📋 커스텀 프로그램</button>
@@ -2854,7 +2937,412 @@ function doImportPreset(){
   });
 }
 
-// ── 편집된 처방 직접 렌더링 ──────────────────
+// ═══════════════════════════════════════════
+// 선수 통합 관리 시스템
+// ═══════════════════════════════════════════
+let _gpsParseData = []; // 파싱된 GPS 데이터 임시 저장
+
+async function loadPlayerManagement(){
+  // 오늘 날짜 기본값
+  const today = new Date().toISOString().split('T')[0];
+  const dateEl = document.getElementById('team-date');
+  if(dateEl && !dateEl.value) dateEl.value = today;
+
+  // 선수 목록 로드
+  const {data} = await supa.from('player_profiles').select('*').order('name');
+  _players = data || [];
+
+  // 대시보드 선수 셀렉트 채우기
+  const sel = document.getElementById('dashboard-player');
+  if(sel){
+    sel.innerHTML = '<option value="">선수를 선택하세요</option>' +
+      _players.map(p=>`<option value="${p.id}">${p.name} (${p.position})</option>`).join('');
+  }
+
+  // 기본: 팀 요약 로드
+  loadTeamSummary();
+}
+
+function setPlayerView(view){
+  ['team','dashboard','upload'].forEach(v=>{
+    document.getElementById(`pv-${v}`).style.display = v===view ? 'block' : 'none';
+    const btn = document.getElementById(`pvbtn-${v}`);
+    if(btn){
+      btn.style.borderColor = v===view ? 'var(--accent)' : 'var(--border2)';
+      btn.style.background  = v===view ? 'var(--accent-bg)' : 'var(--surface2)';
+      btn.style.color       = v===view ? 'var(--accent2)' : 'var(--text2)';
+    }
+  });
+  if(view==='team') loadTeamSummary();
+}
+
+// ── 팀 요약 ───────────────────────────────
+async function loadTeamSummary(){
+  const date = document.getElementById('team-date')?.value;
+  const out = document.getElementById('team-summary-output');
+  if(!out) return;
+  out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+
+  const {data: gps} = await supa.from('gps_records')
+    .select('*, player_profiles(name, position)')
+    .eq('session_date', date)
+    .order('td', {ascending:false});
+
+  if(!gps?.length){
+    out.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${date} 데이터가 없습니다.<br>GPS 업로드 탭에서 데이터를 추가하세요.</div>`;
+    return;
+  }
+
+  // 팀 평균 계산
+  const avg = field => (gps.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/gps.length).toFixed(0);
+  const avgF = (field,dec=1) => (gps.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/gps.length).toFixed(dec);
+
+  out.innerHTML = `
+    <!-- 팀 평균 요약 -->
+    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
+        ${date} 팀 평균 (${gps.length}명)
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+        <div><div style="font-size:20px;font-weight:700;color:var(--accent2)">${avg('td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:#f59e0b">${avg('running_high')}</div><div style="font-size:11px;color:var(--text3)">HSR (m)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:#ef4444">${avg('sprint')}</div><div style="font-size:11px;color:var(--text3)">Sprint (m)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:#a78bfa">${avgF('player_load')}</div><div style="font-size:11px;color:var(--text3)">Player Load</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgF('max_speed')}</div><div style="font-size:11px;color:var(--text3)">최고속도 (km/h)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#34d399">${avgF('rhie',0)}</div><div style="font-size:11px;color:var(--text3)">RHIE</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgF('accel',0)}</div><div style="font-size:11px;color:var(--text3)">가속 (N)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgF('decel',0)}</div><div style="font-size:11px;color:var(--text3)">감속 (N)</div></div>
+      </div>
+    </div>
+
+    <!-- 선수별 데이터 테이블 -->
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
+        <tr style="background:var(--surface2)">
+          <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">TD (m)</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">HSR (m)</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">Sprint (m)</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">최고속도</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">P.Load</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">RHIE</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">RPE</th>
+          <th style="padding:8px;text-align:right;color:var(--text3)">체중</th>
+        </tr>
+        ${gps.map((r,i)=>`
+        <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
+          <td style="padding:8px">
+            <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}</div>
+            <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
+          </td>
+          <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}</td>
+          <td style="padding:8px;text-align:right;color:#f59e0b">${Math.round(r.running_high)||'-'}</td>
+          <td style="padding:8px;text-align:right;color:#ef4444">${Math.round(r.sprint)||'-'}</td>
+          <td style="padding:8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}</td>
+          <td style="padding:8px;text-align:right;color:#a78bfa">${r.player_load||'-'}</td>
+          <td style="padding:8px;text-align:right;color:#34d399">${r.rhie||'-'}</td>
+          <td style="padding:8px;text-align:right;color:${r.rpe>=8?'#ef4444':r.rpe>=6?'#f59e0b':'var(--text2)'}">${r.rpe||'-'}</td>
+          <td style="padding:8px;text-align:right;color:var(--text2)">${r.body_weight||'-'}</td>
+        </tr>`).join('')}
+      </table>
+    </div>`;
+}
+
+function selectDashboardPlayer(playerId){
+  const sel = document.getElementById('dashboard-player');
+  if(sel) sel.value = playerId;
+  setPlayerView('dashboard');
+  loadPlayerDashboard();
+}
+
+// ── 선수 대시보드 ─────────────────────────
+async function loadPlayerDashboard(){
+  const playerId = document.getElementById('dashboard-player')?.value;
+  const days = parseInt(document.getElementById('dashboard-period')?.value||28);
+  const out = document.getElementById('player-dashboard-output');
+  if(!playerId||!out) return;
+
+  const player = _players.find(p=>p.id===playerId);
+  if(!player) return;
+
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+
+  const since = new Date();
+  since.setDate(since.getDate()-days);
+  const sinceStr = since.toISOString().split('T')[0];
+
+  // GPS 데이터
+  const {data:gps} = await supa.from('gps_records')
+    .select('*').eq('player_id',playerId)
+    .gte('session_date',sinceStr)
+    .order('session_date',{ascending:false});
+
+  // 부상 현황
+  const {data:injuries} = await supa.from('injury_records')
+    .select('*').eq('player_id',playerId)
+    .in('status',['치료중','복귀'])
+    .order('injury_date',{ascending:false});
+
+  const hasInjury = injuries?.length > 0;
+
+  out.innerHTML = `
+    <!-- 선수 헤더 -->
+    <div style="background:var(--surface);border:1px solid ${hasInjury?'#ef4444':'var(--accent)'};border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">${player.name}</div>
+          <div style="font-size:12px;color:var(--text3)">${player.position} · MAS ${player.mas} · MSS ${player.mss} · ASR ${(player.mss-player.mas).toFixed(1)} km/h</div>
+        </div>
+        ${hasInjury?`<span style="font-size:12px;padding:4px 10px;border-radius:6px;background:#7f1d1d;color:#fca5a5;border:1px solid #ef4444">⚠️ ${injuries[0].body_part} ${injuries[0].status}</span>`:'<span style="font-size:12px;padding:4px 10px;border-radius:6px;background:#052e16;color:#4ade80;border:1px solid #15803d">✓ 정상</span>'}
+      </div>
+    </div>
+
+    <!-- 최근 ${days}일 GPS 요약 -->
+    ${gps?.length ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">최근 ${days}일 평균 GPS</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin-bottom:14px">
+        ${[
+          ['TD','td','m','var(--accent2)'],
+          ['HSR','running_high','m','#f59e0b'],
+          ['Sprint','sprint','m','#ef4444'],
+          ['P.Load','player_load','','#a78bfa'],
+        ].map(([label,field,unit,color])=>`
+          <div>
+            <div style="font-size:18px;font-weight:700;color:${color}">
+              ${Math.round(gps.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/gps.length)}${unit}
+            </div>
+            <div style="font-size:11px;color:var(--text3)">${label}</div>
+          </div>`).join('')}
+      </div>
+
+      <!-- 최근 세션 목록 -->
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">최근 세션</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <tr style="background:var(--surface2)">
+          <th style="padding:6px 8px;text-align:left;color:var(--text3)">날짜</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3)">HSR</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3)">Sprint</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3)">주기</th>
+        </tr>
+        ${gps.slice(0,10).map(r=>`
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:6px 8px;color:var(--text2)">${r.session_date}</td>
+          <td style="padding:6px 8px;text-align:right;color:var(--accent2)">${Math.round(r.td)||'-'}</td>
+          <td style="padding:6px 8px;text-align:right;color:#f59e0b">${Math.round(r.running_high)||'-'}</td>
+          <td style="padding:6px 8px;text-align:right;color:#ef4444">${Math.round(r.sprint)||'-'}</td>
+          <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}</td>
+          <td style="padding:6px 8px;text-align:right;color:${r.rpe>=8?'#ef4444':r.rpe>=6?'#f59e0b':'var(--text2)'}">${r.rpe||'-'}</td>
+          <td style="padding:6px 8px;text-align:right;color:var(--text3)">${r.periodization||'-'}</td>
+        </tr>`).join('')}
+      </table>
+    </div>` : `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">최근 ${days}일 GPS 데이터 없음</div>`}
+
+    <!-- 부상 이력 -->
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">부상 이력</div>
+        <button onclick="openInjuryForm('${playerId}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">+ 추가</button>
+      </div>
+      ${injuries?.length ? injuries.map(inj=>`
+        <div style="padding:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text)">${inj.body_part} — ${inj.injury_type}</div>
+            <div style="font-size:11px;color:var(--text3)">${inj.injury_date} ~ ${inj.return_date||'진행중'} · ${inj.severity}</div>
+          </div>
+          <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
+        </div>`).join('')
+      : '<div style="font-size:12px;color:var(--text3);padding:8px">부상 이력 없음</div>'}
+    </div>`;
+}
+
+// ── GPS 파일 업로드 ───────────────────────
+function handleFileDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-drop-zone').style.borderColor='var(--border2)';
+  const file = e.dataTransfer.files[0];
+  if(file) parseGpsFile(file);
+}
+
+function handleFileSelect(e){
+  const file = e.target.files[0];
+  if(file) parseGpsFile(file);
+}
+
+async function parseGpsFile(file){
+  const msg = document.getElementById('upload-msg');
+  const preview = document.getElementById('upload-preview');
+  document.getElementById('upload-preview-title').textContent = `파싱 중: ${file.name}`;
+  preview.style.display='block';
+
+  // SheetJS로 파일 파싱
+  const reader = new FileReader();
+  reader.onload = async(e)=>{
+    try{
+      const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+
+      // 헤더 행 찾기 (날짜, Name 컬럼이 있는 행)
+      let headerRow = -1;
+      for(let i=0;i<raw.length;i++){
+        const row = raw[i];
+        if(row && row.some(c=>c==='Name'||c==='날짜')) { headerRow=i; break; }
+      }
+      if(headerRow<0){ msg.textContent='헤더를 찾을 수 없습니다. 파일 형식을 확인하세요.'; msg.style.color='var(--red)'; return; }
+
+      const headers = raw[headerRow];
+      const dataRows = raw.slice(headerRow+1).filter(r=>r&&r.some(c=>c!=null));
+
+      // 컬럼 인덱스 매핑
+      const ci = (name) => headers.findIndex(h=>h===name);
+      const colMap = {
+        date: ci('날짜'), name: ci('Name'), type: ci('타입'), type2: ci('타입 2'),
+        form: ci('훈련형태'), duration: ci('운동시간'),
+        td: ci('총이동거리 (m)'), tdPerMin: ci('분당이동거리'),
+        hsrTotal: ci('고강도+스프린트거리'), runMed: ci('중강도 러닝 (m)'),
+        runHigh: ci('고강도 러닝 (m)'), sprint: ci('스프린트 (m)'),
+        runHighN: ci('고강도 러닝 (N)'), sprintN: ci('스프린트 (N)'),
+        accel: ci('가속 (Cnt)'), decel: ci('감속 (Cnt)'),
+        maxSpeed: ci('최고속도 (km/h)'), pload: ci('운동량'), rhie: ci('RHIE'),
+        fmpRunMed: ci('FMP Running Medium (Sec)'), fmpRunHigh: ci('FMP Running High (Sec)'),
+        fmpDynMed: ci('FMP Dynamic Medium (Sec)'), fmpDynHigh: ci('FMP Dynamic High (Sec)'),
+        rpe: ci('RPE'),
+        hr140: ci('>140 이상'), hr120: ci('140>120 사이'), hr100: ci('120>100 사이'),
+        hr80: ci('100>80 사이'), hr60: ci('80>60 사이'), hr40: ci('60>40 사이'), hr20: ci('40>20 사이'),
+        formation: ci('Fomation'), topic: ci('훈련 주제'), cycle: ci('주기'),
+        period: ci('주기화'), opponent: ci('경기상대'), score: ci('스코어 '),
+        result: ci('결과'), ha: ci('H/A'), weight: ci('체중'),
+      };
+
+      // 선수 이름 → ID 매핑
+      const {data:players} = await supa.from('player_profiles').select('id,name');
+      const playerMap = {};
+      (players||[]).forEach(p=>{ playerMap[p.name]=p.id; });
+
+      // 데이터 파싱
+      _gpsParseData = [];
+      const unknown = new Set();
+
+      dataRows.forEach(row=>{
+        const name = row[colMap.name];
+        if(!name) return;
+        const pid = playerMap[name];
+        if(!pid){ unknown.add(name); return; }
+
+        const getVal = (key) => { const v=row[colMap[key]]; return v!=null&&v!==''?v:null; };
+        const dateVal = getVal('date');
+        let dateStr = '';
+        if(dateVal instanceof Date) dateStr = dateVal.toISOString().split('T')[0];
+        else if(typeof dateVal==='string') dateStr = dateVal.split(' ')[0];
+        else if(typeof dateVal==='number'){
+          const d = new Date(Math.round((dateVal-25569)*86400*1000));
+          dateStr = d.toISOString().split('T')[0];
+        }
+        if(!dateStr) return;
+
+        _gpsParseData.push({
+          player_id: pid, player_name: name,
+          session_date: dateStr,
+          session_type: getVal('type'),
+          training_form: getVal('form'),
+          duration: getVal('duration'),
+          td: getVal('td'), td_per_min: getVal('tdPerMin'),
+          hsr_total: getVal('hsrTotal'), running_medium: getVal('runMed'),
+          running_high: getVal('runHigh'), sprint: getVal('sprint'),
+          running_high_n: getVal('runHighN'), sprint_n: getVal('sprintN'),
+          accel: getVal('accel'), decel: getVal('decel'),
+          max_speed: getVal('maxSpeed'), player_load: getVal('pload'), rhie: getVal('rhie'),
+          fmp_run_medium: getVal('fmpRunMed'), fmp_run_high: getVal('fmpRunHigh'),
+          fmp_dyn_medium: getVal('fmpDynMed'), fmp_dyn_high: getVal('fmpDynHigh'),
+          rpe: getVal('rpe'),
+          hr_140_plus: getVal('hr140'), hr_120_140: getVal('hr120'), hr_100_120: getVal('hr100'),
+          hr_80_100: getVal('hr80'), hr_60_80: getVal('hr60'), hr_40_60: getVal('hr40'), hr_20_40: getVal('hr20'),
+          formation: getVal('formation'), session_topic: getVal('topic'),
+          cycle: getVal('cycle'), periodization: getVal('period'),
+          opponent: getVal('opponent'), score: getVal('score'),
+          result: getVal('result'), home_away: getVal('ha'), body_weight: getVal('weight'),
+        });
+      });
+
+      // 미리보기 테이블
+      const table = document.getElementById('upload-preview-table');
+      const cols = ['player_name','session_date','td','running_high','sprint','max_speed','player_load','rhie','rpe','body_weight'];
+      const colLabels = ['선수','날짜','TD(m)','HSR(m)','Sprint(m)','최고속도','P.Load','RHIE','RPE','체중'];
+      table.innerHTML = `
+        <tr style="background:var(--surface2)">${colLabels.map(l=>`<th style="padding:6px 8px;font-size:11px;color:var(--text3);white-space:nowrap">${l}</th>`).join('')}</tr>
+        ${_gpsParseData.map(r=>`<tr style="border-bottom:1px solid var(--border)">${cols.map(c=>`<td style="padding:6px 8px;font-size:11px;color:var(--text2);white-space:nowrap">${r[c]??'-'}</td>`).join('')}</tr>`).join('')}`;
+
+      document.getElementById('upload-preview-title').textContent =
+        `✅ ${_gpsParseData.length}개 레코드 파싱 완료${unknown.size?` · ⚠️ 미등록 선수: ${[...unknown].join(', ')}`:''}`;
+      if(msg) msg.textContent='';
+    }catch(err){
+      if(msg){ msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)'; }
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function saveGpsData(){
+  const btn = document.getElementById('upload-save-btn');
+  const msg = document.getElementById('upload-msg');
+  if(!_gpsParseData.length){ msg.textContent='저장할 데이터가 없습니다'; return; }
+
+  btn.textContent='저장 중...'; btn.disabled=true;
+
+  // 날짜+선수 기준 기존 데이터 삭제 후 재삽입 (upsert 대신)
+  const dates = [...new Set(_gpsParseData.map(r=>r.session_date))];
+  const playerIds = [...new Set(_gpsParseData.map(r=>r.player_id))];
+
+  for(const date of dates){
+    await supa.from('gps_records').delete()
+      .eq('session_date',date)
+      .in('player_id',playerIds);
+  }
+
+  // player_name 필드 제거 후 저장
+  const toInsert = _gpsParseData.map(({player_name,...rest})=>rest);
+  const {error} = await supa.from('gps_records').insert(toInsert);
+
+  if(error){
+    msg.textContent='저장 실패: '+error.message; msg.style.color='var(--red)';
+    btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
+  } else {
+    msg.textContent=`✅ ${_gpsParseData.length}개 레코드 저장 완료!`; msg.style.color='var(--accent2)';
+    btn.textContent='✓ 저장됨'; 
+    // 팀 요약 탭으로 이동하여 결과 확인
+    setTimeout(()=>{ setPlayerView('team'); loadTeamSummary(); }, 1500);
+  }
+}
+
+function cancelUpload(){
+  _gpsParseData=[];
+  document.getElementById('upload-preview').style.display='none';
+  document.getElementById('gps-file-input').value='';
+}
+
+// ── 부상 기록 폼 ──────────────────────────
+function openInjuryForm(playerId){
+  const body = prompt('부상 부위 (예: 왼쪽 햄스트링):');
+  if(!body) return;
+  const type = prompt('부상 유형 (예: 근육 파열):');
+  const severity = prompt('심각도 (경미/중간/심각):') || '경미';
+  const date = prompt('부상 날짜 (YYYY-MM-DD):') || new Date().toISOString().split('T')[0];
+
+  supa.from('injury_records').insert({
+    player_id: playerId, injury_date: date,
+    body_part: body, injury_type: type||'',
+    severity, status:'치료중',
+    created_at: new Date().toISOString()
+  }).then(({error})=>{
+    if(!error) loadPlayerDashboard();
+  });
+}
+
 async function renderEditedProg(outputId, prog, pos, md, v){
   const links = await loadL();
   let gi=1;
@@ -3860,11 +4348,14 @@ function clearPlayerForm(){
 
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['gym','preact','cardio','videos','custom','cprog'].forEach(id=>{document.getElementById('tab-'+id).style.display=id===tab?'block':'none';});
+  ['gym','preact','cardio','players','videos','custom','cprog'].forEach(id=>{
+    document.getElementById('tab-'+id).style.display=id===tab?'block':'none';
+  });
   if(tab==='videos')renderVM();
   if(tab==='custom')renderCustomList();
   if(tab==='cprog')loadCprogList();
   if(tab==='cardio')loadCardioPlayers();
+  if(tab==='players'){loadPlayerManagement();}
 }
 const __PL__={};try{if(Object.keys(__PL__).length){const _s=JSON.parse(localStorage.getItem(SK)||'{}');Object.assign(_s,__PL__);localStorage.setItem(SK,JSON.stringify(_s));}}catch(e){}
 const __CX__={};try{if(Object.keys(__CX__).length){const _c=JSON.parse(localStorage.getItem(CX_KEY)||'{}');Object.assign(_c,__CX__);localStorage.setItem(CX_KEY,JSON.stringify(_c));}}catch(e){}
