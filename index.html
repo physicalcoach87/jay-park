@@ -297,9 +297,46 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <h3>📊 선수 통합 관리</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">팀 요약</button>
-      <button class="btn-exp" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
-      <button class="btn-exp" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">선수 대시보드</button>
-      <button class="btn-exp" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
+      <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">선수 대시보드</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
+    </div>
+  </div>
+
+  <!-- 웰니스 입력 뷰 -->
+  <div id="pv-wellness" style="display:none">
+    <!-- 선수용: 오늘 컨디션 입력 -->
+    <div id="wellness-player-view">
+      <div style="background:var(--surface);border:1px solid var(--accent);border-radius:12px;padding:1.25rem;margin-bottom:1rem">
+        <div style="font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px">오늘의 컨디션 체크 🌅</div>
+        <div style="font-size:12px;color:var(--text3)" id="wellness-date-label"></div>
+      </div>
+
+      <!-- 4개 항목 슬라이더 -->
+      <div id="wellness-form-items" style="display:flex;flex-direction:column;gap:12px;margin-bottom:1.25rem"></div>
+
+      <div class="ctrl full" style="margin-bottom:1rem">
+        <label>추가 메모 (선택)</label>
+        <textarea id="wellness-notes" rows="2" placeholder="오늘 특이사항이 있으면 입력하세요" style="width:100%;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical"></textarea>
+      </div>
+
+      <button onclick="saveWellness()" class="btn-gen" style="margin:0;width:100%">💚 오늘 컨디션 저장</button>
+      <div id="wellness-msg" style="font-size:13px;text-align:center;margin-top:10px;min-height:18px"></div>
+    </div>
+
+    <!-- 관리자용: 팀 웰니스 현황 -->
+    <div id="wellness-admin-view" style="display:none">
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>날짜</label>
+          <input type="date" id="wellness-view-date" style="width:100%" onchange="loadTeamWellness()">
+        </div>
+        <div class="ctrl" style="display:flex;align-items:flex-end">
+          <button class="btn-gen" style="margin:0;padding:10px 20px" onclick="loadTeamWellness()">조회</button>
+        </div>
+      </div>
+      <div id="team-wellness-output"></div>
     </div>
   </div>
 
@@ -582,7 +619,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab active" onclick="switchTab('gym',this)">GYM 근력</button>
   <button class="tab" onclick="switchTab('preact',this)">Pre-activation</button>
   <button class="tab" onclick="switchTab('cardio',this)">🏃 유산소</button>
-  <button class="tab admin-only" onclick="switchTab('players',this)">📊 선수 관리</button>
+  <button class="tab" onclick="switchTab('players',this)">📊 선수 관리</button>
   <button class="tab admin-only" onclick="switchTab('videos',this)">영상 관리</button>
   <button class="tab admin-only" onclick="switchTab('custom',this)">커스텀 운동</button>
   <button class="tab admin-only" onclick="switchTab('cprog',this)">📋 커스텀 프로그램</button>
@@ -3029,6 +3066,8 @@ async function loadPlayerManagement(){
   const today = new Date().toISOString().split('T')[0];
   const dateEl = document.getElementById('team-date');
   if(dateEl && !dateEl.value) dateEl.value = today;
+  const wDateEl = document.getElementById('wellness-view-date');
+  if(wDateEl && !wDateEl.value) wDateEl.value = today;
   const {data} = await supa.from('player_profiles').select('*').order('position').order('name');
   _players = data || [];
   const sel = document.getElementById('dashboard-player');
@@ -3040,7 +3079,7 @@ async function loadPlayerManagement(){
 }
 
 function setPlayerView(view){
-  ['team','roster','dashboard','upload'].forEach(v=>{
+  ['team','wellness','roster','dashboard','upload'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
     if(el) el.style.display = v===view ? 'block' : 'none';
     const btn = document.getElementById(`pvbtn-${v}`);
@@ -3052,9 +3091,233 @@ function setPlayerView(view){
   });
   if(view==='team') loadTeamSummary();
   if(view==='roster') loadRosterList();
+  if(view==='wellness') initWellnessView();
 }
 
-// ── 선수 명단 ─────────────────────────────
+// ═══════════════════════════════════════════
+// 웰니스 시스템
+// ═══════════════════════════════════════════
+const WELLNESS_ITEMS = [
+  { key:'fatigue',        label:'피로도',   icon:'🔋', desc:'1=최악(극도로 피곤) ~ 5=최상(매우 활기참)' },
+  { key:'sleep_quality',  label:'수면질',   icon:'😴', desc:'1=최악(거의 못잠) ~ 5=최상(깊고 충분히 잠)' },
+  { key:'stress',         label:'스트레스', icon:'🧠', desc:'1=최악(극도로 스트레스) ~ 5=최상(매우 편안)' },
+  { key:'muscle_soreness',label:'근육통',   icon:'💪', desc:'1=최악(심한 통증) ~ 5=최상(통증 없음)' },
+];
+
+const WELLNESS_COLORS = {1:'#ef4444',2:'#f97316',3:'#eab308',4:'#84cc16',5:'#22c55e'};
+const WELLNESS_LABELS = {1:'최악',2:'나쁨',3:'보통',4:'좋음',5:'최상'};
+
+async function initWellnessView(){
+  const today = new Date().toISOString().split('T')[0];
+
+  if(isAdmin){
+    // 관리자: 팀 웰니스 현황
+    document.getElementById('wellness-player-view').style.display='none';
+    document.getElementById('wellness-admin-view').style.display='block';
+    const dateEl = document.getElementById('wellness-view-date');
+    if(dateEl && !dateEl.value) dateEl.value = today;
+    loadTeamWellness();
+  } else {
+    // 선수: 본인 컨디션 입력
+    document.getElementById('wellness-player-view').style.display='block';
+    document.getElementById('wellness-admin-view').style.display='none';
+    document.getElementById('wellness-date-label').textContent = `📅 ${today}`;
+
+    // 본인 player_profile 찾기
+    const {data:profile} = await supa.from('player_profiles')
+      .select('*').eq('created_by', currentUser?.email).single();
+
+    if(!profile){
+      // 이메일로 이름 매칭 시도
+      const userName = currentUser?.email?.split('@')[0]||'';
+      document.getElementById('wellness-form-items').innerHTML=`
+        <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">
+          등록된 선수 정보가 없습니다.<br>코치님께 선수 등록을 요청해주세요.
+        </div>`;
+      return;
+    }
+
+    // 오늘 이미 입력했는지 확인
+    const {data:existing} = await supa.from('wellness_records')
+      .select('*').eq('player_id',profile.id).eq('record_date',today).single();
+
+    renderWellnessForm(profile, existing);
+  }
+}
+
+function renderWellnessForm(profile, existing=null){
+  const wrap = document.getElementById('wellness-form-items');
+  wrap.innerHTML = WELLNESS_ITEMS.map(item=>{
+    const val = existing ? existing[item.key] : 3;
+    return `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div>
+            <span style="font-size:18px">${item.icon}</span>
+            <span style="font-size:14px;font-weight:600;color:var(--text);margin-left:6px">${item.label}</span>
+          </div>
+          <div id="w-val-${item.key}" style="font-size:16px;font-weight:700;color:${WELLNESS_COLORS[val]};min-width:60px;text-align:right">
+            ${val} — ${WELLNESS_LABELS[val]}
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${[1,2,3,4,5].map(n=>`
+            <button id="w-btn-${item.key}-${n}" onclick="selectWellness('${item.key}',${n})"
+              style="flex:1;padding:12px 0;border-radius:8px;border:2px solid ${n===val?WELLNESS_COLORS[n]:'var(--border2)'};
+              background:${n===val?WELLNESS_COLORS[n]+'22':'var(--surface2)'};
+              color:${n===val?WELLNESS_COLORS[n]:'var(--text3)'};
+              font-size:16px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s">
+              ${n}
+            </button>`).join('')}
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">${item.desc}</div>
+      </div>`;
+  }).join('');
+
+  // 기존 값 세팅
+  if(existing){
+    WELLNESS_ITEMS.forEach(item=>{
+      if(existing[item.key]) selectWellness(item.key, existing[item.key], false);
+    });
+    document.getElementById('wellness-notes').value = existing.notes||'';
+    document.getElementById('wellness-msg').textContent='오늘 이미 입력하셨습니다. 수정 가능합니다.';
+    document.getElementById('wellness-msg').style.color='var(--text3)';
+  }
+
+  // profile id 저장
+  document.getElementById('wellness-form-items').dataset.playerId = profile.id;
+  document.getElementById('wellness-form-items').dataset.existingId = existing?.id||'';
+}
+
+function selectWellness(key, val, updateUI=true){
+  if(updateUI){
+    // 버튼 스타일 업데이트
+    [1,2,3,4,5].forEach(n=>{
+      const btn = document.getElementById(`w-btn-${key}-${n}`);
+      if(!btn) return;
+      const active = n===val;
+      btn.style.borderColor = active ? WELLNESS_COLORS[n] : 'var(--border2)';
+      btn.style.background  = active ? WELLNESS_COLORS[n]+'22' : 'var(--surface2)';
+      btn.style.color       = active ? WELLNESS_COLORS[n] : 'var(--text3)';
+    });
+    // 값 표시 업데이트
+    const valEl = document.getElementById(`w-val-${key}`);
+    if(valEl){ valEl.textContent=`${val} — ${WELLNESS_LABELS[val]}`; valEl.style.color=WELLNESS_COLORS[val]; }
+  }
+  // data 저장
+  document.getElementById('wellness-form-items').dataset[key] = val;
+}
+
+async function saveWellness(){
+  const wrap = document.getElementById('wellness-form-items');
+  const playerId = wrap.dataset.playerId;
+  const existingId = wrap.dataset.existingId;
+  const today = new Date().toISOString().split('T')[0];
+  const msg = document.getElementById('wellness-msg');
+
+  const payload = {
+    player_id: playerId,
+    record_date: today,
+    fatigue:         parseInt(wrap.dataset.fatigue||3),
+    sleep_quality:   parseInt(wrap.dataset.sleep_quality||3),
+    stress:          parseInt(wrap.dataset.stress||3),
+    muscle_soreness: parseInt(wrap.dataset.muscle_soreness||3),
+    notes: document.getElementById('wellness-notes').value.trim()||null,
+  };
+
+  // 총점 계산 (20점 만점)
+  const total = payload.fatigue + payload.sleep_quality + payload.stress + payload.muscle_soreness;
+
+  let error;
+  if(existingId){
+    ({error}=await supa.from('wellness_records').update(payload).eq('id',existingId));
+  } else {
+    ({error}=await supa.from('wellness_records').insert(payload));
+  }
+
+  if(error){ msg.textContent='오류: '+error.message; msg.style.color='var(--red)'; return; }
+
+  const statusText = total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
+  msg.textContent=`✅ 저장 완료! 오늘 컨디션 총점: ${total}/20 (${statusText})`;
+  msg.style.color='var(--accent2)';
+  wrap.dataset.existingId = existingId || 'saved';
+}
+
+// ── 팀 웰니스 현황 (관리자) ────────────────
+async function loadTeamWellness(){
+  const date = document.getElementById('wellness-view-date')?.value;
+  const out = document.getElementById('team-wellness-output');
+  if(!out||!date) return;
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+
+  const {data:records} = await supa.from('wellness_records')
+    .select('*, player_profiles(name,position)')
+    .eq('record_date',date)
+    .order('created_at');
+
+  if(!records?.length){
+    out.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${date} 웰니스 데이터가 없습니다.</div>`;
+    return;
+  }
+
+  const avgScore = field => (records.reduce((s,r)=>s+(r[field]||0),0)/records.length).toFixed(1);
+  const teamAvg = (parseFloat(avgScore('fatigue'))+parseFloat(avgScore('sleep_quality'))+parseFloat(avgScore('stress'))+parseFloat(avgScore('muscle_soreness')))/4;
+
+  out.innerHTML=`
+    <!-- 팀 평균 -->
+    <div style="background:var(--surface);border:1px solid ${teamAvg>=4?'#22c55e':teamAvg>=3?'#eab308':'#ef4444'};border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
+        ${date} 팀 평균 (${records.length}명 응답)
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
+        ${WELLNESS_ITEMS.map(item=>{
+          const avg = parseFloat(avgScore(item.key));
+          return `<div>
+            <div style="font-size:22px">${item.icon}</div>
+            <div style="font-size:20px;font-weight:700;color:${WELLNESS_COLORS[Math.round(avg)]}">${avg}</div>
+            <div style="font-size:11px;color:var(--text3)">${item.label}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>
+
+    <!-- 선수별 테이블 -->
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="background:var(--surface2)">
+          <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
+          ${WELLNESS_ITEMS.map(i=>`<th style="padding:8px;text-align:center;color:var(--text3)">${i.icon} ${i.label}</th>`).join('')}
+          <th style="padding:8px;text-align:center;color:var(--text3)">총점</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">상태</th>
+        </tr>
+        ${records.map(r=>{
+          const total = (r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
+          const status = total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px">
+              <div style="font-weight:600">${r.player_profiles?.name||'-'}</div>
+              <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
+            </td>
+            ${WELLNESS_ITEMS.map(item=>`
+              <td style="padding:8px;text-align:center">
+                <span style="font-size:16px;font-weight:700;color:${WELLNESS_COLORS[r[item.key]]||'var(--text3)'}">
+                  ${r[item.key]||'-'}
+                </span>
+              </td>`).join('')}
+            <td style="padding:8px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
+            <td style="padding:8px;text-align:center;font-size:12px">${status}</td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>
+
+    <!-- 미응답 선수 -->
+    ${_players.length > records.length ? `
+    <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)">
+      ⚠️ 미응답: ${_players.filter(p=>!records.find(r=>r.player_id===p.id)).map(p=>p.name).join(', ')}
+    </div>`:''}`; 
+}
+
 async function loadRosterList(){
   const listEl = document.getElementById('roster-list');
   if(!listEl) return;
