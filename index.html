@@ -3568,59 +3568,94 @@ async function loadTeamSummary(){
     return;
   }
 
-  // 팀 평균 계산
-  const avg = field => (gps.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/gps.length).toFixed(0);
-  const avgF = (field,dec=1) => (gps.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/gps.length).toFixed(dec);
+  // 타입2 기준으로 그룹 분리
+  // session_type2 가 null/빈칸 = 전체 훈련 → 팀 평균에 포함
+  // session_type2 가 'M' = 개인 컨디셔닝 → 팀 평균에서 제외
+  const fullGps = gps.filter(r => !r.session_type2 || r.session_type2 !== 'M');
+  const indGps  = gps.filter(r => r.session_type2 === 'M');
+
+  const avgGroup = (arr, field, dec=0) => {
+    const vals = arr.filter(r=>parseFloat(r[field])>0);
+    if(!vals.length) return '-';
+    return (vals.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/vals.length).toFixed(dec);
+  };
+
+  const renderTable = (arr) => arr.map(r=>`
+    <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
+      <td style="padding:8px">
+        <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
+      </td>
+      <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}</td>
+      <td style="padding:8px;text-align:right;color:#f59e0b">${Math.round(r.running_high)||'-'}</td>
+      <td style="padding:8px;text-align:right;color:#ef4444">${Math.round(r.sprint)||'-'}</td>
+      <td style="padding:8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}</td>
+      <td style="padding:8px;text-align:right;color:#a78bfa">${r.player_load||'-'}</td>
+      <td style="padding:8px;text-align:right;color:#34d399">${r.rhie||'-'}</td>
+      <td style="padding:8px;text-align:right;color:#fb923c">${r.accel||'-'}</td>
+      <td style="padding:8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
+      <td style="padding:8px;text-align:right;color:var(--text3)">${r.session_topic||'-'}</td>
+    </tr>`).join('');
+
+  const tableHeader = `
+    <tr style="background:var(--surface2)">
+      <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">TD (m)</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">HSR (m)</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">Sprint (m)</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">최고속도</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">P.Load</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">RHIE</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">가속</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">시간(분)</th>
+      <th style="padding:8px;text-align:right;color:var(--text3)">세션</th>
+    </tr>`;
 
   out.innerHTML = `
-    <!-- 팀 평균 요약 -->
+    <!-- 팀 훈련 평균 (F 그룹) -->
     <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
-        ${date} 팀 평균 (${gps.length}명)
+        ${date} 팀 평균 — 전체 훈련 (${fullGps.length}명)
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
-        <div><div style="font-size:20px;font-weight:700;color:var(--accent2)">${avg('td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
-        <div><div style="font-size:20px;font-weight:700;color:#f59e0b">${avg('running_high')}</div><div style="font-size:11px;color:var(--text3)">HSR (m)</div></div>
-        <div><div style="font-size:20px;font-weight:700;color:#ef4444">${avg('sprint')}</div><div style="font-size:11px;color:var(--text3)">Sprint (m)</div></div>
-        <div><div style="font-size:20px;font-weight:700;color:#a78bfa">${avgF('player_load')}</div><div style="font-size:11px;color:var(--text3)">Player Load</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgF('max_speed')}</div><div style="font-size:11px;color:var(--text3)">최고속도 (km/h)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#34d399">${avgF('rhie',0)}</div><div style="font-size:11px;color:var(--text3)">RHIE</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgF('accel',0)}</div><div style="font-size:11px;color:var(--text3)">가속 (N)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgF('decel',0)}</div><div style="font-size:11px;color:var(--text3)">감속 (N)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:var(--accent2)">${avgGroup(fullGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:#f59e0b">${avgGroup(fullGps,'running_high')}</div><div style="font-size:11px;color:var(--text3)">HSR (m)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:#ef4444">${avgGroup(fullGps,'sprint')}</div><div style="font-size:11px;color:var(--text3)">Sprint (m)</div></div>
+        <div><div style="font-size:20px;font-weight:700;color:#a78bfa">${avgGroup(fullGps,'player_load',1)}</div><div style="font-size:11px;color:var(--text3)">Player Load</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgGroup(fullGps,'max_speed',1)}</div><div style="font-size:11px;color:var(--text3)">최고속도 (km/h)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#34d399">${avgGroup(fullGps,'rhie')}</div><div style="font-size:11px;color:var(--text3)">RHIE</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(fullGps,'accel')}</div><div style="font-size:11px;color:var(--text3)">가속 (N)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(fullGps,'decel')}</div><div style="font-size:11px;color:var(--text3)">감속 (N)</div></div>
       </div>
     </div>
 
-    <!-- 선수별 데이터 테이블 -->
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
-        <tr style="background:var(--surface2)">
-          <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">TD (m)</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">HSR (m)</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">Sprint (m)</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">최고속도</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">P.Load</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">RHIE</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">RPE</th>
-          <th style="padding:8px;text-align:right;color:var(--text3)">체중</th>
-        </tr>
-        ${gps.map((r,i)=>`
-        <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
-          <td style="padding:8px">
-            <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}</div>
-            <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
-          </td>
-          <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}</td>
-          <td style="padding:8px;text-align:right;color:#f59e0b">${Math.round(r.running_high)||'-'}</td>
-          <td style="padding:8px;text-align:right;color:#ef4444">${Math.round(r.sprint)||'-'}</td>
-          <td style="padding:8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}</td>
-          <td style="padding:8px;text-align:right;color:#a78bfa">${r.player_load||'-'}</td>
-          <td style="padding:8px;text-align:right;color:#34d399">${r.rhie||'-'}</td>
-          <td style="padding:8px;text-align:right;color:${r.rpe>=8?'#ef4444':r.rpe>=6?'#f59e0b':'var(--text2)'}">${r.rpe||'-'}</td>
-          <td style="padding:8px;text-align:right;color:var(--text2)">${r.body_weight||'-'}</td>
-        </tr>`).join('')}
+    <!-- 전체 선수 테이블 -->
+    <div style="overflow-x:auto;margin-bottom:14px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:800px">
+        ${tableHeader}
+        ${renderTable(fullGps)}
       </table>
-    </div>`;
+    </div>
+
+    <!-- 개인 컨디셔닝 그룹 -->
+    ${indGps.length ? `
+    <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
+      <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
+        개인 컨디셔닝 (${indGps.length}명)
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin-bottom:12px">
+        <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgGroup(indGps,'max_speed',1)}</div><div style="font-size:11px;color:var(--text3)">최고속도</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#a78bfa">${avgGroup(indGps,'player_load',1)}</div><div style="font-size:11px;color:var(--text3)">P.Load</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(indGps,'accel')}</div><div style="font-size:11px;color:var(--text3)">가속</div></div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:800px">
+          ${tableHeader}
+          ${renderTable(indGps)}
+        </table>
+      </div>
+    </div>` : ''}`;
 }
 
 function selectDashboardPlayer(playerId){
@@ -3830,6 +3865,7 @@ async function parseGpsFile(file){
           player_id: pid, player_name: name,
           session_date: dateStr,
           session_type: getVal('type'),
+          session_type2: getVal('type2'),  // M = 개인컨디셔닝, 빈칸 = 전체훈련
           training_form: getVal('form'),
           duration: getVal('duration'),
           td: getVal('td'), td_per_min: getVal('tdPerMin'),
@@ -3840,20 +3876,20 @@ async function parseGpsFile(file){
           max_speed: getVal('maxSpeed'), player_load: getVal('pload'), rhie: getVal('rhie'),
           fmp_run_medium: getVal('fmpRunMed'), fmp_run_high: getVal('fmpRunHigh'),
           fmp_dyn_medium: getVal('fmpDynMed'), fmp_dyn_high: getVal('fmpDynHigh'),
-          rpe: getVal('rpe'),
+          // rpe, body_weight 는 선수 앱에서 수집 → GPS 파일 값 무시
           hr_140_plus: getVal('hr140'), hr_120_140: getVal('hr120'), hr_100_120: getVal('hr100'),
           hr_80_100: getVal('hr80'), hr_60_80: getVal('hr60'), hr_40_60: getVal('hr40'), hr_20_40: getVal('hr20'),
           formation: getVal('formation'), session_topic: getVal('topic'),
           cycle: getVal('cycle'), periodization: getVal('period'),
           opponent: getVal('opponent'), score: getVal('score'),
-          result: getVal('result'), home_away: getVal('ha'), body_weight: getVal('weight'),
+          result: getVal('result'), home_away: getVal('ha'),
         });
       });
 
       // 미리보기 테이블
       const table = document.getElementById('upload-preview-table');
-      const cols = ['player_name','session_date','td','running_high','sprint','max_speed','player_load','rhie','rpe','body_weight'];
-      const colLabels = ['선수','날짜','TD(m)','HSR(m)','Sprint(m)','최고속도','P.Load','RHIE','RPE','체중'];
+      const cols = ['player_name','session_date','session_type2','td','running_high','sprint','max_speed','player_load','rhie','accel','duration'];
+      const colLabels = ['선수','날짜','타입2','TD(m)','HSR(m)','Sprint(m)','최고속도','P.Load','RHIE','가속','운동시간'];
       table.innerHTML = `
         <tr style="background:var(--surface2)">${colLabels.map(l=>`<th style="padding:6px 8px;font-size:11px;color:var(--text3);white-space:nowrap">${l}</th>`).join('')}</tr>
         ${_gpsParseData.map(r=>`<tr style="border-bottom:1px solid var(--border)">${cols.map(c=>`<td style="padding:6px 8px;font-size:11px;color:var(--text2);white-space:nowrap">${r[c]??'-'}</td>`).join('')}</tr>`).join('')}`;
