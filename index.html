@@ -398,6 +398,14 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <label>전화번호</label>
           <input type="tel" id="pfm-phone" placeholder="예: 010-1234-5678" style="width:100%">
         </div>
+        <div class="ctrl full">
+          <label>언어 설정 / Language</label>
+          <select id="pfm-lang" style="width:100%">
+            <option value="ko">🇰🇷 한국어</option>
+            <option value="en">🇺🇸 English</option>
+            <option value="pt">🇧🇷 Português</option>
+          </select>
+        </div>
       </div>
 
       <!-- 피지컬 데이터 -->
@@ -3378,6 +3386,7 @@ function openPlayerForm(id){
     document.getElementById('pfm-height').value=p.height||'';
     document.getElementById('pfm-weight').value=p.weight||'';
     document.getElementById('pfm-phone').value=p.phone||'';
+    document.getElementById('pfm-lang').value=p.language||'ko';
     document.getElementById('pfm-mas').value=p.mas||'';
     document.getElementById('pfm-mss').value=p.mss||'';
     document.getElementById('pfm-notes').value=p.notes||'';
@@ -3423,6 +3432,7 @@ async function savePlayerForm(){
     height:parseFloat(document.getElementById('pfm-height').value)||null,
     weight:parseFloat(document.getElementById('pfm-weight').value)||null,
     phone:document.getElementById('pfm-phone').value.trim()||null,
+    language:document.getElementById('pfm-lang').value||'ko',
     mas, mss,
     notes:document.getElementById('pfm-notes').value.trim()||null,
     updated_at:new Date().toISOString(),
