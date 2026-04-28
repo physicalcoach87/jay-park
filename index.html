@@ -437,8 +437,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <label>날짜</label>
         <input type="date" id="team-date" style="width:100%">
       </div>
-      <div class="ctrl" style="display:flex;align-items:flex-end">
-        <button class="btn-gen" style="margin:0;padding:10px 20px" onclick="loadTeamSummary()">조회</button>
+      <div class="ctrl" style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn-gen" style="margin:0;padding:10px 20px;flex:1" onclick="loadTeamSummary()">조회</button>
+        <button class="btn-exp" style="padding:10px 14px;border-color:#22c55e;color:#22c55e" onclick="downloadDailyExcel()">📥 엑셀</button>
       </div>
     </div>
     <div id="team-summary-output"></div>
@@ -3446,7 +3447,101 @@ async function confirmDeletePlayer(id,name){
 }
 
 
-// ── 팀 요약 ───────────────────────────────
+// ── 일별 엑셀 다운로드 ────────────────────
+async function downloadDailyExcel(){
+  const date = document.getElementById('team-date')?.value;
+  if(!date){ alert('날짜를 선택해주세요'); return; }
+
+  // 데이터 로드
+  const [{data:gps},{data:wellness},{data:sessions}] = await Promise.all([
+    supa.from('gps_records').select('*, player_profiles(name,position)').eq('session_date',date).order('player_profiles(name)'),
+    supa.from('wellness_records').select('*, player_profiles(name)').eq('record_date',date),
+    supa.from('session_records').select('*, player_profiles(name)').eq('record_date',date).order('session_order'),
+  ]);
+
+  if(!gps?.length && !wellness?.length){
+    alert(`${date} 데이터가 없습니다`); return;
+  }
+
+  // 선수별 데이터 통합
+  const playerMap = {};
+  (_players||[]).forEach(p=>{
+    playerMap[p.id] = {
+      name: p.name, position: p.position,
+      gps:{}, wellness:{}, sessions:[]
+    };
+  });
+
+  (gps||[]).forEach(r=>{
+    if(!playerMap[r.player_id]) playerMap[r.player_id]={name:r.player_profiles?.name||'-',position:r.player_profiles?.position||'-',gps:{},wellness:{},sessions:[]};
+    playerMap[r.player_id].gps = r;
+  });
+  (wellness||[]).forEach(r=>{
+    if(!playerMap[r.player_id]) playerMap[r.player_id]={name:r.player_profiles?.name||'-',position:'-',gps:{},wellness:{},sessions:[]};
+    playerMap[r.player_id].wellness = r;
+  });
+  (sessions||[]).forEach(r=>{
+    if(!playerMap[r.player_id]) return;
+    playerMap[r.player_id].sessions.push(r);
+  });
+
+  // CSV 생성
+  const headers = [
+    '이름','포지션',
+    // 웰니스
+    '피로도','수면질','스트레스','근육통','아침체중',
+    // GPS
+    'TD(m)','HSR(m)','Sprint(m)','최고속도(km/h)','Player Load','RHIE','가속','감속','운동시간(분)',
+    // 세션 1
+    '세션1_운동후체중','세션1_RPE','세션1_sRPE',
+    // 세션 2
+    '세션2_운동후체중','세션2_RPE','세션2_sRPE',
+    // 세션 3
+    '세션3_운동후체중','세션3_RPE','세션3_sRPE',
+    // 총합
+    '총_sRPE'
+  ];
+
+  const rows = Object.values(playerMap)
+    .filter(p=>p.gps?.td||p.wellness?.fatigue)
+    .sort((a,b)=>a.name.localeCompare(b.name))
+    .map(p=>{
+      const g = p.gps || {};
+      const w = p.wellness || {};
+      const s1 = p.sessions.find(s=>s.session_order===1)||{};
+      const s2 = p.sessions.find(s=>s.session_order===2)||{};
+      const s3 = p.sessions.find(s=>s.session_order===3)||{};
+      const dur = parseFloat(g.duration)||0;
+      const srpe1 = s1.rpe && dur ? Math.round(s1.rpe * dur) : '';
+      const srpe2 = s2.rpe && dur ? Math.round(s2.rpe * dur) : '';
+      const srpe3 = s3.rpe && dur ? Math.round(s3.rpe * dur) : '';
+      const totalSrpe = (srpe1||0)+(srpe2||0)+(srpe3||0)||'';
+
+      return [
+        p.name, p.position,
+        w.fatigue||'', w.sleep_quality||'', w.stress||'', w.muscle_soreness||'', w.morning_weight||'',
+        Math.round(g.td)||'', Math.round(g.running_high)||'', Math.round(g.sprint)||'',
+        g.max_speed||'', g.player_load||'', g.rhie||'', g.accel||'', g.decel||'', g.duration||'',
+        s1.post_weight||'', s1.rpe||'', srpe1,
+        s2.post_weight||'', s2.rpe||'', srpe2,
+        s3.post_weight||'', s3.rpe||'', srpe3,
+        totalSrpe
+      ];
+    });
+
+  // CSV 다운로드
+  const csvContent = [headers, ...rows]
+    .map(row => row.map(cell => `"${cell}"`).join(','))
+    .join('\n');
+  const BOM = '\uFEFF'; // 한글 깨짐 방지
+  const blob = new Blob([BOM + csvContent], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${date}_일일데이터.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function loadTeamSummary(){
   const date = document.getElementById('team-date')?.value;
   const out = document.getElementById('team-summary-output');
