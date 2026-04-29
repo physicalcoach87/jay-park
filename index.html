@@ -60,14 +60,14 @@
 }
 body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;min-height:100vh}
 .app{max-width:920px;margin:0 auto;padding:2rem 1.5rem;padding-bottom:calc(2rem + env(safe-area-inset-bottom));padding-left:calc(1.5rem + env(safe-area-inset-left));padding-right:calc(1.5rem + env(safe-area-inset-right))}.tab-wrapper{position:sticky;top:0;z-index:100;background:var(--bg);padding:0.75rem 1.5rem;max-width:920px;margin:0 auto;box-sizing:border-box;border-bottom:1px solid var(--border)}
-.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:2rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border)}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;padding-bottom:1rem;border-bottom:1px solid var(--border)}
 .header-left{display:flex;align-items:center;gap:14px}
 .logo{width:36px;height:36px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center}
 .logo svg{width:20px;height:20px;fill:#fff}
 .htitle{font-size:17px;font-weight:600;letter-spacing:-0.3px}
 .hsubtitle{font-size:12px;color:var(--text3);margin-top:2px}
 .hbadge{background:var(--accent-bg);color:var(--accent2);font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;border:1px solid var(--accent);letter-spacing:.5px}
-.tabs{display:flex;gap:2px;background:var(--surface);padding:4px;border-radius:10px;border:1px solid var(--border)}
+.tabs{display:flex;gap:2px;margin-bottom:1.75rem;background:var(--surface);padding:4px;border-radius:10px;border:1px solid var(--border);position:sticky;top:var(--header-h,72px);z-index:100}
 .tab{flex:1;padding:9px 12px;font-size:13px;font-weight:500;border:none;background:transparent;color:var(--text2);cursor:pointer;border-radius:7px;transition:all .15s;font-family:inherit}
 .tab.active{background:var(--surface2);color:var(--text);border:1px solid var(--border2)}
 .tab:hover:not(.active){color:var(--text)}
@@ -221,17 +221,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 </div>
 
-<div class="tab-wrapper" id="tab-wrapper" style="display:none">
-  <div class="tabs">
-    <button class="tab active" onclick="switchTab('players',this)">📊 선수 통합관리</button>
-    <button class="tab" onclick="switchTab('gym',this)">근력 운동</button>
-    <button class="tab" onclick="switchTab('preact',this)">Pre-activation</button>
-    <button class="tab" onclick="switchTab('cardio',this)">유산소 운동</button>
-    <button class="tab admin-only" onclick="switchTab('progmgmt',this)">📋 프로그램 관리</button>
-    <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
-  </div>
-</div>
-<div class="app" id="main-app" style="display:none;padding-top:0.5rem">
+<div class="app" id="main-app" style="display:none">
 
 <!-- 회원가입 모달 -->
 <div id="signup-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:999999;align-items:center;justify-content:center;padding:1rem">
@@ -293,7 +283,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <div class="header">
   <div class="header-left">
     <div class="logo"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-    <div><div class="htitle">부산아이파크 선수 관리 시스템</div><div class="hsubtitle">Pre-activation &amp; GYM 근력 세션 — A/B/C/D 변형</div></div>
+    <div><div class="htitle">부산아이파크 선수 관리 시스템</div></div>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <span id="user-role" style="font-size:11px;color:var(--accent2);font-weight:600"></span>
@@ -302,6 +292,15 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <button onclick="doLogout()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">로그아웃</button>
     <span class="hbadge">IPARK FC</span>
   </div>
+</div>
+
+<div class="tabs" id="main-tabs">
+  <button class="tab active" onclick="switchTab('players',this)">📊 선수 통합관리</button>
+  <button class="tab" onclick="switchTab('gym',this)">근력 운동</button>
+  <button class="tab" onclick="switchTab('preact',this)">Pre-activation</button>
+  <button class="tab" onclick="switchTab('cardio',this)">유산소 운동</button>
+  <button class="tab admin-only" onclick="switchTab('progmgmt',this)">📋 프로그램 관리</button>
+  <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
 </div>
 
 <!-- 선수 관리 탭 -->
@@ -1090,7 +1089,7 @@ function applyRole(user){
 function showApp(user){
   currentUser = user;
   document.getElementById('login-overlay').style.display='none';
-  document.getElementById('main-app').style.display='block';document.getElementById('tab-wrapper').style.display='block';
+  document.getElementById('main-app').style.display='block';
   const emailEl = document.getElementById('user-email');
   if(emailEl && user?.email) emailEl.textContent = user.email;
   applyRole(user);
@@ -1100,7 +1099,7 @@ function showLogin(){
   currentUser = null;
   isAdmin = false;
   document.getElementById('login-overlay').style.display='flex';
-  document.getElementById('main-app').style.display='none';document.getElementById('tab-wrapper').style.display='none';
+  document.getElementById('main-app').style.display='none';
 }
 
 async function doLogout(){
@@ -5413,6 +5412,14 @@ self.addEventListener('fetch',e=>{
     }, 2000);
   }
 })();
+</script>
+<script>
+function updateHeaderHeight(){
+  const h = document.querySelector('.header');
+  if(h) document.documentElement.style.setProperty('--header-h', h.offsetHeight+'px');
+}
+window.addEventListener('load', updateHeaderHeight);
+window.addEventListener('resize', updateHeaderHeight);
 </script>
 </body>
 </html>
