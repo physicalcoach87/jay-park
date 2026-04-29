@@ -6,7 +6,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>부산아이파크 — 트레이닝 처방</title>
+<title>부산아이파크 — 선수 관리 시스템</title>
 
 <!-- PWA: iOS 홈 화면 설정 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -14,7 +14,7 @@
 <meta name="apple-mobile-web-app-title" content="IPARK 처방">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0e0e10">
-<meta name="description" content="부산아이파크 FC 트레이닝 처방 앱">
+<meta name="description" content="부산아이파크 FC 선수 관리 시스템">
 
 <!-- PWA: 앱 아이콘 (iOS) -->
 <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%23052e16'/><text x='90' y='115' font-size='90' text-anchor='middle' fill='%2322c55e'>⚡</text></svg>">
@@ -23,9 +23,9 @@
 <script>
 (function(){
   const manifest={
-    name:'부산아이파크 트레이닝 처방',
+    name:'부산아이파크 선수 관리 시스템',
     short_name:'IPARK 처방',
-    description:'부산아이파크 FC 트레이닝 처방 앱',
+    description:'부산아이파크 FC 선수 관리 시스템',
     start_url:'.',
     display:'standalone',
     background_color:'#0e0e10',
@@ -183,7 +183,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;margin-bottom:2rem">
       <div style="width:64px;height:64px;background:var(--accent-bg);border:2px solid var(--accent);border-radius:16px;display:flex;align-items:center;justify-content:center;font-size:32px">⚡</div>
       <div style="text-align:center">
-        <div style="font-size:18px;font-weight:600;color:var(--text)">IPARK 트레이닝 처방</div>
+        <div style="font-size:18px;font-weight:600;color:var(--text)">부산아이파크 선수 관리 시스템</div>
         <div style="font-size:13px;color:var(--text3);margin-top:4px">부산아이파크 FC</div>
       </div>
     </div>
@@ -283,7 +283,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <div class="header">
   <div class="header-left">
     <div class="logo"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-    <div><div class="htitle">부산아이파크 트레이닝 처방</div><div class="hsubtitle">Pre-activation &amp; GYM 근력 세션 — A/B/C/D 변형</div></div>
+    <div><div class="htitle">부산아이파크 선수 관리 시스템</div><div class="hsubtitle">Pre-activation &amp; GYM 근력 세션 — A/B/C/D 변형</div></div>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <span id="user-role" style="font-size:11px;color:var(--accent2);font-weight:600"></span>
@@ -295,7 +295,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 </div>
 
 <!-- 선수 관리 탭 -->
-<div id="tab-players" style="display:none">
+<div id="tab-players">
   <div class="vm-bar">
     <h3>📊 선수 통합 관리</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -632,18 +632,16 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 </div>
 <div class="tabs">
-  <button class="tab active" onclick="switchTab('gym',this)">GYM 근력</button>
+  <button class="tab active" onclick="switchTab('players',this)">📊 선수 통합관리</button>
+  <button class="tab" onclick="switchTab('gym',this)">근력 운동</button>
   <button class="tab" onclick="switchTab('preact',this)">Pre-activation</button>
-  <button class="tab" onclick="switchTab('cardio',this)">🏃 유산소</button>
-  <button class="tab" onclick="switchTab('players',this)">📊 선수 관리</button>
-  <button class="tab admin-only" onclick="switchTab('videos',this)">영상 관리</button>
-  <button class="tab admin-only" onclick="switchTab('custom',this)">커스텀 운동</button>
-  <button class="tab admin-only" onclick="switchTab('cprog',this)">📋 커스텀 프로그램</button>
+  <button class="tab" onclick="switchTab('cardio',this)">유산소 운동</button>
+  <button class="tab admin-only" onclick="switchTab('progmgmt',this)">📋 프로그램 관리</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
 </div>
 
 <!-- GYM -->
-<div id="tab-gym">
+<div id="tab-gym" style="display:none">
   <div class="ctrls g4">
     <div class="ctrl"><label>포지션</label><select id="gym-pos">
       <option value="CB">CB — 센터백</option><option value="FB">FB/WB — 풀백/윙백</option>
@@ -793,6 +791,24 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 운동 목록 -->
   <div id="cx-list"></div>
+</div>
+
+<!-- 프로그램 관리 탭 -->
+<div id="tab-progmgmt" style="display:none">
+  <div class="vm-bar"><h3>📋 프로그램 관리</h3></div>
+  <!-- 서브 탭 -->
+  <div style="display:flex;gap:8px;margin-bottom:16px">
+    <button id="ptab-videos" onclick="setProgTab('videos')"
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer">🎬 영상 관리</button>
+    <button id="ptab-custom" onclick="setProgTab('custom')"
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">✏️ 커스텀 운동</button>
+    <button id="ptab-cprog" onclick="setProgTab('cprog')"
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">📋 커스텀 프로그램</button>
+  </div>
+  <!-- 서브 탭 콘텐츠 -->
+  <div id="ptab-content-videos"></div>
+  <div id="ptab-content-custom" style="display:none"></div>
+  <div id="ptab-content-cprog" style="display:none"></div>
 </div>
 
 <!-- 알림/메시지 탭 -->
@@ -4123,6 +4139,12 @@ async function sendNotification(){
   loadNotifyHistory();
 }
 
+async function deleteNotification(id){
+  if(!confirm('이 공지를 삭제하시겠습니까?\n선수 앱에서도 즉시 삭제됩니다.')) return;
+  await supa.from('notifications').delete().eq('id', id);
+  loadNotifyHistory();
+}
+
 async function loadNotifyHistory(){
   const el = document.getElementById('notify-history');
   if(!el) return;
@@ -4136,7 +4158,12 @@ async function loadNotifyHistory(){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="font-size:13px;font-weight:600;color:var(--text)">${n.title}</div>
-        <div style="font-size:11px;color:var(--text3);flex-shrink:0;margin-left:8px">${time}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">
+          <div style="font-size:11px;color:var(--text3)">${time}</div>
+          <button onclick="deleteNotification('${n.id}')"
+            style="background:transparent;border:1px solid var(--red);border-radius:5px;
+                   color:var(--red);font-size:11px;padding:2px 7px;cursor:pointer">삭제</button>
+        </div>
       </div>
       <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${n.body}</div>
       <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--accent-bg);color:var(--accent2)">→ ${target}</span>
