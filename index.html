@@ -4097,6 +4097,22 @@ async function sendNotification(){
     created_by: currentUser?.email||'coach',
   });
   if(error){ msg.textContent='오류: '+error.message; msg.style.color='var(--red)'; return; }
+  // 푸시 알림 발송
+  try {
+    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'
+      },
+      body: JSON.stringify({
+        title, body,
+        target_type: target,
+        target_value: targetVal,
+        player_id: target==='player' ? targetVal : null
+      })
+    });
+  } catch(e) { console.warn('push error:', e); }
   msg.textContent='✅ 알림이 발송됐습니다!'; msg.style.color='var(--accent2)';
   document.getElementById('notify-title').value='';
   document.getElementById('notify-body').value='';
