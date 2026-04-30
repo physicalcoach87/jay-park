@@ -309,9 +309,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <h3>📊 선수 통합 관리</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">팀 요약</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">👤 선수 개인데이터</button>
       <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
-      <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">선수 대시보드</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
     </div>
   </div>
