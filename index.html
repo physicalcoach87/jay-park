@@ -3556,15 +3556,20 @@ async function loadMorningReport(){
     const isYesterday = date === yesterdayStr;
     const isToday2 = date === today;
     const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='M') : [];
-    const topic = (weekGps||[]).find(r=>r.session_date===date)?.session_topic || null;
+    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='S').length : 0;
+    const isTeamDay2 = dayGps.length > 0; // M 있는 날
+    // S 날이면 S 기준으로 표시
+    const dayGpsForRow = isTeamDay2 ? dayGps
+      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='S') : [];
+    const topic = (weekGps||[]).find(r=>r.session_date===date&&(r.session_type2==='M'||r.session_type2==='S'))?.session_topic || null;
     const opp   = (weekGps||[]).find(r=>r.session_date===date)?.opponent || null;
-    const td   = dayGps.length ? avgFields(dayGps,'td') : null;
-    const hsr  = dayGps.length ? avgFields(dayGps,'running_high') : null;
-    const sp   = dayGps.length ? avgFields(dayGps,'sprint') : null;
-    // sRPE from session_records
+    const td   = dayGpsForRow.length ? avgFields(dayGpsForRow,'td') : null;
+    const hsr  = dayGpsForRow.length ? avgFields(dayGpsForRow,'running_high') : null;
+    const sp   = dayGpsForRow.length ? avgFields(dayGpsForRow,'sprint') : null;
+    // sRPE from session_records (M 날만)
     const dayRpe28 = (rpe28||[]).filter(r=>r.record_date===date);
-    const avgRpe = dayRpe28.length ? dayRpe28.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/dayRpe28.length : 0;
-    const avgDur = dayGps.length  ? avgFields(dayGps,'duration') : 0;
+    const avgRpe = isTeamDay2&&dayRpe28.length ? dayRpe28.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/dayRpe28.length : 0;
+    const avgDur = dayGpsForRow.length ? avgFields(dayGpsForRow,'duration') : 0;
     const sRPE  = (avgRpe&&avgDur) ? Math.round(avgRpe*avgDur) : null;
 
     // ACWR 당일 계산
@@ -3593,6 +3598,11 @@ async function loadMorningReport(){
       : `<span style="font-size:10px;color:var(--text3)">—</span>`;
 
     const rowBg = isYesterday ? 'background:var(--accent-bg)' : isToday2 ? 'background:#0a1f10' : '';
+    const typeTag = isPast&&dayGpsForRow.length
+      ? (isTeamDay2
+          ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:4px">M</span>`
+          : `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:4px">S</span>`)
+      : '';
     const dayLabel = isYesterday ? `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--accent);color:white;margin-left:4px">어제</span>`
                    : isToday2   ? `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#15803d;color:white;margin-left:4px">오늘</span>` : '';
 
@@ -3608,10 +3618,10 @@ async function loadMorningReport(){
     return `<tr style="border-bottom:0.5px solid var(--border);${rowBg};${!isPast?'opacity:0.45':''}">
       <td style="padding:7px 10px;white-space:nowrap">
         <span style="color:${isYesterday?'var(--accent2)':isToday2?'#4ade80':'var(--text2)'};font-weight:${isYesterday||isToday2?'600':'400'}">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>
-        ${dayLabel}
+        ${typeTag}${dayLabel}
       </td>
       <td style="padding:7px 8px;text-align:center">${mdBadge}</td>
-      <td style="padding:7px 8px;text-align:right;color:var(--text2)">${dayGps.length?Math.round(avgFields(dayGps,'duration')||0)+'min':'—'}</td>
+      <td style="padding:7px 8px;text-align:right;color:var(--text2)">${dayGpsForRow.length?Math.round(avgFields(dayGpsForRow,'duration')||0)+'min':'—'}</td>
       <td style="padding:7px 8px;text-align:right">${tdCell}</td>
       <td style="padding:7px 8px;text-align:right">${hsrCell}</td>
       <td style="padding:7px 8px;text-align:right">${spCell}</td>
@@ -3621,10 +3631,12 @@ async function loadMorningReport(){
     </tr>`;
   }).join('');
 
-  // 주간 누적
+  // 주간 누적 — M 있는 날(isTeamDay)만 합산, S 날(경기 등) 제외
   const weekAllGps = (weekGps||[]).filter(r=>r.session_date<=today&&r.session_type2==='M');
+  // S 날 여부 판단: 날짜별로 M이 1개도 없으면 S 날
+  const weekTeamDates = new Set(weekAllGps.map(r=>r.session_date));
   const weekTotalTD   = weekAllGps.reduce((a,r)=>a+(parseFloat(r.td)||0),0)/1000;
-  const weekRpeRows   = (rpe28||[]).filter(r=>r.record_date>=weekStartStr&&r.record_date<=today);
+  const weekRpeRows   = (rpe28||[]).filter(r=>r.record_date>=weekStartStr&&r.record_date<=today&&weekTeamDates.has(r.record_date));
   const weekTotalSRPE = weekRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0);
 
   // ── 전날 세션 상세 ─────────────────────────────────────────────
@@ -4688,12 +4700,16 @@ async function loadTwoWeekCal(baseDate){
   for(let i = 0; i < 14; i++){
     const d = new Date(start); d.setDate(start.getDate() + i);
     const ymd = d.toISOString().split('T')[0];
-    // 전체 데이터 (hasData 판단)
+
     const dayAll = (gpsAll||[]).filter(r => r.session_date === ymd);
-    // M = 팀 전체 훈련 기준 (달력 카드 + 팀 평균 모두 M 기준)
     const dayM   = dayAll.filter(r => r.session_type2 === 'M');
-    // M이 없으면 전체 fallback
-    const dayBase = dayM.length > 0 ? dayM : dayAll;
+    const dayS   = dayAll.filter(r => r.session_type2 === 'S');
+
+    // M이 1개라도 있으면 → M 기준 팀 평균 (팀 합계 포함)
+    // M이 없으면 → S 기준 평균 (팀 합계 제외, S 배지)
+    const isTeamDay = dayM.length > 0;
+    const dayBase  = isTeamDay ? dayM : dayS;
+
     const dayRpe = (rpeAll||[]).filter(r => r.record_date === ymd);
 
     const avg = (arr, field, dec=0) => {
@@ -4706,20 +4722,25 @@ async function loadTwoWeekCal(baseDate){
     const durAvg = avg(dayBase, 'duration');
     const sRPE   = (durAvg && rpeAvg) ? Math.round(durAvg * rpeAvg) : null;
 
-    // 세션명: M 데이터의 고유 session_topic 목록 수집 (예: AM-Physical / PM-GYM)
-    const topicSet = [...new Set(dayBase.map(r=>r.session_topic).filter(Boolean))];
-    const topicLabel = topicSet.join(' / ') || null;
+    // 세션명: 기준 그룹(M 또는 S) 중 최빈값
+    const topicCount = {};
+    dayBase.forEach(r => {
+      const t = (r.session_topic||'').trim();
+      if(t) topicCount[t] = (topicCount[t]||0) + 1;
+    });
+    const topicLabel = Object.keys(topicCount).sort((a,b)=>topicCount[b]-topicCount[a])[0] || null;
 
-    // 상대팀·홈어웨이
     const opp  = dayAll.find(r => r.opponent)?.opponent || null;
     const ha   = dayAll.find(r => r.home_away)?.home_away || null;
 
     sessions.push({
       ymd, mon: d.getMonth()+1, day: d.getDate(), dow: DOW[d.getDay()],
       hasData: dayAll.length > 0,
-      n: dayBase.length,      // 달력·팀평균 기준 선수 수
+      isTeamDay,               // true=M기준(팀합계포함), false=S기준(팀합계제외)
+      n: dayBase.length,
       nAll: dayAll.length,
       nM: dayM.length,
+      nS: dayS.length,
       td:     avg(dayBase,'td'),
       hsr:    avg(dayBase,'running_high'),
       sprint: avg(dayBase,'sprint'),
@@ -4728,7 +4749,7 @@ async function loadTwoWeekCal(baseDate){
       dur: durAvg,
       rpe: rpeAvg, sRPE,
       opponent: opp, homeAway: ha,
-      topic: topicLabel,      // AM-Physical / PM-GYM 형태
+      topic: topicLabel,
       raw: dayAll
     });
   }
@@ -4780,22 +4801,16 @@ function renderTwoWeekCal(){
       ? 'border:1.5px solid var(--accent2);background:var(--accent-bg)'
       : 'border:1px solid var(--border)';
 
-    // 세션명 (AM-Physical 등) — 길면 줄바꿈
-    const topicLines = (s.topic||'').split('/').map(t=>t.trim()).filter(Boolean);
-    const topicHtml = topicLines.length
-      ? topicLines.map(t=>`<div style="font-size:9px;font-weight:600;text-align:center;padding:1px 3px;border-radius:3px;${mdBadgeStyle(t)};margin-bottom:1px">${t}</div>`).join('')
+    // M/S 배지
+    const typeBadge = !s.hasData ? '' : s.isTeamDay
+      ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:3px">M</span>`
+      : `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:3px">S</span>`;
+
+    // 세션명 (최빈값 단일 표시)
+    const topicHtml = s.topic
+      ? `<div style="font-size:9px;font-weight:600;text-align:center;padding:1px 3px;border-radius:3px;${mdBadgeStyle(s.topic)};margin-bottom:1px">${s.topic}</div>`
       : `<div style="font-size:9px;color:var(--text3);text-align:center">—</div>`;
 
-    // 상대팀 표시
-    const oppHtml = s.opponent
-      ? `<div style="font-size:9px;color:var(--text3);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 2px">vs ${s.opponent}</div>`
-      : '';
-
-    // 참여 선수수
-    const nHtml = s.hasData
-      ? `<div style="font-size:9px;color:var(--text3);text-align:center">${s.n}명</div>` : '';
-
-    // 지표 3줄
     const metricsHtml = s.hasData ? `
       <div style="border-top:1px solid var(--border);padding-top:4px;margin-top:2px;display:flex;flex-direction:column;gap:2px">
         <div style="display:flex;justify-content:space-between;align-items:center">
@@ -4822,7 +4837,7 @@ function renderTwoWeekCal(){
                min-height:${s.hasData?'145px':'60px'};
                transition:border-color .12s;${activeBorder}">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
-          <span style="font-size:10px;color:${isActive?'var(--accent2)':'var(--text3)'}">${s.dow}</span>
+          <span style="font-size:10px;color:${isActive?'var(--accent2)':'var(--text3)'}">${s.dow}${typeBadge}</span>
           <div style="text-align:right">
             <div style="font-size:9px;color:${isActive?'var(--accent2)':'var(--text3)'};line-height:1">${s.mon}월</div>
             <div style="font-size:14px;font-weight:600;color:${isActive?'var(--accent2)':'var(--text)'};line-height:1.2">${s.day}</div>
