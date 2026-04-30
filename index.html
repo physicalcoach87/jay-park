@@ -3491,7 +3491,6 @@ async function loadMorningReport(){
     supa.from('gps_records')
       .select('*,player_profiles(name,position)')
       .eq('session_date', yesterdayStr)
-      .eq('session_type2','M')
       .order('td',{ascending:false}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration')
@@ -3640,7 +3639,11 @@ async function loadMorningReport(){
   const weekTotalSRPE = weekRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0);
 
   // ── 전날 세션 상세 ─────────────────────────────────────────────
-  const yGps = (yesterdayGps||[]);
+  // 전날: M 있으면 M 기준, 없으면 S 또는 전체
+  const yGpsAll = (yesterdayGps||[]);
+  const yGpsM   = yGpsAll.filter(r => r.session_type2 === 'M');
+  const yGpsS   = yGpsAll.filter(r => r.session_type2 === 'S');
+  const yGps    = yGpsM.length > 0 ? yGpsM : (yGpsS.length > 0 ? yGpsS : yGpsAll);
   const yAvg = field => yGps.length ? avgFields(yGps,field) : null;
   const yDur    = yAvg('duration');
   const yTD     = yAvg('td');
@@ -3671,7 +3674,7 @@ async function loadMorningReport(){
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px">
       ${yMetricCard('운동시간',yDur,'min','var(--text)')}
-      ${yMetricCard('TD',yTD!=null?(yTD/1000).toFixed(1):null,'km','#60a5fa')}
+      ${yMetricCard('TD', yTD!=null ? parseFloat((yTD/1000).toFixed(1)) : null, 'km','#60a5fa')}
       ${yMetricCard('HSR',yHSR,'m','#f59e0b')}
       ${yMetricCard('Sprint',ySprint,'m','#ef4444')}
       ${yMetricCard('가속',yAccel,'회','#fb923c')}
@@ -4022,7 +4025,7 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
       <td style="padding:5px 8px;text-align:right;font-size:11px;color:var(--accent2);font-weight:500">${r.td?Math.round(r.td).toLocaleString():'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;color:#f59e0b">${r.running_high?Math.round(r.running_high):'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;color:#ef4444">${r.sprint?Math.round(r.sprint):'—'}</td>
-      <td style="padding:5px 8px;text-align:right;font-size:11px;color:${isZone5?'#4ade80':'var(--text2)'};font-weight:${isZone5?'600':'400'}">${r.max_speed||'—'}${isZone5?' ✓':''}</td>
+      <td style="padding:5px 8px;text-align:right;font-size:11px;color:${isZone5?'#4ade80':'var(--text2)'};font-weight:${isZone5?'600':'400'}">${r.max_speed||'—'}${isZone5?' ✓ (90%+)':''}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;color:${rpeVal>=8?'#ef4444':rpeVal>=6?'#f59e0b':'var(--text2)'}">${rpeVal||'—'}</td>
       <td style="padding:5px 8px;text-align:right;font-size:11px;color:#c084fc">${sRPE||'—'}</td>
       <td style="padding:5px 8px;text-align:center;font-size:11px;color:${wellColor}">${wellTotal?wellTotal+'/20':'—'}</td>
@@ -4065,8 +4068,8 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
           <div style="font-size:13px;font-weight:500;color:${acwrColor}">${acwr?acwr.toFixed(2):'—'}</div>
         </div>
         <div style="background:var(--surface2);border-radius:6px;padding:7px 5px;text-align:center">
-          <div style="font-size:9px;color:var(--text3);margin-bottom:2px">Zone5</div>
-          <div style="font-size:13px;font-weight:500;color:${daysSinceZ5>=14?'#ef4444':daysSinceZ5>=7?'#f59e0b':'#22c55e'}">${daysSinceZ5>=99?'미노출':daysSinceZ5+'일전'}</div>
+          <div style="font-size:9px;color:var(--text3);margin-bottom:2px">최고속도 90%+</div>
+          <div style="font-size:13px;font-weight:500;color:${daysSinceZ5>=14?'#ef4444':daysSinceZ5>=7?'#f59e0b':'#22c55e'}">${daysSinceZ5>=99?'노출 안됨':daysSinceZ5+'일전'}</div>
         </div>
       </div>
     </div>
@@ -4083,7 +4086,7 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
             <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">TD</th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">HSR</th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">Sprint</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">최고속도${mss?` <span style="font-weight:400;color:var(--text3)">(Z5≥${zone5Thr.toFixed(1)})</span>`:''}
+            <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">최고속도${mss?` <span style="font-weight:400;color:var(--text3)">(90%≥${zone5Thr.toFixed(1)})</span>`:''}
             </th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">RPE</th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">sRPE</th>
@@ -5635,17 +5638,22 @@ function calcMVExposure(sessions, mss, today){
   const todayD = new Date(today);
   const daysDiff = d => Math.floor((todayD - new Date(d)) / 86400000);
 
-  // 최근 21일 Zone5 노출 확인
+  // 최근 21일 Zone5 노출 확인 (오늘 포함)
   let zone5Days = 0, totalDays = 0, lastExposed = null;
   let maxSpeedWeek = 0; // 최근 7일 최고속도
-  sessions.forEach(s => {
+
+  // 날짜순 정렬 (최신→과거) 보장
+  const sorted = [...sessions].sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  sorted.forEach(s => {
     const diff = daysDiff(s.date);
     if(diff < 0 || diff >= 21) return;
     totalDays++;
     const spd = parseFloat(s.maxSpeed) || 0;
     if(spd >= zone5Threshold){
       zone5Days++;
-      if(!lastExposed) lastExposed = diff;
+      // diff=0(오늘)도 포함 — lastExposed는 가장 최근 노출일
+      if(lastExposed === null || diff < lastExposed) lastExposed = diff;
     }
     if(diff < 7 && spd > maxSpeedWeek) maxSpeedWeek = spd;
   });
@@ -5690,8 +5698,8 @@ function calcRiskLevel(acwr, mvExp, wellnessRisk){
 
   // MV 노출 모듈 (햄스트링)
   if(mvExp !== null){
-    if(mvExp.daysSinceExposed >= 14)     { score += 3; flags.push({ type:'MV', level:'red',   msg:`Zone5 ${mvExp.daysSinceExposed}일 미노출 — 햄스트링 고위험` }); }
-    else if(mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type:'MV', level:'amber', msg:`Zone5 ${mvExp.daysSinceExposed}일 미노출 — 햄스트링 주의` }); }
+    if(mvExp.daysSinceExposed >= 14)     { score += 3; flags.push({ type:'MV', level:'red',   msg:`최고속도 90% 이상 ${mvExp.daysSinceExposed}일 노출 안됨 — 햄스트링 고위험` }); }
+    else if(mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type:'MV', level:'amber', msg:`최고속도 90% 이상 ${mvExp.daysSinceExposed}일 노출 안됨 — 햄스트링 주의` }); }
     else if(mvExp.pctMSS < 80)           { score += 1; flags.push({ type:'MV', level:'yellow',msg:`최고속도 MSS ${mvExp.pctMSS.toFixed(0)}% — 속도 노출 부족` }); }
   }
 
@@ -5850,11 +5858,11 @@ function renderRiskResults(results, today){
       const mvSection = mvExpData ? (() => {
         const col = mvExpData.daysSinceExposed >= 14 ? '#ef4444' : mvExpData.daysSinceExposed >= 7 ? '#f59e0b' : '#22c55e';
         return `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
-          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🏃 MV 노출 (햄스트링)</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🏃 최고속도 90% 이상 달성 현황</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <div style="font-size:11px">Zone5 기준 <span style="font-weight:600;color:${col}">${mvExpData.zone5Threshold.toFixed(1)} km/h</span></div>
-            <div style="font-size:11px">마지막 노출 <span style="font-weight:600;color:${col}">${mvExpData.daysSinceExposed >= 99 ? '21일↑' : mvExpData.daysSinceExposed+'일 전'}</span></div>
-            <div style="font-size:11px">이번주 최고 <span style="font-weight:600;color:var(--text)">${mvExpData.maxSpeedWeek.toFixed(1)} km/h (MSS ${mvExpData.pctMSS.toFixed(0)}%)</span></div>
+            <div style="font-size:11px">기준속도 (MSS 90%) <span style="font-weight:600;color:${col}">${mvExpData.zone5Threshold.toFixed(1)} km/h</span></div>
+            <div style="font-size:11px">마지막 달성 <span style="font-weight:600;color:${col}">${mvExpData.daysSinceExposed >= 99 ? '21일 이상 노출 안됨' : mvExpData.daysSinceExposed+'일 전'}</span></div>
+            <div style="font-size:11px">이번주 최고속도 <span style="font-weight:600;color:var(--text)">${mvExpData.maxSpeedWeek.toFixed(1)} km/h (MSS ${mvExpData.pctMSS.toFixed(0)}%)</span></div>
           </div>
         </div>`;
       })() : '';
