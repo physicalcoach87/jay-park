@@ -4706,9 +4706,10 @@ async function loadTwoWeekCal(baseDate){
     const dayS   = dayAll.filter(r => r.session_type2 === 'S');
 
     // M이 1개라도 있으면 → M 기준 팀 평균 (팀 합계 포함)
-    // M이 없으면 → S 기준 평균 (팀 합계 제외, S 배지)
+    // M이 없고 S가 있으면 → S 기준 평균 (팀 합계 제외, S 배지)
+    // M도 S도 없으면 → 전체 fallback (팀 합계 제외)
     const isTeamDay = dayM.length > 0;
-    const dayBase  = isTeamDay ? dayM : dayS;
+    const dayBase  = isTeamDay ? dayM : (dayS.length > 0 ? dayS : dayAll);
 
     const dayRpe = (rpeAll||[]).filter(r => r.record_date === ymd);
 
@@ -4828,13 +4829,21 @@ function renderTwoWeekCal(){
           <span style="font-size:9px;color:var(--text3)">Spr</span>
           <span style="font-size:10px;font-weight:600;color:#ef4444">${s.sprint ?? '—'}</span>
         </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:9px;color:var(--text3)">Acc</span>
+          <span style="font-size:10px;font-weight:600;color:#fb923c">${s.accel ?? '—'}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:9px;color:var(--text3)">RHIE</span>
+          <span style="font-size:10px;font-weight:600;color:#34d399">${s.rhie ?? '—'}</span>
+        </div>
       </div>` : `<div style="font-size:10px;color:var(--text3);text-align:center;margin-top:auto">—</div>`;
 
     return `
       <div onclick="${s.hasData ? `selectTwoWeekDay(${idx})` : ''}"
         style="cursor:${s.hasData?'pointer':'default'};opacity:${s.hasData?1:0.38};
                border-radius:8px;padding:7px 5px 6px;display:flex;flex-direction:column;gap:2px;
-               min-height:${s.hasData?'145px':'60px'};
+               min-height:${s.hasData?'175px':'60px'};
                transition:border-color .12s;${activeBorder}">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
           <span style="font-size:10px;color:${isActive?'var(--accent2)':'var(--text3)'}">${s.dow}${typeBadge}</span>
