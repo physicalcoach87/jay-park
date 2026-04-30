@@ -4758,14 +4758,12 @@ async function saveGpsData(){
 
   btn.textContent='저장 중...'; btn.disabled=true;
 
-  // 날짜+선수 기준 기존 데이터 삭제 후 재삽입 (upsert 대신)
+  // 날짜 기준 전체 삭제 후 재삽입 (선수 변동 케이스 대응)
   const dates = [...new Set(_gpsParseData.map(r=>r.session_date))];
-  const playerIds = [...new Set(_gpsParseData.map(r=>r.player_id))];
 
   for(const date of dates){
     await supa.from('gps_records').delete()
-      .eq('session_date',date)
-      .in('player_id',playerIds);
+      .eq('session_date', date);
   }
 
   // player_name 필드 제거 후 저장
