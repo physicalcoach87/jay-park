@@ -5334,12 +5334,17 @@ async function loadPlayerDashboard(){
         <button onclick="openInjuryForm('${playerId}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">+ 추가</button>
       </div>
       ${injuries?.length ? injuries.map(inj=>`
-        <div style="padding:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-          <div>
+        <div style="padding:8px 4px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:600;color:var(--text)">${inj.body_part} — ${inj.injury_type}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:2px">${inj.injury_date} ~ ${inj.return_date||'진행중'} · ${inj.severity}</div>
+            ${inj.notes?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${inj.notes}</div>`:''}
           </div>
-          <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
+          <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
+            <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
+            <button onclick="openInjuryForm('${playerId}','${inj.id}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">✏️</button>
+            <button onclick="deleteInjury('${inj.id}','${inj.body_part}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:#fca5a5;cursor:pointer;font-family:inherit">🗑️</button>
+          </div>
         </div>`).join('')
       :'<div style="font-size:12px;color:var(--text3);padding:4px 0">부상 이력 없음</div>'}
     </div>`;
@@ -5899,21 +5904,133 @@ async function sendRiskAlert(playerId, playerName, flagMsg){
 
 
 // ── 부상 기록 폼 ──────────────────────────
-function openInjuryForm(playerId){
-  const body = prompt('부상 부위 (예: 왼쪽 햄스트링):');
-  if(!body) return;
-  const type = prompt('부상 유형 (예: 근육 파열):');
-  const severity = prompt('심각도 (경미/중간/심각):') || '경미';
-  const date = prompt('부상 날짜 (YYYY-MM-DD):') || new Date().toISOString().split('T')[0];
+// ── 부상 이력 모달 ──────────────────────────────────────────────
+let _injPlayerId = null;
+let _injRecordId = null;
 
-  supa.from('injury_records').insert({
-    player_id: playerId, injury_date: date,
-    body_part: body, injury_type: type||'',
-    severity, status:'치료중',
-    created_at: new Date().toISOString()
-  }).then(({error})=>{
-    if(!error) loadPlayerDashboard();
-  });
+async function openInjuryForm(playerId, injuryId=null){
+  _injPlayerId = playerId;
+  _injRecordId = injuryId;
+
+  // 기존 모달 제거
+  const existing = document.getElementById('injury-modal');
+  if(existing) existing.remove();
+
+  let inj = null;
+  if(injuryId){
+    const {data} = await supa.from('injury_records').select('*').eq('id',injuryId).single();
+    inj = data;
+  }
+
+  const today = new Date().toISOString().split('T')[0];
+  const modal = document.createElement('div');
+  modal.id = 'injury-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:15px;font-weight:600;color:var(--text)">${injuryId ? '부상 이력 수정' : '부상 이력 추가'}</div>
+        <button onclick="document.getElementById('injury-modal').remove()" style="font-size:18px;background:none;border:none;color:var(--text3);cursor:pointer">×</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">부상 부위</label>
+          <input id="inj-body" value="${inj?.body_part||''}" placeholder="예: 왼쪽 햄스트링"
+            style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">부상 유형</label>
+          <input id="inj-type" value="${inj?.injury_type||''}" placeholder="예: 근육 파열"
+            style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">심각도</label>
+            <select id="inj-severity" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+              <option value="경미" ${inj?.severity==='경미'?'selected':''}>경미</option>
+              <option value="중간" ${inj?.severity==='중간'?'selected':''}>중간</option>
+              <option value="심각" ${inj?.severity==='심각'?'selected':''}>심각</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">상태</label>
+            <select id="inj-status" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+              <option value="치료중" ${inj?.status==='치료중'?'selected':''}>치료중</option>
+              <option value="복귀" ${inj?.status==='복귀'?'selected':''}>복귀</option>
+              <option value="완치" ${inj?.status==='완치'?'selected':''}>완치</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">부상 날짜</label>
+            <input id="inj-date" type="date" value="${inj?.injury_date||today}"
+              style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          </div>
+          <div>
+            <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">복귀 날짜</label>
+            <input id="inj-return" type="date" value="${inj?.return_date||''}"
+              style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">메모</label>
+          <textarea id="inj-notes" rows="2" placeholder="추가 메모 (선택)"
+            style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical">${inj?.notes||''}</textarea>
+        </div>
+        <div id="inj-msg" style="font-size:12px;min-height:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px">
+          <button onclick="document.getElementById('injury-modal').remove()"
+            style="padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-size:13px;font-family:inherit">취소</button>
+          <button onclick="saveInjuryForm()"
+            style="padding:10px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">
+            ${injuryId ? '수정 저장' : '추가'}
+          </button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+async function saveInjuryForm(){
+  const msg = document.getElementById('inj-msg');
+  const body = document.getElementById('inj-body')?.value?.trim();
+  const type = document.getElementById('inj-type')?.value?.trim();
+  if(!body){ msg.textContent='부상 부위를 입력하세요'; msg.style.color='#ef4444'; return; }
+
+  const payload = {
+    player_id:   _injPlayerId,
+    body_part:   body,
+    injury_type: type||'',
+    severity:    document.getElementById('inj-severity')?.value||'경미',
+    status:      document.getElementById('inj-status')?.value||'치료중',
+    injury_date: document.getElementById('inj-date')?.value||new Date().toISOString().split('T')[0],
+    return_date: document.getElementById('inj-return')?.value||null,
+    notes:       document.getElementById('inj-notes')?.value?.trim()||null,
+  };
+
+  msg.textContent='저장 중...'; msg.style.color='var(--text3)';
+  let error;
+  if(_injRecordId){
+    ({error} = await supa.from('injury_records').update(payload).eq('id',_injRecordId));
+  } else {
+    ({error} = await supa.from('injury_records').insert({...payload, created_at: new Date().toISOString()}));
+  }
+
+  if(error){
+    msg.textContent='오류: '+error.message; msg.style.color='#ef4444';
+  } else {
+    document.getElementById('injury-modal')?.remove();
+    loadPlayerDashboard();
+  }
+}
+
+async function deleteInjury(injuryId, bodyPart){
+  if(!confirm(`"${bodyPart}" 부상 이력을 삭제할까요?`)) return;
+  const {error} = await supa.from('injury_records').delete().eq('id', injuryId);
+  if(!error) loadPlayerDashboard();
+  else alert('삭제 실패: '+error.message);
 }
 
 // ═══════════════════════════════════════════
