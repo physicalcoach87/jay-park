@@ -478,6 +478,12 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 선수 대시보드 뷰 -->
   <div id="pv-dashboard" style="display:none">
+    <!-- 뒤로가기 버튼 -->
+    <div id="back-btn-wrap" style="margin-bottom:10px;display:none">
+      <button onclick="goBack()" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:5px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">
+        ← 이전으로
+      </button>
+    </div>
     <div class="ctrls g2" style="margin-bottom:12px">
       <div class="ctrl">
         <label>선수 선택</label>
@@ -3235,6 +3241,10 @@ function setPlayerView(view){
       btn.style.color       = v===view ? 'var(--accent2)' : 'var(--text2)';
     }
   });
+  // 뒤로가기 버튼: dashboard 진입 시 히스토리 있으면 표시
+  const backWrap = document.getElementById('back-btn-wrap');
+  if(backWrap) backWrap.style.display = (view==='dashboard' && _navHistory.length > 0) ? 'block' : 'none';
+
   if(view==='team'){
     const today = new Date().toISOString().split('T')[0];
     const dateEl = document.getElementById('team-date');
@@ -4403,11 +4413,27 @@ async function loadTeamSummary(){
     </div>` : ''}`;
 }
 
-function selectDashboardPlayer(playerId){
+// 뒤로가기 히스토리 스택
+let _navHistory = [];
+
+function selectDashboardPlayer(playerId, fromView){
+  // 현재 탭을 히스토리에 저장
+  const currentActive = ['team','dashboard','wellness','roster','upload']
+    .find(v => {
+      const el = document.getElementById(`pv-${v}`);
+      return el && el.style.display !== 'none';
+    });
+  if(currentActive) _navHistory.push(currentActive);
+
   const sel = document.getElementById('dashboard-player');
   if(sel) sel.value = playerId;
   setPlayerView('dashboard');
   loadPlayerDashboard();
+}
+
+function goBack(){
+  const prev = _navHistory.pop();
+  if(prev) setPlayerView(prev);
 }
 
 // ── 선수 대시보드 ─────────────────────────
