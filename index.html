@@ -1101,6 +1101,8 @@ function showApp(user){
   const emailEl = document.getElementById('user-email');
   if(emailEl && user?.email) emailEl.textContent = user.email;
   applyRole(user);
+  // 로그인 직후 선수 통합관리 탭 데이터 즉시 로드
+  setTimeout(()=>{ loadPlayerManagement(); }, 100);
 }
 
 function showLogin(){
