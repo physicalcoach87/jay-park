@@ -3915,8 +3915,8 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
   panel.style.display = 'block';
   panel.innerHTML = '<div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">⏳ 14일 데이터 불러오는 중...</div>';
 
-  // 14일 전 날짜
-  const since14 = new Date(); since14.setDate(since14.getDate()-13);
+  // 14일 전 날짜 (오늘 포함 14일 = D-14)
+  const since14 = new Date(); since14.setDate(since14.getDate()-14);
   const since14Str = since14.toISOString().split('T')[0];
 
   const [{data:gps14}, {data:rpe14}, {data:well14}, {data:inj}] = await Promise.all([
@@ -3946,7 +3946,8 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
   const wellMap14 = {};
   (well14||[]).forEach(r=>{ wellMap14[r.record_date]=r; });
 
-  const sessions = (gps14||[]).filter(r=>!r.session_type2||r.session_type2!=='M');
+  // 전체 세션 표시 (session_type2 필터 없음 — 개인데이터 탭과 동일)
+  const sessions = (gps14||[]);
   const player = _players.find(p=>p.id===playerId);
   const mss = parseFloat(player?.mss)||0;
 
