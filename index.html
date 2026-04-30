@@ -838,10 +838,23 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 서브 탭 -->
   <div style="display:flex;gap:8px;margin-bottom:14px">
+    <button class="btn-exp" id="ntab-risk" onclick="setNotifyTab('risk')"
+      style="flex:1">⚠️ 부상위험</button>
     <button class="btn-exp" id="ntab-notice" onclick="setNotifyTab('notice')"
       style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📢 공지 알림</button>
     <button class="btn-exp" id="ntab-message" onclick="setNotifyTab('message')"
       style="flex:1">💬 1:1 메시지</button>
+  </div>
+
+  <!-- 부상위험 분석 뷰 -->
+  <div id="nv-risk" style="display:none">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:12px;color:var(--text3)">GPS 업로드 직후 자동 계산됩니다</div>
+      <button onclick="runInjuryRiskAnalysis()" style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 재분석</button>
+    </div>
+    <div id="injury-risk-output">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">GPS 데이터 업로드 후 자동으로 분석됩니다</div>
+    </div>
   </div>
 
   <!-- 공지 알림 뷰 -->
@@ -4764,7 +4777,10 @@ async function saveGpsData(){
     btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
   } else {
     msg.textContent=`✅ ${_gpsParseData.length}개 레코드 저장 완료!`; msg.style.color='var(--accent2)';
-    btn.textContent='✓ 저장됨'; 
+    btn.textContent='✓ 저장됨';
+    // MSS 자동 갱신 + 부상위험 분석 실행
+    await autoUpdateMSS(_gpsParseData);
+    runInjuryRiskAnalysis();
     // 팀 요약 탭으로 이동하여 결과 확인
     setTimeout(()=>{ setPlayerView('team'); loadTeamSummary(); }, 1500);
   }
@@ -4775,6 +4791,370 @@ function cancelUpload(){
   document.getElementById('upload-preview').style.display='none';
   document.getElementById('gps-file-input').value='';
 }
+
+
+// ══════════════════════════════════════════════════════════════════
+// 부상 위험 예측 엔진 (Injury Risk Prediction Engine)
+// 근거: ACWR (Gabbett 2016), MV 노출 (Malone 2017, Duhig 2016),
+//       웰니스 급락, 복합위험지수(CRI)
+// ══════════════════════════════════════════════════════════════════
+
+// ── MSS 자동 갱신 ────────────────────────────────────────────────
+async function autoUpdateMSS(gpsData){
+  // 선수별 이번 업로드의 최고속도 집계
+  const maxByPlayer = {};
+  gpsData.forEach(r => {
+    const spd = parseFloat(r.max_speed) || 0;
+    if(!maxByPlayer[r.player_id] || spd > maxByPlayer[r.player_id])
+      maxByPlayer[r.player_id] = spd;
+  });
+
+  const updated = [];
+  for(const [pid, newMSS] of Object.entries(maxByPlayer)){
+    if(!newMSS) continue;
+    const player = _players.find(p => p.id === pid);
+    if(!player) continue;
+    const currentMSS = parseFloat(player.mss) || 0;
+    if(newMSS > currentMSS){
+      // DB 갱신
+      await supa.from('player_profiles').update({ mss: newMSS }).eq('id', pid);
+      // 메모리 갱신
+      player.mss = newMSS;
+      updated.push({ name: player.name, old: currentMSS, new: newMSS });
+    }
+  }
+
+  // 갱신된 선수 있으면 코치에게 알림 저장
+  if(updated.length > 0){
+    const body = updated.map(u =>
+      `${u.name}: ${u.old > 0 ? u.old.toFixed(1) : '미등록'} → ${u.new.toFixed(1)} km/h`
+    ).join('\n');
+    await supa.from('notifications').insert({
+      title: `🏃 MSS 자동 갱신 (${updated.length}명)`,
+      body,
+      target_type: 'admin',
+      created_by: 'system',
+    });
+    console.log('MSS 갱신:', updated);
+  }
+}
+
+// ── 핵심 계산 함수들 ──────────────────────────────────────────────
+
+// ACWR 계산: 최근 7일 acute / 28일 chronic
+function calcACWR(sessions, today){
+  const toDate = d => new Date(d);
+  const todayD = toDate(today);
+
+  const daysDiff = (a, b) => Math.floor((b - a) / 86400000);
+
+  let acute = 0, chronicSum = 0, chronicDays = 0;
+  sessions.forEach(s => {
+    const rpe  = parseFloat(s.rpe)  || 0;
+    const dur  = parseFloat(s.dur)  || 0;
+    const sRPE = rpe * dur;
+    if(!sRPE) return;
+    const diff = daysDiff(toDate(s.date), todayD);
+    if(diff >= 0 && diff < 7)  acute += sRPE;
+    if(diff >= 0 && diff < 28){ chronicSum += sRPE; chronicDays++; }
+  });
+
+  const chronic = chronicDays > 0 ? (chronicSum / chronicDays) * 7 : 0;
+  const acwr = chronic > 0 ? acute / chronic : null;
+  return { acute: Math.round(acute), chronic: Math.round(chronic), acwr };
+}
+
+// MV 노출 계산: Zone5(≥90% MSS) 주간 노출비율
+function calcMVExposure(sessions, mss, today){
+  if(!mss || mss <= 0) return null;
+  const zone5Threshold = mss * 0.9;
+  const todayD = new Date(today);
+  const daysDiff = d => Math.floor((todayD - new Date(d)) / 86400000);
+
+  // 최근 21일 Zone5 노출 확인
+  let zone5Days = 0, totalDays = 0, lastExposed = null;
+  let maxSpeedWeek = 0; // 최근 7일 최고속도
+  sessions.forEach(s => {
+    const diff = daysDiff(s.date);
+    if(diff < 0 || diff >= 21) return;
+    totalDays++;
+    const spd = parseFloat(s.maxSpeed) || 0;
+    if(spd >= zone5Threshold){
+      zone5Days++;
+      if(!lastExposed) lastExposed = diff;
+    }
+    if(diff < 7 && spd > maxSpeedWeek) maxSpeedWeek = spd;
+  });
+
+  const exposureRatio = totalDays > 0 ? zone5Days / totalDays : 0;
+  const daysSinceExposed = lastExposed !== null ? lastExposed : 99;
+  const pctMSS = mss > 0 ? (maxSpeedWeek / mss) * 100 : 0;
+
+  return { exposureRatio, daysSinceExposed, maxSpeedWeek, pctMSS, zone5Threshold };
+}
+
+// 웰니스 급락 감지
+function calcWellnessRisk(wellness7, todayWellness){
+  if(!todayWellness || !wellness7.length) return null;
+
+  const avg = field => wellness7.reduce((a,r) => a + (r[field]||0), 0) / wellness7.length;
+  const baseline = {
+    fatigue:  avg('fatigue'), sleep: avg('sleep_quality'),
+    stress:   avg('stress'),  muscle: avg('muscle_soreness'),
+  };
+  const baseTotal = (baseline.fatigue + baseline.sleep + baseline.stress + baseline.muscle);
+  const todayTotal = (todayWellness.fatigue||0) + (todayWellness.sleep_quality||0)
+                   + (todayWellness.stress||0)  + (todayWellness.muscle_soreness||0);
+
+  const dropPct = baseTotal > 0 ? (baseTotal - todayTotal) / baseTotal : 0;
+  const absScore = todayTotal;
+
+  return { baseline: (baseTotal/4).toFixed(1), todayAvg: (todayTotal/4).toFixed(1), dropPct, absScore };
+}
+
+// 복합위험지수(CRI) 및 등급 산정
+function calcRiskLevel(acwr, mvExp, wellnessRisk){
+  let score = 0;
+  const flags = [];
+
+  // ACWR 모듈
+  if(acwr !== null){
+    if(acwr > 1.5)       { score += 3; flags.push({ type:'ACWR', level:'red',    msg:`ACWR ${acwr.toFixed(2)} — 급성 과부하 (>1.5)` }); }
+    else if(acwr > 1.3)  { score += 2; flags.push({ type:'ACWR', level:'amber',  msg:`ACWR ${acwr.toFixed(2)} — 부하 주의 (1.3~1.5)` }); }
+    else if(acwr < 0.8 && acwr > 0) { score += 1; flags.push({ type:'ACWR', level:'yellow', msg:`ACWR ${acwr.toFixed(2)} — 과소부하 (<0.8)` }); }
+  }
+
+  // MV 노출 모듈 (햄스트링)
+  if(mvExp !== null){
+    if(mvExp.daysSinceExposed >= 14)     { score += 3; flags.push({ type:'MV', level:'red',   msg:`Zone5 ${mvExp.daysSinceExposed}일 미노출 — 햄스트링 고위험` }); }
+    else if(mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type:'MV', level:'amber', msg:`Zone5 ${mvExp.daysSinceExposed}일 미노출 — 햄스트링 주의` }); }
+    else if(mvExp.pctMSS < 80)           { score += 1; flags.push({ type:'MV', level:'yellow',msg:`최고속도 MSS ${mvExp.pctMSS.toFixed(0)}% — 속도 노출 부족` }); }
+  }
+
+  // 웰니스 모듈
+  if(wellnessRisk !== null){
+    if(wellnessRisk.absScore <= 8)           { score += 2; flags.push({ type:'W', level:'red',   msg:`웰니스 총점 ${wellnessRisk.absScore}/20 — 과훈련 위험` }); }
+    else if(wellnessRisk.dropPct >= 0.25)    { score += 2; flags.push({ type:'W', level:'red',   msg:`웰니스 ${(wellnessRisk.dropPct*100).toFixed(0)}% 급락` }); }
+    else if(wellnessRisk.dropPct >= 0.15)    { score += 1; flags.push({ type:'W', level:'amber', msg:`웰니스 ${(wellnessRisk.dropPct*100).toFixed(0)}% 하락` }); }
+  }
+
+  const level = score >= 4 ? 'red' : score >= 2 ? 'amber' : score >= 1 ? 'yellow' : 'green';
+  return { score, level, flags };
+}
+
+// ── 메인 분석 함수 ────────────────────────────────────────────────
+async function runInjuryRiskAnalysis(){
+  const out = document.getElementById('injury-risk-output');
+  if(!out) return;
+  out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">⏳ 부상 위험 분석 중...</div>';
+
+  const today = new Date().toISOString().split('T')[0];
+  const since28 = new Date(); since28.setDate(since28.getDate()-28);
+  const since28Str = since28.toISOString().split('T')[0];
+  const since21 = new Date(); since21.setDate(since21.getDate()-21);
+  const since21Str = since21.toISOString().split('T')[0];
+  const since7 = new Date(); since7.setDate(since7.getDate()-7);
+  const since7Str = since7.toISOString().split('T')[0];
+
+  // 선수 목록 보장
+  if(!_players.length){
+    const {data} = await supa.from('player_profiles').select('*');
+    _players = data || [];
+  }
+
+  // 데이터 병렬 조회
+  const [{data:gpsAll}, {data:rpeAll}, {data:wellAll}] = await Promise.all([
+    supa.from('gps_records')
+      .select('player_id,session_date,max_speed,duration,session_type2')
+      .gte('session_date', since28Str).order('session_date', {ascending:false}),
+    supa.from('session_records')
+      .select('player_id,record_date,rpe,duration')
+      .gte('record_date', since28Str),
+    supa.from('wellness_records')
+      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
+      .gte('record_date', since7Str).order('record_date', {ascending:false}),
+  ]);
+
+  const results = [];
+
+  for(const player of _players){
+    const pid = player.id;
+    const mss = parseFloat(player.mss) || 0;
+
+    // 선수별 데이터 필터
+    const pgps = (gpsAll||[]).filter(r => r.player_id === pid && (!r.session_type2 || r.session_type2 !== 'M'));
+    const prpe = (rpeAll||[]).filter(r => r.player_id === pid);
+    const pwell= (wellAll||[]).filter(r => r.player_id === pid);
+
+    if(!pgps.length && !prpe.length) continue; // 데이터 없는 선수 스킵
+
+    // session별 sRPE 집계 (date → {rpe, dur})
+    const rpeMap = {};
+    prpe.forEach(r => { rpeMap[r.record_date] = { rpe: parseFloat(r.rpe)||0, dur: parseFloat(r.duration)||0 }; });
+    // GPS에서도 duration 보완
+    pgps.forEach(r => {
+      if(!rpeMap[r.session_date]) rpeMap[r.session_date] = { rpe:0, dur: parseFloat(r.duration)||0 };
+      else if(!rpeMap[r.session_date].dur) rpeMap[r.session_date].dur = parseFloat(r.duration)||0;
+    });
+
+    const sessionsForACWR = Object.entries(rpeMap).map(([date, v]) => ({ date, rpe: v.rpe, dur: v.dur }));
+    const sessionsForMV   = pgps.map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed)||0 }));
+
+    // 모듈 계산
+    const acwrData    = calcACWR(sessionsForACWR, today);
+    const mvExpData   = mss > 0 ? calcMVExposure(sessionsForMV, mss, today) : null;
+    const todayWell   = pwell.find(r => r.record_date === today) || (pwell.length ? pwell[0] : null);
+    const well7       = pwell.filter(r => r.record_date >= since7Str);
+    const wellData    = (todayWell && well7.length > 1) ? calcWellnessRisk(well7.slice(1), todayWell) : null;
+
+    const risk = calcRiskLevel(acwrData.acwr, mvExpData, wellData);
+
+    if(risk.level !== 'green' || risk.flags.length > 0){
+      results.push({ player, acwrData, mvExpData, wellData, risk });
+    }
+  }
+
+  // 위험도 순 정렬
+  const levelOrder = { red:0, amber:1, yellow:2, green:3 };
+  results.sort((a,b) => levelOrder[a.risk.level] - levelOrder[b.risk.level]);
+
+  renderRiskResults(results, today);
+}
+
+// ── 결과 렌더링 ───────────────────────────────────────────────────
+function renderRiskResults(results, today){
+  const out = document.getElementById('injury-risk-output');
+  if(!out) return;
+
+  const levelCfg = {
+    red:    { bg:'#3b1219', border:'#ef4444', color:'#f87171', label:'🔴 고위험',    action:'즉시 부하 감소 / 출전 재고' },
+    amber:  { bg:'#2a1a00', border:'#f59e0b', color:'#fbbf24', label:'🟠 주의',      action:'훈련량 조절 / 모니터링 강화' },
+    yellow: { bg:'#1a1a00', border:'#eab308', color:'#fde047', label:'🟡 모니터링',  action:'부하 점검 / 웰니스 확인' },
+  };
+
+  if(!results.length){
+    out.innerHTML = `
+      <div style="text-align:center;padding:2.5rem;background:var(--surface);border:1px solid #15803d;border-radius:12px">
+        <div style="font-size:32px;margin-bottom:8px">🟢</div>
+        <div style="font-size:15px;font-weight:700;color:#4ade80">전 선수 정상</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">${today} 기준 위험 선수 없음</div>
+      </div>`;
+    return;
+  }
+
+  const summary = {
+    red:    results.filter(r=>r.risk.level==='red').length,
+    amber:  results.filter(r=>r.risk.level==='amber').length,
+    yellow: results.filter(r=>r.risk.level==='yellow').length,
+  };
+
+  out.innerHTML = `
+    <!-- 요약 배너 -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
+      ${[['red','🔴','고위험'],['amber','🟠','주의'],['yellow','🟡','모니터링']].map(([l,ic,lb])=>`
+        <div style="background:${levelCfg[l].bg};border:1px solid ${levelCfg[l].border};border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:${levelCfg[l].color}">${summary[l]}</div>
+          <div style="font-size:11px;color:${levelCfg[l].color}">${ic} ${lb}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- 선수별 카드 -->
+    ${results.map(r => {
+      const cfg = levelCfg[r.risk.level];
+      const { player, acwrData, mvExpData, wellData, risk } = r;
+      const mss = parseFloat(player.mss) || 0;
+
+      const acwrBar = acwrData.acwr !== null ? (() => {
+        const pct = Math.min((acwrData.acwr / 2) * 100, 100);
+        const col = acwrData.acwr > 1.5 ? '#ef4444' : acwrData.acwr > 1.3 ? '#f59e0b' : acwrData.acwr < 0.8 ? '#eab308' : '#22c55e';
+        return `<div style="margin-top:4px">
+          <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-bottom:2px">
+            <span>ACWR</span><span style="color:${col};font-weight:700">${acwrData.acwr.toFixed(2)}</span>
+          </div>
+          <div style="height:4px;background:var(--border);border-radius:2px">
+            <div style="height:4px;border-radius:2px;background:${col};width:${pct}%;position:relative">
+              ${acwrData.acwr > 1.3 ? '<div style="position:absolute;right:0;top:-3px;width:2px;height:10px;background:#ef4444;border-radius:1px"></div>' : ''}
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-top:1px">
+            <span>0.8</span><span style="color:#22c55e">안전</span><span>1.3</span><span style="color:#ef4444">위험</span><span>2.0</span>
+          </div>
+        </div>`;
+      })() : '';
+
+      const mvSection = mvExpData ? (() => {
+        const col = mvExpData.daysSinceExposed >= 14 ? '#ef4444' : mvExpData.daysSinceExposed >= 7 ? '#f59e0b' : '#22c55e';
+        return `<div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🏃 MV 노출 (햄스트링)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div style="font-size:11px">Zone5 기준 <span style="font-weight:600;color:${col}">${mvExpData.zone5Threshold.toFixed(1)} km/h</span></div>
+            <div style="font-size:11px">마지막 노출 <span style="font-weight:600;color:${col}">${mvExpData.daysSinceExposed >= 99 ? '21일↑' : mvExpData.daysSinceExposed+'일 전'}</span></div>
+            <div style="font-size:11px">이번주 최고 <span style="font-weight:600;color:var(--text)">${mvExpData.maxSpeedWeek.toFixed(1)} km/h (MSS ${mvExpData.pctMSS.toFixed(0)}%)</span></div>
+          </div>
+        </div>`;
+      })() : '';
+
+      const wellSection = wellData ? `
+        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">💚 웰니스</div>
+          <div style="font-size:11px">7일 기준선 <span style="font-weight:600;color:var(--text)">${wellData.baseline}/5</span> → 오늘 <span style="font-weight:600;color:${parseFloat(wellData.dropPct)>=0.25?'#ef4444':'#f59e0b'}">${wellData.todayAvg}/5</span> (${(wellData.dropPct*100).toFixed(0)}% 하락)</div>
+        </div>` : '';
+
+      const flagHtml = risk.flags.map(f => {
+        const fc = f.level==='red'?'#f87171':f.level==='amber'?'#fbbf24':'#fde047';
+        return `<div style="font-size:11px;color:${fc};margin-top:3px">• ${f.msg}</div>`;
+      }).join('');
+
+      return `
+        <div style="background:${cfg.bg};border:1px solid ${cfg.border};border-radius:12px;padding:14px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+            <div>
+              <div style="font-size:14px;font-weight:700;color:var(--text)">${player.name}
+                <span style="font-size:11px;color:var(--text3);margin-left:4px">${player.position}</span>
+                ${mss ? `<span style="font-size:10px;color:#93c5fd;margin-left:4px">MSS ${mss}</span>` : ''}
+              </div>
+              <div style="font-size:11px;color:${cfg.color};margin-top:2px;font-weight:600">${cfg.label} · CRI ${risk.score}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:10px;color:var(--text3)">${cfg.action}</div>
+              <button onclick="sendRiskAlert('${player.id}','${player.name}',\`${risk.flags.map(f=>f.msg).join(' / ')}\`)"
+                style="margin-top:4px;font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid ${cfg.border};background:transparent;color:${cfg.color};cursor:pointer;font-family:inherit">
+                📨 알림 발송
+              </button>
+            </div>
+          </div>
+          ${flagHtml}
+          ${acwrBar}
+          ${mvSection}
+          ${wellSection}
+        </div>`;
+    }).join('')}
+    <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">${today} 기준 · GPS 업로드 시 자동 갱신</div>`;
+}
+
+// ── 위험 선수 개별 알림 발송 ─────────────────────────────────────
+async function sendRiskAlert(playerId, playerName, flagMsg){
+  const title = `⚠️ 부상 위험 알림 — ${playerName}`;
+  const body  = `${flagMsg}\n\n훈련 부하 및 컨디션을 확인해주세요.`;
+
+  await supa.from('notifications').insert({
+    title, body,
+    target_type: 'player',
+    target_value: playerId,
+    created_by: currentUser?.email || 'coach',
+  });
+
+  try {
+    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'},
+      body: JSON.stringify({ title, body, target_type:'player', player_id: playerId })
+    });
+  } catch(e){ console.warn('push error:', e); }
+
+  alert(`✅ ${playerName} 선수에게 알림을 발송했습니다.`);
+}
+
 
 // ── 부상 기록 폼 ──────────────────────────
 function openInjuryForm(playerId){
@@ -4813,15 +5193,18 @@ async function loadNotifyTab(){
 }
 
 function setNotifyTab(tab){
-  document.getElementById('nv-notice').style.display = tab==='notice'?'block':'none';
+  document.getElementById('nv-notice').style.display  = tab==='notice' ?'block':'none';
   document.getElementById('nv-message').style.display = tab==='message'?'block':'none';
-  ['notice','message'].forEach(t=>{
+  document.getElementById('nv-risk').style.display    = tab==='risk'   ?'block':'none';
+  ['notice','message','risk'].forEach(t=>{
     const btn = document.getElementById(`ntab-${t}`);
+    if(!btn) return;
     btn.style.borderColor = t===tab?'var(--accent)':'var(--border2)';
     btn.style.background  = t===tab?'var(--accent-bg)':'var(--surface2)';
     btn.style.color       = t===tab?'var(--accent2)':'var(--text2)';
   });
   if(tab==='message') loadMessageList();
+  if(tab==='risk') runInjuryRiskAnalysis();
 }
 
 function onNotifyTargetChange(){
