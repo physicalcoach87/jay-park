@@ -5097,17 +5097,21 @@ async function loadTeamSummary(){
       </table>
     </div>
 
-    <!-- 개인 컨디셔닝 그룹 -->
+    <!-- 서브/미엔트리 그룹 -->
     ${indGps.length ? `
     <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
-        서브/미엔트리 개인컨디셔닝 (${indGps.length}명)
+        서브 평균 (${indGps.length}명)
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgGroup(indGps,'max_speed',1)}</div><div style="font-size:11px;color:var(--text3)">최고속도</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#f59e0b">${avgGroup(indGps,'running_high')}</div><div style="font-size:11px;color:var(--text3)">HSR (m)</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#ef4444">${avgGroup(indGps,'sprint')}</div><div style="font-size:11px;color:var(--text3)">Sprint (m)</div></div>
         <div><div style="font-size:18px;font-weight:700;color:#a78bfa">${avgGroup(indGps,'player_load',1)}</div><div style="font-size:11px;color:var(--text3)">P.Load</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgGroup(indGps,'max_speed',1)}</div><div style="font-size:11px;color:var(--text3)">최고속도</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#34d399">${avgGroup(indGps,'rhie')}</div><div style="font-size:11px;color:var(--text3)">RHIE</div></div>
         <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(indGps,'accel')}</div><div style="font-size:11px;color:var(--text3)">가속</div></div>
+        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(indGps,'decel')}</div><div style="font-size:11px;color:var(--text3)">감속</div></div>
       </div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:800px">
