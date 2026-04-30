@@ -449,9 +449,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 팀 요약 뷰 -->
   <div id="pv-team" style="display:block">
+
+    <!-- 최근 2주 세션 현황 (상단 메인) -->
+    <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px" id="two-week-label">최근 2주 세션 현황 — 날짜 클릭 시 하단 상세 표시</div>
+    <div id="two-week-cal"></div>
+    <div id="two-week-detail" style="display:none;margin-top:12px"></div>
+
+    <!-- 날짜 조회 & 엑셀 (하단) -->
+    <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
     <div class="ctrls g2" style="margin-bottom:12px">
       <div class="ctrl">
-        <label>날짜</label>
+        <label>날짜 조회</label>
         <input type="date" id="team-date" style="width:100%">
       </div>
       <div class="ctrl" style="display:flex;align-items:flex-end;gap:8px">
@@ -460,16 +468,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       </div>
     </div>
     <div id="team-summary-output"></div>
-
-    <!-- 최근 2주 섹션 구분선 -->
-    <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
-    <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px" id="two-week-label">최근 2주 세션 현황 — 날짜 클릭 시 하단 상세 표시</div>
-
-    <!-- 2주 달력 그리드 -->
-    <div id="two-week-cal"></div>
-
-    <!-- 2주 날짜 클릭 상세 패널 -->
-    <div id="two-week-detail" style="display:none;margin-top:12px"></div>
   </div>
 
   <!-- 선수 대시보드 뷰 -->
@@ -3702,7 +3700,10 @@ async function loadTwoWeekCal(baseDate){
   for(let i = 0; i < 14; i++){
     const d = new Date(start); d.setDate(start.getDate() + i);
     const ymd = d.toISOString().split('T')[0];
-    const dayGps = (gpsAll||[]).filter(r => r.session_date === ymd && (!r.session_type2 || r.session_type2 !== 'M'));
+    // 전체 데이터 (hasData 판단용)
+    const dayAll = (gpsAll||[]).filter(r => r.session_date === ymd);
+    // 팀 평균용: M 제외
+    const dayGps = dayAll.filter(r => !r.session_type2 || r.session_type2 !== 'M');
     const dayRpe = (rpeAll||[]).filter(r => r.record_date === ymd);
 
     const avg = (arr, field, dec=0) => {
@@ -3715,21 +3716,22 @@ async function loadTwoWeekCal(baseDate){
     const durAvg = avg(dayGps, 'duration');
     const sRPE   = (durAvg && rpeAvg) ? Math.round(durAvg * rpeAvg) : null;
 
-    // 상대팀·홈어웨이 (날짜 내 첫 번째 유효 값)
-    const opp  = dayGps.find(r => r.opponent)?.opponent || null;
-    const ha   = dayGps.find(r => r.home_away)?.home_away || null;
-    const topic= dayGps.find(r => r.session_topic)?.session_topic || null;
+    // 상대팀·홈어웨이 (전체 데이터에서 첫 번째 유효 값)
+    const opp  = dayAll.find(r => r.opponent)?.opponent || null;
+    const ha   = dayAll.find(r => r.home_away)?.home_away || null;
+    const topic= dayAll.find(r => r.session_topic)?.session_topic || null;
 
     sessions.push({
       ymd, mon: d.getMonth()+1, day: d.getDate(), dow: DOW[d.getDay()],
-      hasData: dayGps.length > 0,
-      n: dayGps.length,
+      hasData: dayAll.length > 0,   // M 포함 전체 기준으로 클릭 가능 여부 판단
+      n: dayGps.length,             // 팀 평균 대상 선수 수 (M 제외)
+      nAll: dayAll.length,          // 전체 참여 선수 수
       td: avg(dayGps,'td'), hsr: avg(dayGps,'running_high'),
       sprint: avg(dayGps,'sprint'), accel: avg(dayGps,'accel'),
       rhie: avg(dayGps,'rhie'), dur: durAvg,
       rpe: rpeAvg, sRPE,
       opponent: opp, homeAway: ha, topic,
-      raw: dayGps   // 선수별 원본 (상세용)
+      raw: dayAll
     });
   }
 
@@ -3833,36 +3835,42 @@ async function renderTwoWeekDetail(idx){
   const detEl = document.getElementById('two-week-detail');
   if(!s || !s.hasData || !detEl) return;
   detEl.style.display = 'block';
+  detEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px">선수 데이터 불러오는 중...</div>';
 
-  // 선수별 상세: raw에는 player_id만 있으므로 player_profiles join 필요
-  const {data: dayGps} = await supa
-    .from('gps_records')
-    .select('*, player_profiles(name, position)')
-    .eq('session_date', s.ymd)
-    .neq('session_type2', 'M')
-    .order('td', {ascending: false});
-
-  const {data: dayRpe} = await supa
-    .from('session_records')
-    .select('player_id, rpe, duration')
-    .eq('record_date', s.ymd);
+  // 전체 선수 조회 (M 포함) — player_profiles join
+  const [{data: dayGps}, {data: dayRpe}] = await Promise.all([
+    supa.from('gps_records')
+      .select('*, player_profiles(name, position)')
+      .eq('session_date', s.ymd)
+      .order('session_type2', {ascending:true})
+      .order('td', {ascending: false}),
+    supa.from('session_records')
+      .select('player_id, rpe, duration')
+      .eq('record_date', s.ymd)
+  ]);
 
   const rpeMap = {};
   (dayRpe||[]).forEach(r => { rpeMap[r.player_id] = r; });
 
-  const full = (dayGps||[]).filter(r => !r.session_type2 || r.session_type2 !== 'M');
-  const avg  = (arr, field, dec=0) => {
+  // M 제외 = 팀 훈련 그룹 (팀 평균 기준)
+  const teamGps = (dayGps||[]).filter(r => !r.session_type2 || r.session_type2 !== 'M');
+  // M = 개인 컨디셔닝 그룹
+  const indGps  = (dayGps||[]).filter(r => r.session_type2 === 'M');
+
+  const avg = (arr, field, dec=0) => {
     const vals = arr.filter(r => parseFloat(r[field]) > 0);
     if(!vals.length) return '—';
-    const v = vals.reduce((s,r) => s + (parseFloat(r[field])||0), 0) / vals.length;
+    const v = vals.reduce((a,r) => a + (parseFloat(r[field])||0), 0) / vals.length;
     return dec ? v.toFixed(dec) : Math.round(v);
   };
-  const durAvg = avg(full, 'duration');
-  const rpeAvg = s.rpe ? s.rpe.toFixed(1) : '—';
+  const durAvg  = avg(teamGps, 'duration');
   const sRPEavg = s.sRPE || '—';
 
-  const haLabel = s.homeAway === 'H' ? '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#0a1f10;color:#4ade80;font-weight:600">HOME</span>'
-                : s.homeAway === 'A' ? '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#2a1a00;color:#fbbf24;font-weight:600">AWAY</span>' : '';
+  const haLabel = s.homeAway === 'H'
+    ? '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#0a1f10;color:#4ade80;font-weight:600">HOME</span>'
+    : s.homeAway === 'A'
+    ? '<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:#2a1a00;color:#fbbf24;font-weight:600">AWAY</span>' : '';
+
   const oppHtml = s.opponent
     ? `<div style="display:inline-flex;align-items:center;gap:6px;margin-top:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px">
          <span style="font-size:10px;color:var(--text3)">준비 상대</span>
@@ -3884,18 +3892,19 @@ async function renderTwoWeekDetail(idx){
       <div style="font-size:13px;font-weight:700;color:var(--accent2)">${m.val}</div>
     </div>`).join('');
 
-  const playerRows = full.map(r => {
-    const rpe = rpeMap[r.player_id];
-    const dur = r.duration || (rpe?.duration) || null;
-    const rpeVal = rpe?.rpe || null;
-    const sRPE = (dur && rpeVal) ? Math.round(dur * rpeVal) : '—';
+  const makeRow = (r, isInd=false) => {
+    const rpe    = rpeMap[r.player_id];
+    const dur    = r.duration || rpe?.duration || null;
+    const rpeVal = parseFloat(rpe?.rpe) || null;
+    const sRPE   = (dur && rpeVal) ? Math.round(dur * rpeVal) : '—';
+    const indBadge = isInd ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#1a0a2e;color:#a78bfa;margin-left:4px">M</span>' : '';
     return `
-      <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
+      <tr style="border-bottom:1px solid var(--border);cursor:pointer;${isInd?'opacity:0.75':''}" onclick="selectDashboardPlayer('${r.player_id}')">
         <td style="padding:8px">
-          <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'—'}</div>
+          <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'—'}${indBadge}</div>
           <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
         </td>
-        <td style="padding:8px;text-align:right">${r.duration||'—'}</td>
+        <td style="padding:8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
         <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${r.td ? Math.round(r.td).toLocaleString() : '—'}</td>
         <td style="padding:8px;text-align:right;color:#f59e0b">${r.running_high ? Math.round(r.running_high).toLocaleString() : '—'}</td>
         <td style="padding:8px;text-align:right;color:#ef4444">${r.sprint ? Math.round(r.sprint).toLocaleString() : '—'}</td>
@@ -3903,11 +3912,14 @@ async function renderTwoWeekDetail(idx){
         <td style="padding:8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
         <td style="padding:8px;text-align:right;color:#a78bfa">${sRPE}</td>
       </tr>`;
-  }).join('');
+  };
+
+  const teamRows = teamGps.map(r => makeRow(r, false)).join('');
+  const indRows  = indGps.map(r => makeRow(r, true)).join('');
 
   const avgRow = `
     <tr style="background:var(--surface2)">
-      <td style="padding:8px;font-weight:600;color:var(--text3)">팀 평균</td>
+      <td style="padding:8px;font-weight:600;color:var(--text3)">팀 평균 <span style="font-size:10px;font-weight:400">(${teamGps.length}명)</span></td>
       <td style="padding:8px;text-align:right;color:var(--text3)">${durAvg}</td>
       <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${s.td ? Math.round(s.td).toLocaleString() : '—'}</td>
       <td style="padding:8px;text-align:right;color:#f59e0b">${s.hsr ? Math.round(s.hsr).toLocaleString() : '—'}</td>
@@ -3921,7 +3933,7 @@ async function renderTwoWeekDetail(idx){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
       <div style="padding:12px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${s.ymd} (${s.dow}) · ${s.topic||'—'}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:2px">참여 선수 ${s.n}명</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">전체 ${s.nAll}명 참여 (팀훈련 ${teamGps.length}명 · 개인컨디셔닝 ${indGps.length}명)</div>
         ${oppHtml}
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px">
           ${avgCards}
@@ -3942,7 +3954,8 @@ async function renderTwoWeekDetail(idx){
             </tr>
           </thead>
           <tbody>
-            ${playerRows}
+            ${teamRows}
+            ${indRows}
             ${avgRow}
           </tbody>
         </table>
@@ -4068,8 +4081,8 @@ function selectDashboardPlayer(playerId){
 // ── 선수 대시보드 ─────────────────────────
 async function loadPlayerDashboard(){
   const playerId = document.getElementById('dashboard-player')?.value;
-  const days = parseInt(document.getElementById('dashboard-period')?.value||28);
-  const out = document.getElementById('player-dashboard-output');
+  const days     = parseInt(document.getElementById('dashboard-period')?.value||28);
+  const out      = document.getElementById('player-dashboard-output');
   if(!playerId||!out) return;
 
   const player = _players.find(p=>p.id===playerId);
@@ -4081,93 +4094,195 @@ async function loadPlayerDashboard(){
   since.setDate(since.getDate()-days);
   const sinceStr = since.toISOString().split('T')[0];
 
-  // GPS 데이터
-  const {data:gps} = await supa.from('gps_records')
-    .select('*').eq('player_id',playerId)
-    .gte('session_date',sinceStr)
-    .order('session_date',{ascending:false});
-
-  // 부상 현황
-  const {data:injuries} = await supa.from('injury_records')
-    .select('*').eq('player_id',playerId)
-    .in('status',['치료중','복귀'])
-    .order('injury_date',{ascending:false});
+  const [{data:gps},{data:rpeRows},{data:injuries}] = await Promise.all([
+    supa.from('gps_records')
+      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,opponent,session_type2')
+      .eq('player_id',playerId)
+      .gte('session_date',sinceStr)
+      .order('session_date',{ascending:false}),
+    supa.from('session_records')
+      .select('record_date,rpe,duration')
+      .eq('player_id',playerId)
+      .gte('record_date',sinceStr)
+      .order('record_date',{ascending:false}),
+    supa.from('injury_records')
+      .select('*').eq('player_id',playerId)
+      .in('status',['치료중','복귀'])
+      .order('injury_date',{ascending:false})
+  ]);
 
   const hasInjury = injuries?.length > 0;
+  const sessions  = gps||[];
+  const rpeMap    = {};
+  (rpeRows||[]).forEach(r=>{ rpeMap[r.record_date]=r; });
+
+  const avgF = (arr,field,dec=0) => {
+    const vals = arr.map(r=>parseFloat(r[field])||0).filter(v=>v>0);
+    if(!vals.length) return null;
+    const v = vals.reduce((a,b)=>a+b,0)/vals.length;
+    return dec ? parseFloat(v.toFixed(dec)) : Math.round(v);
+  };
+  const fmt = v => v!=null ? (typeof v==='number'&&v>999 ? v.toLocaleString() : v) : '—';
+  const mdBadge = topic => {
+    const t=(topic||'').toUpperCase();
+    const map={MATCH:'background:#3b1219;color:#f87171','MD-3':'background:#2a0e0e;color:#f87171','MD-2':'background:#2a1a00;color:#fbbf24','MD-4':'background:#0c1a2e;color:#60a5fa','MD-1':'background:#0a1f10;color:#4ade80','MD+1':'background:#1a1a1a;color:#9ca3af'};
+    for(const k of Object.keys(map)){if(t.includes(k)) return `<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${map[k]}">${topic}</span>`;}
+    return `<span style="font-size:10px;color:var(--text3)">${topic||'—'}</span>`;
+  };
+
+  const avgTD   = avgF(sessions,'td');
+  const avgHSR  = avgF(sessions,'running_high');
+  const avgSP   = avgF(sessions,'sprint');
+  const avgAcc  = avgF(sessions,'accel');
+  const avgRHIE = avgF(sessions,'rhie');
+  const avgMS   = avgF(sessions,'max_speed',1);
+  const avgDur  = avgF(sessions,'duration');
+  const avgPL   = avgF(sessions,'player_load',1);
+  const rpeVals = (rpeRows||[]).map(r=>parseFloat(r.rpe)||0).filter(v=>v>0);
+  const avgRPE  = rpeVals.length ? parseFloat((rpeVals.reduce((a,b)=>a+b,0)/rpeVals.length).toFixed(1)) : null;
+  const avgSRPE = avgDur&&avgRPE ? Math.round(avgDur*avgRPE) : null;
+  const avgFmpRM = avgF(sessions,'fmp_run_medium',1);
+  const avgFmpRH = avgF(sessions,'fmp_run_high',1);
+  const avgFmpDM = avgF(sessions,'fmp_dyn_medium',1);
+  const avgFmpDH = avgF(sessions,'fmp_dyn_high',1);
+  const fmpMax   = Math.max(avgFmpRM||0,avgFmpRH||0,avgFmpDM||0,avgFmpDH||0,1);
+  const fmpBar   = v => v ? `<div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px"><div style="height:4px;border-radius:2px;background:#3b82f6;width:${Math.round((v/fmpMax)*100)}%"></div></div>` : '';
+
+  const statCardHtml = cards => cards.map(c=>`
+    <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${c.label}</div>
+      <div style="font-size:15px;font-weight:700;color:${c.color}">${fmt(c.val)}<span style="font-size:10px;color:var(--text3);margin-left:1px">${c.val!=null?c.unit:''}</span></div>
+    </div>`).join('');
+
+  const cards1 = [
+    {label:'운동시간',val:avgDur, unit:'min',color:'var(--text2)'},
+    {label:'TD',      val:avgTD,  unit:'m',  color:'var(--accent2)'},
+    {label:'HSR',     val:avgHSR, unit:'m',  color:'#f59e0b'},
+    {label:'Sprint',  val:avgSP,  unit:'m',  color:'#ef4444'},
+    {label:'가속',    val:avgAcc, unit:'회', color:'#fb923c'},
+  ];
+  const cards2 = [
+    {label:'RHIE',    val:avgRHIE,unit:'회', color:'#34d399'},
+    {label:'최고속도',val:avgMS,  unit:'km/h',color:'#60a5fa'},
+    {label:'RPE',     val:avgRPE, unit:'',   color:'#f87171'},
+    {label:'sRPE',    val:avgSRPE,unit:'AU', color:'#c084fc'},
+    {label:'P.Load',  val:avgPL,  unit:'',   color:'#a78bfa'},
+  ];
+
+  const sessionRows = sessions.map(r=>{
+    const rpe    = rpeMap[r.session_date];
+    const rpeVal = parseFloat(rpe?.rpe)||null;
+    const dur    = parseFloat(r.duration)||parseFloat(rpe?.duration)||null;
+    const sRPE   = rpeVal&&dur ? Math.round(dur*rpeVal) : null;
+    const rpeColor = rpeVal>=8?'#ef4444':rpeVal>=6?'#f59e0b':'var(--text2)';
+    return `
+      <tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:6px 8px;color:var(--text2);white-space:nowrap">${r.session_date}</td>
+        <td style="padding:6px 8px;text-align:center">${mdBadge(r.cycle||r.periodization)}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.opponent||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--accent2);font-weight:600">${r.td?Math.round(r.td).toLocaleString():'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#f59e0b">${r.running_high?Math.round(r.running_high).toLocaleString():'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.sprint?Math.round(r.sprint).toLocaleString():'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.accel||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:${rpeColor}">${rpeVal||'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>
+      </tr>`;
+  }).join('');
 
   out.innerHTML = `
-    <!-- 선수 헤더 -->
-    <div style="background:var(--surface);border:1px solid ${hasInjury?'#ef4444':'var(--accent)'};border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="background:var(--surface);border:1px solid ${hasInjury?'#ef4444':'var(--accent)'};border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <div>
-          <div style="font-size:18px;font-weight:700;color:var(--text)">${player.name}</div>
-          <div style="font-size:12px;color:var(--text3)">${player.position} · MAS ${player.mas} · MSS ${player.mss} · ASR ${(player.mss-player.mas).toFixed(1)} km/h</div>
+          <div style="font-size:17px;font-weight:700;color:var(--text)">${player.name}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${player.position} &nbsp;·&nbsp; MAS ${player.mas||'—'} &nbsp;·&nbsp; MSS ${player.mss||'—'} &nbsp;·&nbsp; ASR ${player.mas&&player.mss?(parseFloat(player.mss)-parseFloat(player.mas)).toFixed(1):'—'} km/h</div>
         </div>
-        ${hasInjury?`<span style="font-size:12px;padding:4px 10px;border-radius:6px;background:#7f1d1d;color:#fca5a5;border:1px solid #ef4444">⚠️ ${injuries[0].body_part} ${injuries[0].status}</span>`:'<span style="font-size:12px;padding:4px 10px;border-radius:6px;background:#052e16;color:#4ade80;border:1px solid #15803d">✓ 정상</span>'}
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:11px;padding:3px 9px;border-radius:6px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">최근 ${days}일 · ${sessions.length}세션</span>
+          ${hasInjury
+            ?`<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:#7f1d1d;color:#fca5a5;border:1px solid #ef4444">⚠ ${injuries[0].body_part} ${injuries[0].status}</span>`
+            :`<span style="font-size:11px;padding:3px 9px;border-radius:6px;background:#052e16;color:#4ade80;border:1px solid #15803d">✓ 정상</span>`}
+        </div>
       </div>
     </div>
 
-    <!-- 최근 ${days}일 GPS 요약 -->
-    ${gps?.length ? `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">최근 ${days}일 평균 GPS</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin-bottom:14px">
-        ${[
-          ['TD','td','m','var(--accent2)'],
-          ['HSR','running_high','m','#f59e0b'],
-          ['Sprint','sprint','m','#ef4444'],
-          ['P.Load','player_load','','#a78bfa'],
-        ].map(([label,field,unit,color])=>`
+    ${sessions.length ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">기간 평균 GPS</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px">${statCardHtml(cards1)}</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">${statCardHtml(cards2)}</div>
+    </div>
+
+    ${(avgFmpRM||avgFmpRH||avgFmpDM||avgFmpDH) ? `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">FMP (Fatigue &amp; Movement Profile) — 기간 평균</div>
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:600">Running</div>
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>Medium</span><span style="font-weight:600;color:var(--text)">${avgFmpRM!=null?avgFmpRM+' sec':'—'}</span></div>${fmpBar(avgFmpRM)}
+          </div>
           <div>
-            <div style="font-size:18px;font-weight:700;color:${color}">
-              ${Math.round(gps.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/gps.length)}${unit}
-            </div>
-            <div style="font-size:11px;color:var(--text3)">${label}</div>
-          </div>`).join('')}
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>High</span><span style="font-weight:600;color:#ef4444">${avgFmpRH!=null?avgFmpRH+' sec':'—'}</span></div>${fmpBar(avgFmpRH)}
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:8px;font-weight:600">Dynamic</div>
+          <div style="margin-bottom:6px">
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>Medium</span><span style="font-weight:600;color:var(--text)">${avgFmpDM!=null?avgFmpDM+' sec':'—'}</span></div>${fmpBar(avgFmpDM)}
+          </div>
+          <div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text2)"><span>High</span><span style="font-weight:600;color:#ef4444">${avgFmpDH!=null?avgFmpDH+' sec':'—'}</span></div>${fmpBar(avgFmpDH)}
+          </div>
+        </div>
       </div>
+    </div>` : ''}
 
-      <!-- 최근 세션 목록 -->
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">최근 세션</div>
-      <table style="width:100%;border-collapse:collapse;font-size:11px">
-        <tr style="background:var(--surface2)">
-          <th style="padding:6px 8px;text-align:left;color:var(--text3)">날짜</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3)">HSR</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3)">Sprint</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3)">주기</th>
-        </tr>
-        ${gps.slice(0,10).map(r=>`
-        <tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:6px 8px;color:var(--text2)">${r.session_date}</td>
-          <td style="padding:6px 8px;text-align:right;color:var(--accent2)">${Math.round(r.td)||'-'}</td>
-          <td style="padding:6px 8px;text-align:right;color:#f59e0b">${Math.round(r.running_high)||'-'}</td>
-          <td style="padding:6px 8px;text-align:right;color:#ef4444">${Math.round(r.sprint)||'-'}</td>
-          <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}</td>
-          <td style="padding:6px 8px;text-align:right;color:${r.rpe>=8?'#ef4444':r.rpe>=6?'#f59e0b':'var(--text2)'}">${r.rpe||'-'}</td>
-          <td style="padding:6px 8px;text-align:right;color:var(--text3)">${r.periodization||'-'}</td>
-        </tr>`).join('')}
-      </table>
-    </div>` : `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">최근 ${days}일 GPS 데이터 없음</div>`}
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">세션별 이력</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:720px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">날짜</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--text3)">주기</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--text3)">주기화</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">시간</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">HSR</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Sprint</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">sRPE</th>
+            </tr>
+          </thead>
+          <tbody>${sessionRows}</tbody>
+        </table>
+      </div>
+    </div>
+    ` : `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">최근 ${days}일 GPS 데이터 없음</div>`}
 
-    <!-- 부상 이력 -->
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">부상 이력</div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em">부상 이력</div>
         <button onclick="openInjuryForm('${playerId}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">+ 추가</button>
       </div>
       ${injuries?.length ? injuries.map(inj=>`
         <div style="padding:8px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
           <div>
             <div style="font-size:12px;font-weight:600;color:var(--text)">${inj.body_part} — ${inj.injury_type}</div>
-            <div style="font-size:11px;color:var(--text3)">${inj.injury_date} ~ ${inj.return_date||'진행중'} · ${inj.severity}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${inj.injury_date} ~ ${inj.return_date||'진행중'} · ${inj.severity}</div>
           </div>
           <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
         </div>`).join('')
-      : '<div style="font-size:12px;color:var(--text3);padding:8px">부상 이력 없음</div>'}
+      :'<div style="font-size:12px;color:var(--text3);padding:4px 0">부상 이력 없음</div>'}
     </div>`;
 }
+
 
 // ── GPS 파일 업로드 ───────────────────────
 function handleFileDrop(e){
