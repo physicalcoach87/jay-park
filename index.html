@@ -339,13 +339,19 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
     <!-- 관리자용: 팀 웰니스 현황 -->
     <div id="wellness-admin-view" style="display:none">
+      <!-- 최근 2주 웰니스 달력 -->
+      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px" id="wellness-two-week-label">최근 2주 웰니스 현황 — 날짜 클릭 시 하단 상세 표시</div>
+      <div id="wellness-two-week-cal"></div>
+      <div id="wellness-two-week-detail" style="display:none;margin-top:12px"></div>
+      <!-- 날짜 조회 (하단) -->
+      <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
       <div class="ctrls g2" style="margin-bottom:12px">
         <div class="ctrl">
-          <label>날짜</label>
+          <label>날짜 조회</label>
           <input type="date" id="wellness-view-date" style="width:100%" onchange="loadTeamWellness()">
         </div>
         <div class="ctrl" style="display:flex;align-items:flex-end">
-          <button class="btn-gen" style="margin:0;padding:10px 20px" onclick="loadTeamWellness()">조회</button>
+          <button class="btn-gen" style="margin:0;padding:10px 20px;width:100%" onclick="loadTeamWellness()">조회</button>
         </div>
       </div>
       <div id="team-wellness-output"></div>
@@ -479,14 +485,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <option value="">선수를 선택하세요</option>
         </select>
       </div>
-      <div class="ctrl">
-        <label>기간</label>
-        <select id="dashboard-period" onchange="loadPlayerDashboard()">
-          <option value="7">최근 7일</option>
-          <option value="14">최근 14일</option>
-          <option value="28" selected>최근 28일</option>
-          <option value="90">최근 3개월</option>
-        </select>
+      <div class="ctrl" style="display:flex;align-items:flex-end;gap:8px">
+        <div style="flex:1">
+          <label>기간</label>
+          <select id="dashboard-period" onchange="loadPlayerDashboard()" style="width:100%">
+            <option value="7">최근 7일</option>
+            <option value="14">최근 14일</option>
+            <option value="28" selected>최근 28일</option>
+            <option value="90">최근 3개월</option>
+          </select>
+        </div>
+        <button class="btn-exp" style="padding:10px 14px;border-color:#22c55e;color:#22c55e;white-space:nowrap" onclick="downloadDashboardExcel()">📥 엑셀</button>
       </div>
     </div>
     <div id="player-dashboard-output"></div>
@@ -3248,6 +3257,7 @@ async function initWellnessView(){
     const dateEl = document.getElementById('wellness-view-date');
     if(dateEl && !dateEl.value) dateEl.value = today;
     loadTeamWellness();
+    loadWellnessTwoWeekCal(today);
   } else {
     // 선수: 본인 컨디션 입력
     document.getElementById('wellness-player-view').style.display='block';
@@ -3375,11 +3385,254 @@ async function saveWellness(){
 }
 
 // ── 팀 웰니스 현황 (관리자) ────────────────
+
+// ── 웰니스 2주 달력 ────────────────────────────────────────────────
+let _wellnessSessions = [];
+let _wellnessActiveIdx = -1;
+
+async function loadWellnessTwoWeekCal(baseDate){
+  const calEl = document.getElementById('wellness-two-week-cal');
+  const lblEl = document.getElementById('wellness-two-week-label');
+  const detEl = document.getElementById('wellness-two-week-detail');
+  if(!calEl) return;
+  calEl.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">2주 웰니스 불러오는 중...</div>';
+
+  const base  = new Date(baseDate);
+  const start = new Date(base); start.setDate(base.getDate()-13);
+  const startStr = start.toISOString().split('T')[0];
+
+  const {data:wAll} = await supa.from('wellness_records')
+    .select('record_date,player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
+    .gte('record_date',startStr).lte('record_date',baseDate)
+    .order('record_date',{ascending:true});
+
+  const DOW = ['일','월','화','수','목','금','토'];
+  const sessions = [];
+  for(let i=0;i<14;i++){
+    const d = new Date(start); d.setDate(start.getDate()+i);
+    const ymd = d.toISOString().split('T')[0];
+    const dayW = (wAll||[]).filter(r=>r.record_date===ymd);
+    const avgW = field => {
+      const vals = dayW.filter(r=>r[field]>0).map(r=>r[field]);
+      return vals.length ? parseFloat((vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1)) : null;
+    };
+    const fa=avgW('fatigue'), sl=avgW('sleep_quality'), st=avgW('stress'), ms=avgW('muscle_soreness');
+    const total = (fa&&sl&&st&&ms) ? parseFloat(((fa+sl+st+ms)/4).toFixed(1)) : null;
+    sessions.push({
+      ymd, mon:d.getMonth()+1, day:d.getDate(), dow:DOW[d.getDay()],
+      hasData: dayW.length>0, n:dayW.length,
+      fatigue:fa, sleep:sl, stress:st, muscle:ms, total,
+      raw: dayW
+    });
+  }
+  _wellnessSessions = sessions;
+
+  const s0=sessions[0],sL=sessions[13];
+  lblEl.textContent=`최근 2주 웰니스 현황 (${s0.mon}/${s0.day} – ${sL.mon}/${sL.day}) — 날짜 클릭 시 상세 표시`;
+
+  let lastIdx=-1;
+  sessions.forEach((s,i)=>{ if(s.hasData) lastIdx=i; });
+  _wellnessActiveIdx=lastIdx;
+  renderWellnessCal();
+  if(lastIdx>=0) renderWellnessDetail(lastIdx);
+  else detEl.style.display='none';
+}
+
+function renderWellnessCal(){
+  const calEl=document.getElementById('wellness-two-week-cal');
+  if(!calEl||!_wellnessSessions.length) return;
+  const sessions=_wellnessSessions;
+
+  const scoreColor = t => t>=4?'#22c55e':t>=3?'#eab308':t>=2?'#f97316':'#ef4444';
+  const makeCard = (s,idx) => {
+    const isActive = idx===_wellnessActiveIdx;
+    const border = isActive
+      ? 'border:1.5px solid var(--accent2);background:var(--accent-bg)'
+      : 'border:1px solid var(--border)';
+    const scoreHtml = s.total!=null
+      ? `<div style="text-align:center;margin-top:auto">
+           <div style="font-size:18px;font-weight:700;color:${scoreColor(s.total)}">${s.total}</div>
+           <div style="font-size:9px;color:var(--text3);">${s.n}명</div>
+           <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:2px;margin-top:4px">
+             <div style="font-size:9px;text-align:center">🔋<span style="color:${scoreColor(s.fatigue)};font-weight:600">${s.fatigue??'—'}</span></div>
+             <div style="font-size:9px;text-align:center">😴<span style="color:${scoreColor(s.sleep)};font-weight:600">${s.sleep??'—'}</span></div>
+             <div style="font-size:9px;text-align:center">🧠<span style="color:${scoreColor(s.stress)};font-weight:600">${s.stress??'—'}</span></div>
+             <div style="font-size:9px;text-align:center">💪<span style="color:${scoreColor(s.muscle)};font-weight:600">${s.muscle??'—'}</span></div>
+           </div>
+         </div>`
+      : `<div style="font-size:10px;color:var(--text3);text-align:center;margin-top:auto">—</div>`;
+
+    return `<div onclick="${s.hasData?`selectWellnessDay(${idx})`:''}"
+      style="cursor:${s.hasData?'pointer':'default'};opacity:${s.hasData?1:0.38};
+             border-radius:8px;padding:7px 5px 6px;display:flex;flex-direction:column;gap:2px;
+             min-height:${s.hasData?'130px':'55px'};transition:border-color .12s;${border}">
+      <div style="display:flex;align-items:baseline;justify-content:space-between">
+        <span style="font-size:10px;color:${isActive?'var(--accent2)':'var(--text3)'}">${s.dow}</span>
+        <div style="text-align:right">
+          <div style="font-size:9px;color:${isActive?'var(--accent2)':'var(--text3)'};line-height:1">${s.mon}월</div>
+          <div style="font-size:14px;font-weight:600;color:${isActive?'var(--accent2)':'var(--text)'};line-height:1.2">${s.day}</div>
+        </div>
+      </div>
+      ${scoreHtml}
+    </div>`;
+  };
+
+  const week=(st,en,lbl)=>`
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--text3);padding:3px 0 6px;border-bottom:1px solid var(--border2);margin-bottom:6px">${lbl}</div>
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">
+        ${sessions.slice(st,en).map((s,i)=>makeCard(s,st+i)).join('')}
+      </div>
+    </div>`;
+
+  const s0=sessions[0],s6=sessions[6],s7=sessions[7],s13=sessions[13];
+  calEl.innerHTML=
+    week(0,7,`1주차 (${s0.mon}/${s0.day} – ${s6.mon}/${s6.day})`)+
+    week(7,14,`2주차 (${s7.mon}/${s7.day} – ${s13.mon}/${s13.day})`);
+}
+
+function selectWellnessDay(idx){
+  _wellnessActiveIdx=idx;
+  renderWellnessCal();
+  renderWellnessDetail(idx);
+}
+
+async function renderWellnessDetail(idx){
+  const s=_wellnessSessions[idx];
+  const detEl=document.getElementById('wellness-two-week-detail');
+  if(!s||!s.hasData||!detEl) return;
+  detEl.style.display='block';
+  detEl.innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
+
+  const {data:records} = await supa.from('wellness_records')
+    .select('*, player_profiles(name,position)')
+    .eq('record_date',s.ymd)
+    .order('created_at');
+
+  if(!records?.length){ detEl.innerHTML=''; return; }
+
+  const avgScore = field => (records.reduce((a,r)=>a+(r[field]||0),0)/records.length).toFixed(1);
+  const teamAvg  = (parseFloat(avgScore('fatigue'))+parseFloat(avgScore('sleep_quality'))+parseFloat(avgScore('stress'))+parseFloat(avgScore('muscle_soreness')))/4;
+  const scoreColor = v => parseFloat(v)>=4?'#22c55e':parseFloat(v)>=3?'#eab308':parseFloat(v)>=2?'#f97316':'#ef4444';
+
+  const avgCards = WELLNESS_ITEMS.map(item=>{
+    const v = parseFloat(avgScore(item.key));
+    return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 6px;text-align:center">
+      <div style="font-size:16px">${item.icon}</div>
+      <div style="font-size:15px;font-weight:700;color:${scoreColor(v)}">${v.toFixed(1)}</div>
+      <div style="font-size:10px;color:var(--text3)">${item.label}</div>
+    </div>`;
+  }).join('');
+
+  const rows = records.map(r=>{
+    const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
+    const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px">
+        <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'—'}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
+      </td>
+      ${WELLNESS_ITEMS.map(item=>`
+        <td style="padding:8px;text-align:center">
+          <span style="font-size:15px;font-weight:700;color:${WELLNESS_COLORS[r[item.key]]||'var(--text3)'}">
+            ${r[item.key]||'—'}
+          </span>
+        </td>`).join('')}
+      <td style="padding:8px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
+      <td style="padding:8px;text-align:center;font-size:12px">${status}</td>
+      <td style="padding:8px;text-align:center;color:var(--text3)">${r.morning_weight||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const noResp = _players.filter(p=>!records.find(r=>r.player_id===p.id));
+
+  detEl.innerHTML=`
+    <div style="background:var(--surface);border:1px solid ${teamAvg>=4?'#22c55e':teamAvg>=3?'#eab308':'#ef4444'};border-radius:10px;overflow:hidden">
+      <div style="padding:12px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
+        <div style="font-size:14px;font-weight:700;color:var(--text)">${s.ymd} (${s.dow}) 팀 웰니스</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:2px">${records.length}명 응답 · 팀 평균 ${teamAvg.toFixed(1)}/5.0</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:10px">${avgCards}</div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:480px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
+              ${WELLNESS_ITEMS.map(i=>`<th style="padding:8px;text-align:center;color:var(--text3)">${i.icon} ${i.label}</th>`).join('')}
+              <th style="padding:8px;text-align:center;color:var(--text3)">총점</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">상태</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">체중</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      ${noResp.length?`
+      <div style="padding:10px 14px;background:var(--surface2);border-top:1px solid var(--border);font-size:12px;color:var(--text3)">
+        ⚠️ 미응답 (${noResp.length}명): ${noResp.map(p=>p.name).join(', ')}
+      </div>`:''}
+    </div>`;
+}
+
+// ── 선수 대시보드 엑셀 다운로드 ────────────────────────────────────
+async function downloadDashboardExcel(){
+  const playerId = document.getElementById('dashboard-player')?.value;
+  const days     = parseInt(document.getElementById('dashboard-period')?.value||28);
+  if(!playerId){ alert('선수를 먼저 선택하세요'); return; }
+
+  const player = _players.find(p=>p.id===playerId);
+  const since  = new Date(); since.setDate(since.getDate()-days);
+  const sinceStr = since.toISOString().split('T')[0];
+
+  const [{data:gps},{data:rpeRows}] = await Promise.all([
+    supa.from('gps_records')
+      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,opponent,session_type2')
+      .eq('player_id',playerId).gte('session_date',sinceStr).order('session_date',{ascending:true}),
+    supa.from('session_records')
+      .select('record_date,rpe,duration')
+      .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true})
+  ]);
+
+  const rpeMap={};
+  (rpeRows||[]).forEach(r=>{ rpeMap[r.record_date]=r; });
+
+  // 헤더
+  const header=['날짜','주기','주기화(상대)','시간(분)','TD(m)','HSR(m)','Sprint(m)','가속','RHIE','최고속도(km/h)','P.Load','RPE','sRPE','FMP Run Medium','FMP Run High','FMP Dyn Medium','FMP Dyn High'];
+  const rows=(gps||[]).map(r=>{
+    const rpe=rpeMap[r.session_date];
+    const rpeVal=parseFloat(rpe?.rpe)||'';
+    const dur=parseFloat(r.duration)||parseFloat(rpe?.duration)||'';
+    const sRPE=(rpeVal&&dur)?Math.round(dur*rpeVal):'';
+    return [
+      r.session_date, r.cycle||r.periodization||'', r.opponent||'',
+      r.duration||'', r.td?Math.round(r.td):'', r.running_high?Math.round(r.running_high):'',
+      r.sprint?Math.round(r.sprint):'', r.accel||'', r.rhie||'',
+      r.max_speed||'', r.player_load||'', rpeVal, sRPE,
+      r.fmp_run_medium||'', r.fmp_run_high||'', r.fmp_dyn_medium||'', r.fmp_dyn_high||''
+    ];
+  });
+
+  // CSV 생성 (SheetJS 없이 순수 CSV)
+  const csvLines=[header,...rows].map(row=>
+    row.map(v=>typeof v==='string'&&(v.includes(','))?`"${v}"`:v).join(',')
+  );
+  const bom='\uFEFF';
+  const blob=new Blob([bom+csvLines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`${player?.name||'선수'}_대시보드_${sinceStr}_${days}일.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
 async function loadTeamWellness(){
   const date = document.getElementById('wellness-view-date')?.value;
   const out = document.getElementById('team-wellness-output');
   if(!out||!date) return;
   out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+  loadWellnessTwoWeekCal(date);
 
   const {data:records} = await supa.from('wellness_records')
     .select('*, player_profiles(name,position)')
