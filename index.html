@@ -3491,7 +3491,7 @@ async function loadMorningReport(){
     supa.from('gps_records')
       .select('*,player_profiles(name,position)')
       .eq('session_date', yesterdayStr)
-      .neq('session_type2','M')
+      .eq('session_type2','M')
       .order('td',{ascending:false}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration')
@@ -3555,7 +3555,7 @@ async function loadMorningReport(){
     const isPast = date <= today;
     const isYesterday = date === yesterdayStr;
     const isToday2 = date === today;
-    const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(!r.session_type2||r.session_type2!=='M')) : [];
+    const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='M') : [];
     const topic = (weekGps||[]).find(r=>r.session_date===date)?.session_topic || null;
     const opp   = (weekGps||[]).find(r=>r.session_date===date)?.opponent || null;
     const td   = dayGps.length ? avgFields(dayGps,'td') : null;
@@ -3622,7 +3622,7 @@ async function loadMorningReport(){
   }).join('');
 
   // 주간 누적
-  const weekAllGps = (weekGps||[]).filter(r=>r.session_date<=today&&(!r.session_type2||r.session_type2!=='M'));
+  const weekAllGps = (weekGps||[]).filter(r=>r.session_date<=today&&r.session_type2==='M');
   const weekTotalTD   = weekAllGps.reduce((a,r)=>a+(parseFloat(r.td)||0),0)/1000;
   const weekRpeRows   = (rpe28||[]).filter(r=>r.record_date>=weekStartStr&&r.record_date<=today);
   const weekTotalSRPE = weekRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0);
@@ -3681,7 +3681,7 @@ async function loadMorningReport(){
   for(const player of _players){
     const pid = player.id;
     const mss = parseFloat(player.mss)||0;
-    const pgps = (gps28||[]).filter(r=>r.player_id===pid&&(!r.session_type2||r.session_type2!=='M'));
+    const pgps = (gps28||[]).filter(r=>r.player_id===pid); // 개인 데이터 전체 포함
     const prpe = (rpeMap28[pid]||[]);
     if(!pgps.length&&!prpe.length) continue;
     const rpeMap2={};
@@ -4877,11 +4877,10 @@ async function renderTwoWeekDetail(idx){
   const rpeMap = {};
   (dayRpe||[]).forEach(r => { rpeMap[r.player_id] = r; });
 
-  // M = 팀 전체 훈련 기준 (팀 평균 계산 기준)
+  // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
+  // session_type2 = 빈칸/null → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
   const teamGps = (dayGps||[]).filter(r => r.session_type2 === 'M');
-  // M 아닌 것 = 개인 컨디셔닝 등 별도 그룹
   const indGps  = (dayGps||[]).filter(r => !r.session_type2 || r.session_type2 !== 'M');
-  // 팀 평균은 M 기준, M 없으면 전체 fallback
   const avgBase = teamGps.length > 0 ? teamGps : (dayGps||[]);
 
   const avg = (arr, field, dec=0) => {
@@ -4941,7 +4940,9 @@ async function renderTwoWeekDetail(idx){
     const dur    = r.duration || rpe?.duration || null;
     const rpeVal = parseFloat(rpe?.rpe) || null;
     const sRPE   = (dur && rpeVal) ? Math.round(dur * rpeVal) : '—';
-    const indBadge = isInd ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#1a0a2e;color:#a78bfa;margin-left:4px">M</span>' : '';
+    const indBadge = isInd
+      ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#1a1a2e;color:#9ca3af;margin-left:4px;font-weight:600">S</span>'
+      : '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#0c1a2e;color:#60a5fa;margin-left:4px;font-weight:600">M</span>';
     return `
       <tr style="border-bottom:1px solid var(--border);cursor:pointer;${isInd?'opacity:0.75':''}" onclick="selectDashboardPlayer('${r.player_id}')">
         <td style="padding:8px">
@@ -4963,7 +4964,7 @@ async function renderTwoWeekDetail(idx){
 
   const avgRow = `
     <tr style="background:var(--surface2)">
-      <td style="padding:8px;font-weight:600;color:var(--text3)">팀 평균 <span style="font-size:10px;font-weight:400;color:var(--text3)">(M ${avgBase.length}명)</span></td>
+      <td style="padding:8px;font-weight:600;color:var(--text3)">팀 평균 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전 ${avgBase.length}명)</span></td>
       <td style="padding:8px;text-align:right;color:var(--text3)">${durAvg||'—'}</td>
       <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${mTD ? Math.round(mTD).toLocaleString() : '—'}</td>
       <td style="padding:8px;text-align:right;color:#f59e0b">${mHSR ? Math.round(mHSR).toLocaleString() : '—'}</td>
@@ -4978,7 +4979,7 @@ async function renderTwoWeekDetail(idx){
       <div style="padding:12px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${s.ymd} (${s.dow})</div>
         <div style="font-size:12px;color:var(--accent2);margin-top:2px;font-weight:600">${s.topic||'—'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">전체 ${s.nAll}명 참여 · 팀(M) ${teamGps.length}명 기준 평균</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">전체 ${s.nAll}명 참여 · 주전(M) ${teamGps.length}명 기준 평균 · 서브/미엔트리 ${indGps.length}명</div>
         ${oppHtml}
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px">
           ${avgCards}
@@ -5028,9 +5029,10 @@ async function loadTeamSummary(){
 
   // 타입2 기준으로 그룹 분리
   // session_type2 가 null/빈칸 = 전체 훈련 → 팀 평균에 포함
-  // session_type2 가 'M' = 개인 컨디셔닝 → 팀 평균에서 제외
-  const fullGps = gps.filter(r => !r.session_type2 || r.session_type2 !== 'M');
-  const indGps  = gps.filter(r => r.session_type2 === 'M');
+  // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
+  // session_type2 = 빈칸/null → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
+  const fullGps = gps.filter(r => r.session_type2 === 'M');
+  const indGps  = gps.filter(r => !r.session_type2 || r.session_type2 !== 'M');
 
   const avgGroup = (arr, field, dec=0) => {
     const vals = arr.filter(r=>parseFloat(r[field])>0);
@@ -5073,7 +5075,7 @@ async function loadTeamSummary(){
     <!-- 팀 훈련 평균 (F 그룹) -->
     <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
-        ${date} 팀 평균 — 전체 훈련 (${fullGps.length}명)
+        ${date} 팀 평균 — 팀훈련(M) (${fullGps.length}명)
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center">
         <div><div style="font-size:20px;font-weight:700;color:var(--accent2)">${avgGroup(fullGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
@@ -5099,7 +5101,7 @@ async function loadTeamSummary(){
     ${indGps.length ? `
     <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
-        개인 컨디셔닝 (${indGps.length}명)
+        서브/미엔트리 개인컨디셔닝 (${indGps.length}명)
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
@@ -5448,7 +5450,7 @@ async function parseGpsFile(file){
           player_id: pid, player_name: name,
           session_date: dateStr,
           session_type: getVal('type'),
-          session_type2: getVal('type2'),  // M = 개인컨디셔닝, 빈칸 = 전체훈련
+          session_type2: getVal('type2'),  // M = 팀 전체훈련(주전/엔트리), 빈칸 = 서브/미엔트리 개인컨디셔닝
           training_form: getVal('form'),
           duration: getVal('duration'),
           td: getVal('td'), td_per_min: getVal('tdPerMin'),
@@ -5715,8 +5717,8 @@ async function runInjuryRiskAnalysis(){
     const pid = player.id;
     const mss = parseFloat(player.mss) || 0;
 
-    // 선수별 데이터 필터
-    const pgps = (gpsAll||[]).filter(r => r.player_id === pid && (!r.session_type2 || r.session_type2 !== 'M'));
+    // 선수별 데이터 필터 — 개인 데이터이므로 session_type2 무관 전체 포함
+    const pgps = (gpsAll||[]).filter(r => r.player_id === pid);
     const prpe = (rpeAll||[]).filter(r => r.player_id === pid);
     const pwell= (wellAll||[]).filter(r => r.player_id === pid);
 
