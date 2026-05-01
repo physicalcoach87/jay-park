@@ -3913,14 +3913,18 @@ async function loadMorningReport(){
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
         ${(injuredAll||[]).map(inj => {
-          const player = _players.find(p=>p.id===inj.player_id);
+              const player = _players.find(p=>p.id===inj.player_id);
           const statusColor = inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
                             : inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
                             : {bg:'#78350f',text:'#fcd34d'};
+          const injDays = inj.injury_date
+            ? Math.floor((new Date(today) - new Date(inj.injury_date)) / 86400000)
+            : null;
           return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:8px;gap:8px;flex-wrap:wrap">
             <div>
               <span style="font-size:13px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
               <span style="font-size:11px;color:var(--text3);margin-left:6px">${player?.position||''}</span>
+              ${injDays!==null?`<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:#3b1219;color:#fca5a5;margin-left:6px;font-weight:600">부상 ${injDays}일째</span>`:''}
               <div style="font-size:11px;color:var(--text2);margin-top:2px">${inj.body_part} · ${inj.injury_type||'—'} · ${inj.severity||'—'}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:1px">${inj.injury_date}${inj.return_date?' ~ '+inj.return_date:' ~ 진행중'}</div>
             </div>
