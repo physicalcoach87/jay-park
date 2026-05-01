@@ -3483,6 +3483,7 @@ async function loadMorningReport(){
     {data:rpe28},
     {data:todayWell},
     {data:well7},
+    {data:injuredAll},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
@@ -3501,6 +3502,10 @@ async function loadMorningReport(){
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
       .gte('record_date', since7Str).order('record_date',{ascending:false}),
+    supa.from('injury_records')
+      .select('player_id,body_part,injury_type,severity,status,injury_date,return_date')
+      .in('status',['치료중','재활중','복귀'])
+      .order('injury_date',{ascending:false}),
   ]);
 
   // ── 주간 날짜별 팀 평균 집계 ──────────────────────────────────
@@ -3554,12 +3559,11 @@ async function loadMorningReport(){
     const isPast = date <= today;
     const isYesterday = date === yesterdayStr;
     const isToday2 = date === today;
-    const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='M') : [];
-    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='S').length : 0;
-    const isTeamDay2 = dayGps.length > 0; // M 있는 날
-    // S 날이면 S 기준으로 표시
+    const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='M') : [];
+    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S').length : 0;
+    const isTeamDay2 = dayGps.length > 0;
     const dayGpsForRow = isTeamDay2 ? dayGps
-      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&r.session_type2==='S') : [];
+      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S') : [];
     const topic = (weekGps||[]).find(r=>r.session_date===date&&(r.session_type2==='M'||r.session_type2==='S'))?.session_topic || null;
     const opp   = (weekGps||[]).find(r=>r.session_date===date)?.opponent || null;
     const td   = dayGpsForRow.length ? avgFields(dayGpsForRow,'td') : null;
@@ -3631,18 +3635,41 @@ async function loadMorningReport(){
   }).join('');
 
   // 주간 누적 — M 있는 날(isTeamDay)만 합산, S 날(경기 등) 제외
-  const weekAllGps = (weekGps||[]).filter(r=>r.session_date<=today&&r.session_type2==='M');
-  // S 날 여부 판단: 날짜별로 M이 1개도 없으면 S 날
+  const weekAllGps = (weekGps||[]).filter(r=>r.session_date<=today&&(r.session_type2||'').trim().toUpperCase()==='M');
   const weekTeamDates = new Set(weekAllGps.map(r=>r.session_date));
-  const weekTotalTD   = weekAllGps.reduce((a,r)=>a+(parseFloat(r.td)||0),0)/1000;
+
+  // 날짜별 팀 평균 계산 후 합산 (전체 합산 X)
+  const weekAvgByDate = {};
+  weekTeamDates.forEach(date => {
+    const dayGps = weekAllGps.filter(r=>r.session_date===date);
+    if(!dayGps.length) return;
+    const avgF = field => {
+      const vals = dayGps.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));
+      return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
+    };
+    weekAvgByDate[date] = {
+      td:     avgF('td'),
+      hsr:    avgF('running_high'),
+      sprint: avgF('sprint'),
+      accel:  avgF('accel'),
+      rhie:   avgF('rhie'),
+    };
+  });
+  const weekDatesArr = [...weekTeamDates].sort();
+  const weekTotalTD     = weekDatesArr.reduce((a,d)=>a+(weekAvgByDate[d]?.td||0),0)/1000;
+  const weekTotalHSR    = Math.round(weekDatesArr.reduce((a,d)=>a+(weekAvgByDate[d]?.hsr||0),0));
+  const weekTotalSprint = Math.round(weekDatesArr.reduce((a,d)=>a+(weekAvgByDate[d]?.sprint||0),0));
+  const weekTotalAccel  = Math.round(weekDatesArr.reduce((a,d)=>a+(weekAvgByDate[d]?.accel||0),0));
+  const weekTotalRHIE   = Math.round(weekDatesArr.reduce((a,d)=>a+(weekAvgByDate[d]?.rhie||0),0));
+
   const weekRpeRows   = (rpe28||[]).filter(r=>r.record_date>=weekStartStr&&r.record_date<=today&&weekTeamDates.has(r.record_date));
   const weekTotalSRPE = weekRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0);
 
   // ── 전날 세션 상세 ─────────────────────────────────────────────
   // 전날: M 있으면 M 기준, 없으면 S 또는 전체
   const yGpsAll = (yesterdayGps||[]);
-  const yGpsM   = yGpsAll.filter(r => r.session_type2 === 'M');
-  const yGpsS   = yGpsAll.filter(r => r.session_type2 === 'S');
+  const yGpsM   = yGpsAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
+  const yGpsS   = yGpsAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'S');
   const yGps    = yGpsM.length > 0 ? yGpsM : (yGpsS.length > 0 ? yGpsS : yGpsAll);
   const yAvg = field => yGps.length ? avgFields(yGps,field) : null;
   const yDur    = yAvg('duration');
@@ -3848,9 +3875,13 @@ async function loadMorningReport(){
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
         <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">이번 주 팀 부하 흐름</div>
-        <div style="display:flex;gap:12px">
-          <span style="font-size:11px;color:var(--text3)">주간 TD <strong style="color:var(--text)">${weekTotalTD.toFixed(1)}km</strong></span>
-          <span style="font-size:11px;color:var(--text3)">누적 sRPE <strong style="color:#a78bfa">${Math.round(weekTotalSRPE).toLocaleString()} AU</strong></span>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--text3)">TD <strong style="color:var(--text)">${weekTotalTD.toFixed(1)}km</strong></span>
+          <span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${weekTotalHSR.toLocaleString()}m</strong></span>
+          <span style="font-size:11px;color:var(--text3)">Sprint <strong style="color:#ef4444">${weekTotalSprint.toLocaleString()}m</strong></span>
+          <span style="font-size:11px;color:var(--text3)">가속 <strong style="color:#fb923c">${weekTotalAccel}회</strong></span>
+          <span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">${weekTotalRHIE}회</strong></span>
+          <span style="font-size:11px;color:var(--text3)">sRPE <strong style="color:#a78bfa">${Math.round(weekTotalSRPE).toLocaleString()} AU</strong></span>
         </div>
       </div>
       <div style="overflow-x:auto">
@@ -3874,7 +3905,32 @@ async function loadMorningReport(){
       ${yesterdayDetailHtml}
     </div>
 
-    <!-- 섹션2: 부상 위험 -->
+    <!-- 섹션2: 부상자 현황 -->
+    ${(injuredAll||[]).length ? `
+    <div style="background:var(--surface);border:0.5px solid #ef4444;border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">
+        🏥 부상자 현황 (${(injuredAll||[]).length}명)
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${(injuredAll||[]).map(inj => {
+          const player = _players.find(p=>p.id===inj.player_id);
+          const statusColor = inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
+                            : inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
+                            : {bg:'#78350f',text:'#fcd34d'};
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:8px;gap:8px;flex-wrap:wrap">
+            <div>
+              <span style="font-size:13px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:6px">${player?.position||''}</span>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px">${inj.body_part} · ${inj.injury_type||'—'} · ${inj.severity||'—'}</div>
+              <div style="font-size:10px;color:var(--text3);margin-top:1px">${inj.injury_date}${inj.return_date?' ~ '+inj.return_date:' ~ 진행중'}</div>
+            </div>
+            <span style="font-size:11px;padding:3px 10px;border-radius:8px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- 섹션3: 부상 위험 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">부상 위험 선수 (${riskResults.length}명)</div>
@@ -3885,13 +3941,13 @@ async function loadMorningReport(){
       ${riskHtml}
     </div>
 
-    <!-- 섹션3: 권장 부하 -->
+    <!-- 섹션5: 권장 부하 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">오늘 권장 운동 부하</div>
       ${loadHtml}
     </div>
 
-    <!-- 섹션4: 웰니스 + 미응답 -->
+    <!-- 섹션6: 웰니스 + 미응답 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">
         오늘 팀 웰니스 · 응답 ${todayWellAll.length}명 / 전체 ${_players.length}명
@@ -3952,7 +4008,7 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
     supa.from('injury_records')
       .select('body_part,injury_type,status,injury_date')
       .eq('player_id', playerId)
-      .in('status',['치료중','복귀'])
+      .in('status',['치료중','재활중','복귀'])
       .limit(1),
   ]);
 
@@ -4705,8 +4761,8 @@ async function loadTwoWeekCal(baseDate){
     const ymd = d.toISOString().split('T')[0];
 
     const dayAll = (gpsAll||[]).filter(r => r.session_date === ymd);
-    const dayM   = dayAll.filter(r => r.session_type2 === 'M');
-    const dayS   = dayAll.filter(r => r.session_type2 === 'S');
+    const dayM   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
+    const dayS   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'S');
 
     // M이 1개라도 있으면 → M 기준 팀 평균 (팀 합계 포함)
     // M이 없고 S가 있으면 → S 기준 평균 (팀 합계 제외, S 배지)
@@ -4906,8 +4962,8 @@ async function renderTwoWeekDetail(idx){
 
   // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
   // session_type2 = 빈칸/null → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
-  const teamGps = (dayGps||[]).filter(r => r.session_type2 === 'M');
-  const indGps  = (dayGps||[]).filter(r => !r.session_type2 || r.session_type2 !== 'M');
+  const teamGps = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
+  const indGps  = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
   const avgBase = teamGps.length > 0 ? teamGps : (dayGps||[]);
 
   const avg = (arr, field, dec=0) => {
@@ -5058,8 +5114,8 @@ async function loadTeamSummary(){
   // session_type2 가 null/빈칸 = 전체 훈련 → 팀 평균에 포함
   // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
   // session_type2 = 빈칸/null → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
-  const fullGps = gps.filter(r => r.session_type2 === 'M');
-  const indGps  = gps.filter(r => !r.session_type2 || r.session_type2 !== 'M');
+  const fullGps = gps.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
+  const indGps  = gps.filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
 
   const avgGroup = (arr, field, dec=0) => {
     const vals = arr.filter(r=>parseFloat(r[field])>0);
@@ -5201,7 +5257,7 @@ async function loadPlayerDashboard(){
       .order('record_date',{ascending:false}),
     supa.from('injury_records')
       .select('*').eq('player_id',playerId)
-      .in('status',['치료중','복귀'])
+      .in('status',['치료중','재활중','복귀'])
       .order('injury_date',{ascending:false})
   ]);
 
@@ -5375,7 +5431,7 @@ async function loadPlayerDashboard(){
             ${inj.notes?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${inj.notes}</div>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
-            <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
+            <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='재활중'?'#312e81':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='재활중'?'#a5b4fc':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
             <button onclick="openInjuryForm('${playerId}','${inj.id}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">✏️</button>
             <button onclick="deleteInjury('${inj.id}','${inj.body_part}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:#fca5a5;cursor:pointer;font-family:inherit">🗑️</button>
           </div>
@@ -5481,7 +5537,7 @@ async function parseGpsFile(file){
           player_id: pid, player_name: name,
           session_date: dateStr,
           session_type: getVal('type'),
-          session_type2: getVal('type2'),  // M = 팀 전체훈련(주전/엔트리), 빈칸 = 서브/미엔트리 개인컨디셔닝
+          session_type2: getVal('type2') ? getVal('type2').trim().toUpperCase() : null,  // M = 팀 전체훈련(주전/엔트리), S = 서브/미엔트리
           training_form: getVal('form'),
           duration: getVal('duration'),
           td: getVal('td'), td_per_min: getVal('tdPerMin'),
@@ -5995,6 +6051,7 @@ async function openInjuryForm(playerId, injuryId=null){
             <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">상태</label>
             <select id="inj-status" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
               <option value="치료중" ${inj?.status==='치료중'?'selected':''}>치료중</option>
+              <option value="재활중" ${inj?.status==='재활중'?'selected':''}>재활중</option>
               <option value="복귀" ${inj?.status==='복귀'?'selected':''}>복귀</option>
               <option value="완치" ${inj?.status==='완치'?'selected':''}>완치</option>
             </select>
