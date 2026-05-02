@@ -302,6 +302,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab" onclick="switchTab('cardio',this)">유산소 운동</button>
   <button class="tab admin-only" onclick="switchTab('progmgmt',this)">📋 프로그램 관리</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
+  <button class="tab admin-only" onclick="switchTab('match',this)">🏟️ 경기 데이터</button>
 </div>
 
 <!-- 모닝 레포트 탭 -->
@@ -852,6 +853,64 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 </div>
 
 <!-- 알림/메시지 탭 -->
+<div id="tab-match" style="display:none">
+  <div class="vm-bar" style="margin-bottom:12px">
+    <h3>🏟️ 경기 데이터</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="match-upload-btn" onclick="document.getElementById('match-file-input').click()"
+        style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">
+        📤 경기 엑셀 업로드
+      </button>
+      <input type="file" id="match-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleMatchFileSelect(event)">
+    </div>
+  </div>
+
+  <!-- 서브 탭 -->
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    <button class="btn-exp" id="mtab-list" onclick="setMatchTab('list')"
+      style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📋 경기 목록</button>
+    <button class="btn-exp" id="mtab-player" onclick="setMatchTab('player')" style="flex:1">👤 선수별 분석</button>
+    <button class="btn-exp" id="mtab-max" onclick="setMatchTab('max')" style="flex:1">🏆 Match Max</button>
+  </div>
+
+  <!-- 경기 목록 뷰 -->
+  <div id="mv-list">
+    <div id="match-list-output">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기 데이터를 업로드하면 표시됩니다</div>
+    </div>
+  </div>
+
+  <!-- 선수별 분석 뷰 -->
+  <div id="mv-player" style="display:none">
+    <div class="ctrls g2" style="margin-bottom:12px">
+      <div class="ctrl">
+        <label>선수 선택</label>
+        <select id="match-player-sel" onchange="loadMatchPlayerDetail()" style="width:100%">
+          <option value="">선수를 선택하세요</option>
+        </select>
+      </div>
+      <div class="ctrl">
+        <label>TIME 기준</label>
+        <select id="match-time-sel" onchange="loadMatchPlayerDetail()" style="width:100%">
+          <option value="FT">FT (풀타임)</option>
+          <option value="1Q">1Q (전반)</option>
+          <option value="2Q">2Q (후반)</option>
+        </select>
+      </div>
+    </div>
+    <div id="match-player-output">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">선수를 선택하세요</div>
+    </div>
+  </div>
+
+  <!-- Match Max 뷰 -->
+  <div id="mv-max" style="display:none">
+    <div id="match-max-output">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기 데이터를 업로드하면 선수별 Match Max가 표시됩니다</div>
+    </div>
+  </div>
+</div>
+
 <div id="tab-notify" style="display:none">
   <div class="vm-bar">
     <h3>🔔 알림 / 메시지</h3>
@@ -7425,9 +7484,469 @@ function setProgTab(name){
   }
 }
 
+// ══════════════════════════════════════════════════════════════════
+// 경기 데이터 탭 (Match Records)
+// ══════════════════════════════════════════════════════════════════
+
+// TIME → 분 변환
+function timeToMin(t){ return t==='FT'?90:t==='1Q'?45:t==='2Q'?45:90; }
+
+// 서브탭 전환
+function setMatchTab(tab){
+  ['list','player','max'].forEach(t=>{
+    const el=document.getElementById('mv-'+t);
+    if(el) el.style.display=t===tab?'block':'none';
+    const btn=document.getElementById('mtab-'+t);
+    if(btn){
+      btn.style.borderColor=t===tab?'var(--accent)':'var(--border2)';
+      btn.style.background =t===tab?'var(--accent-bg)':'var(--surface2)';
+      btn.style.color      =t===tab?'var(--accent2)':'var(--text2)';
+    }
+  });
+  if(tab==='player') loadMatchPlayerDetail();
+  if(tab==='max')    loadMatchMax();
+}
+
+// 탭 진입 시
+async function loadMatchTab(){
+  if(!_players.length){
+    const {data}=await supa.from('player_profiles').select('*');
+    _players=data||[];
+  }
+  const sel=document.getElementById('match-player-sel');
+  if(sel && sel.options.length<=1){
+    sel.innerHTML='<option value="">선수를 선택하세요</option>'+
+      _players.map(p=>`<option value="${p.id}">${p.name} (${p.position})</option>`).join('');
+  }
+  loadMatchList();
+}
+
+// ── 경기 엑셀 업로드 ─────────────────────────────────────────────
+function handleMatchFileSelect(e){
+  const file=e.target.files[0];
+  if(file) parseMatchFile(file);
+}
+
+async function parseMatchFile(file){
+  const btn=document.getElementById('match-upload-btn');
+  btn.textContent='⏳ 파싱 중...'; btn.disabled=true;
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+  const buf  = await file.arrayBuffer();
+  const wb   = XLSX.read(buf,{type:'array',cellDates:true});
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const raw  = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+  const header = raw[0];
+  const ci = name => header.findIndex(h=>(h||'').toString().trim()===name.trim());
+
+  const COL = {
+    date:     ci('날짜'),    opp:    ci('경기상대'), time:  ci('TIME'),
+    name:     ci('이름'),    dur:    ci('Total Duration'),
+    td:       ci('Total Distance (m)'), mpm: ci('Meterage Per Minute'),
+    hir:      ci('HIR+SPRINT'),
+    b3td:     ci('Band 3 TD (m)'),  b4td: ci('Band 4 TD (m)'), b5td: ci('Band 5 TD (m)'),
+    b4n:      ci('Band 4 (N)'),     b5n:  ci('Band 5 (N)'),
+    accel:    ci('Acc B3 Efforts (Gen 2)'), decel: ci('Dec B3 Efforts (Gen 2)'),
+    maxv:     ci('Maximum Velocity (km/h)'), pl: ci('Total Player Load'),
+    rhie:     ci('RHIE Total Bouts'),
+    fmpRM:    ci('FMP Running.M'),  fmpRH: ci('FMP Running.H'),
+    fmpDM:    ci('FMP Dynamic.M'), fmpDH: ci('FMP Dynamic.H'),
+    score:    ci('스코어 '),    result: ci('결과'), ha: ci('H/A'),
+  };
+
+  // 선수명 → ID 매핑
+  const nameMap={};
+  _players.forEach(p=>{ nameMap[p.name]=p.id; });
+
+  const toInsert=[];
+  const unknown=new Set();
+
+  for(const row of raw.slice(1)){
+    if(!row[COL.date]||!row[COL.name]) continue;
+    const playerName=(row[COL.name]||'').trim();
+    const pid=nameMap[playerName];
+    if(!pid){ unknown.add(playerName); continue; }
+
+    const dateVal=row[COL.date];
+    const dateStr=dateVal instanceof Date
+      ? dateVal.toISOString().split('T')[0]
+      : String(dateVal).split('T')[0];
+
+    toInsert.push({
+      player_id:  pid,
+      match_date: dateStr,
+      opponent:   row[COL.opp]||null,
+      home_away:  row[COL.ha]||null,
+      round:      (row[COL.opp]||'').split(' ')[0]||null,
+      time_type:  row[COL.time]||null,
+      duration:   parseFloat(row[COL.dur])||null,
+      td:         parseFloat(row[COL.td])||null,
+      mpm:        parseFloat(row[COL.mpm])||null,
+      hir_sprint: parseFloat(row[COL.hir])||null,
+      band3_td:   parseFloat(row[COL.b3td])||null,
+      band4_td:   parseFloat(row[COL.b4td])||null,
+      band5_td:   parseFloat(row[COL.b5td])||null,
+      band4_n:    parseFloat(row[COL.b4n])||null,
+      band5_n:    parseFloat(row[COL.b5n])||null,
+      accel:      parseFloat(row[COL.accel])||null,
+      decel:      parseFloat(row[COL.decel])||null,
+      max_speed:  parseFloat(row[COL.maxv])||null,
+      player_load:parseFloat(row[COL.pl])||null,
+      rhie:       parseFloat(row[COL.rhie])||null,
+      fmp_run_m:  parseFloat(row[COL.fmpRM])||null,
+      fmp_run_h:  parseFloat(row[COL.fmpRH])||null,
+      fmp_dyn_m:  parseFloat(row[COL.fmpDM])||null,
+      fmp_dyn_h:  parseFloat(row[COL.fmpDH])||null,
+      score:      row[COL.score]||null,
+      result:     row[COL.result]||null,
+    });
+  }
+
+  // 날짜 기준 기존 데이터 삭제 후 재삽입
+  const dates=[...new Set(toInsert.map(r=>r.match_date))];
+  for(const d of dates){
+    await supa.from('match_records').delete().eq('match_date',d);
+  }
+  const {error}=await supa.from('match_records').insert(toInsert);
+
+  if(error){
+    btn.textContent='❌ 오류: '+error.message; btn.disabled=false;
+    return;
+  }
+
+  // Match Max 자동 갱신
+  await updateMatchMax(toInsert.map(r=>r.player_id));
+
+  btn.textContent='✅ '+toInsert.length+'개 저장 완료';
+  setTimeout(()=>{ btn.textContent='📤 경기 엑셀 업로드'; btn.disabled=false; },2000);
+  if(unknown.size) alert(`⚠️ 미등록 선수 (${[...unknown].join(', ')}) — 선수명 확인 필요`);
+
+  loadMatchList();
+  loadMatchMax();
+}
+
+// ── Match Max 자동 갱신 ───────────────────────────────────────────
+async function updateMatchMax(playerIds){
+  const pids=[...new Set(playerIds)];
+  const {data:ftData}=await supa.from('match_records')
+    .select('player_id,td,mpm,hir_sprint,band5_td,accel,rhie,max_speed,player_load,duration')
+    .eq('time_type','FT')
+    .in('player_id',pids);
+
+  for(const pid of pids){
+    const rows=(ftData||[]).filter(r=>r.player_id===pid);
+    if(!rows.length) continue;
+    const maxF=field=>Math.max(...rows.map(r=>parseFloat(r[field])||0));
+    const payload={
+      match_max_td:       maxF('td'),
+      match_max_mpm:      maxF('mpm'),
+      match_max_hir:      maxF('hir_sprint'),
+      match_max_band5_td: maxF('band5_td'),
+      match_max_accel:    maxF('accel'),
+      match_max_rhie:     maxF('rhie'),
+      match_max_speed:    maxF('max_speed'),
+      match_max_pl:       maxF('player_load'),
+      match_max_updated:  new Date().toISOString().split('T')[0],
+    };
+    await supa.from('player_profiles').update(payload).eq('id',pid);
+    const p=_players.find(pl=>pl.id===pid);
+    if(p) Object.assign(p,payload);
+  }
+  console.log('Match Max 갱신 완료:', pids.length+'명');
+}
+
+// ── 경기 목록 ──────────────────────────────────────────────────────
+async function loadMatchList(){
+  const out=document.getElementById('match-list-output');
+  if(!out) return;
+  out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
+
+  const {data:matches}=await supa.from('match_records')
+    .select('match_date,opponent,home_away,round,time_type,score,result')
+    .eq('time_type','FT')
+    .order('match_date',{ascending:false});
+
+  if(!matches?.length){
+    out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">경기 데이터 없음 — 엑셀을 업로드하세요</div>';
+    return;
+  }
+
+  // 경기별 선수 수 집계
+  const {data:counts}=await supa.from('match_records')
+    .select('match_date,opponent,player_id')
+    .eq('time_type','FT');
+  const cntMap={};
+  (counts||[]).forEach(r=>{
+    const k=r.match_date+'|'+r.opponent;
+    cntMap[k]=(cntMap[k]||0)+1;
+  });
+
+  const resultColor=r=>r==='W'?'#22c55e':r==='D'?'#eab308':r==='L'?'#ef4444':'var(--text3)';
+  const haColor=h=>h==='H'?'#4ade80':h==='A'?'#fbbf24':'var(--text3)';
+
+  out.innerHTML=`
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead>
+          <tr style="background:var(--surface2)">
+            <th style="padding:8px 10px;text-align:left;color:var(--text3)">날짜</th>
+            <th style="padding:8px 10px;text-align:left;color:var(--text3)">상대</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">H/A</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">스코어</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">결과</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">선수</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">상세</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${matches.map(m=>`
+            <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="loadMatchDetail('${m.match_date}','${m.opponent||''}')">
+              <td style="padding:8px 10px;color:var(--text2)">${m.match_date}</td>
+              <td style="padding:8px 10px;font-weight:600;color:var(--text)">${m.opponent||'—'}</td>
+              <td style="padding:8px 10px;text-align:center;font-weight:600;color:${haColor(m.home_away)}">${m.home_away||'—'}</td>
+              <td style="padding:8px 10px;text-align:center;color:var(--text2)">${m.score||'—'}</td>
+              <td style="padding:8px 10px;text-align:center;font-weight:700;color:${resultColor(m.result)}">${m.result||'—'}</td>
+              <td style="padding:8px 10px;text-align:center;color:var(--text3)">${cntMap[m.match_date+'|'+m.opponent]||0}명</td>
+              <td style="padding:8px 10px;text-align:center;color:var(--accent2)">→</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ── 경기 상세 (선수별 데이터 + Match Max 대비 %) ──────────────────
+async function loadMatchDetail(date, opponent){
+  const out=document.getElementById('match-list-output');
+  out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
+
+  const {data:rows}=await supa.from('match_records')
+    .select('*,player_profiles(name,position,match_max_td,match_max_mpm,match_max_hir,match_max_accel,match_max_rhie,match_max_speed)')
+    .eq('match_date',date).eq('opponent',opponent)
+    .order('time_type').order('td',{ascending:false});
+
+  if(!rows?.length){ out.innerHTML='<div style="color:var(--text3);padding:1rem">데이터 없음</div>'; return; }
+
+  const pct=(val,max)=>(!val||!max)?null:Math.round((val/max)*100);
+  const pctColor=p=>!p?'var(--text3)':p>=80?'#22c55e':p>=60?'#eab308':'#ef4444';
+  const pctBadge=(val,max,unit='')=>{
+    const p=pct(val,max);
+    const v=val?Math.round(val).toLocaleString()+unit:'—';
+    const badge=p?`<span style="font-size:10px;color:${pctColor(p)};margin-left:3px">(${p}%)</span>`:'';
+    return `${v}${badge}`;
+  };
+
+  // FT만 뽑아서 상세 표시
+  const ftRows=rows.filter(r=>r.time_type==='FT');
+  const otherRows=rows.filter(r=>r.time_type!=='FT');
+
+  const makeTable=(data,title)=>`
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">${title}</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전(분)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">HIR+Spr</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.map(r=>{
+              const mx=r.player_profiles;
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px">
+                  <div style="font-weight:600;color:var(--text)">${mx?.name||'—'}</div>
+                  <div style="font-size:10px;color:var(--text3)">${mx?.position||''}</div>
+                </td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.td,mx?.match_max_td,'m')}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.mpm,mx?.match_max_mpm,'m/min')}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.hir_sprint,mx?.match_max_hir,'m')}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.accel,mx?.match_max_accel,'회')}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.rhie,mx?.match_max_rhie,'회')}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.max_speed,mx?.match_max_speed,'km/h')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+
+  out.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button onclick="loadMatchList()" style="font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">← 목록</button>
+      <div style="font-size:14px;font-weight:700;color:var(--text)">${date} · ${opponent}</div>
+    </div>
+    ${ftRows.length?makeTable(ftRows,'FT (풀타임) — Match Max 대비 %'):''}
+    ${otherRows.filter(r=>r.time_type==='1Q').length?makeTable(otherRows.filter(r=>r.time_type==='1Q'),'1Q (전반)'):''}
+    ${otherRows.filter(r=>r.time_type==='2Q').length?makeTable(otherRows.filter(r=>r.time_type==='2Q'),'2Q (후반)'):''}`;
+}
+
+// ── 선수별 경기 이력 분석 ─────────────────────────────────────────
+async function loadMatchPlayerDetail(){
+  const pid=document.getElementById('match-player-sel')?.value;
+  const timeType=document.getElementById('match-time-sel')?.value||'FT';
+  const out=document.getElementById('match-player-output');
+  if(!pid||!out) return;
+
+  const player=_players.find(p=>p.id===pid);
+  out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
+
+  const {data:rows}=await supa.from('match_records')
+    .select('*')
+    .eq('player_id',pid).eq('time_type',timeType)
+    .order('match_date',{ascending:false});
+
+  if(!rows?.length){
+    out.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3)">${player?.name||''} · ${timeType} 경기 데이터 없음</div>`;
+    return;
+  }
+
+  const mx=player;
+  const pct=(v,m)=>(!v||!m)?'—':Math.round((v/m)*100)+'%';
+  const pctColor=p=>p==='—'?'var(--text3)':parseInt(p)>=80?'#22c55e':parseInt(p)>=60?'#eab308':'#ef4444';
+
+  // 평균 계산
+  const avgF=field=>{
+    const v=rows.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));
+    return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;
+  };
+
+  const summaryCards=[
+    {label:'평균 TD',val:avgF('td'),unit:'m',max:mx?.match_max_td},
+    {label:'평균 MPM',val:avgF('mpm'),unit:'m/min',max:mx?.match_max_mpm},
+    {label:'평균 HIR+Spr',val:avgF('hir_sprint'),unit:'m',max:mx?.match_max_hir},
+    {label:'평균 가속',val:avgF('accel'),unit:'회',max:mx?.match_max_accel},
+    {label:'평균 RHIE',val:avgF('rhie'),unit:'회',max:mx?.match_max_rhie},
+    {label:'최고속도 Max',val:Math.round(Math.max(...rows.map(r=>parseFloat(r.max_speed)||0))*10)/10,unit:'km/h',max:mx?.match_max_speed},
+  ].map(c=>{
+    const p=c.max?Math.round((c.val/c.max)*100):null;
+    return `<div style="background:var(--surface2);border-radius:8px;padding:9px 8px;text-align:center">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${c.label}</div>
+      <div style="font-size:14px;font-weight:600;color:var(--accent2)">${c.val||'—'}<span style="font-size:10px;color:var(--text3);margin-left:1px">${c.val?c.unit:''}</span></div>
+      ${p?`<div style="font-size:11px;color:${pctColor(p+'%')};margin-top:1px">Max 대비 ${p}%</div>`:''}
+    </div>`;
+  }).join('');
+
+  const tableRows=rows.map(r=>`
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px;color:var(--text2);white-space:nowrap">${r.match_date}</td>
+      <td style="padding:6px 8px;color:var(--text3)">${r.opponent||'—'}</td>
+      <td style="padding:6px 8px;text-align:center;color:${r.result==='W'?'#22c55e':r.result==='L'?'#ef4444':'#eab308'};font-weight:600">${r.result||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
+      <td style="padding:6px 8px;text-align:right">
+        <span style="color:var(--accent2)">${r.td?Math.round(r.td).toLocaleString():'—'}</span>
+        <span style="font-size:10px;color:${pctColor(pct(r.td,mx?.match_max_td))};margin-left:3px">${pct(r.td,mx?.match_max_td)}</span>
+      </td>
+      <td style="padding:6px 8px;text-align:right">
+        <span style="color:#f59e0b">${r.mpm?parseFloat(r.mpm).toFixed(1):'—'}</span>
+        <span style="font-size:10px;color:${pctColor(pct(r.mpm,mx?.match_max_mpm))};margin-left:3px">${pct(r.mpm,mx?.match_max_mpm)}</span>
+      </td>
+      <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.hir_sprint?Math.round(r.hir_sprint):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+    </tr>`).join('');
+
+  out.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">${player?.name||''} · ${player?.position||''} · ${timeType} 경기 ${rows.length}경기</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">
+        <div style="grid-column:span 3;display:grid;grid-template-columns:repeat(6,1fr);gap:6px">${summaryCards}</div>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">날짜</th>
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">상대</th>
+              <th style="padding:6px 8px;text-align:center;color:var(--text3)">결과</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">HIR+Spr</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── Match Max 전체 현황 ───────────────────────────────────────────
+async function loadMatchMax(){
+  const out=document.getElementById('match-max-output');
+  if(!out) return;
+  out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
+
+  if(!_players.length){
+    const {data}=await supa.from('player_profiles').select('*');
+    _players=data||[];
+  }
+
+  const playersWithMax=_players.filter(p=>p.match_max_td);
+  if(!playersWithMax.length){
+    out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">Match Max 데이터 없음 — 경기 엑셀을 업로드하세요</div>';
+    return;
+  }
+
+  // 포지션 순 정렬
+  const posOrder=['GK','CB','FB','MF','CM','CAM','WG','ST','FW'];
+  playersWithMax.sort((a,b)=>{
+    const ai=posOrder.indexOf(a.position)>=0?posOrder.indexOf(a.position):99;
+    const bi=posOrder.indexOf(b.position)>=0?posOrder.indexOf(b.position):99;
+    return ai-bi||a.name.localeCompare(b.name);
+  });
+
+  out.innerHTML=`
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">FT(풀타임) 기준 선수별 경기 최대값 — 훈련 강도 비교 기준</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:680px">
+        <thead>
+          <tr style="background:var(--surface2)">
+            <th style="padding:7px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">TD Max</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">MPM Max</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">HIR+Spr Max</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속 Max</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE Max</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도 Max</th>
+            <th style="padding:7px 8px;text-align:right;color:var(--text3)">갱신일</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${playersWithMax.map(p=>`
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:7px 8px">
+                <div style="font-weight:600;color:var(--text)">${p.name}</div>
+                <div style="font-size:10px;color:var(--text3)">${p.position}</div>
+              </td>
+              <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${p.match_max_td?Math.round(p.match_max_td).toLocaleString()+'m':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#f59e0b">${p.match_max_mpm?parseFloat(p.match_max_mpm).toFixed(1):'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#ef4444">${p.match_max_hir?Math.round(p.match_max_hir).toLocaleString()+'m':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#fb923c">${p.match_max_accel||'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#34d399">${p.match_max_rhie||'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#60a5fa">${p.match_max_speed?parseFloat(p.match_max_speed).toFixed(1)+'km/h':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:var(--text3)">${p.match_max_updated||'—'}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['gym','preact','cardio','players','videos','custom','cprog','notify','progmgmt','report'].forEach(id=>{
+  ['gym','preact','cardio','players','videos','custom','cprog','notify','progmgmt','report','match'].forEach(id=>{
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
@@ -7439,6 +7958,7 @@ function switchTab(tab,el){
   if(tab==='notify')loadNotifyTab();
   if(tab==='progmgmt') setProgTab('videos');
   if(tab==='report') loadMorningReport();
+  if(tab==='match') loadMatchTab();
 }
 const __PL__={};try{if(Object.keys(__PL__).length){const _s=JSON.parse(localStorage.getItem(SK)||'{}');Object.assign(_s,__PL__);localStorage.setItem(SK,JSON.stringify(_s));}}catch(e){}
 const __CX__={};try{if(Object.keys(__CX__).length){const _c=JSON.parse(localStorage.getItem(CX_KEY)||'{}');Object.assign(_c,__CX__);localStorage.setItem(CX_KEY,JSON.stringify(_c));}}catch(e){}
