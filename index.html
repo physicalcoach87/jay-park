@@ -3778,8 +3778,13 @@ async function loadMorningReport(){
     .select('player_id,session_date,max_speed,duration,session_type2')
     .gte('session_date',since28Str).order('session_date',{ascending:false});
 
+  // 치료중/재활중 선수는 이미 부상자 현황에 표시되므로 위험 목록에서 제외
+  const injuredActiveIds = new Set(
+    (injuredAll||[]).filter(r=>r.status==='치료중'||r.status==='재활중').map(r=>r.player_id)
+  );
   const riskResults = [];
   for(const player of _players){
+    if(injuredActiveIds.has(player.id)) continue; // 치료중/재활중 → 부상 위험 목록 제외
     const pid = player.id;
     const mss = parseFloat(player.mss)||0;
     const pgps = (gps28||[]).filter(r=>r.player_id===pid); // 개인 데이터 전체 포함
@@ -5854,7 +5859,7 @@ async function runInjuryRiskAnalysis(){
   }
 
   // 데이터 병렬 조회
-  const [{data:gpsAll}, {data:rpeAll}, {data:wellAll}] = await Promise.all([
+  const [{data:gpsAll}, {data:rpeAll}, {data:wellAll}, {data:injuredNow}] = await Promise.all([
     supa.from('gps_records')
       .select('player_id,session_date,max_speed,duration,session_type2')
       .gte('session_date', since28Str).order('session_date', {ascending:false}),
@@ -5864,11 +5869,18 @@ async function runInjuryRiskAnalysis(){
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
       .gte('record_date', since7Str).order('record_date', {ascending:false}),
+    supa.from('injury_records')
+      .select('player_id,status')
+      .in('status',['치료중','재활중']),
   ]);
+
+  // 치료중/재활중 선수는 이미 부상자 현황에 표시되므로 위험 분석 제외
+  const injuredNowIds = new Set((injuredNow||[]).map(r=>r.player_id));
 
   const results = [];
 
   for(const player of _players){
+    if(injuredNowIds.has(player.id)) continue; // 치료중/재활중 → 분석 제외
     const pid = player.id;
     const mss = parseFloat(player.mss) || 0;
 
