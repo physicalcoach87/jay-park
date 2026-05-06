@@ -354,12 +354,18 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <input type="date" id="sched-date" style="width:100%;padding:9px 11px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box">
       </div>
       <div>
+        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px">시간 (선택)</label>
+        <input type="time" id="sched-time" style="width:100%;padding:9px 11px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;box-sizing:border-box">
+      </div>
+      <div>
         <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:5px">유형</label>
         <select id="sched-type" onchange="updateSchedForm()" style="width:100%;padding:9px 11px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit">
           <option value="TRAINING">🏃 훈련</option>
           <option value="MATCH">⚽ 경기</option>
           <option value="GYM">🏋️ GYM</option>
           <option value="REST">😴 휴식/회복</option>
+          <option value="MEAL">🍽️ 식사 시간</option>
+          <option value="SNACK">🍌 간식 시간</option>
           <option value="EVENT">📢 팀 이벤트</option>
         </select>
       </div>
@@ -3849,6 +3855,7 @@ function openScheduleModal(date, ev){
 
   document.getElementById('sched-modal-title').textContent = _calEditId ? '일정 수정' : '일정 추가';
   document.getElementById('sched-date').value  = ev ? (ev.event_date||date||_calDateStr(new Date())) : (date||_calDateStr(new Date()));
+  document.getElementById('sched-time').value  = ev ? (ev.start_time||'') : '';
   document.getElementById('sched-type').value  = ev ? (ev.event_type||'TRAINING') : 'TRAINING';
   document.getElementById('sched-md').value    = ev ? (ev.md_stage||'') : '';
   document.getElementById('sched-title').value = ev ? (ev.title||'') : '';
@@ -3882,6 +3889,7 @@ function setSchedTeam(t){
 }
 async function saveScheduleEvent(){
   const date  = document.getElementById('sched-date').value;
+  const time  = document.getElementById('sched-time').value;
   const type  = document.getElementById('sched-type').value;
   const md    = document.getElementById('sched-md').value;
   const title = document.getElementById('sched-title').value.trim();
@@ -3890,6 +3898,7 @@ async function saveScheduleEvent(){
 
   const payload = {
     event_date:  date,
+    start_time:  time||null,
     event_type:  type,
     md_stage:    md||null,
     title:       title||null,
