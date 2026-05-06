@@ -329,6 +329,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <span id="cal-period-lbl" style="font-size:13px;font-weight:500;color:var(--text);min-width:110px;text-align:center"></span>
         <button onclick="calNavNext()" style="width:28px;height:28px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:6px;cursor:pointer;font-size:16px;line-height:1;font-family:inherit">›</button>
         <button onclick="openScheduleModal(null)" style="font-size:12px;padding:5px 12px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">+ 추가</button>
+        <button onclick="openWeekGridModal()" style="font-size:12px;padding:5px 12px;border:1px solid #3b82f6;background:rgba(59,130,246,0.1);color:#93c5fd;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">📋 주간 입력</button>
+        <button onclick="openPhotoParseModal()" style="font-size:12px;padding:5px 12px;border:1px solid #8b5cf6;background:rgba(139,92,246,0.1);color:#c4b5fd;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">📷 사진 입력</button>
       </div>
     </div>
     <div id="schedule-cal-body" style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
@@ -338,6 +340,63 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <div id="morning-report-output">
     <div style="text-align:center;padding:3rem;color:var(--text3)">레포트 불러오는 중...</div>
+  </div>
+</div>
+
+<!-- 주간 그리드 편집 모달 -->
+<div id="week-grid-overlay" onclick="closeWeekGridModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;align-items:flex-start;justify-content:center;padding:16px;box-sizing:border-box;overflow-y:auto">
+  <div onclick="event.stopPropagation()" style="background:var(--surface2);border:1px solid var(--border2);border-radius:14px;width:min(1200px,96vw);box-shadow:0 20px 60px rgba(0,0,0,0.5);margin:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--border)">
+      <span style="font-size:15px;font-weight:700;color:var(--text)">📋 주간 일정 입력</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <button onclick="wgNavPrev()" style="width:28px;height:28px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);border-radius:6px;cursor:pointer;font-size:16px;line-height:1;font-family:inherit">‹</button>
+        <span id="wg-period-lbl" style="font-size:12px;font-weight:500;color:var(--text);min-width:150px;text-align:center"></span>
+        <button onclick="wgNavNext()" style="width:28px;height:28px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);border-radius:6px;cursor:pointer;font-size:16px;line-height:1;font-family:inherit">›</button>
+        <button onclick="closeWeekGridModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:0 4px;line-height:1;margin-left:6px">✕</button>
+      </div>
+    </div>
+    <div style="padding:14px;overflow-x:auto">
+      <div id="week-grid-content" style="display:flex;gap:7px;min-width:900px">
+        <div style="text-align:center;padding:2rem;color:var(--text3);width:100%">불러오는 중...</div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;padding:13px 20px;border-top:1px solid var(--border)">
+      <button onclick="closeWeekGridModal()" style="padding:9px 18px;font-size:13px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">취소</button>
+      <button onclick="saveWeekGrid()" style="padding:9px 22px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">💾 전체 저장</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진 파싱 모달 -->
+<div id="photo-parse-overlay" onclick="closePhotoParseModal()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:10000;align-items:center;justify-content:center">
+  <div onclick="event.stopPropagation()" style="background:var(--surface2);border:1px solid var(--border2);border-radius:14px;padding:20px;width:min(560px,92vw);max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.5)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <span style="font-size:15px;font-weight:700;color:var(--text)">📷 사진으로 일정 입력</span>
+      <button onclick="closePhotoParseModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;padding:0 4px;line-height:1">✕</button>
+    </div>
+    <div id="photo-upload-area" onclick="document.getElementById('photo-file-input').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+      ondragleave="this.style.borderColor='var(--border2)'"
+      ondrop="event.preventDefault();this.style.borderColor='var(--border2)';document.getElementById('photo-file-input').files=event.dataTransfer.files;onPhotoSelected({target:document.getElementById('photo-file-input')})"
+      style="border:2px dashed var(--border2);border-radius:10px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s"
+      onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border2)'">
+      <div style="font-size:34px;margin-bottom:8px">📅</div>
+      <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px">주간 일정표 사진 업로드</div>
+      <div style="font-size:12px;color:var(--text3)">클릭하거나 이미지를 드래그하세요 (JPG, PNG)</div>
+      <input type="file" id="photo-file-input" accept="image/*" style="display:none" onchange="onPhotoSelected(event)">
+    </div>
+    <div id="photo-preview-wrap" style="display:none;margin-top:12px">
+      <img id="photo-preview-img" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:200px;object-fit:contain">
+    </div>
+    <div id="photo-parse-result" style="display:none;margin-top:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">파싱된 일정 (수정 가능)</div>
+      <div id="photo-parsed-table"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;justify-content:flex-end">
+      <button onclick="closePhotoParseModal()" style="padding:9px 16px;font-size:13px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">취소</button>
+      <button id="photo-parse-btn" onclick="parseSchedulePhoto()" style="display:none;padding:9px 18px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:#8b5cf6;color:#fff;cursor:pointer;font-family:inherit">🔍 분석하기</button>
+      <button id="photo-save-btn" onclick="savePhotoSchedule()" style="display:none;padding:9px 22px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">💾 일정 등록</button>
+    </div>
   </div>
 </div>
 
@@ -3646,6 +3705,8 @@ const SCHED_COLORS = {
   GYM:      { bg:'rgba(59,130,246,0.15)',  border:'#3b82f6', text:'#93c5fd', label:'GYM'     },
   REST:     { bg:'rgba(113,113,122,0.15)', border:'#71717a', text:'#a1a1aa', label:'휴식'    },
   EVENT:    { bg:'rgba(139,92,246,0.15)',  border:'#8b5cf6', text:'#c4b5fd', label:'이벤트'  },
+  MEAL:     { bg:'rgba(234,179,8,0.15)',   border:'#eab308', text:'#fde047', label:'식사'    },
+  SNACK:    { bg:'rgba(249,115,22,0.15)',  border:'#f97316', text:'#fdba74', label:'간식'    },
 };
 const MD_COLORS = {
   'MD-5':'#52525b','MD-4':'#3b82f6','MD-3':'#ef4444',
@@ -3921,6 +3982,226 @@ async function deleteScheduleEvent(){
   const {error}=await supa.from('weekly_schedule').delete().eq('id',_calEditId);
   if(error){ alert('삭제 실패: '+error.message); return; }
   closeScheduleModal();
+  loadScheduleCalendar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 주간 그리드 편집기
+// ══════════════════════════════════════════════════════════════════
+let _weekGridBase = new Date();
+let _weekGridData = [];
+let _weekGridRowCnt = 0;
+
+function openWeekGridModal(){
+  _weekGridBase = new Date(_calBaseDate);
+  document.getElementById('week-grid-overlay').style.display = 'flex';
+  loadWeekGrid();
+}
+function closeWeekGridModal(){
+  document.getElementById('week-grid-overlay').style.display = 'none';
+}
+function wgNavPrev(){ _weekGridBase.setDate(_weekGridBase.getDate()-7); loadWeekGrid(); }
+function wgNavNext(){ _weekGridBase.setDate(_weekGridBase.getDate()+7); loadWeekGrid(); }
+
+async function loadWeekGrid(){
+  document.getElementById('week-grid-content').innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3);width:100%">불러오는 중...</div>';
+  const ws = _calWeekStart(new Date(_weekGridBase));
+  const we = new Date(ws); we.setDate(ws.getDate()+6);
+  const from = _calDateStr(ws), to = _calDateStr(we);
+  document.getElementById('wg-period-lbl').textContent = from + ' ~ ' + to;
+  const {data} = await supa.from('weekly_schedule').select('*')
+    .gte('event_date', from).lte('event_date', to)
+    .order('start_time', {ascending:true, nullsFirst:true});
+  _weekGridData = (data||[]).map(e=>({
+    rowId:'r_'+e.id, id:e.id, date:e.event_date,
+    time:e.start_time||'', type:e.event_type||'TRAINING',
+    md:e.md_stage||'', title:e.title||'', team:e.team||'ALL', _del:false
+  }));
+  renderWeekGrid();
+}
+
+function renderWeekGrid(){
+  const ws = _calWeekStart(new Date(_weekGridBase));
+  const DAY_KR = ['월','화','수','목','금','토','일'];
+  const IS = 'width:100%;padding:5px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px;font-family:inherit;box-sizing:border-box';
+  const typeOpts = [['TRAINING','🏃 훈련'],['MATCH','⚽ 경기'],['GYM','🏋️ GYM'],['REST','😴 휴식'],['MEAL','🍽️ 식사'],['SNACK','🍌 간식'],['EVENT','📢 이벤트']];
+  const mdOpts   = [['','MD-'],['MD-5','MD-5'],['MD-4','MD-4'],['MD-3','MD-3'],['MD-2','MD-2'],['MD-1','MD-1'],['MD+1','MD+1'],['MATCH','경기일']];
+  const teamOpts = [['ALL','전체'],['A','A팀'],['B','B팀']];
+  const selHtml  = (opts, val) => opts.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('');
+  const today    = _calDateStr(new Date());
+  let html = '';
+  for(let i=0;i<7;i++){
+    const d = new Date(ws); d.setDate(ws.getDate()+i);
+    const ds = _calDateStr(d);
+    const isToday = ds===today;
+    const isSun=i===6, isSat=i===5;
+    const dc = isSun?'#f87171':isSat?'#93c5fd':'var(--text)';
+    const dayRows = _weekGridData.filter(r=>r.date===ds&&!r._del);
+    html += `<div style="flex:1;min-width:140px;background:var(--surface);border:1px solid ${isToday?'var(--accent)':'var(--border)'};border-radius:8px;display:flex;flex-direction:column">`;
+    html += `<div style="padding:7px 8px;background:${isToday?'rgba(22,163,74,0.1)':'var(--surface2)'};border-bottom:1px solid var(--border);text-align:center;border-radius:7px 7px 0 0">
+      <div style="font-size:10px;font-weight:600;color:${dc}">${DAY_KR[i]}</div>
+      <div style="font-size:16px;font-weight:700;color:${isToday?'var(--accent)':dc}">${d.getDate()}</div>
+    </div>`;
+    html += `<div id="wg-col-${ds}" style="flex:1;padding:6px;display:flex;flex-direction:column;gap:5px">`;
+    dayRows.forEach(row=>{
+      html += `<div data-rowid="${row.rowId}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:3px">
+        <div style="display:flex;gap:3px;align-items:center">
+          <input type="time" data-field="time" value="${row.time}" style="${IS};flex:1">
+          <button onclick="deleteGridRow('${row.rowId}')" style="flex-shrink:0;background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0 2px;line-height:1">✕</button>
+        </div>
+        <select data-field="type" style="${IS}">${selHtml(typeOpts,row.type)}</select>
+        <select data-field="md" style="${IS}">${selHtml(mdOpts,row.md)}</select>
+        <input type="text" data-field="title" value="${row.title.replace(/"/g,'&quot;')}" placeholder="제목..." style="${IS}">
+        <select data-field="team" style="${IS}">${selHtml(teamOpts,row.team)}</select>
+      </div>`;
+    });
+    html += `</div>`;
+    html += `<div style="padding:0 6px 6px">
+      <button onclick="addGridRow('${ds}')" style="width:100%;padding:5px;font-size:11px;border:1px dashed var(--border2);background:transparent;color:var(--text3);border-radius:5px;cursor:pointer;font-family:inherit">+ 추가</button>
+    </div></div>`;
+  }
+  document.getElementById('week-grid-content').innerHTML = html;
+}
+
+function addGridRow(date){
+  _weekGridRowCnt++;
+  _weekGridData.push({rowId:'new_'+_weekGridRowCnt,id:null,date,time:'',type:'TRAINING',md:'',title:'',team:'ALL',_del:false});
+  renderWeekGrid();
+}
+function deleteGridRow(rowId){
+  const row = _weekGridData.find(r=>r.rowId===rowId);
+  if(row){ row._del=true; renderWeekGrid(); }
+}
+async function saveWeekGrid(){
+  const container = document.getElementById('week-grid-content');
+  _weekGridData.filter(r=>!r._del).forEach(row=>{
+    const el = container.querySelector('[data-rowid="'+row.rowId+'"]');
+    if(!el) return;
+    row.time  = el.querySelector('[data-field="time"]').value;
+    row.type  = el.querySelector('[data-field="type"]').value;
+    row.md    = el.querySelector('[data-field="md"]').value;
+    row.title = el.querySelector('[data-field="title"]').value.trim();
+    row.team  = el.querySelector('[data-field="team"]').value;
+  });
+  const toDel = _weekGridData.filter(r=>r._del&&r.id);
+  const toIns = _weekGridData.filter(r=>!r._del&&!r.id);
+  const toUpd = _weekGridData.filter(r=>!r._del&&r.id);
+  let error;
+  if(toDel.length){
+    ({error}=await supa.from('weekly_schedule').delete().in('id',toDel.map(r=>r.id)));
+    if(error){alert('삭제 실패: '+error.message);return;}
+  }
+  for(const row of toUpd){
+    ({error}=await supa.from('weekly_schedule').update({
+      event_date:row.date, start_time:row.time||null, event_type:row.type,
+      md_stage:row.md||null, title:row.title||null, team:row.team
+    }).eq('id',row.id));
+    if(error){alert('수정 실패: '+error.message);return;}
+  }
+  if(toIns.length){
+    ({error}=await supa.from('weekly_schedule').insert(toIns.map(row=>({
+      event_date:row.date, start_time:row.time||null, event_type:row.type,
+      md_stage:row.md||null, title:row.title||null, team:row.team, description:null
+    }))));
+    if(error){alert('저장 실패: '+error.message);return;}
+  }
+  closeWeekGridModal();
+  loadScheduleCalendar();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 사진 → 일정 파싱
+// ══════════════════════════════════════════════════════════════════
+let _photoBase64 = null;
+let _photoType = null;
+let _parsedEvents = [];
+
+function openPhotoParseModal(){
+  _photoBase64=null; _photoType=null; _parsedEvents=[];
+  document.getElementById('photo-preview-wrap').style.display='none';
+  document.getElementById('photo-parse-result').style.display='none';
+  document.getElementById('photo-parse-btn').style.display='none';
+  document.getElementById('photo-save-btn').style.display='none';
+  document.getElementById('photo-file-input').value='';
+  document.getElementById('photo-parse-overlay').style.display='flex';
+}
+function closePhotoParseModal(){
+  document.getElementById('photo-parse-overlay').style.display='none';
+}
+function onPhotoSelected(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  _photoType = file.type||'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = ev=>{
+    _photoBase64 = ev.target.result.split(',')[1];
+    document.getElementById('photo-preview-img').src = ev.target.result;
+    document.getElementById('photo-preview-wrap').style.display='block';
+    document.getElementById('photo-parse-btn').style.display='inline-block';
+    document.getElementById('photo-save-btn').style.display='none';
+    document.getElementById('photo-parse-result').style.display='none';
+  };
+  reader.readAsDataURL(file);
+}
+async function parseSchedulePhoto(){
+  if(!_photoBase64){alert('사진을 선택해주세요.');return;}
+  const btn = document.getElementById('photo-parse-btn');
+  btn.textContent='분석 중...'; btn.disabled=true;
+  try{
+    const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI';
+    const res = await fetch(SUPA_URL+'/functions/v1/parse-schedule',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
+      body:JSON.stringify({imageBase64:_photoBase64, imageType:_photoType})
+    });
+    const json = await res.json();
+    if(!res.ok) throw new Error(json.error||'파싱 실패');
+    _parsedEvents = json.events||[];
+    renderParsedTable();
+    document.getElementById('photo-parse-result').style.display='block';
+    document.getElementById('photo-save-btn').style.display='inline-block';
+  }catch(err){
+    alert('분석 실패: '+err.message+'\n\n※ Supabase Edge Function(parse-schedule) 배포가 필요합니다.');
+  }finally{
+    btn.textContent='🔍 분석하기'; btn.disabled=false;
+  }
+}
+function renderParsedTable(){
+  const IS='padding:4px 6px;border-radius:4px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px;font-family:inherit;width:100%;box-sizing:border-box';
+  const typeOpts=[['TRAINING','🏃 훈련'],['MATCH','⚽ 경기'],['GYM','🏋️ GYM'],['REST','😴 휴식'],['MEAL','🍽️ 식사'],['SNACK','🍌 간식'],['EVENT','📢 이벤트']];
+  const teamOpts=[['ALL','전체'],['A','A팀'],['B','B팀']];
+  const selHtml=(opts,val)=>opts.map(([v,l])=>`<option value="${v}"${v===val?' selected':''}>${l}</option>`).join('');
+  let html=`<div style="display:flex;flex-direction:column;gap:6px">`;
+  _parsedEvents.forEach((ev,i)=>{
+    html+=`<div data-pidx="${i}" style="background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:8px;display:grid;grid-template-columns:1fr 1fr;gap:5px">
+      <div><div style="font-size:9px;color:var(--text3);margin-bottom:2px">날짜</div><input type="date" data-field="event_date" value="${ev.event_date||''}" style="${IS}"></div>
+      <div><div style="font-size:9px;color:var(--text3);margin-bottom:2px">시간</div><input type="time" data-field="start_time" value="${ev.start_time||''}" style="${IS}"></div>
+      <div><div style="font-size:9px;color:var(--text3);margin-bottom:2px">유형</div><select data-field="event_type" style="${IS}">${selHtml(typeOpts,ev.event_type||'TRAINING')}</select></div>
+      <div><div style="font-size:9px;color:var(--text3);margin-bottom:2px">대상</div><select data-field="team" style="${IS}">${selHtml(teamOpts,ev.team||'ALL')}</select></div>
+      <div style="grid-column:1/-1"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">제목</div><input type="text" data-field="title" value="${(ev.title||'').replace(/"/g,'&quot;')}" style="${IS}"></div>
+      <div style="grid-column:1/-1;text-align:right"><button onclick="removeParsedEvent(${i})" style="font-size:11px;padding:2px 8px;border:1px solid #ef4444;background:transparent;color:#ef4444;border-radius:4px;cursor:pointer;font-family:inherit">삭제</button></div>
+    </div>`;
+  });
+  html+=`</div>`;
+  document.getElementById('photo-parsed-table').innerHTML=html;
+}
+function removeParsedEvent(i){
+  _parsedEvents.splice(i,1);
+  if(!_parsedEvents.length){ document.getElementById('photo-parse-result').style.display='none'; document.getElementById('photo-save-btn').style.display='none'; }
+  else renderParsedTable();
+}
+async function savePhotoSchedule(){
+  const cards = document.getElementById('photo-parsed-table').querySelectorAll('[data-pidx]');
+  const rows=[];
+  cards.forEach(card=>{
+    const g=f=>card.querySelector('[data-field="'+f+'"]').value;
+    if(!g('event_date')) return;
+    rows.push({event_date:g('event_date'),start_time:g('start_time')||null,event_type:g('event_type'),title:g('title').trim()||null,team:g('team'),description:null,md_stage:null});
+  });
+  if(!rows.length){alert('등록할 일정이 없습니다.');return;}
+  const {error}=await supa.from('weekly_schedule').insert(rows);
+  if(error){alert('저장 실패: '+error.message);return;}
+  closePhotoParseModal();
   loadScheduleCalendar();
 }
 
