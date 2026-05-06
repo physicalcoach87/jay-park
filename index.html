@@ -3838,7 +3838,7 @@ function _renderWeekCal(body, events){
     const d = new Date(ws); d.setDate(ws.getDate()+i);
     const ds = _calDateStr(d);
     const isToday = ds===today;
-    const dayEvts = byDate[ds]||[];
+    const dayEvts = (byDate[ds]||[]).sort((a,b)=>(a.start_time||'99:99').localeCompare(b.start_time||'99:99'));
     html += `<div onclick="openScheduleModal('${ds}')"
       style="padding:5px 3px;border-right:${i<6?'1px solid var(--border)':'none'};min-height:100px;cursor:pointer;background:${isToday?'rgba(22,163,74,0.04)':'transparent'};transition:background .12s"
       onmouseenter="this.style.background='var(--surface2)'" onmouseleave="this.style.background='${isToday?'rgba(22,163,74,0.04)':'transparent'}'">`;
@@ -3882,7 +3882,7 @@ function _renderMonthCal(body, events){
     const isLast = dow===6;
     const isToday = ds===today;
     const dayCl = dow===6?'#f87171':dow===5?'#93c5fd':'var(--text)';
-    const dayEvts = byDate[ds]||[];
+    const dayEvts = (byDate[ds]||[]).sort((a,b)=>(a.start_time||'99:99').localeCompare(b.start_time||'99:99'));
     const numStyle = isToday
       ? 'background:var(--accent);color:#fff;border-radius:50%;width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;font-size:11px'
       : `color:${dayCl}`;
