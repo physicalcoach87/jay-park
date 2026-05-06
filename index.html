@@ -327,8 +327,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">👤 선수 개인데이터</button>
       <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
-      <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('match')" id="pvbtn-match">🏟️ 경기 데이터</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
     </div>
   </div>
 
@@ -585,18 +585,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 경기 데이터 뷰 -->
   <div id="pv-match" style="display:none">
-    <!-- 헤더: 경기 엑셀 업로드 -->
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:12px;color:var(--text3)">BePro 경기 Excel 파일을 업로드하세요</div>
-      <div style="display:flex;gap:8px">
-        <button onclick="document.getElementById('match-file-input').click()"
-          style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">
-          📤 경기 엑셀 업로드
-        </button>
-        <input type="file" id="match-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleMatchFileSelect(event)">
-      </div>
-    </div>
-
     <!-- 서브 탭 -->
     <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
       <button class="btn-exp" id="mtab-list" onclick="setMatchTab('list')"
