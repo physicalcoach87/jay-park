@@ -302,7 +302,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab" onclick="switchTab('cardio',this)">유산소 운동</button>
   <button class="tab admin-only" onclick="switchTab('progmgmt',this)">📋 프로그램 관리</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
-  <button class="tab admin-only" onclick="switchTab('match',this)">🏟️ 경기 데이터</button>
 </div>
 
 <!-- 모닝 레포트 탭 -->
@@ -329,6 +328,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('match')" id="pvbtn-match">🏟️ 경기 데이터</button>
     </div>
   </div>
 
@@ -525,35 +525,141 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- GPS 업로드 뷰 -->
   <div id="pv-upload" style="display:none">
-    <div class="coaching-box" style="margin-bottom:1rem">
-      <p>GPS Excel 파일을 업로드하면 자동으로 파싱해서 Supabase에 저장합니다.<br>
-      선수명이 <strong style="color:var(--accent2)">player_profiles</strong>에 등록된 이름과 일치해야 합니다.</p>
+    <!-- 업로드 타입 선택 -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button id="uptab-gps" onclick="setUploadTab('gps')"
+        class="btn-exp" style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">🏃 훈련 GPS 업로드</button>
+      <button id="uptab-match" onclick="setUploadTab('match')"
+        class="btn-exp" style="flex:1">🏟️ 경기 엑셀 업로드</button>
     </div>
 
-    <!-- 파일 업로드 영역 -->
-    <div id="upload-drop-zone"
-      style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
-      onclick="document.getElementById('gps-file-input').click()"
-      ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
-      ondragleave="this.style.borderColor='var(--border2)'"
-      ondrop="handleFileDrop(event)">
-      <div style="font-size:32px;margin-bottom:8px">📂</div>
-      <div style="font-size:14px;font-weight:600;color:var(--text2)">GPS Excel 파일 클릭 또는 드래그</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
-    </div>
-    <input type="file" id="gps-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)">
-
-    <!-- 파싱 결과 미리보기 -->
-    <div id="upload-preview" style="display:none">
-      <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="upload-preview-title"></div>
-      <div style="overflow-x:auto;margin-bottom:12px">
-        <table id="upload-preview-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px"></table>
+    <!-- 훈련 GPS 업로드 섹션 -->
+    <div id="uv-gps">
+      <div class="coaching-box" style="margin-bottom:1rem">
+        <p>GPS Excel 파일을 업로드하면 자동으로 파싱해서 Supabase에 저장합니다.<br>
+        선수명이 <strong style="color:var(--accent2)">player_profiles</strong>에 등록된 이름과 일치해야 합니다.</p>
       </div>
+      <div id="upload-drop-zone"
+        style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
+        onclick="document.getElementById('gps-file-input').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
+        ondragleave="this.style.borderColor='var(--border2)'"
+        ondrop="handleFileDrop(event)">
+        <div style="font-size:32px;margin-bottom:8px">📂</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text2)">GPS Excel 파일 클릭 또는 드래그</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
+      </div>
+      <input type="file" id="gps-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)">
+      <div id="upload-preview" style="display:none">
+        <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="upload-preview-title"></div>
+        <div style="overflow-x:auto;margin-bottom:12px">
+          <table id="upload-preview-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px"></table>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="saveGpsData()" class="btn-exp pri" style="flex:2;padding:11px" id="upload-save-btn">💾 Supabase에 저장</button>
+          <button onclick="cancelUpload()" class="btn-exp" style="flex:1;padding:11px">취소</button>
+        </div>
+        <div id="upload-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+      </div>
+    </div>
+
+    <!-- 경기 엑셀 업로드 섹션 -->
+    <div id="uv-match" style="display:none">
+      <div class="coaching-box" style="margin-bottom:1rem">
+        <p>BePro 경기 Excel 파일을 업로드합니다.<br>
+        컬럼: 날짜 / 경기상대 / TIME(FT·1Q·2Q) / 선수명 / TD / MPM / HSR+SPRINT / Band4 TD / Band5 TD / 가속 / RHIE / 최고속도 / P.Load / FMP Running.M·H / FMP Dynamic.M·H</p>
+      </div>
+      <div style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
+        onclick="document.getElementById('match-file-input-up').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
+        ondragleave="this.style.borderColor='var(--border2)'"
+        ondrop="event.preventDefault();handleMatchFileSelect({target:{files:event.dataTransfer.files}})">
+        <div style="font-size:32px;margin-bottom:8px">🏟️</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text2)">경기 Excel 파일 클릭 또는 드래그</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
+      </div>
+      <input type="file" id="match-file-input-up" accept=".xlsx,.xls" style="display:none" onchange="handleMatchFileSelect(event)">
+      <div id="match-upload-msg" style="font-size:12px;margin-top:8px;min-height:16px;color:var(--text3)"></div>
+    </div>
+  </div>
+
+  <!-- 경기 데이터 뷰 -->
+  <div id="pv-match" style="display:none">
+    <!-- 헤더: 경기 엑셀 업로드 -->
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-size:12px;color:var(--text3)">BePro 경기 Excel 파일을 업로드하세요</div>
       <div style="display:flex;gap:8px">
-        <button onclick="saveGpsData()" class="btn-exp pri" style="flex:2;padding:11px" id="upload-save-btn">💾 Supabase에 저장</button>
-        <button onclick="cancelUpload()" class="btn-exp" style="flex:1;padding:11px">취소</button>
+        <button onclick="document.getElementById('match-file-input').click()"
+          style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">
+          📤 경기 엑셀 업로드
+        </button>
+        <input type="file" id="match-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleMatchFileSelect(event)">
       </div>
-      <div id="upload-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
+    </div>
+
+    <!-- 서브 탭 -->
+    <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn-exp" id="mtab-list" onclick="setMatchTab('list')"
+        style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📋 경기 목록</button>
+      <button class="btn-exp" id="mtab-player" onclick="setMatchTab('player')" style="flex:1">👤 선수별 분석</button>
+      <button class="btn-exp" id="mtab-max" onclick="setMatchTab('max')" style="flex:1">🏆 Match Max</button>
+      <button class="btn-exp" id="mtab-report" onclick="setMatchTab('report')" style="flex:1">📊 경기 보고서</button>
+    </div>
+
+    <!-- 경기 목록 뷰 -->
+    <div id="mv-list">
+      <div id="match-list-output">
+        <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기 데이터를 업로드하면 표시됩니다</div>
+      </div>
+    </div>
+
+    <!-- 선수별 분석 뷰 -->
+    <div id="mv-player" style="display:none">
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>선수 선택</label>
+          <select id="match-player-sel" onchange="loadMatchPlayerDetail()" style="width:100%">
+            <option value="">선수를 선택하세요</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label>TIME 기준</label>
+          <select id="match-time-sel" onchange="loadMatchPlayerDetail()" style="width:100%">
+            <option value="FT">FT (풀타임)</option>
+            <option value="1Q">1Q (전반)</option>
+            <option value="2Q">2Q (후반)</option>
+          </select>
+        </div>
+      </div>
+      <div id="match-player-output">
+        <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">선수를 선택하세요</div>
+      </div>
+    </div>
+
+    <!-- Match Max 뷰 -->
+    <div id="mv-max" style="display:none">
+      <div id="match-max-output">
+        <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기 데이터를 업로드하면 선수별 Match Max가 표시됩니다</div>
+      </div>
+    </div>
+
+    <!-- 경기 보고서 뷰 -->
+    <div id="mv-report" style="display:none">
+      <div style="display:flex;gap:8px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap">
+        <div class="ctrl" style="flex:2">
+          <label style="font-size:11px;color:var(--text3)">경기 선택</label>
+          <select id="report-match-sel" style="width:100%;margin-top:4px">
+            <option value="">경기를 선택하세요</option>
+          </select>
+        </div>
+        <button onclick="generateMatchReport()"
+          style="font-size:12px;padding:7px 16px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap">
+          📊 보고서 생성
+        </button>
+      </div>
+      <div id="match-report-output">
+        <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기를 선택하고 보고서 생성 버튼을 누르세요</div>
+      </div>
     </div>
   </div>
 </div>
@@ -850,65 +956,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div id="ptab-content-videos"></div>
   <div id="ptab-content-custom" style="display:none"></div>
   <div id="ptab-content-cprog" style="display:none"></div>
-</div>
-
-<!-- 알림/메시지 탭 -->
-<div id="tab-match" style="display:none">
-  <div class="vm-bar" style="margin-bottom:12px">
-    <h3>🏟️ 경기 데이터</h3>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button id="match-upload-btn" onclick="document.getElementById('match-file-input').click()"
-        style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit">
-        📤 경기 엑셀 업로드
-      </button>
-      <input type="file" id="match-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleMatchFileSelect(event)">
-    </div>
-  </div>
-
-  <!-- 서브 탭 -->
-  <div style="display:flex;gap:8px;margin-bottom:14px">
-    <button class="btn-exp" id="mtab-list" onclick="setMatchTab('list')"
-      style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📋 경기 목록</button>
-    <button class="btn-exp" id="mtab-player" onclick="setMatchTab('player')" style="flex:1">👤 선수별 분석</button>
-    <button class="btn-exp" id="mtab-max" onclick="setMatchTab('max')" style="flex:1">🏆 Match Max</button>
-  </div>
-
-  <!-- 경기 목록 뷰 -->
-  <div id="mv-list">
-    <div id="match-list-output">
-      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기 데이터를 업로드하면 표시됩니다</div>
-    </div>
-  </div>
-
-  <!-- 선수별 분석 뷰 -->
-  <div id="mv-player" style="display:none">
-    <div class="ctrls g2" style="margin-bottom:12px">
-      <div class="ctrl">
-        <label>선수 선택</label>
-        <select id="match-player-sel" onchange="loadMatchPlayerDetail()" style="width:100%">
-          <option value="">선수를 선택하세요</option>
-        </select>
-      </div>
-      <div class="ctrl">
-        <label>TIME 기준</label>
-        <select id="match-time-sel" onchange="loadMatchPlayerDetail()" style="width:100%">
-          <option value="FT">FT (풀타임)</option>
-          <option value="1Q">1Q (전반)</option>
-          <option value="2Q">2Q (후반)</option>
-        </select>
-      </div>
-    </div>
-    <div id="match-player-output">
-      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">선수를 선택하세요</div>
-    </div>
-  </div>
-
-  <!-- Match Max 뷰 -->
-  <div id="mv-max" style="display:none">
-    <div id="match-max-output">
-      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기 데이터를 업로드하면 선수별 Match Max가 표시됩니다</div>
-    </div>
-  </div>
 </div>
 
 <div id="tab-notify" style="display:none">
@@ -3313,7 +3360,7 @@ async function loadPlayerManagement(){
 }
 
 function setPlayerView(view){
-  ['team','wellness','roster','dashboard','upload'].forEach(v=>{
+  ['team','wellness','roster','dashboard','upload','match'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
     if(el) el.style.display = v===view ? 'block' : 'none';
     const btn = document.getElementById(`pvbtn-${v}`);
@@ -3337,6 +3384,19 @@ function setPlayerView(view){
   }
   if(view==='roster') loadRosterList();
   if(view==='wellness') initWellnessView();
+  if(view==='match'){
+    setMatchTab('list');
+    loadMatchList();
+    // 선수 셀렉트 채우기
+    const sel = document.getElementById('match-player-sel');
+    if(sel && sel.options.length <= 1 && _players.length){
+      _players.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
+    } else if(sel && sel.options.length <= 1){
+      supa.from('player_profiles').select('id,name,position').then(({data})=>{
+        (data||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
+      });
+    }
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -5683,6 +5743,19 @@ function cancelUpload(){
   document.getElementById('gps-file-input').value='';
 }
 
+function setUploadTab(tab){
+  ['gps','match'].forEach(t=>{
+    const el=document.getElementById('uv-'+t);
+    if(el) el.style.display=t===tab?'block':'none';
+    const btn=document.getElementById('uptab-'+t);
+    if(btn){
+      btn.style.borderColor=t===tab?'var(--accent)':'var(--border2)';
+      btn.style.background =t===tab?'var(--accent-bg)':'var(--surface2)';
+      btn.style.color      =t===tab?'var(--accent2)':'var(--text2)';
+    }
+  });
+}
+
 
 // ══════════════════════════════════════════════════════════════════
 // 부상 위험 예측 엔진 (Injury Risk Prediction Engine)
@@ -7505,7 +7578,7 @@ function timeToMin(t){ return t==='FT'?90:t==='1Q'?45:t==='2Q'?45:90; }
 
 // 서브탭 전환
 function setMatchTab(tab){
-  ['list','player','max'].forEach(t=>{
+  ['list','player','max','report'].forEach(t=>{
     const el=document.getElementById('mv-'+t);
     if(el) el.style.display=t===tab?'block':'none';
     const btn=document.getElementById('mtab-'+t);
@@ -7517,6 +7590,132 @@ function setMatchTab(tab){
   });
   if(tab==='player') loadMatchPlayerDetail();
   if(tab==='max')    loadMatchMax();
+  if(tab==='report') loadReportMatchSel();
+}
+
+async function loadReportMatchSel(){
+  const sel=document.getElementById('report-match-sel');
+  if(!sel) return;
+  const {data}=await supa.from('match_records')
+    .select('match_date,opponent,result')
+    .eq('time_type','FT')
+    .order('match_date',{ascending:false});
+  const seen=new Set();
+  const unique=(data||[]).filter(r=>{
+    const k=r.match_date+'|'+(r.opponent||'');
+    if(seen.has(k)) return false; seen.add(k); return true;
+  });
+  sel.innerHTML='<option value="">경기를 선택하세요</option>'+
+    unique.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${r.opponent||'?'} (${r.result||'—'})</option>`).join('');
+}
+
+async function generateMatchReport(){
+  const sel=document.getElementById('report-match-sel');
+  const out=document.getElementById('match-report-output');
+  if(!sel?.value||!out) return;
+  const [date,opponent]=sel.value.split('||');
+
+  out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">보고서 생성 중...</div>';
+
+  const {data:rows}=await supa.from('match_records')
+    .select('*,player_profiles(name,position,match_max_td,match_max_mpm,match_max_hir,match_max_accel,match_max_rhie,match_max_speed)')
+    .eq('match_date',date).eq('opponent',opponent)
+    .eq('time_type','FT')
+    .order('td',{ascending:false});
+
+  if(!rows?.length){ out.innerHTML='<div style="color:var(--text3);padding:1rem">FT 데이터 없음</div>'; return; }
+
+  const toMMSS=secs=>{ if(!secs||secs<=0) return '—'; const m=Math.floor(secs/60),s=Math.round(secs%60); return `${m}:${s.toString().padStart(2,'0')}`; };
+  const pct=(v,m)=>(!v||!m)?null:Math.round((v/m)*100);
+  const pctColor=p=>!p?'var(--text3)':p>=80?'#22c55e':p>=60?'#eab308':'#ef4444';
+  const pctBadge=(v,m)=>{
+    const p=pct(v,m);
+    const disp=v?Math.round(v):'—';
+    const badge=p?`<span style="font-size:9px;color:${pctColor(p)};margin-left:2px">(${p}%)</span>`:'';
+    return `${disp}${badge}`;
+  };
+
+  // 팀 평균 계산
+  const avgF=field=>{ const v=rows.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field])); return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null; };
+  const teamAvg={td:avgF('td'),mpm:avgF('mpm'),hir:avgF('hir_sprint'),b4:avgF('band4_td'),b5:avgF('band5_td'),accel:avgF('accel'),rhie:avgF('rhie'),pl:avgF('player_load')};
+
+  const matchInfo=rows[0];
+  const resultBadge=matchInfo.result==='W'?'<span style="background:#14532d;color:#4ade80;padding:2px 10px;border-radius:6px;font-weight:700">WIN</span>':matchInfo.result==='L'?'<span style="background:#7f1d1d;color:#f87171;padding:2px 10px;border-radius:6px;font-weight:700">LOSE</span>':'<span style="background:#2a1a00;color:#fbbf24;padding:2px 10px;border-radius:6px;font-weight:700">DRAW</span>';
+
+  out.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${date} · vs ${opponent||'?'}</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${matchInfo.home_away==='H'?'🏠 홈':'✈️ 원정'} · ${matchInfo.score||'—'} · FT ${rows.length}명 출전</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">${resultBadge}</div>
+      </div>
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">팀 평균 (FT)</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:4px">
+        ${[
+          {l:'TD',v:teamAvg.td,u:'m',c:'var(--accent2)'},
+          {l:'MPM',v:teamAvg.mpm,u:'m/min',c:'#f59e0b'},
+          {l:'HIR+Spr',v:teamAvg.hir,u:'m',c:'#ef4444'},
+          {l:'가속',v:teamAvg.accel,u:'회',c:'#fb923c'},
+          {l:'RHIE',v:teamAvg.rhie,u:'회',c:'#34d399'},
+          {l:'Band4 TD',v:teamAvg.b4,u:'m',c:'#818cf8'},
+          {l:'Band5 TD',v:teamAvg.b5,u:'m',c:'#a78bfa'},
+          {l:'P.Load',v:teamAvg.pl,u:'',c:'#c084fc'},
+        ].map(c=>`<div style="background:var(--surface2);border-radius:8px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${c.l}</div>
+          <div style="font-size:13px;font-weight:600;color:${c.c}">${c.v!=null?c.v.toLocaleString():'—'}<span style="font-size:9px;color:var(--text3);margin-left:1px">${c.v?c.u:''}</span></div>
+        </div>`).join('')}
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">
+      <div style="padding:10px 14px;font-size:12px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">선수별 상세 (FT · Match Max 대비 %)</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1100px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:7px 8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">출전</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">TD(m)</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">MPM</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">HIR+Spr</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">Band4(m)</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">Band5(m)</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">P.Load</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">Run.M</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">Run.H</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">Dyn.M</th>
+              <th style="padding:7px 8px;text-align:right;color:var(--text3)">Dyn.H</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(r=>{
+              const mx=r.player_profiles;
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:7px 8px"><div style="font-weight:600;color:var(--text)">${mx?.name||'—'}</div><div style="font-size:10px;color:var(--text3)">${mx?.position||''}</div></td>
+                <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
+                <td style="padding:7px 8px;text-align:right;color:var(--accent2)">${pctBadge(r.td,mx?.match_max_td)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#f59e0b">${pctBadge(r.mpm,mx?.match_max_mpm)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#ef4444">${pctBadge(r.hir_sprint,mx?.match_max_hir)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#818cf8">${r.band4_td?Math.round(r.band4_td):'—'}</td>
+                <td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.band5_td?Math.round(r.band5_td):'—'}</td>
+                <td style="padding:7px 8px;text-align:right;color:#fb923c">${pctBadge(r.accel,mx?.match_max_accel)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#34d399">${pctBadge(r.rhie,mx?.match_max_rhie)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+                <td style="padding:7px 8px;text-align:right;color:#c084fc">${r.player_load?Math.round(r.player_load):'—'}</td>
+                <td style="padding:7px 8px;text-align:right;color:#34d399">${toMMSS(r.fmp_run_m)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#10b981">${toMMSS(r.fmp_run_h)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#f59e0b">${toMMSS(r.fmp_dyn_m)}</td>
+                <td style="padding:7px 8px;text-align:right;color:#f97316">${toMMSS(r.fmp_dyn_h)}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // 탭 진입 시
@@ -7540,8 +7739,9 @@ function handleMatchFileSelect(e){
 }
 
 async function parseMatchFile(file){
-  const btn=document.getElementById('match-upload-btn');
-  btn.textContent='⏳ 파싱 중...'; btn.disabled=true;
+  // 업로드 상태 표시 (GPS업로드탭 메시지 div 또는 경기데이터탭 버튼)
+  const msgEl=document.getElementById('match-upload-msg');
+  if(msgEl) msgEl.innerHTML='<span style="color:var(--accent2)">⏳ 파싱 중...</span>';
 
   const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
   const buf  = await file.arrayBuffer();
@@ -7622,16 +7822,17 @@ async function parseMatchFile(file){
   }
   const {error}=await supa.from('match_records').insert(toInsert);
 
+  const msgEl2=document.getElementById('match-upload-msg');
   if(error){
-    btn.textContent='❌ 오류: '+error.message; btn.disabled=false;
+    if(msgEl2) msgEl2.innerHTML=`<span style="color:#ef4444">❌ 오류: ${error.message}</span>`;
     return;
   }
 
   // Match Max 자동 갱신
   await updateMatchMax(toInsert.map(r=>r.player_id));
 
-  btn.textContent='✅ '+toInsert.length+'개 저장 완료';
-  setTimeout(()=>{ btn.textContent='📤 경기 엑셀 업로드'; btn.disabled=false; },2000);
+  if(msgEl2) msgEl2.innerHTML=`<span style="color:#22c55e">✅ ${toInsert.length}개 저장 완료</span>`;
+  setTimeout(()=>{ if(msgEl2) msgEl2.innerHTML=''; },3000);
   if(unknown.size) alert(`⚠️ 미등록 선수 (${[...unknown].join(', ')}) — 선수명 확인 필요`);
 
   loadMatchList();
@@ -7674,28 +7875,36 @@ async function loadMatchList(){
   if(!out) return;
   out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
 
-  const {data:matches}=await supa.from('match_records')
-    .select('match_date,opponent,home_away,round,time_type,score,result')
+  const {data:allRows}=await supa.from('match_records')
+    .select('match_date,opponent,home_away,round,score,result,player_id')
     .eq('time_type','FT')
     .order('match_date',{ascending:false});
 
-  if(!matches?.length){
+  if(!allRows?.length){
     out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">경기 데이터 없음 — 엑셀을 업로드하세요</div>';
     return;
   }
 
-  // 경기별 선수 수 집계
-  const {data:counts}=await supa.from('match_records')
-    .select('match_date,opponent,player_id')
-    .eq('time_type','FT');
+  // 중복 제거: match_date + opponent 기준 unique 경기 목록
+  const seen=new Set();
+  const matches=allRows.filter(m=>{
+    const k=m.match_date+'|'+(m.opponent||'');
+    if(seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+
+  // 경기별 선수 수 (player_id distinct count)
   const cntMap={};
-  (counts||[]).forEach(r=>{
-    const k=r.match_date+'|'+r.opponent;
-    cntMap[k]=(cntMap[k]||0)+1;
+  allRows.forEach(r=>{
+    const k=r.match_date+'|'+(r.opponent||'');
+    if(!cntMap[k]) cntMap[k]=new Set();
+    cntMap[k].add(r.player_id);
   });
 
   const resultColor=r=>r==='W'?'#22c55e':r==='D'?'#eab308':r==='L'?'#ef4444':'var(--text3)';
   const haColor=h=>h==='H'?'#4ade80':h==='A'?'#fbbf24':'var(--text3)';
+
+  window._matchListData = matches; // 삭제 시 참조용
 
   out.innerHTML=`
     <div style="overflow-x:auto">
@@ -7709,22 +7918,40 @@ async function loadMatchList(){
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">결과</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">선수</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">상세</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">삭제</th>
           </tr>
         </thead>
         <tbody>
-          ${matches.map(m=>`
-            <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="loadMatchDetail('${m.match_date}','${m.opponent||''}')">
-              <td style="padding:8px 10px;color:var(--text2)">${m.match_date}</td>
-              <td style="padding:8px 10px;font-weight:600;color:var(--text)">${m.opponent||'—'}</td>
+          ${matches.map(m=>{
+            const k=m.match_date+'|'+(m.opponent||'');
+            const cnt=cntMap[k]?cntMap[k].size:0;
+            const esc=s=>(s||'').replace(/'/g,"\\'");
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:8px 10px;color:var(--text2);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">${m.match_date}</td>
+              <td style="padding:8px 10px;font-weight:600;color:var(--text);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">${m.opponent||'—'}</td>
               <td style="padding:8px 10px;text-align:center;font-weight:600;color:${haColor(m.home_away)}">${m.home_away||'—'}</td>
               <td style="padding:8px 10px;text-align:center;color:var(--text2)">${m.score||'—'}</td>
               <td style="padding:8px 10px;text-align:center;font-weight:700;color:${resultColor(m.result)}">${m.result||'—'}</td>
-              <td style="padding:8px 10px;text-align:center;color:var(--text3)">${cntMap[m.match_date+'|'+m.opponent]||0}명</td>
-              <td style="padding:8px 10px;text-align:center;color:var(--accent2)">→</td>
-            </tr>`).join('')}
+              <td style="padding:8px 10px;text-align:center;color:var(--text3)">${cnt}명</td>
+              <td style="padding:8px 10px;text-align:center;color:var(--accent2);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">→</td>
+              <td style="padding:8px 10px;text-align:center">
+                <button onclick="deleteMatch('${esc(m.match_date)}','${esc(m.opponent||'')}')"
+                  style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #ef4444;background:transparent;color:#ef4444;cursor:pointer;font-family:inherit">🗑️</button>
+              </td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>`;
+}
+
+// ── 경기 삭제 ──────────────────────────────────────────────────────
+async function deleteMatch(date, opponent){
+  if(!confirm(`${date} vs ${opponent||'?'} 경기 데이터를 삭제할까요?\n(모든 선수 데이터가 삭제됩니다)`)) return;
+  const {error}=await supa.from('match_records').delete()
+    .eq('match_date',date).eq('opponent',opponent);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  loadMatchList();
 }
 
 // ── 경기 상세 (선수별 데이터 + Match Max 대비 %) ──────────────────
@@ -7748,25 +7975,40 @@ async function loadMatchDetail(date, opponent){
     return `${v}${badge}`;
   };
 
-  // FT만 뽑아서 상세 표시
+  // FMP 초→MM:SS 변환
+  const toMMSS=secs=>{
+    if(!secs||secs<=0) return '—';
+    const m=Math.floor(secs/60), s=Math.round(secs%60);
+    return `${m}:${s.toString().padStart(2,'0')}`;
+  };
+
+  // FT / 1Q / 2Q 분리
   const ftRows=rows.filter(r=>r.time_type==='FT');
-  const otherRows=rows.filter(r=>r.time_type!=='FT');
+  const q1Rows=rows.filter(r=>r.time_type==='1Q');
+  const q2Rows=rows.filter(r=>r.time_type==='2Q');
 
   const makeTable=(data,title)=>`
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">${title}</div>
       <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1100px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전(분)</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD(m)</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">HIR+Spr</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">HIR+Spr(m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Band4 TD(m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Band5 TD(m)</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">P.Load</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">FMP Run.M</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">FMP Run.H</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">FMP Dyn.M</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">FMP Dyn.H</th>
             </tr>
           </thead>
           <tbody>
@@ -7778,12 +8020,19 @@ async function loadMatchDetail(date, opponent){
                   <div style="font-size:10px;color:var(--text3)">${mx?.position||''}</div>
                 </td>
                 <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
-                <td style="padding:6px 8px;text-align:right">${pctBadge(r.td,mx?.match_max_td,'m')}</td>
-                <td style="padding:6px 8px;text-align:right">${pctBadge(r.mpm,mx?.match_max_mpm,'m/min')}</td>
-                <td style="padding:6px 8px;text-align:right">${pctBadge(r.hir_sprint,mx?.match_max_hir,'m')}</td>
-                <td style="padding:6px 8px;text-align:right">${pctBadge(r.accel,mx?.match_max_accel,'회')}</td>
-                <td style="padding:6px 8px;text-align:right">${pctBadge(r.rhie,mx?.match_max_rhie,'회')}</td>
-                <td style="padding:6px 8px;text-align:right">${pctBadge(r.max_speed,mx?.match_max_speed,'km/h')}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.td,mx?.match_max_td)}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.mpm,mx?.match_max_mpm)}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.hir_sprint,mx?.match_max_hir)}</td>
+                <td style="padding:6px 8px;text-align:right;color:#818cf8">${r.band4_td?Math.round(r.band4_td):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#a78bfa">${r.band5_td?Math.round(r.band5_td):'—'}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.accel,mx?.match_max_accel)}</td>
+                <td style="padding:6px 8px;text-align:right">${pctBadge(r.rhie,mx?.match_max_rhie)}</td>
+                <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#c084fc">${r.player_load?Math.round(r.player_load):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#34d399">${toMMSS(r.fmp_run_m)}</td>
+                <td style="padding:6px 8px;text-align:right;color:#10b981">${toMMSS(r.fmp_run_h)}</td>
+                <td style="padding:6px 8px;text-align:right;color:#f59e0b">${toMMSS(r.fmp_dyn_m)}</td>
+                <td style="padding:6px 8px;text-align:right;color:#f97316">${toMMSS(r.fmp_dyn_h)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -7797,11 +8046,11 @@ async function loadMatchDetail(date, opponent){
       <div style="font-size:14px;font-weight:700;color:var(--text)">${date} · ${opponent}</div>
     </div>
     ${ftRows.length?makeTable(ftRows,'FT (풀타임) — Match Max 대비 %'):''}
-    ${otherRows.filter(r=>r.time_type==='1Q').length?makeTable(otherRows.filter(r=>r.time_type==='1Q'),'1Q (전반)'):''}
-    ${otherRows.filter(r=>r.time_type==='2Q').length?makeTable(otherRows.filter(r=>r.time_type==='2Q'),'2Q (후반)'):''}`;
+    ${q1Rows.length?makeTable(q1Rows,'1Q (전반)'):''}
+    ${q2Rows.length?makeTable(q2Rows,'2Q (후반)'):''}`;
 }
 
-// ── 선수별 경기 이력 분석 ─────────────────────────────────────────
+// ── 선수별 경기 이력 분석 (MAX 기준) ─────────────────────────────
 async function loadMatchPlayerDetail(){
   const pid=document.getElementById('match-player-sel')?.value;
   const timeType=document.getElementById('match-time-sel')?.value||'FT';
@@ -7824,26 +8073,47 @@ async function loadMatchPlayerDetail(){
   const mx=player;
   const pct=(v,m)=>(!v||!m)?'—':Math.round((v/m)*100)+'%';
   const pctColor=p=>p==='—'?'var(--text3)':parseInt(p)>=80?'#22c55e':parseInt(p)>=60?'#eab308':'#ef4444';
+  const toMMSS=secs=>{
+    if(!secs||secs<=0) return '—';
+    const m=Math.floor(secs/60), s=Math.round(secs%60);
+    return `${m}:${s.toString().padStart(2,'0')}`;
+  };
 
-  // 평균 계산
-  const avgF=field=>{
+  // MAX 계산 (최고속도 제외 소수점 없음)
+  const maxF=field=>{
     const v=rows.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));
-    return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;
+    return v.length?Math.round(Math.max(...v)):null;
+  };
+  const maxSpeed=()=>{
+    const v=rows.filter(r=>parseFloat(r.max_speed)>0).map(r=>parseFloat(r.max_speed));
+    return v.length?Math.max(...v):null;
+  };
+  const maxFMP=field=>{
+    const v=rows.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));
+    return v.length?Math.max(...v):null;
   };
 
   const summaryCards=[
-    {label:'평균 TD',val:avgF('td'),unit:'m',max:mx?.match_max_td},
-    {label:'평균 MPM',val:avgF('mpm'),unit:'m/min',max:mx?.match_max_mpm},
-    {label:'평균 HIR+Spr',val:avgF('hir_sprint'),unit:'m',max:mx?.match_max_hir},
-    {label:'평균 가속',val:avgF('accel'),unit:'회',max:mx?.match_max_accel},
-    {label:'평균 RHIE',val:avgF('rhie'),unit:'회',max:mx?.match_max_rhie},
-    {label:'최고속도 Max',val:Math.round(Math.max(...rows.map(r=>parseFloat(r.max_speed)||0))*10)/10,unit:'km/h',max:mx?.match_max_speed},
+    {label:'TD Max',val:maxF('td'),unit:'m',max:mx?.match_max_td,color:'var(--accent2)'},
+    {label:'MPM Max',val:maxF('mpm'),unit:'m/min',max:mx?.match_max_mpm,color:'#f59e0b'},
+    {label:'HIR+Spr Max',val:maxF('hir_sprint'),unit:'m',max:mx?.match_max_hir,color:'#ef4444'},
+    {label:'Band4 TD Max',val:maxF('band4_td'),unit:'m',max:null,color:'#818cf8'},
+    {label:'Band5 TD Max',val:maxF('band5_td'),unit:'m',max:null,color:'#a78bfa'},
+    {label:'가속 Max',val:maxF('accel'),unit:'회',max:mx?.match_max_accel,color:'#fb923c'},
+    {label:'RHIE Max',val:maxF('rhie'),unit:'회',max:mx?.match_max_rhie,color:'#34d399'},
+    {label:'최고속도 Max',val:maxSpeed()!=null?parseFloat(maxSpeed().toFixed(1)):null,unit:'km/h',max:mx?.match_max_speed,color:'#60a5fa'},
+    {label:'P.Load Max',val:maxF('player_load'),unit:'',max:null,color:'#c084fc'},
+    {label:'FMP Run.M Max',val:maxFMP('fmp_run_m'),unit:'',max:null,color:'#34d399',mmss:true},
+    {label:'FMP Run.H Max',val:maxFMP('fmp_run_h'),unit:'',max:null,color:'#10b981',mmss:true},
+    {label:'FMP Dyn.M Max',val:maxFMP('fmp_dyn_m'),unit:'',max:null,color:'#f59e0b',mmss:true},
+    {label:'FMP Dyn.H Max',val:maxFMP('fmp_dyn_h'),unit:'',max:null,color:'#f97316',mmss:true},
   ].map(c=>{
-    const p=c.max?Math.round((c.val/c.max)*100):null;
+    const displayVal=c.mmss?toMMSS(c.val):(c.val!=null?c.val+'':null);
+    const p=(!c.mmss&&c.max&&c.val)?Math.round((c.val/c.max)*100):null;
     return `<div style="background:var(--surface2);border-radius:8px;padding:9px 8px;text-align:center">
       <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${c.label}</div>
-      <div style="font-size:14px;font-weight:600;color:var(--accent2)">${c.val||'—'}<span style="font-size:10px;color:var(--text3);margin-left:1px">${c.val?c.unit:''}</span></div>
-      ${p?`<div style="font-size:11px;color:${pctColor(p+'%')};margin-top:1px">Max 대비 ${p}%</div>`:''}
+      <div style="font-size:13px;font-weight:600;color:${c.color}">${displayVal||'—'}<span style="font-size:9px;color:var(--text3);margin-left:1px">${displayVal&&!c.mmss?c.unit:''}</span></div>
+      ${p?`<div style="font-size:10px;color:${pctColor(p+'%')};margin-top:1px">Match Max ${p}%</div>`:''}
     </div>`;
   }).join('');
 
@@ -7853,40 +8123,48 @@ async function loadMatchPlayerDetail(){
       <td style="padding:6px 8px;color:var(--text3)">${r.opponent||'—'}</td>
       <td style="padding:6px 8px;text-align:center;color:${r.result==='W'?'#22c55e':r.result==='L'?'#ef4444':'#eab308'};font-weight:600">${r.result||'—'}</td>
       <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
-      <td style="padding:6px 8px;text-align:right">
-        <span style="color:var(--accent2)">${r.td?Math.round(r.td).toLocaleString():'—'}</span>
-        <span style="font-size:10px;color:${pctColor(pct(r.td,mx?.match_max_td))};margin-left:3px">${pct(r.td,mx?.match_max_td)}</span>
-      </td>
-      <td style="padding:6px 8px;text-align:right">
-        <span style="color:#f59e0b">${r.mpm?parseFloat(r.mpm).toFixed(1):'—'}</span>
-        <span style="font-size:10px;color:${pctColor(pct(r.mpm,mx?.match_max_mpm))};margin-left:3px">${pct(r.mpm,mx?.match_max_mpm)}</span>
-      </td>
+      <td style="padding:6px 8px;text-align:right;color:var(--accent2)">${r.td?Math.round(r.td).toLocaleString():'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#f59e0b">${r.mpm?Math.round(r.mpm):'—'}</td>
       <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.hir_sprint?Math.round(r.hir_sprint):'—'}</td>
-      <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#818cf8">${r.band4_td?Math.round(r.band4_td):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#a78bfa">${r.band5_td?Math.round(r.band5_td):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.accel?Math.round(r.accel):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie?Math.round(r.rhie):'—'}</td>
       <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#c084fc">${r.player_load?Math.round(r.player_load):'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#34d399">${toMMSS(r.fmp_run_m)}</td>
+      <td style="padding:6px 8px;text-align:right;color:#10b981">${toMMSS(r.fmp_run_h)}</td>
+      <td style="padding:6px 8px;text-align:right;color:#f59e0b">${toMMSS(r.fmp_dyn_m)}</td>
+      <td style="padding:6px 8px;text-align:right;color:#f97316">${toMMSS(r.fmp_dyn_h)}</td>
     </tr>`).join('');
 
   out.innerHTML=`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">${player?.name||''} · ${player?.position||''} · ${timeType} 경기 ${rows.length}경기</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">
-        <div style="grid-column:span 3;display:grid;grid-template-columns:repeat(6,1fr);gap:6px">${summaryCards}</div>
-      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">${player?.name||''} · ${player?.position||''} · ${timeType} ${rows.length}경기</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${summaryCards}</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
       <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:1100px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:6px 8px;text-align:left;color:var(--text3)">날짜</th>
               <th style="padding:6px 8px;text-align:left;color:var(--text3)">상대</th>
               <th style="padding:6px 8px;text-align:center;color:var(--text3)">결과</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD(m)</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">HIR+Spr</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Band4(m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Band5(m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">P.Load</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Run.M</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Run.H</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Dyn.M</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Dyn.H</th>
             </tr>
           </thead>
           <tbody>${tableRows}</tbody>
