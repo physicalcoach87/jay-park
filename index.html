@@ -7781,9 +7781,18 @@ async function parseMatchFile(file){
     if(!pid){ unknown.add(playerName); continue; }
 
     const dateVal=row[COL.date];
-    const dateStr=dateVal instanceof Date
-      ? dateVal.toISOString().split('T')[0]
-      : String(dateVal).split('T')[0];
+    let dateStr;
+    if(dateVal instanceof Date){
+      // SheetJS가 Date 객체로 변환한 경우
+      const d = new Date(dateVal.getTime() + 9*60*60*1000); // KST 보정
+      dateStr = d.toISOString().split('T')[0];
+    } else if(typeof dateVal==='number'){
+      // Excel 날짜 직렬 번호 → JS Date 변환 (46075 등)
+      const d = new Date(Math.round((dateVal - 25569) * 86400 * 1000));
+      dateStr = d.toISOString().split('T')[0];
+    } else {
+      dateStr = String(dateVal).split('T')[0].split(' ')[0];
+    }
 
     toInsert.push({
       player_id:  pid,
