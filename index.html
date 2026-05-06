@@ -3652,7 +3652,7 @@ const MD_COLORS = {
   'MD-2':'#f97316','MD-1':'#eab308','MD+1':'#14b8a6','MATCH':'#ef4444'
 };
 
-function _calDateStr(d){ return d.toISOString().split('T')[0]; }
+function _calDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 
 function _calWeekStart(d){
   const r = new Date(d);
