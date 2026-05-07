@@ -4798,7 +4798,7 @@ async function loadMorningReport(){
         🏥 부상자 현황 (${(injuredAll||[]).length}명)
       </div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        ${(injuredAll||[]).map(inj => {
+        ${(()=>{ window._mrInjuries = injuredAll||[]; return window._mrInjuries; })().map((inj,_mrIdx) => {
               const player = _players.find(p=>p.id===inj.player_id);
           const statusColor = inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
                             : inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
@@ -4806,7 +4806,7 @@ async function loadMorningReport(){
           const injDays = inj.injury_date
             ? Math.floor((new Date(today) - new Date(inj.injury_date)) / 86400000)
             : null;
-          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:8px;gap:8px;flex-wrap:wrap">
+          return `<div onclick="openInjuryForm(window._mrInjuries[${_mrIdx}].player_id, window._mrInjuries[${_mrIdx}].id)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:8px;gap:8px;flex-wrap:wrap;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
             <div>
               <span style="font-size:13px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
               <span style="font-size:11px;color:var(--text3);margin-left:6px">${player?.position||''}</span>
@@ -4814,7 +4814,10 @@ async function loadMorningReport(){
               <div style="font-size:11px;color:var(--text2);margin-top:2px">${inj.body_part} · ${inj.injury_type||'—'} · ${inj.severity||'—'}</div>
               <div style="font-size:10px;color:var(--text3);margin-top:1px">${inj.injury_date}${inj.return_date?' ~ '+inj.return_date:' ~ 진행중'}</div>
             </div>
-            <span style="font-size:11px;padding:3px 10px;border-radius:8px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span style="font-size:10px;color:var(--text3)">✏️</span>
+              <span style="font-size:11px;padding:3px 10px;border-radius:8px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
+            </div>
           </div>`;
         }).join('')}
       </div>
@@ -7120,6 +7123,7 @@ async function saveInjuryForm(){
   } else {
     document.getElementById('injury-modal')?.remove();
     loadPlayerDashboard();
+    if(document.getElementById('morning-report-output')) loadMorningReport();
   }
 }
 
