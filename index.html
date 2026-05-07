@@ -1002,7 +1002,81 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button id="gympart-LB" class="btn-exp" onclick="setGymBodyPart('LB')">🦵 Lower Body</button>
       <button id="gympart-AB" class="btn-exp" onclick="setGymBodyPart('AB')">⚡ All Body</button>
       <button id="gympart-Core" class="btn-exp" onclick="setGymBodyPart('Core')">🔄 Core</button>
+      <button id="gympart-Multi" class="btn-exp" onclick="setGymBodyPart('Multi')">🔀 멀티 (Mix)</button>
     </div>
+  </div>
+
+  <!-- 멀티 운동 설정 패널 -->
+  <div id="gym-multi-config" style="display:none;background:var(--surface);border:1px solid #a21caf;border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:#e879f9;text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px">🔀 멀티 믹스 구성 설정</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+
+      <!-- UB -->
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;border:1px solid var(--border2)" id="mcfg-ub-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="mcfg-ub-on" checked onchange="updateMultiConfig()" style="width:14px;height:14px;accent-color:#3b82f6">
+            <span style="font-size:12px;font-weight:700;color:#3b82f6">🏋️ Upper Body</span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)">
+          운동 수:
+          <select id="mcfg-ub-cnt" onchange="updateMultiConfig()" style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+            <option value="1">1개</option><option value="2" selected>2개</option><option value="3">3개</option><option value="4">4개</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- LB -->
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;border:1px solid var(--border2)" id="mcfg-lb-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="mcfg-lb-on" checked onchange="updateMultiConfig()" style="width:14px;height:14px;accent-color:#22c55e">
+            <span style="font-size:12px;font-weight:700;color:#22c55e">🦵 Lower Body</span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)">
+          운동 수:
+          <select id="mcfg-lb-cnt" onchange="updateMultiConfig()" style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+            <option value="1">1개</option><option value="2">2개</option><option value="3" selected>3개</option><option value="4">4개</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- AB -->
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;border:1px solid var(--border2)" id="mcfg-ab-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="mcfg-ab-on" onchange="updateMultiConfig()" style="width:14px;height:14px;accent-color:#f59e0b">
+            <span style="font-size:12px;font-weight:700;color:#f59e0b">⚡ All Body / 플라이오</span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)">
+          운동 수:
+          <select id="mcfg-ab-cnt" onchange="updateMultiConfig()" style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+            <option value="1" selected>1개</option><option value="2">2개</option><option value="3">3개</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Core -->
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;border:1px solid var(--border2)" id="mcfg-core-wrap">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="mcfg-core-on" checked onchange="updateMultiConfig()" style="width:14px;height:14px;accent-color:#a855f7">
+            <span style="font-size:12px;font-weight:700;color:#a855f7">🔄 Core</span>
+          </label>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)">
+          운동 수:
+          <select id="mcfg-core-cnt" onchange="updateMultiConfig()" style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+            <option value="1">1개</option><option value="2" selected>2개</option><option value="3">3개</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+    <div id="mcfg-summary" style="margin-top:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)"></div>
   </div>
 
   <!-- ③ 운동 목적 버튼 -->
@@ -3240,6 +3314,32 @@ let _currentGymBodyPart='LB';
 let _currentGymPurpose='hyper';
 let _currentGymMode='rand';
 
+// 멀티 운동 설정 (카테고리별 포함 여부 + 운동 수)
+let _multiConfig={
+  UB:{on:true, cnt:2},
+  LB:{on:true, cnt:3},
+  AB:{on:false, cnt:1},
+  Core:{on:true, cnt:2}
+};
+
+function updateMultiConfig(){
+  _multiConfig={
+    UB:{on:document.getElementById('mcfg-ub-on')?.checked||false,   cnt:parseInt(document.getElementById('mcfg-ub-cnt')?.value||2)},
+    LB:{on:document.getElementById('mcfg-lb-on')?.checked||false,   cnt:parseInt(document.getElementById('mcfg-lb-cnt')?.value||3)},
+    AB:{on:document.getElementById('mcfg-ab-on')?.checked||false,   cnt:parseInt(document.getElementById('mcfg-ab-cnt')?.value||1)},
+    Core:{on:document.getElementById('mcfg-core-on')?.checked||false,cnt:parseInt(document.getElementById('mcfg-core-cnt')?.value||2)},
+  };
+  // 멀티 config 요약 표시
+  const el=document.getElementById('mcfg-summary');
+  if(el){
+    const POOL_NAMES={UB:'🏋️ 상체',LB:'🦵 하체',AB:'⚡ 전신',Core:'🔄 코어'};
+    const total=Object.entries(_multiConfig).filter(([,v])=>v.on).reduce((s,[,v])=>s+v.cnt,0);
+    const parts=Object.entries(_multiConfig).filter(([,v])=>v.on).map(([k,v])=>`${POOL_NAMES[k]} ${v.cnt}개`).join(' · ');
+    el.textContent=parts?`총 ${total}개 운동 — ${parts}`:'포함할 분류를 하나 이상 선택하세요';
+  }
+  if(_currentGymMode==='manual') renderGymManualSelector();
+}
+
 function initGymTab(){
   autoSetGymPurpose();
   setGymBodyPart(_currentGymBodyPart, true);
@@ -3248,14 +3348,18 @@ function initGymTab(){
 
 function setGymBodyPart(part, silent){
   _currentGymBodyPart=part;
-  const colors={UB:'#3b82f6',LB:'#22c55e',AB:'#f59e0b',Core:'#a855f7'};
-  const bgs={UB:'rgba(59,130,246,0.15)',LB:'rgba(34,197,94,0.15)',AB:'rgba(245,158,11,0.15)',Core:'rgba(168,85,247,0.15)'};
-  ['UB','LB','AB','Core'].forEach(p=>{
+  const colors={UB:'#3b82f6',LB:'#22c55e',AB:'#f59e0b',Core:'#a855f7',Multi:'#e879f9'};
+  const bgs={UB:'rgba(59,130,246,0.15)',LB:'rgba(34,197,94,0.15)',AB:'rgba(245,158,11,0.15)',Core:'rgba(168,85,247,0.15)',Multi:'rgba(232,121,249,0.15)'};
+  ['UB','LB','AB','Core','Multi'].forEach(p=>{
     const btn=document.getElementById('gympart-'+p);
     if(!btn)return;
     if(p===part){btn.style.borderColor=colors[p];btn.style.background=bgs[p];btn.style.color=colors[p];btn.style.fontWeight='700';}
     else{btn.style.borderColor='var(--border2)';btn.style.background='transparent';btn.style.color='var(--text2)';btn.style.fontWeight='';}
   });
+  // 멀티 설정 패널 토글
+  const mcfg=document.getElementById('gym-multi-config');
+  if(mcfg) mcfg.style.display=(part==='Multi')?'':'none';
+  if(part==='Multi') updateMultiConfig();
   if(_currentGymMode==='manual'&&!silent)renderGymManualSelector();
 }
 
@@ -3309,8 +3413,50 @@ function gymEquipOk(exEquip, selEquip){
 function renderGymManualSelector(){
   const bp=_currentGymBodyPart;
   const selEquip=document.getElementById('gym-equip')?.value||'full';
-  const pool=GYM_POOL[bp];
   const purp=GYM_PURPOSE_TEMPLATE[_currentGymPurpose];
+
+  // ── 멀티 수동 선택: 활성화된 모든 카테고리 표시 ──
+  if(bp==='Multi'){
+    const enabledParts=Object.entries(_multiConfig).filter(([,v])=>v.on);
+    if(!enabledParts.length){
+      document.getElementById('gym-cat-selector').innerHTML='<p style="color:var(--text3);font-size:13px">설정 패널에서 분류를 하나 이상 선택하세요.</p>';return;
+    }
+    const ORDER=['AB','LB','UB','Core'];
+    const sorted=ORDER.filter(k=>_multiConfig[k]?.on);
+    enabledParts.forEach(([k])=>{if(!sorted.includes(k))sorted.push(k);});
+    let html=`<div style="font-size:12px;color:var(--text3);margin-bottom:12px">운동 선택 → <strong style="color:${purp.color}">${purp.icon} ${purp.label}</strong> (${purp.sets}×${purp.reps}, ${purp.rpe}) 자동 적용</div>`;
+    sorted.forEach(partKey=>{
+      const pool=GYM_POOL[partKey];
+      if(!pool) return;
+      html+=`<div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="width:4px;height:16px;border-radius:2px;background:${pool.color}"></div>
+          <div style="font-size:13px;font-weight:700;color:${pool.color}">${pool.label}</div>
+        </div>`;
+      Object.entries(pool.subs).forEach(([subKey,sub])=>{
+        const filtered=sub.ex.filter(e=>gymEquipOk(e.equip,selEquip));
+        if(!filtered.length)return;
+        html+=`<div style="margin-bottom:10px;padding-left:12px">
+          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">${sub.label}</div>
+          ${filtered.map(e=>{
+            const ri=sub.ex.indexOf(e);
+            const eqBadge=(e.equip||'bw').split(',').map(eq=>`<span style="font-size:10px;background:var(--bg3);color:var(--text3);border-radius:3px;padding:1px 4px;margin-left:2px">${eq.trim()}</span>`).join('');
+            return `<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border-radius:7px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border2)">
+              <input type="checkbox" data-bp="${partKey}" data-sub="${subKey}" data-idx="${ri}" style="width:15px;height:15px;accent-color:${pool.color}">
+              <span style="font-size:13px;color:var(--text);flex:1">${e.n}</span>
+              ${eqBadge}
+            </label>`;
+          }).join('')}
+        </div>`;
+      });
+      html+='</div>';
+    });
+    document.getElementById('gym-cat-selector').innerHTML=html;
+    return;
+  }
+
+  // ── 단일 분류 기존 로직 ───────────────────
+  const pool=GYM_POOL[bp];
   if(!pool){document.getElementById('gym-cat-selector').innerHTML='';return;}
   let html=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">운동 선택 → <strong style="color:${purp.color}">${purp.icon} ${purp.label}</strong> (${purp.sets}×${purp.reps}, ${purp.rpe}) 자동 적용</div>`;
   Object.entries(pool.subs).forEach(([subKey,sub])=>{
@@ -3340,11 +3486,83 @@ async function generateGym(){
   const bp=_currentGymBodyPart;
   const purpKey=_currentGymPurpose;
   const purpT=GYM_PURPOSE_TEMPLATE[purpKey];
-  const pool=GYM_POOL[bp];
   const links=await loadL();
   const posL=document.getElementById('gym-pos').selectedOptions[0].text;
   const mdL=document.getElementById('gym-md').selectedOptions[0].text;
   const timeL=document.getElementById('gym-time').selectedOptions[0].text;
+  const purpChip=`<span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>`;
+
+  // ── 멀티 운동 분기 ────────────────────────
+  if(bp==='Multi'){
+    const enabledParts=Object.entries(_multiConfig).filter(([,v])=>v.on);
+    if(!enabledParts.length){document.getElementById('gym-output').innerHTML='<p style="color:var(--text3);padding:1rem">포함할 분류를 하나 이상 선택하세요.</p>';return;}
+    function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+    let gi=1;
+    let allTotal=0;
+    const multiChip=`<span class="chip" style="color:#e879f9;border-color:#a21caf;background:rgba(232,121,249,0.12)">🔀 멀티 믹스</span>`;
+    const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">강도</div><div style="font-size:15px;font-weight:700;color:${purpT.color}">${purpT.rpe}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">휴식</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.rest}</div></div>
+      <div id="multi-total-box" style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">총 운동</div><div style="font-size:15px;font-weight:700;color:#e879f9">—</div></div>
+    </div>`;
+
+    // 카테고리 순서: AB(전신/파워) → LB → UB → Core (축구 특이적 우선순위)
+    const ORDER=['AB','LB','UB','Core'];
+    let blockHtml='';
+    const sortedParts=ORDER.filter(k=>_multiConfig[k]?.on);
+    // 포함 안된 것도 끝에 붙이기 (순서 안정)
+    enabledParts.forEach(([k])=>{if(!sortedParts.includes(k))sortedParts.push(k);});
+
+    sortedParts.forEach((partKey,bi)=>{
+      const cfg=_multiConfig[partKey];
+      if(!cfg||!cfg.on) return;
+      const pool=GYM_POOL[partKey];
+      // 풀 전체에서 장비 필터 후 셔플 → cnt 개 선택
+      const allAvail=[];
+      Object.values(pool.subs).forEach(sub=>{
+        sub.ex.filter(e=>gymEquipOk(e.equip,selEquip)).forEach(e=>allAvail.push(e));
+      });
+      const picked=shuffle(allAvail).slice(0,cfg.cnt);
+      if(!picked.length) return;
+      allTotal+=picked.length;
+      const exWithProps=picked.map(e=>({...e,s:`${purpT.sets}×${purpT.reps}`,i:purpT.rpe,r:`${purpT.rest} 휴식`,p:e.p||'main'}));
+      const blockLabel=bi===0&&ORDER.includes(partKey)&&partKey==='AB'?`① ${pool.label} — 파워 블록`:
+                       partKey==='LB'?`${bi===0?'①':'②'} ${pool.label} — 주동근 블록`:
+                       partKey==='UB'?`${bi===0?'①':bi===1?'②':'③'} ${pool.label} — 상체 블록`:
+                       `마무리 — ${pool.label}`;
+      blockHtml+=`
+        <div style="margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <div style="width:4px;height:18px;border-radius:2px;background:${pool.color}"></div>
+            <div style="font-size:13px;font-weight:700;color:${pool.color}">${blockLabel}</div>
+            <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:4px;padding:2px 7px">${picked.length}개 운동</div>
+          </div>
+          ${exWithProps.map(e=>buildCard(e,gi++,links)).join('')}
+        </div>`;
+    });
+
+    if(!blockHtml){document.getElementById('gym-output').innerHTML='<p style="color:var(--text3);padding:1rem">선택된 장비에 맞는 운동이 없습니다.</p>';return;}
+
+    const sessionFlow=sortedParts.map(k=>GYM_POOL[k]?.label||k).join(' → ');
+    document.getElementById('gym-output').innerHTML=`
+      <div class="chips"><span class="chip">${posL}</span><span class="chip">${mdL}</span><span class="chip">${timeL}</span>${multiChip}${purpChip}</div>
+      <div class="goal-box"><p><strong>세션 플로우:</strong> ${sessionFlow}<br><span style="font-size:12px;color:var(--text3)">${purpT.icon} ${purpT.label} — ${purpT.desc}</span></p></div>
+      ${purpBox}
+      <div class="slabel" style="margin-bottom:10px">멀티 믹스 프로그램 — 총 ${allTotal}개 운동</div>
+      ${blockHtml}
+      <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
+      <div class="coaching-box"><p>${purpT.coaching}</p></div>
+      ${expBar('gym-output')}`;
+    // 총 운동 수 업데이트
+    const tb=document.getElementById('multi-total-box');
+    if(tb) tb.querySelector('div:last-child').textContent=`${allTotal}개`;
+    document.getElementById('gym-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+    return;
+  }
+
+  // ── 단일 분류 기존 로직 ───────────────────
+  const pool=GYM_POOL[bp];
   const t=parseInt(time);
   const baseCount=t>=60?2:1;
   const selectedEx=[];
@@ -3360,7 +3578,6 @@ async function generateGym(){
   const blocks=[{l:`${pool.label} — ${purpT.label}`,p:'main',ex:selectedEx}];
   const prog={goal:`${pool.label} | ${purpT.icon} ${purpT.label} — ${purpT.desc}`,coaching:purpT.coaching,blocks};
   _lastGymState={pos,md,bodyPart:bp,purpose:purpKey,v:'RAND',prog};
-  const purpChip=`<span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>`;
   const bpChip=`<span class="chip" style="color:${pool.color};border-color:${pool.border};background:${pool.bg}">${pool.label}</span>`;
   const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
     <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
@@ -3391,11 +3608,70 @@ async function buildManualGym(){
   const bp=_currentGymBodyPart;
   const purpKey=_currentGymPurpose;
   const purpT=GYM_PURPOSE_TEMPLATE[purpKey];
-  const pool=GYM_POOL[bp];
   const links=await loadL();
   const posL=document.getElementById('gym-pos').selectedOptions[0].text;
   const mdL=document.getElementById('gym-md').selectedOptions[0].text;
   const timeL=document.getElementById('gym-time').selectedOptions[0].text;
+  const purpChip=`<span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>`;
+  const manBadge=`<span class="chip" style="color:#a855f7;border-color:#7e22ce;background:rgba(168,85,247,0.12)">✋ 수동</span>`;
+
+  // ── 멀티 수동: 카테고리별 블록으로 출력 ──
+  if(bp==='Multi'){
+    // 선택 운동을 카테고리별로 그룹핑
+    const byPart={};
+    checks.forEach(cb=>{
+      const bpKey=cb.dataset.bp;const subKey=cb.dataset.sub;const idx=parseInt(cb.dataset.idx);
+      const ex=GYM_POOL[bpKey]?.subs[subKey]?.ex[idx];
+      if(ex){
+        if(!byPart[bpKey])byPart[bpKey]=[];
+        byPart[bpKey].push({...ex,s:`${purpT.sets}×${purpT.reps}`,i:purpT.rpe,r:`${purpT.rest} 휴식`,p:ex.p||'main'});
+      }
+    });
+    const partKeys=Object.keys(byPart);
+    if(!partKeys.length){alert('선택된 운동이 없습니다.');return;}
+    const total=partKeys.reduce((s,k)=>s+byPart[k].length,0);
+    const ORDER=['AB','LB','UB','Core'];
+    const sorted=ORDER.filter(k=>byPart[k]);
+    partKeys.forEach(k=>{if(!sorted.includes(k))sorted.push(k);});
+    const multiChip=`<span class="chip" style="color:#e879f9;border-color:#a21caf;background:rgba(232,121,249,0.12)">🔀 멀티 믹스</span>`;
+    const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">강도</div><div style="font-size:15px;font-weight:700;color:${purpT.color}">${purpT.rpe}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">휴식</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.rest}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">총 운동</div><div style="font-size:15px;font-weight:700;color:#e879f9">${total}개</div></div>
+    </div>`;
+    let gi=1;
+    let blockHtml='';
+    sorted.forEach(partKey=>{
+      const pool=GYM_POOL[partKey];
+      const exList=byPart[partKey];
+      if(!exList||!exList.length) return;
+      blockHtml+=`
+        <div style="margin-bottom:18px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+            <div style="width:4px;height:18px;border-radius:2px;background:${pool.color}"></div>
+            <div style="font-size:13px;font-weight:700;color:${pool.color}">${pool.label}</div>
+            <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:4px;padding:2px 7px">${exList.length}개 선택</div>
+          </div>
+          ${exList.map(e=>buildCard(e,gi++,links)).join('')}
+        </div>`;
+    });
+    const sessionFlow=sorted.map(k=>GYM_POOL[k]?.label||k).join(' → ');
+    document.getElementById('gym-output').innerHTML=`
+      <div class="chips"><span class="chip">${posL}</span><span class="chip">${mdL}</span><span class="chip">${timeL}</span>${multiChip}${purpChip}${manBadge}</div>
+      <div class="goal-box"><p><strong>세션 플로우:</strong> ${sessionFlow}<br><span style="font-size:12px;color:var(--text3)">${purpT.icon} ${purpT.label} — ${purpT.desc}</span></p></div>
+      ${purpBox}
+      <div class="slabel" style="margin-bottom:10px">멀티 믹스 프로그램 (수동) — 총 ${total}개 운동</div>
+      ${blockHtml}
+      <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
+      <div class="coaching-box"><p>${purpT.coaching}</p></div>
+      ${expBar('gym-output')}`;
+    document.getElementById('gym-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+    return;
+  }
+
+  // ── 단일 분류 기존 로직 ───────────────────
+  const pool=GYM_POOL[bp];
   const selectedEx=[];
   checks.forEach(cb=>{
     const bpKey=cb.dataset.bp;const subKey=cb.dataset.sub;const idx=parseInt(cb.dataset.idx);
@@ -3406,9 +3682,7 @@ async function buildManualGym(){
   const blocks=[{l:`${pool.label} — ${purpT.label}`,p:'main',ex:selectedEx}];
   const prog={goal:`${pool.label} | ${purpT.icon} ${purpT.label} — ${purpT.desc}`,coaching:purpT.coaching,blocks};
   _lastGymState={pos,md,bodyPart:bp,purpose:purpKey,v:'MANUAL',prog};
-  const purpChip=`<span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>`;
   const bpChip=`<span class="chip" style="color:${pool.color};border-color:${pool.border};background:${pool.bg}">${pool.label}</span>`;
-  const manBadge=`<span class="chip" style="color:#a855f7;border-color:#7e22ce;background:rgba(168,85,247,0.12)">✋ 수동</span>`;
   const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
     <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
     <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">강도</div><div style="font-size:15px;font-weight:700;color:${purpT.color}">${purpT.rpe}</div></div>
@@ -8423,6 +8697,7 @@ function onPlayerSelect(){
   document.getElementById('info-pos').textContent=player.position;
   renderIntervalConfig();
   // RHIE 세트 설정 갱신
+  const itype = document.getElementById('cardio-itype')?.value||'';
   if(itype==='rhie5'||itype==='rhie3') renderRhieSetConfig();
 }
 
@@ -8504,7 +8779,17 @@ function renderIntervalConfig(){
           </select>
         </div>
       </div>
-      <div id="set-intensity-wrap"></div>`;
+      <div id="set-intensity-wrap"></div>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">강도 프리셋</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          <button onclick="applyIntensityPreset('flat')" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:11px;cursor:pointer">━ 균일</button>
+          <button onclick="applyIntensityPreset('asc')" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:11px;cursor:pointer">↗ 점증</button>
+          <button onclick="applyIntensityPreset('desc')" style="padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:11px;cursor:pointer">↘ 점감</button>
+          <button onclick="applyIntensityPreset('pyramid')" style="padding:5px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--surface2);color:var(--accent2);font-size:11px;cursor:pointer">▲ 피라미드</button>
+          <button onclick="applyIntensityPreset('rev')" style="padding:5px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--surface2);color:var(--accent2);font-size:11px;cursor:pointer">▽ 역피라미드</button>
+        </div>
+      </div>`;
     renderSetIntensity();
   } else {
     // 30-30 / 20-20 / 15-15
@@ -8639,12 +8924,19 @@ function buildRhieSection(mas, mss, itype, unit){
       </div>`).join('')}
 
       <!-- 총 볼륨 -->
-      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:12px">
-        <div><div style="font-weight:600;color:#fbbf24">${totalSprints}회</div><div style="color:var(--text3)">총 스프린트</div></div>
-        <div><div style="font-weight:600;color:var(--accent2)">${totalDist}m</div><div style="color:var(--text3)">총 스프린트 거리</div></div>
-        <div><div style="font-weight:600;color:var(--text)">${totalSprints*workSec}초</div><div style="color:var(--text3)">총 Work 시간</div></div>
-        <div><div style="font-weight:600;color:var(--text3)">${Math.round((totalSprints*workSec + (reps-1)*repRest*sets + setRest*(sets-1))/60)}분</div><div style="color:var(--text3)">총 소요 시간</div></div>
-      </div>
+      ${(()=>{
+        const totalTimeSec=totalSprints*workSec+(reps-1)*repRest*sets+setRest*(sets-1);
+        const avgPctMss=setData.reduce((s,d)=>s+d.pct,0)/sets;
+        const rpeEst=Math.min(10,Math.round(avgPctMss/100*5+(totalTimeSec/60)*0.07));
+        return `
+        <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:12px">
+          <div><div style="font-weight:600;color:#fbbf24">${totalSprints}회</div><div style="color:var(--text3)">총 스프린트</div></div>
+          <div><div style="font-weight:600;color:var(--accent2)">${totalDist}m</div><div style="color:var(--text3)">스프린트 거리</div></div>
+          <div><div style="font-weight:600;color:var(--text)">${totalSprints*workSec}초</div><div style="color:var(--text3)">총 Work</div></div>
+          <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalTimeSec/60)}분</div><div style="color:var(--text3)">총 소요 시간</div></div>
+          <div><div style="font-weight:600;color:#fb923c">sRPE ~${rpeEst}</div><div style="color:var(--text3)">예상 RPE</div></div>
+        </div>`;
+      })()}
     </div>`;
 }
 
@@ -8681,6 +8973,48 @@ function updateIntensityPreview(i){
   if(el && mas) el.textContent = `${+(mas*pct/100).toFixed(1)} km/h`;
 }
 
+// ── 강도 프리셋 적용 ─────────────────────────
+function applyIntensityPreset(preset){
+  const sets = parseInt(document.getElementById('cfg-sets')?.value||3);
+  const base = 100;
+  const step = 3;
+  let intensities;
+  switch(preset){
+    case 'flat':    intensities = Array(sets).fill(base); break;
+    case 'asc':     intensities = Array.from({length:sets},(_,i)=>base+i*step); break;
+    case 'desc':    intensities = Array.from({length:sets},(_,i)=>base+(sets-1-i)*step); break;
+    case 'pyramid': {
+      const half=Math.ceil(sets/2);
+      intensities = Array.from({length:sets},(_,i)=>i<half?base+i*step:base+(sets-1-i)*step);
+      break;
+    }
+    case 'rev': {
+      const half=Math.ceil(sets/2);
+      intensities = Array.from({length:sets},(_,i)=>i<half?base+(half-1-i)*step:base+(i-half+1)*step);
+      break;
+    }
+    default: intensities = Array(sets).fill(base);
+  }
+  intensities.forEach((pct,i)=>{
+    const el=document.getElementById(`cfg-intensity-${i}`);
+    if(el){el.value=pct;updateIntensityPreview(i);}
+  });
+}
+
+// ── 에너지 시스템 분류 ────────────────────
+function getEnergySystem(itype){
+  const map={
+    '4min':  {label:'VO₂max (중추)',  icon:'❤️', color:'#f87171',borderColor:'#991b1b',bg:'#1f0808', hrZone:'90–95% HRmax'},
+    '2min':  {label:'VO₂max (중추)',  icon:'❤️', color:'#f87171',borderColor:'#991b1b',bg:'#1f0808', hrZone:'88–95% HRmax'},
+    '30s':   {label:'무산소 해당계', icon:'🔥', color:'#fb923c',borderColor:'#9a3412',bg:'#1c0a03', hrZone:'95–100% HRmax'},
+    '20s':   {label:'무산소 해당계', icon:'🔥', color:'#fb923c',borderColor:'#9a3412',bg:'#1c0a03', hrZone:'95–100% HRmax'},
+    '15s':   {label:'PCr + 해당계',  icon:'⚡', color:'#fbbf24',borderColor:'#92400e',bg:'#1c1003', hrZone:'~100% HRmax'},
+    'rhie5': {label:'PCr (신경근)',   icon:'⚡', color:'#fbbf24',borderColor:'#92400e',bg:'#1c1003', hrZone:'90–100% HRmax'},
+    'rhie3': {label:'PCr 폭발력',    icon:'⚡', color:'#fbbf24',borderColor:'#92400e',bg:'#1c1003', hrZone:'85–100% HRmax'},
+  };
+  return map[itype]||map['4min'];
+}
+
 // ── 처방 생성 ─────────────────────────────
 async function generateCardio(){
   const playerId=document.getElementById('cardio-player').value;
@@ -8692,12 +9026,16 @@ async function generateCardio(){
   const mas=parseFloat(player.mas);
   const mdLabel={'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
 
+  // 에너지 시스템 결정
+  const energyInfo = getEnergySystem(itype);
+
   let html=`
     <div class="chips" style="margin-top:1rem">
       <span class="chip">${player.name}</span>
       <span class="chip">${player.position}</span>
       <span class="chip">${mdLabel}</span>
       <span class="chip" style="color:#4ade80;border-color:#15803d;background:#052e16">🏃 유산소 인터벌</span>
+      <span class="chip" style="color:${energyInfo.color};border-color:${energyInfo.borderColor};background:${energyInfo.bg}">${energyInfo.icon} ${energyInfo.label}</span>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin:12px 0;display:grid;grid-template-columns:repeat(3,1fr);gap:12px;text-align:center">
       <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${mas}</div><div style="font-size:11px;color:var(--text3)">MAS (km/h)</div></div>
@@ -8747,6 +9085,14 @@ function buildLongInterval(mas, itype, unit, md){
   // 총 볼륨
   const totalWorkDist = setData.reduce((s,d)=>s+calcDist(d.speed,workSec),0);
   const totalRestDist = setData.reduce((s,d)=>s+calcDist(restSpeed,restSec),0);
+  const totalTD = totalWorkDist + totalRestDist;
+  const totalTimeSec = sets*(workSec+restSec);
+  const avgPct = Math.round(setData.reduce((s,d)=>s+d.pct,0)/sets);
+  // HR Zone 추정: %MAS → %HRmax 선형 근사 (Buchheit 2008 근거)
+  const estHRpct = Math.min(100, Math.round(37 + 0.6*avgPct));
+  // 예상 sRPE: 강도+지속시간 기반 경험식
+  const durMin = totalTimeSec/60;
+  const rpeEst = Math.min(10, Math.round((avgPct/100)*4 + durMin*0.08));
 
   return `
     <div style="background:var(--surface);border:1px solid #15803d;border-radius:10px;padding:14px;margin-bottom:12px">
@@ -8761,20 +9107,27 @@ function buildLongInterval(mas, itype, unit, md){
           <th style="padding:8px;text-align:center;color:var(--text3)">속도</th>
           <th style="padding:8px;text-align:center;color:var(--text3)">Work</th>
           <th style="padding:8px;text-align:center;color:var(--text3)">Rest (동적)</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">HR Zone</th>
         </tr>
-        ${setData.map((d,i)=>`
+        ${setData.map((d,i)=>{
+          const hrPct=Math.min(100,Math.round(37+0.6*d.pct));
+          const hrColor=hrPct>=95?'#f87171':hrPct>=90?'#fb923c':'#fbbf24';
+          return `
         <tr style="border-bottom:1px solid var(--border)">
           <td style="padding:8px;text-align:center;font-weight:600;color:var(--text)">${i+1}</td>
           <td style="padding:8px;text-align:center;color:var(--accent2)">${d.pct}% MAS</td>
           <td style="padding:8px;text-align:center;color:#4ade80;font-weight:600">${d.speed} km/h</td>
           <td style="padding:8px;text-align:center;color:var(--text)">${d.workVal}</td>
           <td style="padding:8px;text-align:center;color:var(--text3)">${d.restVal} @ ${restSpeed}km/h</td>
-        </tr>`).join('')}
+          <td style="padding:8px;text-align:center;color:${hrColor};font-weight:600">~${hrPct}%</td>
+        </tr>`;}).join('')}
       </table>
-      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:12px">
+      <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:12px">
         <div><div style="font-weight:600;color:var(--accent2)">${sets}세트</div><div style="color:var(--text3)">총 세트</div></div>
         <div><div style="font-weight:600;color:#4ade80">${unit==='distance'?totalWorkDist+'m':Math.round(workSec*sets/60)+'분'}</div><div style="color:var(--text3)">총 Work</div></div>
         <div><div style="font-weight:600;color:var(--text3)">${unit==='distance'?totalRestDist+'m':Math.round(restSec*sets/60)+'분'}</div><div style="color:var(--text3)">총 Rest</div></div>
+        <div><div style="font-weight:600;color:#93c5fd">${totalTD}m</div><div style="color:var(--text3)">세션 총 TD</div></div>
+        <div><div style="font-weight:600;color:#f87171">sRPE ~${rpeEst}</div><div style="color:var(--text3)">예상 RPE</div></div>
       </div>
     </div>`;
 }
@@ -8839,11 +9192,20 @@ function buildShortInterval(mas, itype, unit, md){
         ${s<sets-1?`<div style="font-size:11px;color:var(--amber);padding:5px 0">⏱ 세트 간 휴식 ${setRestSec}초 (완전 회복)</div>`:''}
       </div>`).join('')}
       <!-- 총 볼륨 -->
-      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:12px">
-        <div><div style="font-weight:600;color:#a78bfa">${reps*sets}회</div><div style="color:var(--text3)">총 반복</div></div>
-        <div><div style="font-weight:600;color:#c4b5fd">${unit==='distance'?calcDist(speed,workSec)*reps*sets+'m':workSec*reps*sets+'초'}</div><div style="color:var(--text3)">총 Work</div></div>
-        <div><div style="font-weight:600;color:var(--text3)">${Math.round((setWorkSec*sets+setRestSec*(sets-1))/60)}분</div><div style="color:var(--text3)">총 시간</div></div>
-      </div>
+      ${(()=>{
+        const workDist=calcDist(speed,workSec)*reps*sets;
+        const totalSec=setWorkSec*sets+setRestSec*(sets-1);
+        const hrEst=Math.min(100,Math.round(37+0.6*120)); // 120%MAS
+        const rpeEst=Math.min(10,Math.round(120/100*4+(totalSec/60)*0.1));
+        return `
+        <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:12px">
+          <div><div style="font-weight:600;color:#a78bfa">${reps*sets}회</div><div style="color:var(--text3)">총 반복</div></div>
+          <div><div style="font-weight:600;color:#c4b5fd">${unit==='distance'?workDist+'m':workSec*reps*sets+'초'}</div><div style="color:var(--text3)">총 Work</div></div>
+          <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalSec/60)}분</div><div style="color:var(--text3)">총 시간</div></div>
+          <div><div style="font-weight:600;color:#f87171">~${hrEst}% HR</div><div style="color:var(--text3)">추정 HR</div></div>
+          <div><div style="font-weight:600;color:#fb923c">sRPE ~${rpeEst}</div><div style="color:var(--text3)">예상 RPE</div></div>
+        </div>`;
+      })()}
     </div>`;
 }
 
@@ -8901,28 +9263,6 @@ function buildCardioCoaching2(itype, md){
   };
   return (tips[itype]||tips['4min'])[md]||'강도와 볼륨을 MD 목적에 맞게 조절하세요.';
 }
-
-async function loadCardioPlayers(){
-  const sel=document.getElementById('cardio-player');
-  if(!sel) return;
-  const {data}=await supa.from('player_profiles').select('*').order('name');
-  _players=data||[];
-  sel.innerHTML='<option value="">선수를 선택하세요</option>'+
-    _players.map(p=>`<option value="${p.id}">${p.name} (${p.position}) — MAS ${p.mas} / MSS ${p.mss}</option>`).join('');
-}
-
-function onPlayerSelect(){
-  const id=document.getElementById('cardio-player').value;
-  const player=_players.find(p=>p.id===id);
-  const info=document.getElementById('cardio-player-info');
-  if(!player){info.style.display='none';return;}
-  info.style.display='block';
-  document.getElementById('info-mas').textContent=player.mas;
-  document.getElementById('info-mss').textContent=player.mss;
-  document.getElementById('info-asr').textContent=(player.mss-player.mas).toFixed(1);
-  document.getElementById('info-pos').textContent=player.position;
-}
-
 
 // ── 선수 데이터 관리 모달 ──────────────────
 function openPlayerMgmt(){
