@@ -721,6 +721,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         </div>
         <div id="upload-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
       </div>
+      <!-- 업로드된 GPS 훈련 기록 목록 -->
+      <div id="gps-history-section" style="margin-top:1.2rem">
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">📋 업로드된 훈련 기록</div>
+        <div id="gps-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
+      </div>
     </div>
 
     <!-- 경기 엑셀 업로드 섹션 -->
@@ -3532,6 +3537,7 @@ function setPlayerView(view){
   }
   if(view==='roster') loadRosterList();
   if(view==='wellness') initWellnessView();
+  if(view==='upload'){ setUploadTab('gps'); loadGpsHistory(); }
   if(view==='match'){
     setMatchTab('list');
     loadMatchList();
@@ -4417,11 +4423,11 @@ async function loadMorningReport(){
     const isYesterday = date === yesterdayStr;
     const isToday2 = date === today;
     const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='M') : [];
-    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S').length : 0;
+    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&['S','SS'].includes((r.session_type2||'').trim().toUpperCase())).length : 0;
     const isTeamDay2 = dayGps.length > 0;
     const dayGpsForRow = isTeamDay2 ? dayGps
-      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S') : [];
-    const topic = (weekGps||[]).find(r=>r.session_date===date&&(r.session_type2==='M'||r.session_type2==='S'))?.session_topic || null;
+      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&['S','SS'].includes((r.session_type2||'').trim().toUpperCase())) : [];
+    const topic = (weekGps||[]).find(r=>r.session_date===date&&['M','S','SS'].includes((r.session_type2||'').trim().toUpperCase()))?.session_topic || null;
     const opp   = (weekGps||[]).find(r=>r.session_date===date)?.opponent || null;
     const td   = dayGpsForRow.length ? avgFields(dayGpsForRow,'td') : null;
     const hsr  = dayGpsForRow.length ? avgFields(dayGpsForRow,'running_high') : null;
@@ -5628,11 +5634,11 @@ async function loadTwoWeekCal(baseDate){
 
     const dayAll = (gpsAll||[]).filter(r => r.session_date === ymd);
     const dayM   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
-    const dayS   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'S');
+    const dayS   = dayAll.filter(r => ['S','SS'].includes((r.session_type2||'').trim().toUpperCase()));
 
     // M이 1개라도 있으면 → M 기준 팀 평균 (팀 합계 포함)
-    // M이 없고 S가 있으면 → S 기준 평균 (팀 합계 제외, S 배지)
-    // M도 S도 없으면 → 전체 fallback (팀 합계 제외)
+    // M이 없고 S/SS가 있으면 → S/SS 기준 평균 (팀 합계 제외, S 배지)
+    // M도 S/SS도 없으면 → 전체 fallback (팀 합계 제외)
     const isTeamDay = dayM.length > 0;
     const dayBase  = isTeamDay ? dayM : (dayS.length > 0 ? dayS : dayAll);
 
@@ -5659,6 +5665,7 @@ async function loadTwoWeekCal(baseDate){
     const opp  = dayAll.find(r => r.opponent)?.opponent || null;
     const ha   = dayAll.find(r => r.home_away)?.home_away || null;
 
+    const nSS = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS').length;
     sessions.push({
       ymd, mon: d.getMonth()+1, day: d.getDate(), dow: DOW[d.getDay()],
       hasData: dayAll.length > 0,
@@ -5667,6 +5674,7 @@ async function loadTwoWeekCal(baseDate){
       nAll: dayAll.length,
       nM: dayM.length,
       nS: dayS.length,
+      nSS,
       td:     avg(dayBase,'td'),
       hsr:    avg(dayBase,'running_high'),
       sprint: avg(dayBase,'sprint'),
@@ -5727,9 +5735,11 @@ function renderTwoWeekCal(){
       ? 'border:1.5px solid var(--accent2);background:var(--accent-bg)'
       : 'border:1px solid var(--border)';
 
-    // M/S 배지
+    // M/S/SS 배지
     const typeBadge = !s.hasData ? '' : s.isTeamDay
       ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:3px">M</span>`
+      : (s.nSS > 0 && s.nM === 0)
+      ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#2a1a00;color:#fbbf24;font-weight:700;margin-left:3px">SS</span>`
       : `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:3px">S</span>`;
 
     // 세션명 (최빈값 단일 표시)
@@ -5827,7 +5837,8 @@ async function renderTwoWeekDetail(idx){
   (dayRpe||[]).forEach(r => { rpeMap[r.player_id] = r; });
 
   // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
-  // session_type2 = 빈칸/null → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
+  // session_type2 = 'S' → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
+  // session_type2 = 'SS' → 대표팀 소집/특별 상황 → 팀 평균 제외, 개인 데이터에만 포함
   const teamGps = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
   const indGps  = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
   const avgBase = teamGps.length > 0 ? teamGps : (dayGps||[]);
@@ -5889,9 +5900,12 @@ async function renderTwoWeekDetail(idx){
     const dur    = r.duration || rpe?.duration || null;
     const rpeVal = parseFloat(rpe?.rpe) || null;
     const sRPE   = (dur && rpeVal) ? Math.round(dur * rpeVal) : '—';
-    const indBadge = isInd
-      ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#1a1a2e;color:#9ca3af;margin-left:4px;font-weight:600">S</span>'
-      : '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#0c1a2e;color:#60a5fa;margin-left:4px;font-weight:600">M</span>';
+    const t2 = (r.session_type2||'').trim().toUpperCase();
+    const indBadge = !isInd
+      ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#0c1a2e;color:#60a5fa;margin-left:4px;font-weight:600">M</span>'
+      : t2 === 'SS'
+      ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#2a1a00;color:#fbbf24;margin-left:4px;font-weight:600">SS</span>'
+      : '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:#1a1a2e;color:#9ca3af;margin-left:4px;font-weight:600">S</span>';
     return `
       <tr style="border-bottom:1px solid var(--border);cursor:pointer;${isInd?'opacity:0.75':''}" onclick="selectDashboardPlayer('${r.player_id}')">
         <td style="padding:8px">
@@ -5928,7 +5942,7 @@ async function renderTwoWeekDetail(idx){
       <div style="padding:12px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${s.ymd} (${s.dow})</div>
         <div style="font-size:12px;color:var(--accent2);margin-top:2px;font-weight:600">${s.topic||'—'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">전체 ${s.nAll}명 참여 · 주전(M) ${teamGps.length}명 기준 평균 · 서브/미엔트리 ${indGps.length}명</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">전체 ${s.nAll}명 참여 · 주전(M) ${teamGps.length}명 기준 평균 · 서브/미엔트리 ${indGps.filter(r=>(r.session_type2||'').trim().toUpperCase()!=='SS').length}명 · 대표팀(SS) ${s.nSS}명</div>
         ${oppHtml}
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px">
           ${avgCards}
@@ -5977,11 +5991,12 @@ async function loadTeamSummary(){
   }
 
   // 타입2 기준으로 그룹 분리
-  // session_type2 가 null/빈칸 = 전체 훈련 → 팀 평균에 포함
   // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
-  // session_type2 = 빈칸/null → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
+  // session_type2 = 'S' → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
+  // session_type2 = 'SS' → 대표팀 소집/특별 상황 → 팀 평균 제외, 개인 데이터에만 포함
   const fullGps = gps.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
   const indGps  = gps.filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
+  const ssGps   = gps.filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS');
 
   const avgGroup = (arr, field, dec=0) => {
     const vals = arr.filter(r=>parseFloat(r[field])>0);
@@ -5989,10 +6004,17 @@ async function loadTeamSummary(){
     return (vals.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/vals.length).toFixed(dec);
   };
 
-  const renderTable = (arr) => arr.map(r=>`
+  const renderTable = (arr) => arr.map(r=>{
+    const rt2 = (r.session_type2||'').trim().toUpperCase();
+    const rtBadge = rt2 === 'SS'
+      ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#2a1a00;color:#fbbf24;font-weight:700;margin-left:4px">SS</span>'
+      : rt2 === 'S'
+      ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:4px">S</span>'
+      : '';
+    return `
     <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
       <td style="padding:8px">
-        <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}</div>
+        <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}${rtBadge}</div>
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
       </td>
       <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}</td>
@@ -6004,7 +6026,7 @@ async function loadTeamSummary(){
       <td style="padding:8px;text-align:right;color:#fb923c">${r.accel||'-'}</td>
       <td style="padding:8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
       <td style="padding:8px;text-align:right;color:var(--text3)">${r.session_topic||'-'}</td>
-    </tr>`).join('');
+    </tr>`;}).join('');
 
   const tableHeader = `
     <tr style="background:var(--surface2)">
@@ -6046,11 +6068,14 @@ async function loadTeamSummary(){
       </table>
     </div>
 
-    <!-- 서브/미엔트리 그룹 -->
+    <!-- 서브/미엔트리 그룹 (S + SS 포함) -->
     ${indGps.length ? `
     <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
-      <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         서브 평균 (${indGps.length}명)
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        서브/미엔트리(S) ${indGps.length - ssGps.length}명${ssGps.length > 0 ? ` · <span style="color:#fbbf24;font-weight:600">대표팀 소집(SS) ${ssGps.length}명 — 팀 평균 미반영</span>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;text-align:center;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
@@ -6470,6 +6495,8 @@ async function saveGpsData(){
     // MSS 자동 갱신 + 부상위험 분석 실행
     await autoUpdateMSS(_gpsParseData);
     runInjuryRiskAnalysis();
+    // 히스토리 목록 갱신
+    loadGpsHistory();
     // 팀 요약 탭으로 이동하여 결과 확인
     setTimeout(()=>{ setPlayerView('team'); loadTeamSummary(); }, 1500);
   }
@@ -6479,6 +6506,67 @@ function cancelUpload(){
   _gpsParseData=[];
   document.getElementById('upload-preview').style.display='none';
   document.getElementById('gps-file-input').value='';
+}
+
+// ── GPS 업로드 기록 목록 조회 ─────────────────────────────────────
+async function loadGpsHistory(){
+  const listEl = document.getElementById('gps-history-list');
+  if(!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
+
+  const {data, error} = await supa.from('gps_records')
+    .select('session_date, player_id, session_type2')
+    .order('session_date', {ascending: false})
+    .limit(500);
+
+  if(error || !data?.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">업로드된 훈련 기록이 없습니다.</div>';
+    return;
+  }
+
+  // 날짜별 집계
+  const byDate = {};
+  data.forEach(r => {
+    if(!byDate[r.session_date]) byDate[r.session_date] = {total:0, types: new Set()};
+    byDate[r.session_date].total++;
+    const t = (r.session_type2||'').trim().toUpperCase();
+    if(t) byDate[r.session_date].types.add(t);
+  });
+
+  const rows = Object.entries(byDate).map(([date, info]) => {
+    const typeTags = [...info.types].map(t => {
+      const style = t === 'M'
+        ? 'background:#0c1a2e;color:#60a5fa;border:1px solid #3b82f6'
+        : t === 'SS'
+        ? 'background:#2a1a00;color:#fbbf24;border:1px solid #f59e0b'
+        : 'background:#1a1a2e;color:#9ca3af;border:1px solid #4b5563';
+      return `<span style="font-size:10px;padding:1px 6px;border-radius:3px;font-weight:700;${style}">${t}</span>`;
+    }).join(' ');
+    window._gpsHistoryDates = window._gpsHistoryDates || {};
+    window._gpsHistoryDates[date] = date;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${date}</span>
+          ${typeTags}
+          <span style="font-size:11px;color:var(--text3)">${info.total}명</span>
+        </div>
+        <button onclick="deleteGpsDate('${date}')"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
+          🗑 삭제
+        </button>
+      </div>`;
+  }).join('');
+
+  listEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">${rows}</div>`;
+}
+
+// ── GPS 날짜별 삭제 ──────────────────────────────────────────────
+async function deleteGpsDate(date){
+  if(!confirm(`${date} 훈련 GPS 데이터를 삭제할까요?\n해당 날짜 전체 선수 데이터가 삭제됩니다.`)) return;
+  const {error} = await supa.from('gps_records').delete().eq('session_date', date);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  loadGpsHistory();
 }
 
 function setUploadTab(tab){
