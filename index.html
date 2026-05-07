@@ -6474,16 +6474,15 @@ async function saveGpsData(){
 
   btn.textContent='저장 중...'; btn.disabled=true;
 
-  // 날짜 기준 전체 삭제 후 재삽입 (선수 변동 케이스 대응)
-  const dates = [...new Set(_gpsParseData.map(r=>r.session_date))];
+  // 선수+날짜 단위로 해당 선수만 삭제 후 재삽입 (기존 다른 선수 데이터 유지)
+  const toInsert = _gpsParseData.map(({player_name,...rest})=>rest);
 
-  for(const date of dates){
+  for(const r of toInsert){
     await supa.from('gps_records').delete()
-      .eq('session_date', date);
+      .eq('session_date', r.session_date)
+      .eq('player_id', r.player_id);
   }
 
-  // player_name 필드 제거 후 저장
-  const toInsert = _gpsParseData.map(({player_name,...rest})=>rest);
   const {error} = await supa.from('gps_records').insert(toInsert);
 
   if(error){
