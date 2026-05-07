@@ -298,10 +298,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <div class="tabs" id="main-tabs">
   <button class="tab admin-only active" onclick="switchTab('report',this)">📋 Morning Report</button>
   <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
-  <button class="tab" onclick="switchTab('gym',this)">근력 운동</button>
-  <button class="tab" onclick="switchTab('preact',this)">Pre-activation</button>
-  <button class="tab" onclick="switchTab('cardio',this)">유산소 운동</button>
-  <button class="tab admin-only" onclick="switchTab('progmgmt',this)">📋 프로그램 관리</button>
+  <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
 </div>
 
@@ -836,7 +833,18 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
 <!-- 앱 메인 콘텐츠 시작 -->
 
-<!-- 유산소 처방 탭 -->
+<!-- ══ 운동 처방 탭 (래퍼) ══ -->
+<div id="tab-exercise" style="display:none">
+  <!-- 서브탭 nav -->
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button id="extab-gym" class="btn-exp" onclick="switchExerciseTab('gym')"
+      style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">💪 근력 운동</button>
+    <button id="extab-preact" class="btn-exp" onclick="switchExerciseTab('preact')">⚡ Pre-activation</button>
+    <button id="extab-cardio" class="btn-exp" onclick="switchExerciseTab('cardio')">🏃 유산소 운동</button>
+    <button id="extab-progmgmt" class="btn-exp admin-only" onclick="switchExerciseTab('progmgmt')">📋 프로그램 관리</button>
+  </div>
+
+<!-- 유산소 처방 서브탭 -->
 <div id="tab-cardio" style="display:none">
   <div class="vm-bar">
     <h3>🏃 개인화 유산소 처방</h3>
@@ -1127,6 +1135,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div id="ptab-content-custom" style="display:none"></div>
   <div id="ptab-content-cprog" style="display:none"></div>
 </div>
+
+</div><!-- /tab-exercise 래퍼 끝 -->
 
 <div id="tab-notify" style="display:none">
   <div class="vm-bar">
@@ -3501,9 +3511,9 @@ function doImportPreset(){
 
   // 커스텀 프로그램 탭으로 이동
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelector('[onclick="switchTab(\'cprog\',this)"]').classList.add('active');
-  ['gym','preact','videos','custom','cprog'].forEach(id=>{
-    document.getElementById('tab-'+id).style.display=id==='cprog'?'block':'none';
+  ['exercise','players','notify','report','match','cprog'].forEach(id=>{
+    const el2 = document.getElementById('tab-'+id);
+    if(el2) el2.style.display = id==='cprog' ? 'block' : 'none';
   });
 }
 
@@ -7512,10 +7522,10 @@ async function runCprog(id){
 
   // GYM 탭으로 이동해서 출력
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-  document.querySelector('[onclick="switchTab(\'gym\',this)"]').classList.add('active');
-  ['gym','preact','videos','custom','cprog'].forEach(tid=>{
-    document.getElementById('tab-'+tid).style.display=tid==='gym'?'block':'none';
-  });
+  const _exMainTab = document.querySelector('[onclick="switchTab(\'exercise\',this)"]');
+  if(_exMainTab) _exMainTab.classList.add('active');
+  document.getElementById('tab-exercise').style.display='block';
+  switchExerciseTab('gym');
 
   let gi=1;
   const blocks = (p.blocks||[]).map(b=>{
@@ -7738,13 +7748,12 @@ async function saveCprog(){
 
   // 저장 후 호출 원점에 따라 즉시 갱신
   if(_cprogCallerOutput === 'gym-output'){
-    // GYM 탭으로 전환
+    // GYM 서브탭으로 전환
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    const gymTab = document.querySelector('[onclick="switchTab(\'gym\',this)"]');
-    if(gymTab) gymTab.classList.add('active');
-    ['gym','preact','videos','custom','cprog'].forEach(id=>{
-      document.getElementById('tab-'+id).style.display=id==='gym'?'block':'none';
-    });
+    const _exTab = document.querySelector('[onclick="switchTab(\'exercise\',this)"]');
+    if(_exTab) _exTab.classList.add('active');
+    document.getElementById('tab-exercise').style.display='block';
+    switchExerciseTab('gym');
     // 편집된 내용으로 직접 렌더링
     const pos = _lastGymState?.pos || prog.position || '';
     const md  = _lastGymState?.md  || prog.md_stage  || '';
@@ -7753,11 +7762,10 @@ async function saveCprog(){
     _cprogCallerOutput = null;
   } else if(_cprogCallerOutput === 'pa-output'){
     document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
-    const paTab = document.querySelector('[onclick="switchTab(\'preact\',this)"]');
-    if(paTab) paTab.classList.add('active');
-    ['gym','preact','videos','custom','cprog'].forEach(id=>{
-      document.getElementById('tab-'+id).style.display=id==='preact'?'block':'none';
-    });
+    const _exTab = document.querySelector('[onclick="switchTab(\'exercise\',this)"]');
+    if(_exTab) _exTab.classList.add('active');
+    document.getElementById('tab-exercise').style.display='block';
+    switchExerciseTab('preact');
     const pos = _lastPreactState?.pos || prog.position || '';
     const v   = _lastPreactState?.v   || '';
     await renderEditedProg('pa-output', prog, pos, '', v);
@@ -9241,19 +9249,37 @@ async function loadMatchMax(){
 
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['gym','preact','cardio','players','videos','custom','cprog','notify','progmgmt','report','match'].forEach(id=>{
+  ['exercise','players','notify','report','match','cprog'].forEach(id=>{
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
-  if(tab==='videos')renderVM();
-  if(tab==='custom')renderCustomList();
-  if(tab==='cprog')loadCprogList();
-  if(tab==='cardio')loadCardioPlayers();
   if(tab==='players'){loadPlayerManagement();}
   if(tab==='notify')loadNotifyTab();
-  if(tab==='progmgmt') setProgTab('videos');
   if(tab==='report'){ loadMorningReport(); loadScheduleCalendar(); }
   if(tab==='match') loadMatchTab();
+  if(tab==='exercise') switchExerciseTab('gym');
+}
+
+function switchExerciseTab(sub){
+  const subs = ['gym','preact','cardio','progmgmt'];
+  subs.forEach(id=>{
+    const el = document.getElementById('tab-'+id);
+    if(el) el.style.display = id===sub ? 'block' : 'none';
+    const btn = document.getElementById('extab-'+id);
+    if(btn){
+      if(id===sub){
+        btn.style.borderColor='var(--accent)';
+        btn.style.background='var(--accent-bg)';
+        btn.style.color='var(--accent2)';
+      } else {
+        btn.style.borderColor='var(--border2)';
+        btn.style.background='transparent';
+        btn.style.color='var(--text2)';
+      }
+    }
+  });
+  if(sub==='cardio') loadCardioPlayers();
+  if(sub==='progmgmt') setProgTab('videos');
 }
 const __PL__={};try{if(Object.keys(__PL__).length){const _s=JSON.parse(localStorage.getItem(SK)||'{}');Object.assign(_s,__PL__);localStorage.setItem(SK,JSON.stringify(_s));}}catch(e){}
 const __CX__={};try{if(Object.keys(__CX__).length){const _c=JSON.parse(localStorage.getItem(CX_KEY)||'{}');Object.assign(_c,__CX__);localStorage.setItem(CX_KEY,JSON.stringify(_c));}}catch(e){}
