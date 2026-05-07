@@ -4384,7 +4384,7 @@ async function loadMorningReport(){
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
       .gte('record_date', since7Str).order('record_date',{ascending:false}),
     supa.from('injury_records')
-      .select('player_id,body_part,injury_type,severity,status,injury_date,return_date')
+      .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
       .in('status',['치료중','재활중','복귀'])
       .order('injury_date',{ascending:false}),
   ]);
