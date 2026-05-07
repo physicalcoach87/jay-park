@@ -4423,11 +4423,11 @@ async function loadMorningReport(){
     const isYesterday = date === yesterdayStr;
     const isToday2 = date === today;
     const dayGps = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='M') : [];
-    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&['S','SS'].includes((r.session_type2||'').trim().toUpperCase())).length : 0;
+    const dayS_cnt = isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S').length : 0;
     const isTeamDay2 = dayGps.length > 0;
     const dayGpsForRow = isTeamDay2 ? dayGps
-      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&['S','SS'].includes((r.session_type2||'').trim().toUpperCase())) : [];
-    const topic = (weekGps||[]).find(r=>r.session_date===date&&['M','S','SS'].includes((r.session_type2||'').trim().toUpperCase()))?.session_topic || null;
+      : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S') : [];
+    const topic = (weekGps||[]).find(r=>r.session_date===date&&['M','S'].includes((r.session_type2||'').trim().toUpperCase()))?.session_topic || null;
     const opp   = (weekGps||[]).find(r=>r.session_date===date)?.opponent || null;
     const td   = dayGpsForRow.length ? avgFields(dayGpsForRow,'td') : null;
     const hsr  = dayGpsForRow.length ? avgFields(dayGpsForRow,'running_high') : null;
@@ -5632,13 +5632,14 @@ async function loadTwoWeekCal(baseDate){
     const d = new Date(start); d.setDate(start.getDate() + i);
     const ymd = d.toISOString().split('T')[0];
 
-    const dayAll = (gpsAll||[]).filter(r => r.session_date === ymd);
+    // SS(대표팀/개인 일정)는 팀 캘린더에서 완전 제외 → 개인 데이터 탭에서만 확인
+    const dayAll = (gpsAll||[]).filter(r => r.session_date === ymd && (r.session_type2||'').trim().toUpperCase() !== 'SS');
     const dayM   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
-    const dayS   = dayAll.filter(r => ['S','SS'].includes((r.session_type2||'').trim().toUpperCase()));
+    const dayS   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'S');
 
     // M이 1개라도 있으면 → M 기준 팀 평균 (팀 합계 포함)
-    // M이 없고 S/SS가 있으면 → S/SS 기준 평균 (팀 합계 제외, S 배지)
-    // M도 S/SS도 없으면 → 전체 fallback (팀 합계 제외)
+    // M이 없고 S가 있으면 → S 기준 평균 (팀 합계 제외, S 배지)
+    // M도 S도 없으면 → 전체 fallback (팀 합계 제외)
     const isTeamDay = dayM.length > 0;
     const dayBase  = isTeamDay ? dayM : (dayS.length > 0 ? dayS : dayAll);
 
@@ -5665,7 +5666,6 @@ async function loadTwoWeekCal(baseDate){
     const opp  = dayAll.find(r => r.opponent)?.opponent || null;
     const ha   = dayAll.find(r => r.home_away)?.home_away || null;
 
-    const nSS = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS').length;
     sessions.push({
       ymd, mon: d.getMonth()+1, day: d.getDate(), dow: DOW[d.getDay()],
       hasData: dayAll.length > 0,
@@ -5674,7 +5674,6 @@ async function loadTwoWeekCal(baseDate){
       nAll: dayAll.length,
       nM: dayM.length,
       nS: dayS.length,
-      nSS,
       td:     avg(dayBase,'td'),
       hsr:    avg(dayBase,'running_high'),
       sprint: avg(dayBase,'sprint'),
@@ -5735,11 +5734,9 @@ function renderTwoWeekCal(){
       ? 'border:1.5px solid var(--accent2);background:var(--accent-bg)'
       : 'border:1px solid var(--border)';
 
-    // M/S/SS 배지
+    // M/S 배지 (SS는 캘린더에서 제외)
     const typeBadge = !s.hasData ? '' : s.isTeamDay
       ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:3px">M</span>`
-      : (s.nSS > 0 && s.nM === 0)
-      ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#2a1a00;color:#fbbf24;font-weight:700;margin-left:3px">SS</span>`
       : `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:3px">S</span>`;
 
     // 세션명 (최빈값 단일 표시)
@@ -5836,12 +5833,13 @@ async function renderTwoWeekDetail(idx){
   const rpeMap = {};
   (dayRpe||[]).forEach(r => { rpeMap[r.player_id] = r; });
 
+  // SS(대표팀/개인 일정)는 팀 상세 뷰에서도 제외 → 개인 데이터 탭에서만 확인
   // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
   // session_type2 = 'S' → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
-  // session_type2 = 'SS' → 대표팀 소집/특별 상황 → 팀 평균 제외, 개인 데이터에만 포함
+  // session_type2 = 'SS' → 대표팀 소집/개인 일정 → 팀 뷰 전체 제외
   const teamGps = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
-  const indGps  = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
-  const avgBase = teamGps.length > 0 ? teamGps : (dayGps||[]);
+  const indGps  = (dayGps||[]).filter(r => { const t=(r.session_type2||'').trim().toUpperCase(); return t !== 'M' && t !== 'SS'; });
+  const avgBase = teamGps.length > 0 ? teamGps : indGps.length > 0 ? indGps : [];
 
   const avg = (arr, field, dec=0) => {
     const vals = arr.filter(r => parseFloat(r[field]) > 0);
@@ -5942,7 +5940,7 @@ async function renderTwoWeekDetail(idx){
       <div style="padding:12px 14px;background:var(--surface2);border-bottom:1px solid var(--border)">
         <div style="font-size:14px;font-weight:700;color:var(--text)">${s.ymd} (${s.dow})</div>
         <div style="font-size:12px;color:var(--accent2);margin-top:2px;font-weight:600">${s.topic||'—'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">전체 ${s.nAll}명 참여 · 주전(M) ${teamGps.length}명 기준 평균 · 서브/미엔트리 ${indGps.filter(r=>(r.session_type2||'').trim().toUpperCase()!=='SS').length}명 · 대표팀(SS) ${s.nSS}명</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">주전(M) ${teamGps.length}명 기준 평균 · 서브(S) ${indGps.length}명</div>
         ${oppHtml}
         <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px">
           ${avgCards}
@@ -6489,15 +6487,26 @@ async function saveGpsData(){
     msg.textContent='저장 실패: '+error.message; msg.style.color='var(--red)';
     btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
   } else {
-    msg.textContent=`✅ ${_gpsParseData.length}개 레코드 저장 완료!`; msg.style.color='var(--accent2)';
-    btn.textContent='✓ 저장됨';
+    const savedCount = _gpsParseData.length;
     // MSS 자동 갱신 + 부상위험 분석 실행
     await autoUpdateMSS(_gpsParseData);
     runInjuryRiskAnalysis();
     // 히스토리 목록 갱신
     loadGpsHistory();
-    // 팀 요약 탭으로 이동하여 결과 확인
-    setTimeout(()=>{ setPlayerView('team'); loadTeamSummary(); }, 1500);
+    // 업로드 폼 초기화 → 바로 다음 파일 업로드 가능
+    _gpsParseData = [];
+    document.getElementById('upload-preview').style.display = 'none';
+    document.getElementById('gps-file-input').value = '';
+    btn.textContent = '💾 Supabase에 저장'; btn.disabled = false;
+    // 상단에 성공 토스트 표시
+    const dropZone = document.getElementById('upload-drop-zone');
+    if(dropZone){
+      const toast = document.createElement('div');
+      toast.style.cssText = 'background:#0a1f10;border:1px solid #22c55e;border-radius:8px;padding:10px 14px;font-size:13px;color:#4ade80;font-weight:600;margin-bottom:10px;text-align:center';
+      toast.textContent = `✅ ${savedCount}개 레코드 저장 완료! 다음 파일을 업로드하세요.`;
+      dropZone.parentNode.insertBefore(toast, dropZone);
+      setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+    }
   }
 }
 
