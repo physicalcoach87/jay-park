@@ -1207,6 +1207,21 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동명</label>
       <input type="text" id="cx-name" placeholder="예: Reverse Nordic curl" style="width:100%;font-size:14px;padding:10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
     </div>
+    <!-- 운동 종류 -->
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동 종류</label>
+      <div style="display:flex;gap:8px">
+        <button id="cx-type-btn-gym" onclick="setCxType('gym')"
+          style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">💪 근력운동</button>
+        <button id="cx-type-btn-preact" onclick="setCxType('preact')"
+          style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">⚡ Pre-activation</button>
+      </div>
+    </div>
+    <!-- 카테고리 -->
+    <div style="margin-bottom:10px">
+      <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">카테고리</label>
+      <div id="cx-cat-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
     <div style="margin-bottom:10px">
       <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동 방법 (한 줄씩 입력, 최대 6줄)</label>
       <div id="cx-steps-wrap" style="display:flex;flex-direction:column;gap:6px">
@@ -1357,6 +1372,74 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
   <div class="coaching-box" style="margin-bottom:1rem">
     <p>기존 처방 수정, 새 변형 추가, 완전 새 프로그램을 만들 수 있습니다. Supabase에 저장되어 모든 기기에서 공유됩니다.</p>
+  </div>
+
+  <!-- 🎲 랜덤 프로그램 생성기 -->
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1rem;margin-bottom:1rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:pointer" onclick="toggleRandGen()">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">🎲 랜덤 프로그램 생성기</div>
+      <span id="rand-gen-arrow" style="color:var(--text3);font-size:14px">▼</span>
+    </div>
+    <div id="rand-gen-body">
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">세션 유형과 개수를 선택하면 커스텀 운동 라이브러리에서 랜덤으로 프로그램을 생성합니다.</div>
+      <!-- 세션 유형 체크박스 -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2)">
+          <input type="checkbox" id="rg-check-gym" checked style="accent-color:var(--accent)"> 💪 근력운동
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2)">
+          <input type="checkbox" id="rg-check-preact" checked style="accent-color:var(--accent)"> ⚡ Pre-activation
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2)">
+          <input type="checkbox" id="rg-check-cardio" style="accent-color:var(--accent)"> 🏃 유산소
+        </label>
+      </div>
+      <!-- 카테고리 필터 -->
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>근력 카테고리</label>
+          <select id="rg-gym-cat" style="width:100%">
+            <option value="">전체</option>
+            <option value="Upper Body">Upper Body</option>
+            <option value="Lower Body">Lower Body</option>
+            <option value="All Body">All Body</option>
+            <option value="Core">Core</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label>Pre-activation 카테고리</label>
+          <select id="rg-preact-cat" style="width:100%">
+            <option value="">전체</option>
+            <option value="MOBILITY">MOBILITY</option>
+            <option value="ACTIVATION">ACTIVATION</option>
+            <option value="DYNAMIC PREP">DYNAMIC PREP</option>
+            <option value="STRENGTH">STRENGTH</option>
+          </select>
+        </div>
+      </div>
+      <!-- 운동 수 설정 -->
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>근력 운동 수</label>
+          <select id="rg-gym-cnt" style="width:100%">
+            <option value="3">3개</option><option value="4">4개</option>
+            <option value="5" selected>5개</option><option value="6">6개</option>
+          </select>
+        </div>
+        <div class="ctrl">
+          <label>Pre-activation 운동 수</label>
+          <select id="rg-preact-cnt" style="width:100%">
+            <option value="3">3개</option><option value="4" selected>4개</option>
+            <option value="5">5개</option><option value="6">6개</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="generateRandomCprog()" class="btn-exp pri" style="flex:2;padding:10px">🎲 랜덤 생성</button>
+        <button onclick="document.getElementById('rg-preview').innerHTML=''" class="btn-exp" style="flex:1;padding:10px">초기화</button>
+      </div>
+      <div id="rg-preview" style="margin-top:12px"></div>
+    </div>
   </div>
 
   <!-- 필터 -->
@@ -3861,11 +3944,15 @@ async function renderVM(f=''){
   document.getElementById('vm-cnt').textContent=`저장됨: ${Object.keys(links).length}개`;
   document.getElementById('video-list').innerHTML=all.map(name=>{
     const val=links[name]||'';const sid="vl_"+name.replace(/[^a-zA-Z0-9]/g,'_');
+    const fid="vf_"+name.replace(/[^a-zA-Z0-9]/g,'_');
     return `<div class="vm-row">
       <div class="vm-name">${name}${val?' <span style="font-size:10px;color:var(--accent2)">●</span>':''}</div>
       <div class="vm-ir">
-        <input class="vm-inp" id="${sid}" type="text" placeholder="YouTube 또는 Drive URL" value="${val}">
+        <input class="vm-inp" id="${sid}" type="text" placeholder="YouTube / Drive URL" value="${val}">
         <button class="vm-sv" onclick="svL('${name.replace(/'/g,"\\'")}','${sid}')">저장</button>
+        <label title="파일 업로드" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;padding:6px 9px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;white-space:nowrap">
+          📁<input id="${fid}" type="file" accept="video/*,image/*" style="display:none" onchange="uploadVideoFile('${name.replace(/'/g,"\\'")}','${sid}','${fid}',this)">
+        </label>
         ${val?`<button class="vm-dl" onclick="dlL('${name.replace(/'/g,"\\'")}')">삭제</button>`:''}
       </div>
     </div>`;
@@ -4046,6 +4133,187 @@ function getGymProg(pos, md, v){
 }
 
 // ═══════════════════════════════════════════
+// 커스텀 운동 — 종류/카테고리 선택
+// ═══════════════════════════════════════════
+window._cxType = 'gym';
+window._cxCat  = '';
+
+const CX_TYPE_CATS = {
+  gym:    ['Upper Body','Lower Body','All Body','Core'],
+  preact: ['MOBILITY','ACTIVATION','DYNAMIC PREP','STRENGTH']
+};
+
+function setCxType(t){
+  window._cxType = t;
+  window._cxCat  = '';
+  ['gym','preact'].forEach(id=>{
+    const b = document.getElementById('cx-type-btn-'+id);
+    if(!b) return;
+    if(id===t){
+      b.style.borderColor='var(--accent)'; b.style.background='var(--accent-bg)'; b.style.color='var(--accent2)';
+    } else {
+      b.style.borderColor='var(--border2)'; b.style.background='transparent'; b.style.color='var(--text2)';
+    }
+  });
+  renderCxCatBtns();
+}
+
+function setCxCat(c){
+  window._cxCat = (window._cxCat === c) ? '' : c;
+  renderCxCatBtns();
+}
+
+function renderCxCatBtns(){
+  const wrap = document.getElementById('cx-cat-btns');
+  if(!wrap) return;
+  const cats = CX_TYPE_CATS[window._cxType] || [];
+  wrap.innerHTML = cats.map(c=>{
+    const active = window._cxCat === c;
+    return `<button onclick="setCxCat('${c}')" style="padding:6px 12px;border-radius:7px;border:1px solid ${active?'var(--accent)':'var(--border2)'};background:${active?'var(--accent-bg)':'transparent'};color:${active?'var(--accent2)':'var(--text2)'};font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">${c}</button>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════
+// 영상 — 파일 업로드 (Supabase Storage)
+// ═══════════════════════════════════════════
+async function uploadVideoFile(name, urlInputId, fileInputId, input){
+  const file = input.files[0];
+  if(!file) return;
+  const urlInput = document.getElementById(urlInputId);
+  if(urlInput) urlInput.placeholder = '업로드 중...';
+  try {
+    const ext  = file.name.split('.').pop();
+    const path = `exercise-videos/${Date.now()}_${name.replace(/[^a-zA-Z0-9가-힣]/g,'_')}.${ext}`;
+    const { data, error } = await supa.storage.from('exercise-videos').upload(path, file, { upsert: true });
+    if(error) throw error;
+    const { data: pub } = supa.storage.from('exercise-videos').getPublicUrl(path);
+    const publicUrl = pub.publicUrl;
+    if(urlInput) urlInput.value = publicUrl;
+    await svL(name, urlInputId);
+  } catch(e) {
+    alert('파일 업로드 실패: ' + (e.message||e));
+  }
+  // 파일 input 초기화
+  input.value = '';
+}
+
+// ═══════════════════════════════════════════
+// 랜덤 프로그램 생성기
+// ═══════════════════════════════════════════
+function toggleRandGen(){
+  const body  = document.getElementById('rand-gen-body');
+  const arrow = document.getElementById('rand-gen-arrow');
+  if(!body) return;
+  const hidden = body.style.display === 'none';
+  body.style.display  = hidden ? '' : 'none';
+  if(arrow) arrow.textContent = hidden ? '▼' : '▶';
+}
+
+function generateRandomCprog(){
+  const useGym    = document.getElementById('rg-check-gym')?.checked;
+  const usePreact = document.getElementById('rg-check-preact')?.checked;
+  const useCardio = document.getElementById('rg-check-cardio')?.checked;
+  if(!useGym && !usePreact && !useCardio){
+    alert('세션 유형을 최소 1개 선택하세요.');
+    return;
+  }
+
+  const gymCat    = document.getElementById('rg-gym-cat')?.value    || '';
+  const preactCat = document.getElementById('rg-preact-cat')?.value || '';
+  const gymCnt    = parseInt(document.getElementById('rg-gym-cnt')?.value    || 5);
+  const preactCnt = parseInt(document.getElementById('rg-preact-cnt')?.value || 4);
+
+  const meta = loadCXMeta();
+  const cx   = loadCX();
+  // 전체 운동 목록 (커스텀 + 기본 D)
+  const allNames = [...new Set([...Object.keys(D||{}), ...Object.keys(cx)])];
+
+  // 카테고리 기준으로 분류
+  function pickRandom(pool, n){
+    const shuffled = [...pool].sort(()=>Math.random()-0.5);
+    return shuffled.slice(0, Math.min(n, shuffled.length));
+  }
+
+  function getExByType(type, cat){
+    return allNames.filter(name=>{
+      const m = meta[name] || {};
+      if(m.type !== type) return false;
+      if(cat && m.category !== cat) return false;
+      return true;
+    });
+  }
+
+  let html = '';
+  let total = 0;
+
+  if(usePreact){
+    const pool = getExByType('preact', preactCat);
+    const picked = pickRandom(pool, preactCnt);
+    if(picked.length){
+      html += `<div style="margin-bottom:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">⚡ Pre-activation${preactCat?' — '+preactCat:''}</div>
+        ${picked.map(n=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:4px;font-size:13px">
+          <span>${n}</span>
+          <span style="font-size:10px;color:var(--text3)">${meta[n]?.category||''}</span>
+        </div>`).join('')}
+      </div>`;
+      total += picked.length;
+    } else {
+      html += `<div style="padding:8px;font-size:12px;color:var(--text3)">⚡ Pre-activation 운동이 없습니다. 먼저 운동을 추가하세요.</div>`;
+    }
+  }
+
+  if(useGym){
+    const pool = getExByType('gym', gymCat);
+    const picked = pickRandom(pool, gymCnt);
+    if(picked.length){
+      html += `<div style="margin-bottom:10px">
+        <div style="font-size:11px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">💪 근력운동${gymCat?' — '+gymCat:''}</div>
+        ${picked.map(n=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:4px;font-size:13px">
+          <span>${n}</span>
+          <span style="font-size:10px;color:var(--text3)">${meta[n]?.category||''}</span>
+        </div>`).join('')}
+      </div>`;
+      total += picked.length;
+    } else {
+      html += `<div style="padding:8px;font-size:12px;color:var(--text3)">💪 근력 운동이 없습니다. 먼저 운동을 추가하세요.</div>`;
+    }
+  }
+
+  if(useCardio){
+    const CARDIO_EX = ['Assault bike intervals','Treadmill sprint','Rowing intervals','Jump rope','Shuttle run','Cone drill'];
+    const picked = pickRandom(CARDIO_EX, 3);
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">🏃 유산소</div>
+      ${picked.map(n=>`<div style="padding:7px 10px;background:var(--surface2);border-radius:7px;margin-bottom:4px;font-size:13px">${n}</div>`).join('')}
+    </div>`;
+    total += picked.length;
+  }
+
+  const preview = document.getElementById('rg-preview');
+  if(!preview) return;
+  if(!total && !html){
+    preview.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">커스텀 운동 라이브러리가 비어 있습니다.<br>먼저 <strong>운동 생성</strong> 탭에서 운동을 추가하세요.</div>`;
+    return;
+  }
+  preview.innerHTML = `<div style="border:1px solid var(--border);border-radius:10px;padding:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600">랜덤 프로그램 — 총 ${total}개 운동</div>
+      <button onclick="generateRandomCprog()" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 재생성</button>
+    </div>
+    ${html}
+    <button onclick="saveRandProgAsNew()" class="btn-exp pri" style="width:100%;padding:9px;margin-top:4px">💾 커스텀 프로그램으로 저장</button>
+  </div>`;
+}
+
+function saveRandProgAsNew(){
+  // rg-preview 내 운동 목록을 수집해 cprog 에디터로 전달
+  const rows = document.querySelectorAll('#rg-preview [data-exname]');
+  // 간단히 에디터를 열어 사용자가 마무리하도록
+  openCprogEditor(null);
+}
+
+// ═══════════════════════════════════════════
 // 커스텀 운동 엔진
 // ═══════════════════════════════════════════
 const CX_KEY='ipark_custom_ex_v1';
@@ -4084,15 +4352,19 @@ function saveCustomEx(){
   saveCX(cx);
   D[newName] = steps;
 
-  // 메타 저장: 원본 이름 추적
+  // 메타 저장: 원본 이름 추적 + 종류/카테고리
   const meta = loadCXMeta();
+  const _t = window._cxType||''; const _c = window._cxCat||'';
   if(isRename && D_ORIGINAL[originalName]){
     // 기본 운동 이름 변경 → 원본 이름 기록
-    meta[newName] = { originalName };
+    meta[newName] = { originalName, type:_t, category:_c };
     delete meta[originalName];
   } else if(!isRename && D_ORIGINAL[newName]){
     // 기본 운동 내용만 수정 → 원본 이름 = 현재 이름
-    meta[newName] = { originalName: newName };
+    meta[newName] = { ...(meta[newName]||{}), originalName: newName, type:_t, category:_c };
+  } else {
+    // 완전 새 커스텀 운동
+    meta[newName] = { ...(meta[newName]||{}), type:_t, category:_c };
   }
   saveCXMeta(meta);
 
@@ -4153,6 +4425,14 @@ function loadCxIntoForm(name, isCustom){
   nameInput.dataset.originalName = name; // 원본 이름 저장
   const inputs = document.querySelectorAll('.cx-step');
   inputs.forEach((inp,i) => { inp.value = steps[i] || ''; });
+  // 종류/카테고리 복원
+  const m = loadCXMeta()[name] || {};
+  window._cxType = m.type || 'gym';
+  window._cxCat  = m.category || '';
+  setCxType(window._cxType);
+  // setCxType 후 카테고리 재선택
+  window._cxCat = m.category || '';
+  renderCxCatBtns();
   document.getElementById('cx-form-wrap').style.display='block';
   document.getElementById('cx-form-wrap').scrollIntoView({behavior:'smooth'});
   showCxMsg(`"${name}" 편집 중 — 운동명과 방법 수정 후 저장하세요`, 'var(--amber)');
@@ -4199,6 +4479,9 @@ function clearCxForm(){
   document.getElementById('cx-msg').textContent = '';
   document.getElementById('cx-form-wrap').style.display='none';
   document.getElementById('cx-form-title').textContent = '운동 편집';
+  // 종류/카테고리 초기화
+  window._cxType = 'gym'; window._cxCat = '';
+  setCxType('gym');
 }
 
 function showCxMsg(msg, color){
@@ -4237,6 +4520,9 @@ function openNewCxForm(){
   const nameInput = document.getElementById('cx-name');
   nameInput.dataset.originalName = '';
   nameInput.focus();
+  // 초기 카테고리 버튼 렌더링
+  window._cxType = 'gym'; window._cxCat = '';
+  setCxType('gym');
   document.getElementById('cx-form-wrap').scrollIntoView({behavior:'smooth'});
 }
 
@@ -4274,17 +4560,22 @@ function renderAllExList(filter=''){
   }
 
   listEl.innerHTML = exercises.map(({name, steps, isCustom, isModified})=>{
+    const m = meta[name] || {};
+    const typeLbl = m.type === 'gym' ? '💪 근력' : m.type === 'preact' ? '⚡ Pre-act' : '';
+    const catLbl  = m.category || '';
     const badge = isModified
       ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:#7c2d12;color:#fed7aa;border:1px solid #c2410c">수정됨</span>`
       : isCustom
         ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--accent-bg);color:var(--accent2);border:1px solid var(--accent)">커스텀</span>`
         : `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border2)">기본</span>`;
+    const typeBadge = typeLbl ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${typeLbl}</span>` : '';
+    const catBadge  = catLbl  ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">${catLbl}</span>` : '';
     const preview = steps.slice(0,2).map(s=>`<div style="font-size:11px;color:var(--text3);line-height:1.6;padding-left:10px;position:relative"><span style="position:absolute;left:0;color:var(--accent2)">▸</span>${s}</div>`).join('');
     const more = steps.length>2?`<div style="font-size:11px;color:var(--text3);padding-left:10px">+${steps.length-2}단계 더...</div>`:'';
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
-          <div style="font-size:13px;font-weight:600;color:var(--text)">${name}</div>${badge}
+          <div style="font-size:13px;font-weight:600;color:var(--text)">${name}</div>${badge}${typeBadge}${catBadge}
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button onclick="loadCxIntoForm('${name.replace(/'/g,"\\'")}','${isCustom}')"
