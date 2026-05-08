@@ -1258,7 +1258,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <button id="cx-tab-all" onclick="setCxTab('all')"
           style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
-          📋 전체 운동 (75개)
+          📋 전체 운동 (161개)
         </button>
         <button id="cx-tab-custom" onclick="setCxTab('custom')"
           style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">
@@ -4466,10 +4466,11 @@ function loadCxIntoForm(name, isCustom){
   nameInput.dataset.originalName = name; // 원본 이름 저장
   const inputs = document.querySelectorAll('.cx-step');
   inputs.forEach((inp,i) => { inp.value = steps[i] || ''; });
-  // 종류/카테고리 복원
+  // 종류/카테고리 복원 (meta 우선, 없으면 poolMap에서)
   const m = loadCXMeta()[name] || {};
-  window._cxType = m.type || 'gym';
-  window._cxCat  = m.category || '';
+  const poolInfo = getAllPoolNames().get(name) || {};
+  window._cxType = m.type || poolInfo.type || 'gym';
+  window._cxCat  = m.category || poolInfo.category || '';
   setCxType(window._cxType);
   // setCxType 후 카테고리 재선택
   window._cxCat = m.category || '';
@@ -4596,30 +4597,74 @@ function openNewCxForm(){
   document.getElementById('cx-form-wrap').scrollIntoView({behavior:'smooth'});
 }
 
+// GYM_POOL + PA_POOL 전체 운동 이름→{type,category,cue} 맵 반환
+function getAllPoolNames(){
+  const map = new Map();
+  // GYM_POOL
+  if(typeof GYM_POOL !== 'undefined'){
+    Object.entries(GYM_POOL).forEach(([catKey, catData])=>{
+      Object.entries(catData.subs||{}).forEach(([, subData])=>{
+        (subData.ex||[]).forEach(ex=>{
+          if(!map.has(ex.n)) map.set(ex.n, {type:'gym', category:catKey+' / '+subData.label, cue:ex.cue||''});
+        });
+      });
+    });
+  }
+  // PA_POOL
+  if(typeof PA_POOL !== 'undefined'){
+    Object.entries(PA_POOL).forEach(([catKey, catData])=>{
+      Object.entries(catData.subs||{}).forEach(([, subData])=>{
+        (subData.ex||[]).forEach(ex=>{
+          if(!map.has(ex.n)) map.set(ex.n, {type:'preact', category:catKey+' / '+subData.label, cue:ex.i||''});
+        });
+      });
+    });
+  }
+  return map;
+}
+
 function renderAllExList(filter=''){
   const listEl = document.getElementById('cx-list');
   if(!listEl) return;
   updateCxCount();
   const cx = loadCX();
   const cxKeys = Object.keys(cx);
-
   const meta = loadCXMeta();
+  const poolMap = getAllPoolNames(); // 161개 전체 맵
 
   let exercises = [];
   if(cxTabMode === 'all'){
-    const allNames = [...new Set([...Object.keys(D_ORIGINAL||D), ...cxKeys])].sort();
-    exercises = allNames.map(name=>({
-      name,
-      steps: cx[name] || D[name] || [],
-      isCustom: !!cx[name],
-      // 수정됨: 기본 운동이거나 기본 운동에서 이름 변경된 경우
-      isModified: !!cx[name] && (!!(D_ORIGINAL||{})[name] || !!(meta[name]?.originalName && (D_ORIGINAL||{})[meta[name].originalName]))
-    }));
+    // D_ORIGINAL + GYM_POOL + PA_POOL + cx 합산 (중복 제거)
+    const allNames = new Set([
+      ...Object.keys(D_ORIGINAL||D),
+      ...poolMap.keys(),
+      ...cxKeys
+    ]);
+    exercises = [...allNames].sort().map(name=>{
+      const poolInfo = poolMap.get(name) || {};
+      const m = meta[name] || {};
+      const type     = m.type     || poolInfo.type     || '';
+      const category = m.category || poolInfo.category || '';
+      const cue      = poolInfo.cue || '';
+      const steps    = cx[name] || D[name] || [];
+      return {
+        name, steps, cue, type, category,
+        isCustom:   !!cx[name],
+        isModified: !!cx[name] && (!!(D_ORIGINAL||{})[name] || !!(m.originalName && (D_ORIGINAL||{})[m.originalName]))
+      };
+    });
   } else {
-    exercises = cxKeys.sort().map(name=>({
-      name, steps: cx[name], isCustom: true,
-      isModified: !!(D_ORIGINAL||{})[name] || !!(meta[name]?.originalName && (D_ORIGINAL||{})[meta[name].originalName])
-    }));
+    exercises = cxKeys.sort().map(name=>{
+      const poolInfo = poolMap.get(name) || {};
+      const m = meta[name] || {};
+      return {
+        name, steps: cx[name], cue: poolInfo.cue||'',
+        type:     m.type     || poolInfo.type     || '',
+        category: m.category || poolInfo.category || '',
+        isCustom: true,
+        isModified: !!(D_ORIGINAL||{})[name] || !!(m.originalName && (D_ORIGINAL||{})[m.originalName])
+      };
+    });
   }
 
   if(filter) exercises = exercises.filter(e=>e.name.toLowerCase().includes(filter.toLowerCase()));
@@ -4629,32 +4674,37 @@ function renderAllExList(filter=''){
     return;
   }
 
-  listEl.innerHTML = exercises.map(({name, steps, isCustom, isModified})=>{
-    const m = meta[name] || {};
-    const typeLbl = m.type === 'gym' ? '💪 근력' : m.type === 'preact' ? '⚡ Pre-act' : '';
-    const catLbl  = m.category || '';
+  listEl.innerHTML = exercises.map(({name, steps, cue, type, category, isCustom, isModified})=>{
+    const typeLbl = type === 'gym' ? '💪 근력' : type === 'preact' ? '⚡ Pre-act' : '';
     const badge = isModified
       ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:#7c2d12;color:#fed7aa;border:1px solid #c2410c">수정됨</span>`
       : isCustom
         ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--accent-bg);color:var(--accent2);border:1px solid var(--accent)">커스텀</span>`
         : `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border2)">기본</span>`;
     const typeBadge = typeLbl ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text2);border:1px solid var(--border)">${typeLbl}</span>` : '';
-    const catBadge  = catLbl  ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">${catLbl}</span>` : '';
-    const preview = steps.slice(0,2).map(s=>`<div style="font-size:11px;color:var(--text3);line-height:1.6;padding-left:10px;position:relative"><span style="position:absolute;left:0;color:var(--accent2)">▸</span>${s}</div>`).join('');
-    const more = steps.length>2?`<div style="font-size:11px;color:var(--text3);padding-left:10px">+${steps.length-2}단계 더...</div>`:'';
+    const catBadge  = category ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">${category}</span>` : '';
+    // 스텝이 있으면 스텝 미리보기, 없으면 cue 표시
+    let preview = '';
+    if(steps.length){
+      preview = steps.slice(0,2).map(s=>`<div style="font-size:11px;color:var(--text3);line-height:1.6;padding-left:10px;position:relative"><span style="position:absolute;left:0;color:var(--accent2)">▸</span>${s}</div>`).join('');
+      if(steps.length>2) preview += `<div style="font-size:11px;color:var(--text3);padding-left:10px">+${steps.length-2}단계 더...</div>`;
+    } else if(cue){
+      preview = `<div style="font-size:11px;color:var(--text3);line-height:1.5;padding-left:10px;position:relative"><span style="position:absolute;left:0;color:var(--accent2)">▸</span>${cue}</div>`;
+    }
+    const safeName = name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
     return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:${preview?'6':'0'}px">
         <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
           <div style="font-size:13px;font-weight:600;color:var(--text)">${name}</div>${badge}${typeBadge}${catBadge}
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
-          <button onclick="loadCxIntoForm('${name.replace(/'/g,"\\'")}','${isCustom}')"
+          <button onclick="loadCxIntoForm('${safeName}','${isCustom}')"
             style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">✏️ 편집</button>
-          ${isCustom?`<button onclick="deleteCustomEx('${name.replace(/'/g,"\\'")}','${isModified}')"
+          ${isCustom?`<button onclick="deleteCustomEx('${safeName}','${isModified}')"
             style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">삭제</button>`:''}
         </div>
       </div>
-      ${preview}${more}
+      ${preview}
     </div>`;
   }).join('');
 }
