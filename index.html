@@ -4367,6 +4367,11 @@ const CX_META_KEY = 'ipark_cx_meta_v1';
 function loadCXMeta(){try{return JSON.parse(localStorage.getItem(CX_META_KEY)||'{}')}catch(e){return {}}}
 function saveCXMeta(o){localStorage.setItem(CX_META_KEY,JSON.stringify(o))}
 
+// 숨긴 운동 (기본/풀 운동 삭제 시 숨김 목록에 추가)
+const CX_HIDDEN_KEY = 'ipark_cx_hidden_v1';
+function loadCXHidden(){try{return JSON.parse(localStorage.getItem(CX_HIDDEN_KEY)||'[]')}catch(e){return []}}
+function saveCXHidden(arr){localStorage.setItem(CX_HIDDEN_KEY,JSON.stringify(arr))}
+
 function saveCustomEx(){
   const nameInput = document.getElementById('cx-name');
   const newName = nameInput.value.trim();
@@ -4504,6 +4509,50 @@ function deleteCustomEx(name, isModified){
   updateCxCount();
 }
 
+// 통합 삭제 함수 — 커스텀이면 cx에서 제거, 기본/풀이면 숨김 목록에 추가
+function deleteAnyEx(name, isCustom, isModified){
+  const custom = isCustom === 'true';
+  const modified = isModified === 'true';
+
+  if(custom){
+    // 기존 커스텀 삭제 로직
+    const confirmMsg = modified
+      ? `"${name}"을 삭제하면 기본 운동 방법으로 복원됩니다. 삭제할까요?`
+      : `"${name}" 커스텀 운동을 삭제할까요?`;
+    if(!confirm(confirmMsg)) return;
+    const cx = loadCX();
+    delete cx[name];
+    saveCX(cx);
+    const meta = loadCXMeta();
+    delete meta[name];
+    saveCXMeta(meta);
+    if(modified){
+      showCxMsg(`"${name}" 삭제됨 — 기본값 복원은 새로고침 후 적용됩니다`, 'var(--amber)');
+    } else {
+      delete D[name];
+      showCxMsg(`"${name}" 삭제됨`, 'var(--red)');
+    }
+  } else {
+    // 기본/풀 운동 → 숨김 목록에 추가
+    if(!confirm(`"${name}"을 목록에서 숨기겠습니까?\n(운동 관리 상단에서 복원 가능)`) ) return;
+    const hidden = loadCXHidden();
+    if(!hidden.includes(name)) hidden.push(name);
+    saveCXHidden(hidden);
+    showCxMsg(`"${name}" 숨김 처리됨`, 'var(--red)');
+  }
+  renderAllExList(document.getElementById('cx-search')?.value||'');
+  updateCxCount();
+}
+
+// 숨긴 운동 전체 복원
+function restoreAllHiddenEx(){
+  if(!confirm('숨긴 운동을 모두 복원하시겠습니까?')) return;
+  saveCXHidden([]);
+  showCxMsg('숨긴 운동 전체 복원 완료', 'var(--accent2)');
+  renderAllExList(document.getElementById('cx-search')?.value||'');
+  updateCxCount();
+}
+
 function clearAllCustom(){
   if(!confirm('모든 커스텀 운동을 삭제하시겠습니까? 기본 운동 수정 내용도 초기화됩니다.')) return;
   const cx = loadCX();
@@ -4631,50 +4680,64 @@ function renderAllExList(filter=''){
   const cxKeys = Object.keys(cx);
   const meta = loadCXMeta();
   const poolMap = getAllPoolNames(); // 161개 전체 맵
+  const hidden = new Set(loadCXHidden());
 
   let exercises = [];
   if(cxTabMode === 'all'){
-    // D_ORIGINAL + GYM_POOL + PA_POOL + cx 합산 (중복 제거)
+    // D_ORIGINAL + GYM_POOL + PA_POOL + cx 합산 (중복 제거, 숨김 제외)
     const allNames = new Set([
       ...Object.keys(D_ORIGINAL||D),
       ...poolMap.keys(),
       ...cxKeys
     ]);
-    exercises = [...allNames].sort().map(name=>{
-      const poolInfo = poolMap.get(name) || {};
-      const m = meta[name] || {};
-      const type     = m.type     || poolInfo.type     || '';
-      const category = m.category || poolInfo.category || '';
-      const cue      = poolInfo.cue || '';
-      const steps    = cx[name] || D[name] || [];
-      return {
-        name, steps, cue, type, category,
-        isCustom:   !!cx[name],
-        isModified: !!cx[name] && (!!(D_ORIGINAL||{})[name] || !!(m.originalName && (D_ORIGINAL||{})[m.originalName]))
-      };
-    });
+    exercises = [...allNames].sort()
+      .filter(name => !hidden.has(name))
+      .map(name=>{
+        const poolInfo = poolMap.get(name) || {};
+        const m = meta[name] || {};
+        const type     = m.type     || poolInfo.type     || '';
+        const category = m.category || poolInfo.category || '';
+        const cue      = poolInfo.cue || '';
+        const steps    = cx[name] || D[name] || [];
+        return {
+          name, steps, cue, type, category,
+          isCustom:   !!cx[name],
+          isModified: !!cx[name] && (!!(D_ORIGINAL||{})[name] || !!(m.originalName && (D_ORIGINAL||{})[m.originalName]))
+        };
+      });
   } else {
-    exercises = cxKeys.sort().map(name=>{
-      const poolInfo = poolMap.get(name) || {};
-      const m = meta[name] || {};
-      return {
-        name, steps: cx[name], cue: poolInfo.cue||'',
-        type:     m.type     || poolInfo.type     || '',
-        category: m.category || poolInfo.category || '',
-        isCustom: true,
-        isModified: !!(D_ORIGINAL||{})[name] || !!(m.originalName && (D_ORIGINAL||{})[m.originalName])
-      };
-    });
+    exercises = cxKeys.sort()
+      .filter(name => !hidden.has(name))
+      .map(name=>{
+        const poolInfo = poolMap.get(name) || {};
+        const m = meta[name] || {};
+        return {
+          name, steps: cx[name], cue: poolInfo.cue||'',
+          type:     m.type     || poolInfo.type     || '',
+          category: m.category || poolInfo.category || '',
+          isCustom: true,
+          isModified: !!(D_ORIGINAL||{})[name] || !!(m.originalName && (D_ORIGINAL||{})[m.originalName])
+        };
+      });
   }
 
   if(filter) exercises = exercises.filter(e=>e.name.toLowerCase().includes(filter.toLowerCase()));
 
+  // 숨긴 운동 복원 UI (전체 탭에서만)
+  const hiddenCount = hidden.size;
+  const restoreBar = (cxTabMode==='all' && hiddenCount > 0)
+    ? `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;margin-bottom:10px">
+        <span style="font-size:12px;color:var(--text3)">🗑️ 숨긴 운동 ${hiddenCount}개</span>
+        <button onclick="restoreAllHiddenEx()" style="font-size:12px;padding:4px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">전체 복원</button>
+      </div>`
+    : '';
+
   if(!exercises.length){
-    listEl.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${filter?'검색 결과가 없습니다':cxTabMode==='custom'?'커스텀 운동이 없습니다':'운동 목록이 없습니다'}</div>`;
+    listEl.innerHTML = restoreBar + `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${filter?'검색 결과가 없습니다':cxTabMode==='custom'?'커스텀 운동이 없습니다':'운동 목록이 없습니다'}</div>`;
     return;
   }
 
-  listEl.innerHTML = exercises.map(({name, steps, cue, type, category, isCustom, isModified})=>{
+  const listHtml = exercises.map(({name, steps, cue, type, category, isCustom, isModified})=>{
     const typeLbl = type === 'gym' ? '💪 근력' : type === 'preact' ? '⚡ Pre-act' : '';
     const badge = isModified
       ? `<span style="font-size:10px;padding:2px 7px;border-radius:4px;background:#7c2d12;color:#fed7aa;border:1px solid #c2410c">수정됨</span>`
@@ -4700,13 +4763,15 @@ function renderAllExList(filter=''){
         <div style="display:flex;gap:6px;flex-shrink:0">
           <button onclick="loadCxIntoForm('${safeName}','${isCustom}')"
             style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">✏️ 편집</button>
-          ${isCustom?`<button onclick="deleteCustomEx('${safeName}','${isModified}')"
-            style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">삭제</button>`:''}
+          <button onclick="deleteAnyEx('${safeName}','${isCustom}','${isModified}')"
+            style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">삭제</button>
         </div>
       </div>
       ${preview}
     </div>`;
   }).join('');
+
+  listEl.innerHTML = restoreBar + listHtml;
 }
 
 function renderCustomList(filter=''){
@@ -5856,10 +5921,14 @@ async function loadMorningReport(){
   const yRpeRows = (rpe28||[]).filter(r=>r.record_date===yesterdayStr);
   const yRpeAvg = yRpeRows.length ? yRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/yRpeRows.length : null;
 
-  // ── 어제 RPE 미응답 선수 ─────────────────────────────────────────
+  // ── 어제 RPE 집계 (전날 세션 상세용) ───────────────────────────
   const yRpeRespondedIds = new Set(yRpeRows.map(r=>r.player_id));
-  const noRpeResp = _players.filter(p=>!yRpeRespondedIds.has(p.id));
-  window._noRpeRespPlayers = noRpeResp.map(p=>({id:p.id,name:p.name}));
+
+  // ── 오늘 RPE 미응답 선수 ─────────────────────────────────────────
+  const todayRpeRows = (rpe28||[]).filter(r=>r.record_date===today);
+  const todayRpeRespondedIds = new Set(todayRpeRows.map(r=>r.player_id));
+  const noTodayRpeResp = _players.filter(p=>!todayRpeRespondedIds.has(p.id));
+  window._noRpeRespPlayers = noTodayRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
   const yWell   = (well7||[]).filter(r=>r.record_date===yesterdayStr);
   const yWellAvg= yWell.length ? yWell.reduce((a,r)=>a+(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0),0)/(yWell.length*4) : null;
@@ -6035,12 +6104,12 @@ async function loadMorningReport(){
       </button>
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 응답 완료</div>`;
 
-  // ── 어제 RPE 미응답 HTML ─────────────────────────────────────────
-  const noRpeRespHtml = noRpeResp.length ? `
+  // ── 오늘 RPE 미응답 HTML ─────────────────────────────────────────
+  const noRpeRespHtml = noTodayRpeResp.length ? `
     <div style="height:0.5px;background:var(--border2);margin:10px 0"></div>
-    <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">⚠️ RPE 미입력 (${noRpeResp.length}명)</div>
+    <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">⚠️ RPE 미입력 (${noTodayRpeResp.length}명)</div>
     <div style="display:flex;flex-direction:column;gap:5px">
-      ${noRpeResp.map(p=>`
+      ${noTodayRpeResp.map(p=>`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:8px">
           <div>
             <span style="font-size:12px;font-weight:500;color:var(--text)">${p.name}</span>
@@ -6172,8 +6241,8 @@ async function loadMorningReport(){
         </button>
         <button id="mr-tab-rpe" onclick="mrSwitchTab('rpe')"
           style="flex:1;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:none;background:transparent;color:var(--text2)">
-          📋 어제 RPE
-          <span style="font-size:10px;margin-left:4px;opacity:.8">${yRpeRespondedIds.size}/${_players.length}명</span>
+          📋 오늘 RPE
+          <span style="font-size:10px;margin-left:4px;opacity:.8">${todayRpeRespondedIds.size}/${_players.length}명</span>
         </button>
       </div>
 
@@ -6192,8 +6261,8 @@ async function loadMorningReport(){
       <!-- RPE 콘텐츠 -->
       <div id="mr-panel-rpe" style="display:none">
         <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
-          응답 ${yRpeRespondedIds.size}명 / 미입력 ${noRpeResp.length}명
-          <span style="margin-left:6px">(${yesterdayStr})</span>
+          응답 ${todayRpeRespondedIds.size}명 / 미입력 ${noTodayRpeResp.length}명
+          <span style="margin-left:6px">(${today})</span>
         </div>
         ${noRpeRespHtml}
       </div>
