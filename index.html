@@ -643,7 +643,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       </div>
       <div class="ctrl" style="display:flex;align-items:flex-end;gap:8px">
         <button class="btn-gen" style="margin:0;padding:10px 20px;flex:1" onclick="loadTeamSummary()">조회</button>
-        <button class="btn-exp" style="padding:10px 14px;border-color:#22c55e;color:#22c55e" onclick="downloadDailyExcel()">📥 엑셀</button>
+        <button class="btn-exp" style="padding:6px 10px;border-color:#eab308;color:#eab308;font-size:12px" onclick="downloadRpeWeightExcel()">📥 RPE/체중</button>
+        <button class="btn-exp" style="padding:6px 10px;border-color:#22c55e;color:#22c55e;font-size:12px" onclick="downloadGpsExcel()">📥 GPS</button>
       </div>
     </div>
     <div id="team-summary-output"></div>
@@ -5443,6 +5444,11 @@ async function loadMorningReport(){
   const yMS     = yAvg('max_speed');
   const yRpeRows = (rpe28||[]).filter(r=>r.record_date===yesterdayStr);
   const yRpeAvg = yRpeRows.length ? yRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/yRpeRows.length : null;
+
+  // ── 어제 RPE 미응답 선수 ─────────────────────────────────────────
+  const yRpeRespondedIds = new Set(yRpeRows.map(r=>r.player_id));
+  const noRpeResp = _players.filter(p=>!yRpeRespondedIds.has(p.id));
+  window._noRpeRespPlayers = noRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
   const yWell   = (well7||[]).filter(r=>r.record_date===yesterdayStr);
   const yWellAvg= yWell.length ? yWell.reduce((a,r)=>a+(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0),0)/(yWell.length*4) : null;
@@ -5618,6 +5624,28 @@ async function loadMorningReport(){
       </button>
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 응답 완료</div>`;
 
+  // ── 어제 RPE 미응답 HTML ─────────────────────────────────────────
+  const noRpeRespHtml = noRpeResp.length ? `
+    <div style="height:0.5px;background:var(--border2);margin:10px 0"></div>
+    <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">⚠️ RPE 미입력 (${noRpeResp.length}명)</div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      ${noRpeResp.map(p=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:8px">
+          <div>
+            <span style="font-size:12px;font-weight:500;color:var(--text)">${p.name}</span>
+            <span style="font-size:10px;color:var(--text3);margin-left:6px">${p.position}</span>
+          </div>
+          <button onclick="sendRpeReminder('${p.id}','${p.name}',this)"
+            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-family:inherit">
+            📨 RPE 입력 요청
+          </button>
+        </div>`).join('')}
+      <button onclick="sendRpeReminderAll(window._noRpeRespPlayers,this)"
+        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #7c3aed;background:#1a0a2e;color:#a78bfa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit">
+        📨 미입력 전원에게 발송
+      </button>
+    </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 RPE 입력 완료</div>`;
+
   // ── 최종 렌더링 ───────────────────────────────────────────────
   const nowStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} 자동 생성`;
   if(timeEl) timeEl.textContent = nowStr;
@@ -5734,6 +5762,15 @@ async function loadMorningReport(){
           ${wBar('근육통','💪',wMuscle)}
         </div>` : `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">오늘 웰니스 응답 없음</div>`}
       ${noRespHtml}
+    </div>
+
+    <!-- 섹션7: 어제 RPE 미응답 -->
+    <div style="background:var(--surface);border:0.5px solid #7c3aed40;border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:8px">
+        📋 어제 RPE 입력 현황 · 응답 ${yRpeRespondedIds.size}명 / 전체 ${_players.length}명
+        <span style="font-size:10px;color:var(--text3);margin-left:6px">(${yesterdayStr})</span>
+      </div>
+      ${noRpeRespHtml}
     </div>`;
 }
 
@@ -5955,6 +5992,32 @@ async function sendWellnessReminderAll(players, btn){
   btn.textContent='✅ 전체 발송 완료';
 }
 
+
+// ── RPE 입력 요청 알림 ────────────────────────────────────────────
+async function sendRpeReminder(playerId, playerName, btn){
+  btn.textContent='⏳ 발송 중...'; btn.disabled=true;
+  await supa.from('notifications').insert({
+    title:'💪 RPE 입력 요청',
+    body:`${playerName} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`,
+    target_type:'player', target_value:playerId,
+    created_by: currentUser?.email||'coach',
+  });
+  btn.textContent='✅ 발송됨';
+}
+
+// RPE 입력 요청 발송 (전체)
+async function sendRpeReminderAll(players, btn){
+  btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
+  await Promise.all(players.map(p=>
+    supa.from('notifications').insert({
+      title:'💪 RPE 입력 요청',
+      body:`${p.name} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`,
+      target_type:'player', target_value:p.id,
+      created_by: currentUser?.email||'coach',
+    })
+  ));
+  btn.textContent='✅ 전체 발송 완료';
+}
 
 // ── 웰니스 2주 달력 ────────────────────────────────────────────────
 let _wellnessSessions = [];
@@ -6489,6 +6552,104 @@ async function downloadDailyExcel(){
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = `${date}_일일데이터.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── RPE/체중 전용 엑셀 다운로드 ───────────────────────────────────
+async function downloadRpeWeightExcel(){
+  const date = document.getElementById('team-date')?.value;
+  if(!date){ alert('날짜를 선택해주세요'); return; }
+
+  const [{data:sessions},{data:wellness},{data:gps}] = await Promise.all([
+    supa.from('session_records').select('*, player_profiles(name)').eq('record_date',date).order('session_order'),
+    supa.from('wellness_records').select('player_id,morning_weight').eq('record_date',date),
+    supa.from('gps_records').select('player_id,duration').eq('session_date',date),
+  ]);
+
+  if(!sessions?.length && !wellness?.length){
+    alert(`${date} RPE/체중 데이터가 없습니다`); return;
+  }
+
+  const wellMap = {};
+  (wellness||[]).forEach(r=>{ wellMap[r.player_id] = r.morning_weight||''; });
+  const gpsDurMap = {};
+  (gps||[]).forEach(r=>{ gpsDurMap[r.player_id] = parseFloat(r.duration)||0; });
+
+  const playerMap = {};
+  (_players||[]).forEach(p=>{ playerMap[p.id]={name:p.name,sessions:[]}; });
+  (sessions||[]).forEach(r=>{
+    if(!playerMap[r.player_id]) playerMap[r.player_id]={name:r.player_profiles?.name||'-',sessions:[]};
+    playerMap[r.player_id].sessions.push(r);
+  });
+
+  const headers = ['이름','GPS','아침체중(kg)','세션1_RPE','세션1_sRPE(AU)','세션1_운동후체중','세션2_RPE','세션2_sRPE(AU)','세션2_운동후체중','세션3_RPE','세션3_sRPE(AU)','세션3_운동후체중','입력여부'];
+
+  const rows = Object.entries(playerMap)
+    .filter(([id,p])=>p.sessions.length>0||(wellMap[id]!==undefined))
+    .map(([id,p])=>{
+      const s1 = p.sessions.find(s=>s.session_order===1)||{};
+      const s2 = p.sessions.find(s=>s.session_order===2)||{};
+      const s3 = p.sessions.find(s=>s.session_order===3)||{};
+      const dur = gpsDurMap[id]||0;
+      const srpe1 = s1.rpe&&dur ? Math.round(s1.rpe*dur) : '';
+      const srpe2 = s2.rpe&&dur ? Math.round(s2.rpe*dur) : '';
+      const srpe3 = s3.rpe&&dur ? Math.round(s3.rpe*dur) : '';
+      return [
+        p.name,
+        dur?`${dur}min`:'GPS없음',
+        wellMap[id]||'',
+        s1.rpe||'', srpe1, s1.post_weight||'',
+        s2.rpe||'', srpe2, s2.post_weight||'',
+        s3.rpe||'', srpe3, s3.post_weight||'',
+        p.sessions.length>0?'입력':'미입력',
+      ];
+    })
+    .sort((a,b)=>a[0].localeCompare(b[0]));
+
+  const csv = [headers,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${date}_RPE체중데이터.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── GPS 전용 엑셀 다운로드 ─────────────────────────────────────────
+async function downloadGpsExcel(){
+  const date = document.getElementById('team-date')?.value;
+  if(!date){ alert('날짜를 선택해주세요'); return; }
+
+  const {data:gps} = await supa.from('gps_records')
+    .select('*, player_profiles(name,position)')
+    .eq('session_date',date)
+    .order('td',{ascending:false});
+
+  if(!gps?.length){ alert(`${date} GPS 데이터가 없습니다`); return; }
+
+  const headers = ['이름','포지션','타입','운동시간(분)','TD(m)','HSR(m)','Sprint(m)','최고속도(km/h)','Player Load','가속','RHIE','감속'];
+
+  const rows = gps.map(r=>[
+    r.player_profiles?.name||'-',
+    r.player_profiles?.position||'-',
+    (r.session_type2||'').trim().toUpperCase()||'-',
+    r.duration||'',
+    Math.round(r.td)||'',
+    Math.round(r.running_high)||'',
+    Math.round(r.sprint)||'',
+    r.max_speed||'',
+    r.player_load||'',
+    r.accel||'',
+    r.rhie||'',
+    r.decel||'',
+  ]);
+
+  const csv = [headers,...rows].map(r=>r.map(c=>`"${c}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${date}_GPS데이터.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
