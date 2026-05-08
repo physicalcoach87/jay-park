@@ -6040,29 +6040,66 @@ async function loadMorningReport(){
       ${loadHtml}
     </div>
 
-    <!-- 섹션6: 웰니스 + 미응답 -->
+    <!-- 섹션6+7: 웰니스 + RPE 통합 카드 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">
-        오늘 팀 웰니스 · 응답 ${todayWellAll.length}명 / 전체 ${_players.length}명
-      </div>
-      ${todayWellAll.length ? `
-        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:6px">
-          ${wBar('피로도','🔋',wFat)}
-          ${wBar('수면질','😴',wSleep)}
-          ${wBar('스트레스','🧠',wStress)}
-          ${wBar('근육통','💪',wMuscle)}
-        </div>` : `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">오늘 웰니스 응답 없음</div>`}
-      ${noRespHtml}
-    </div>
 
-    <!-- 섹션7: 어제 RPE 미응답 -->
-    <div style="background:var(--surface);border:0.5px solid #7c3aed40;border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:8px">
-        📋 어제 RPE 입력 현황 · 응답 ${yRpeRespondedIds.size}명 / 전체 ${_players.length}명
-        <span style="font-size:10px;color:var(--text3);margin-left:6px">(${yesterdayStr})</span>
+      <!-- 서브탭 헤더 -->
+      <div style="display:flex;gap:0;margin-bottom:12px;border:0.5px solid var(--border2);border-radius:8px;overflow:hidden">
+        <button id="mr-tab-well" onclick="mrSwitchTab('well')"
+          style="flex:1;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:none;background:var(--accent-bg);color:var(--accent2);border-right:0.5px solid var(--border2)">
+          💚 오늘 웰니스
+          <span style="font-size:10px;margin-left:4px;opacity:.8">${todayWellAll.length}/${_players.length}명</span>
+        </button>
+        <button id="mr-tab-rpe" onclick="mrSwitchTab('rpe')"
+          style="flex:1;padding:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;border:none;background:transparent;color:var(--text2)">
+          📋 어제 RPE
+          <span style="font-size:10px;margin-left:4px;opacity:.8">${yRpeRespondedIds.size}/${_players.length}명</span>
+        </button>
       </div>
-      ${noRpeRespHtml}
+
+      <!-- 웰니스 콘텐츠 -->
+      <div id="mr-panel-well">
+        ${todayWellAll.length ? `
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:6px">
+            ${wBar('피로도','🔋',wFat)}
+            ${wBar('수면질','😴',wSleep)}
+            ${wBar('스트레스','🧠',wStress)}
+            ${wBar('근육통','💪',wMuscle)}
+          </div>` : `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">오늘 웰니스 응답 없음</div>`}
+        ${noRespHtml}
+      </div>
+
+      <!-- RPE 콘텐츠 -->
+      <div id="mr-panel-rpe" style="display:none">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">
+          응답 ${yRpeRespondedIds.size}명 / 미입력 ${noRpeResp.length}명
+          <span style="margin-left:6px">(${yesterdayStr})</span>
+        </div>
+        ${noRpeRespHtml}
+      </div>
+
     </div>`;
+}
+
+// ── Morning Report 웰니스/RPE 서브탭 전환 ──────────────────────
+function mrSwitchTab(tab){
+  const panels = {well:'mr-panel-well', rpe:'mr-panel-rpe'};
+  const tabs   = {well:'mr-tab-well',   rpe:'mr-tab-rpe'};
+  Object.entries(panels).forEach(([key, id])=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = (key===tab) ? '' : 'none';
+  });
+  Object.entries(tabs).forEach(([key, id])=>{
+    const btn = document.getElementById(id);
+    if(!btn) return;
+    if(key===tab){
+      btn.style.background = 'var(--accent-bg)';
+      btn.style.color      = 'var(--accent2)';
+    } else {
+      btn.style.background = 'transparent';
+      btn.style.color      = 'var(--text2)';
+    }
+  });
 }
 
 // ── 부상위험 선수 14일 개인데이터 토글 ─────────────────────────
