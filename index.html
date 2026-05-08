@@ -1172,82 +1172,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div id="video-list"></div>
 </div>
 
-<!-- CUSTOM EXERCISE -->
-<div id="tab-custom" style="display:none">
-  <div class="vm-bar">
-    <h3>운동 방법 관리</h3>
-    <span class="vm-cnt" id="cx-cnt">커스텀: 0개</span>
-  </div>
-  <div class="coaching-box" style="margin-bottom:1rem">
-    <p>기존 75개 운동 방법을 수정하거나 새 운동을 추가할 수 있습니다. 수정된 내용은 처방 카드에 즉시 반영됩니다.</p>
-  </div>
-
-  <!-- 통합 검색 -->
-  <input class="vm-si" type="text" id="cx-search" placeholder="운동명 검색 (기존 + 커스텀 전체)..." oninput="renderAllExList(this.value)" style="margin-bottom:12px">
-
-  <!-- 탭 전환 -->
-  <div style="display:flex;gap:8px;margin-bottom:12px">
-    <button id="cx-tab-all" onclick="setCxTab('all')"
-      style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
-      📋 전체 운동 (75개)
-    </button>
-    <button id="cx-tab-custom" onclick="setCxTab('custom')"
-      style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">
-      ✏️ 커스텀 운동
-    </button>
-  </div>
-
-  <!-- 편집 폼 -->
-  <div id="cx-form-wrap" style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:1.25rem;display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div id="cx-form-title" style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px">운동 편집</div>
-      <button onclick="clearCxForm()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1">×</button>
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동명</label>
-      <input type="text" id="cx-name" placeholder="예: Reverse Nordic curl" style="width:100%;font-size:14px;padding:10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
-    </div>
-    <!-- 운동 종류 -->
-    <div style="margin-bottom:10px">
-      <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동 종류</label>
-      <div style="display:flex;gap:8px">
-        <button id="cx-type-btn-gym" onclick="setCxType('gym')"
-          style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">💪 근력운동</button>
-        <button id="cx-type-btn-preact" onclick="setCxType('preact')"
-          style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">⚡ Pre-activation</button>
-      </div>
-    </div>
-    <!-- 카테고리 -->
-    <div style="margin-bottom:10px">
-      <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">카테고리</label>
-      <div id="cx-cat-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동 방법 (한 줄씩 입력, 최대 6줄)</label>
-      <div id="cx-steps-wrap" style="display:flex;flex-direction:column;gap:6px">
-        <input type="text" class="cx-step vm-inp" placeholder="1단계 — 시작 자세">
-        <input type="text" class="cx-step vm-inp" placeholder="2단계">
-        <input type="text" class="cx-step vm-inp" placeholder="3단계">
-        <input type="text" class="cx-step vm-inp" placeholder="4단계">
-        <input type="text" class="cx-step vm-inp" placeholder="5단계">
-        <input type="text" class="cx-step vm-inp" placeholder="6단계 (선택)">
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-top:4px">
-      <button class="btn-exp pri" style="flex:2;padding:10px" onclick="saveCustomEx()">💾 저장</button>
-      <button class="btn-exp" style="flex:1;padding:10px" onclick="clearCxForm()">취소</button>
-    </div>
-    <div id="cx-msg" style="font-size:12px;color:var(--accent2);margin-top:8px;min-height:16px"></div>
-  </div>
-
-  <!-- 새 운동 추가 버튼 -->
-  <div id="cx-add-btn-wrap" style="margin-bottom:12px">
-    <button onclick="openNewCxForm()" class="btn-exp pri" style="width:100%;padding:10px">✚ 새 운동 추가</button>
-  </div>
-
-  <!-- 운동 목록 -->
-  <div id="cx-list"></div>
-</div>
+<!-- CUSTOM EXERCISE (placeholder — 실제 UI는 ptab-content-custom에 직접 렌더링됨) -->
+<div id="tab-custom" style="display:none"></div>
 
 <!-- 프로그램 관리 탭 -->
 <div id="tab-progmgmt" style="display:none">
@@ -1257,13 +1183,99 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <button id="ptab-videos" onclick="setProgTab('videos')"
       style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer">🎬 영상 관리</button>
     <button id="ptab-custom" onclick="setProgTab('custom')"
-      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">✏️ 커스텀 운동</button>
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">🏋️ 운동 관리</button>
     <button id="ptab-cprog" onclick="setProgTab('cprog')"
       style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">📋 커스텀 프로그램</button>
   </div>
   <!-- 서브 탭 콘텐츠 -->
   <div id="ptab-content-videos"></div>
-  <div id="ptab-content-custom" style="display:none"></div>
+  <div id="ptab-content-custom" style="display:none">
+    <div class="vm-bar">
+      <h3>🏋️ 운동 관리</h3>
+      <span class="vm-cnt" id="cx-cnt">커스텀: 0개</span>
+    </div>
+
+    <!-- 서브탭: 운동 편집 / 새 운동 추가 -->
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button id="exmgmt-tab-edit" onclick="setExMgmtTab('edit')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">✏️ 운동 편집</button>
+      <button id="exmgmt-tab-add" onclick="setExMgmtTab('add')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">✚ 새 운동 추가</button>
+    </div>
+
+    <!-- 편집/추가 공용 폼 (sub-tab에 따라 표시/숨김) -->
+    <div id="cx-form-wrap" style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:1.25rem;display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div id="cx-form-title" style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px">운동 편집</div>
+        <button onclick="clearCxForm()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:18px;line-height:1">×</button>
+      </div>
+      <!-- 운동명 -->
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동명</label>
+        <input type="text" id="cx-name" placeholder="예: Reverse Nordic curl" style="width:100%;font-size:14px;padding:10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
+      </div>
+      <!-- 운동 종류 -->
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동 종류</label>
+        <div style="display:flex;gap:8px">
+          <button id="cx-type-btn-gym" onclick="setCxType('gym')"
+            style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">💪 근력운동</button>
+          <button id="cx-type-btn-preact" onclick="setCxType('preact')"
+            style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">⚡ Pre-activation</button>
+        </div>
+      </div>
+      <!-- 카테고리: 근력 → Upper Body / Lower Body / All Body / Core
+                     Pre-activation → MOBILITY / ACTIVATION / DYNAMIC PREP / STRENGTH -->
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">카테고리</label>
+        <div id="cx-cat-btns" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+      </div>
+      <!-- 운동 방법 -->
+      <div style="margin-bottom:10px">
+        <label style="display:block;font-size:11px;color:var(--text3);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">운동 방법 (한 줄씩 입력, 최대 6줄)</label>
+        <div id="cx-steps-wrap" style="display:flex;flex-direction:column;gap:6px">
+          <input type="text" class="cx-step vm-inp" placeholder="1단계 — 시작 자세">
+          <input type="text" class="cx-step vm-inp" placeholder="2단계">
+          <input type="text" class="cx-step vm-inp" placeholder="3단계">
+          <input type="text" class="cx-step vm-inp" placeholder="4단계">
+          <input type="text" class="cx-step vm-inp" placeholder="5단계">
+          <input type="text" class="cx-step vm-inp" placeholder="6단계 (선택)">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-exp pri" style="flex:2;padding:10px" onclick="saveCustomEx()">💾 저장</button>
+        <button class="btn-exp" style="flex:1;padding:10px" onclick="clearCxForm()">취소</button>
+      </div>
+      <div id="cx-msg" style="font-size:12px;color:var(--accent2);margin-top:8px;min-height:16px"></div>
+    </div>
+
+    <!-- 운동 편집 섹션 -->
+    <div id="exmgmt-content-edit">
+      <div class="coaching-box" style="margin-bottom:1rem">
+        <p>근력운동 및 Pre-activation 운동 목록입니다. 운동을 선택해 방법을 편집하세요.</p>
+      </div>
+      <input class="vm-si" type="text" id="cx-search" placeholder="운동명 검색 (기존 + 커스텀 전체)..." oninput="renderAllExList(this.value)" style="margin-bottom:12px">
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button id="cx-tab-all" onclick="setCxTab('all')"
+          style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+          📋 전체 운동 (75개)
+        </button>
+        <button id="cx-tab-custom" onclick="setCxTab('custom')"
+          style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">
+          ✏️ 커스텀 운동
+        </button>
+      </div>
+      <div id="cx-list"></div>
+    </div>
+
+    <!-- 새 운동 추가 섹션 (폼은 위에 표시됨) -->
+    <div id="exmgmt-content-add" style="display:none">
+      <div class="coaching-box">
+        <p>운동 종류(근력운동 / Pre-activation), 카테고리, 운동 방법을 입력 후 저장하세요.</p>
+        <p style="margin-top:4px;font-size:11px;color:var(--text3)">근력운동: Upper Body / Lower Body / All Body / Core &nbsp;|&nbsp; Pre-activation: MOBILITY / ACTIVATION / DYNAMIC PREP / STRENGTH</p>
+      </div>
+    </div>
+  </div>
   <div id="ptab-content-cprog" style="display:none"></div>
 </div>
 
@@ -4472,13 +4484,18 @@ function clearAllCustom(){
 }
 
 function clearCxForm(){
-  document.getElementById('cx-name').value = '';
-  document.getElementById('cx-name').removeAttribute('readonly');
-  document.getElementById('cx-name').style.color='var(--text)';
+  const nameEl = document.getElementById('cx-name');
+  if(nameEl){ nameEl.value=''; nameEl.removeAttribute('readonly'); nameEl.style.color='var(--text)'; }
   document.querySelectorAll('.cx-step').forEach(i => i.value = '');
-  document.getElementById('cx-msg').textContent = '';
-  document.getElementById('cx-form-wrap').style.display='none';
-  document.getElementById('cx-form-title').textContent = '운동 편집';
+  const msgEl = document.getElementById('cx-msg');
+  if(msgEl) msgEl.textContent = '';
+  // add 모드에서는 폼 유지, edit 모드에서는 숨김
+  if(window._exMgmtTab !== 'add'){
+    const wrap = document.getElementById('cx-form-wrap');
+    if(wrap) wrap.style.display='none';
+  }
+  const titleEl = document.getElementById('cx-form-title');
+  if(titleEl) titleEl.textContent = window._exMgmtTab==='add' ? '새 운동 추가' : '운동 편집';
   // 종류/카테고리 초기화
   window._cxType = 'gym'; window._cxCat = '';
   setCxType('gym');
@@ -4498,6 +4515,30 @@ function updateCxCount(){
 }
 
 let cxTabMode = 'all';
+
+// ── 운동 관리 서브탭 (운동 편집 / 새 운동 추가) ─────────────
+window._exMgmtTab = 'edit';
+
+function setExMgmtTab(tab){
+  window._exMgmtTab = tab;
+  ['edit','add'].forEach(t=>{
+    const btn  = document.getElementById('exmgmt-tab-'+t);
+    const cont = document.getElementById('exmgmt-content-'+t);
+    if(btn){
+      btn.style.cssText = t===tab
+        ? 'flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit'
+        : 'flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit';
+    }
+    if(cont) cont.style.display = t===tab ? 'block' : 'none';
+  });
+  if(tab==='add'){
+    openNewCxForm();
+  } else {
+    const wrap = document.getElementById('cx-form-wrap');
+    if(wrap) wrap.style.display='none';
+    renderAllExList(document.getElementById('cx-search')?.value||'');
+  }
+}
 
 function setCxTab(mode){
   cxTabMode = mode;
@@ -9988,9 +10029,9 @@ function setProgTab(name){
     if(src && dest){ dest.innerHTML = src.innerHTML; renderVM(); }
   }
   if(name==='custom'){
-    const src = document.getElementById('tab-custom');
-    const dest = document.getElementById('ptab-content-custom');
-    if(src && dest){ dest.innerHTML = src.innerHTML; renderCustomList(); }
+    window._exMgmtTab = 'edit';
+    renderAllExList('');
+    updateCxCount();
   }
   if(name==='cprog'){
     const src = document.getElementById('tab-cprog');
