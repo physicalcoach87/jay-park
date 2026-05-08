@@ -2998,6 +2998,12 @@ async function saveL(name, url){
     localStorage.setItem(SK, JSON.stringify(local));
   }
 }
+function getManualVideoUrl(name){
+  const cached = _videoCache && _videoCache[name];
+  if(cached) return cached;
+  return `https://www.youtube.com/results?search_query=${encodeURIComponent(name+' exercise tutorial')}`;
+}
+
 function getAllEx(){
   const s=new Set();
   // PA (구형 — 하위 호환)
@@ -3553,28 +3559,29 @@ function renderGymManualSelector(){
     sorted.forEach(partKey=>{
       const pool=GYM_POOL[partKey];
       if(!pool) return;
-      html+=`<div style="margin-bottom:18px">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <div style="width:4px;height:16px;border-radius:2px;background:${pool.color}"></div>
-          <div style="font-size:13px;font-weight:700;color:${pool.color}">${pool.label}</div>
-        </div>`;
+      let subHtml='';
       Object.entries(pool.subs).forEach(([subKey,sub])=>{
         const filtered=sub.ex.filter(e=>gymEquipOk(e.equip,selEquip));
         if(!filtered.length)return;
-        html+=`<div style="margin-bottom:10px;padding-left:12px">
-          <div style="font-size:11px;font-weight:700;color:var(--text3);margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em">${sub.label}</div>
+        subHtml+=`<div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:${pool.color};margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">${sub.label}</div>
           ${filtered.map(e=>{
             const ri=sub.ex.indexOf(e);
-            const eqBadge=(e.equip||'bw').split(',').map(eq=>`<span style="font-size:10px;background:var(--bg3);color:var(--text3);border-radius:3px;padding:1px 4px;margin-left:2px">${eq.trim()}</span>`).join('');
-            return `<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border-radius:7px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border2)">
-              <input type="checkbox" data-bp="${partKey}" data-sub="${subKey}" data-idx="${ri}" style="width:15px;height:15px;accent-color:${pool.color}">
-              <span style="font-size:13px;color:var(--text);flex:1">${e.n}</span>
+            const eqBadge=(e.equip||'bw').split(',').map(eq=>`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3)">${eq.trim()}</span>`).join('');
+            return `<label style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent" onmouseover="this.style.background='var(--surface2)';this.style.borderColor='var(--border2)'" onmouseout="this.style.background='transparent';this.style.borderColor='transparent'">
+              <input type="checkbox" data-bp="${partKey}" data-sub="${subKey}" data-idx="${ri}" style="width:14px;height:14px;accent-color:${pool.color};cursor:pointer;flex-shrink:0">
+              <span style="font-size:13px;color:var(--text1);flex:1">${e.n}</span>
+              <a href="${getManualVideoUrl(e.n)}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(239,68,68,0.13);color:#f87171;text-decoration:none;border:1px solid rgba(239,68,68,0.35);white-space:nowrap;flex-shrink:0" title="영상 보기">▶ 영상</a>
               ${eqBadge}
             </label>`;
           }).join('')}
         </div>`;
       });
-      html+='</div>';
+      if(!subHtml) return;
+      html+=`<div style="margin-bottom:14px;border:1px solid ${pool.border};border-radius:8px;overflow:hidden">
+        <div style="background:${pool.bg};padding:8px 14px;font-weight:700;font-size:13px;color:${pool.color};border-left:3px solid ${pool.color}">${pool.label}</div>
+        <div style="padding:8px 14px">${subHtml}</div>
+      </div>`;
     });
     document.getElementById('gym-cat-selector').innerHTML=html;
     return;
@@ -3584,22 +3591,30 @@ function renderGymManualSelector(){
   const pool=GYM_POOL[bp];
   if(!pool){document.getElementById('gym-cat-selector').innerHTML='';return;}
   let html=`<div style="font-size:12px;color:var(--text3);margin-bottom:10px">운동 선택 → <strong style="color:${purp.color}">${purp.icon} ${purp.label}</strong> (${purp.sets}×${purp.reps}, ${purp.rpe}) 자동 적용</div>`;
+  let subHtml='';
   Object.entries(pool.subs).forEach(([subKey,sub])=>{
     const filtered=sub.ex.filter(e=>gymEquipOk(e.equip,selEquip));
     if(!filtered.length)return;
-    html+=`<div style="margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:${pool.color};margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">${sub.label}</div>
+    subHtml+=`<div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:${pool.color};margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">${sub.label}</div>
       ${filtered.map(e=>{
         const ri=sub.ex.indexOf(e);
-        const eqBadge=(e.equip||'bw').split(',').map(eq=>`<span style="font-size:10px;background:var(--bg3);color:var(--text3);border-radius:3px;padding:1px 4px;margin-left:2px">${eq.trim()}</span>`).join('');
-        return `<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg2);border-radius:7px;margin-bottom:4px;cursor:pointer;border:1px solid var(--border2)">
-          <input type="checkbox" data-bp="${bp}" data-sub="${subKey}" data-idx="${ri}" style="width:15px;height:15px;accent-color:${pool.color}">
-          <span style="font-size:13px;color:var(--text);flex:1">${e.n}</span>
+        const eqBadge=(e.equip||'bw').split(',').map(eq=>`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3)">${eq.trim()}</span>`).join('');
+        return `<label style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent" onmouseover="this.style.background='var(--surface2)';this.style.borderColor='var(--border2)'" onmouseout="this.style.background='transparent';this.style.borderColor='transparent'">
+          <input type="checkbox" data-bp="${bp}" data-sub="${subKey}" data-idx="${ri}" style="width:14px;height:14px;accent-color:${pool.color};cursor:pointer;flex-shrink:0">
+          <span style="font-size:13px;color:var(--text1);flex:1">${e.n}</span>
+          <a href="${getManualVideoUrl(e.n)}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(239,68,68,0.13);color:#f87171;text-decoration:none;border:1px solid rgba(239,68,68,0.35);white-space:nowrap;flex-shrink:0" title="영상 보기">▶ 영상</a>
           ${eqBadge}
         </label>`;
       }).join('')}
     </div>`;
   });
+  if(subHtml){
+    html+=`<div style="border:1px solid ${pool.border};border-radius:8px;overflow:hidden">
+      <div style="background:${pool.bg};padding:8px 14px;font-weight:700;font-size:13px;color:${pool.color};border-left:3px solid ${pool.color}">${pool.label}</div>
+      <div style="padding:8px 14px">${subHtml}</div>
+    </div>`;
+  }
   document.getElementById('gym-cat-selector').innerHTML=html||'<p style="color:var(--text3);font-size:13px">선택된 장비에 맞는 운동이 없습니다.</p>';
 }
 
@@ -3865,9 +3880,10 @@ function renderPAManualSelector(){
       if(!avail.length) continue;
       subHtml+=`<div style="margin-bottom:10px">
         <div style="font-size:11px;font-weight:700;color:${cat.color};margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px">${sub.label}</div>
-        ${avail.map(e=>`<label style="display:flex;gap:10px;align-items:center;padding:5px 6px;border-radius:5px;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='transparent'">
+        ${avail.map(e=>`<label style="display:flex;gap:8px;align-items:center;padding:6px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent" onmouseover="this.style.background='var(--surface2)';this.style.borderColor='var(--border2)'" onmouseout="this.style.background='transparent';this.style.borderColor='transparent'">
           <input type="checkbox" data-cat="${catKey}" data-sub="${subKey}" data-idx="${sub.ex.indexOf(e)}" style="width:14px;height:14px;accent-color:${cat.color};cursor:pointer;flex-shrink:0">
           <span style="font-size:13px;color:var(--text1);flex:1">${e.n}</span>
+          <a href="${getManualVideoUrl(e.n)}" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(239,68,68,0.13);color:#f87171;text-decoration:none;border:1px solid rgba(239,68,68,0.35);white-space:nowrap;flex-shrink:0" title="영상 보기">▶ 영상</a>
           <span style="font-size:11px;color:var(--text3);white-space:nowrap">${e.s}</span>
           ${e.equip!=='bw'?`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:var(--surface2);color:var(--text3)">${e.equip}</span>`:''}
         </label>`).join('')}
