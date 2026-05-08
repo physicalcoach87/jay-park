@@ -6893,12 +6893,18 @@ async function loadTeamSummary(){
       .eq('record_date', date),
   ]);
 
-  if(!gps?.length){
+  const hasGps  = (gps||[]).length > 0;
+  const hasSess = (sessions||[]).length > 0;
+  const hasWell = (wellness||[]).length > 0;
+
+  if(!hasGps && !hasSess && !hasWell){
     out.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${date} 데이터가 없습니다.<br>GPS 업로드 탭에서 데이터를 추가하세요.</div>`;
     return;
   }
 
-  // session_records / wellness_records → player_id 맵
+  // ── 맵 구성 ──
+  const gpsMap = {};
+  (gps||[]).forEach(r=>{ gpsMap[r.player_id]=r; });
   const sessMap = {};
   (sessions||[]).forEach(s=>{
     if(!sessMap[s.player_id]) sessMap[s.player_id]=[];
@@ -6907,13 +6913,58 @@ async function loadTeamSummary(){
   const wellMap = {};
   (wellness||[]).forEach(w=>{ wellMap[w.player_id]=w; });
 
-  // 타입2 기준으로 그룹 분리
-  // session_type2 = 'M' → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
-  // session_type2 = 'S' → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
-  // session_type2 = 'SS' → 대표팀 소집/특별 상황 → 팀 평균 제외, 개인 데이터에만 포함
-  const fullGps = gps.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
-  const indGps  = gps.filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
-  const ssGps   = gps.filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS');
+  // ── RPE/체중 입력 현황 패널 (항상 렌더, GPS 업로드 전후 모두) ──
+  // 전체 등록 선수 기준으로 입력 여부 표시
+  const rpeStatusRows = (_players||[]).map(p=>{
+    const ss = sessMap[p.id]||[];
+    const s1 = ss.find(s=>s.session_order===1)||ss[0]||{};
+    const w  = wellMap[p.id]||{};
+    const g  = gpsMap[p.id];
+    const rpe    = parseFloat(s1.rpe)||null;
+    const postW  = s1.post_weight ? parseFloat(s1.post_weight).toFixed(1) : null;
+    const preW   = w.morning_weight ? parseFloat(w.morning_weight).toFixed(1) : null;
+    const wDiff  = preW&&postW ? (parseFloat(postW)-parseFloat(preW)).toFixed(1) : null;
+    const wDiffColor = wDiff===null?'var(--text3)':parseFloat(wDiff)<=-1?'#ef4444':parseFloat(wDiff)<0?'#f59e0b':'#34d399';
+    const dur    = parseFloat(s1.duration)||parseFloat(g?.duration)||null;
+    const sRPE   = rpe&&dur ? Math.round(rpe*dur) : null;
+    // 상태 판정
+    const hasRpe  = !!rpe;
+    const hasPreW = !!preW;
+    const hasGpsP = !!g;
+    const statusDot = hasRpe
+      ? `<span style="color:#22c55e;font-size:14px">●</span>`
+      : `<span style="color:#ef4444;font-size:14px">●</span>`;
+    const gpsDot = hasGpsP
+      ? `<span style="color:#22c55e;font-size:10px">GPS✓</span>`
+      : `<span style="color:#6b7280;font-size:10px">GPS-</span>`;
+    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe };
+  }).filter(r => {
+    // GPS 있거나, RPE/wellness 입력한 선수만 표시
+    return gpsMap[r.p.id] || sessMap[r.p.id] || wellMap[r.p.id];
+  });
+
+  const rpeEntered  = rpeStatusRows.filter(r=>r.hasRpe).length;
+  const rpeTotal    = rpeStatusRows.length;
+  const rpeStatusHtml = rpeStatusRows.map(r=>`
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px">
+        <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
+      </td>
+      <td style="padding:6px 8px;text-align:center">${r.statusDot}</td>
+      <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px">
+        <div style="color:var(--text3)">${r.preW ? r.preW+' kg' : '—'}</div>
+        <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
+      </td>
+      <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
+    </tr>`).join('');
+
+  // ── GPS 기반 팀 평균 / 테이블 (GPS 있을 때만) ──
+  const fullGps = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
+  const indGps  = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
+  const ssGps   = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS');
 
   const avgGroup = (arr, field, dec=0) => {
     const vals = arr.filter(r=>parseFloat(r[field])>0);
@@ -6921,7 +6972,6 @@ async function loadTeamSummary(){
     return (vals.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/vals.length).toFixed(dec);
   };
 
-  // RPE/sRPE 평균 계산 (session_records 기준)
   const calcAvgRpe = (gpsArr) => {
     const vals = gpsArr.map(r=>{
       const ss = sessMap[r.player_id]||[];
@@ -6969,8 +7019,8 @@ async function loadTeamSummary(){
       <td style="padding:7px 8px;text-align:right;color:#ef4444">${Math.round(r.sprint)||'-'}</td>
       <td style="padding:7px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}</td>
       <td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.player_load||'-'}</td>
-      <td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}</td>
       <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}</td>
+      <td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
       <td style="padding:7px 8px;text-align:right;color:#fbbf24;font-weight:600">${rpeVal||'—'}</td>
       <td style="padding:7px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>
@@ -6988,8 +7038,8 @@ async function loadTeamSummary(){
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">Sprint (m)</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">P.Load</th>
-      <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속</th>
+      <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">시간(분)</th>
       <th style="padding:7px 8px;text-align:right;color:#fbbf24">RPE</th>
       <th style="padding:7px 8px;text-align:right;color:#c084fc">sRPE</th>
@@ -7000,7 +7050,36 @@ async function loadTeamSummary(){
   const mSrpeAvg = calcAvgSrpe(fullGps);
 
   out.innerHTML = `
-    <!-- 팀 훈련 평균 (M 그룹) -->
+
+    <!-- ① RPE/체중 입력 현황 (항상 표시) -->
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">
+          📋 RPE / 체중 입력 현황
+        </div>
+        <div style="font-size:12px;font-weight:600">
+          <span style="color:#22c55e">${rpeEntered}</span>
+          <span style="color:var(--text3)"> / ${rpeTotal}명 입력완료</span>
+          ${!hasGps ? '<span style="font-size:10px;color:#f59e0b;margin-left:8px">⏳ GPS 업로드 대기중</span>' : ''}
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE입력</th>
+            <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
+            <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">GPS</th>
+          </tr>
+          ${rpeStatusHtml}
+        </table>
+      </div>
+    </div>
+
+    <!-- ② GPS 팀 평균 (GPS 있을 때만) -->
+    ${hasGps ? `
     <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
         ${date} 팀 평균 — 팀훈련(M) (${fullGps.length}명)
@@ -7018,7 +7097,7 @@ async function loadTeamSummary(){
       </div>
     </div>
 
-    <!-- 전체 선수 테이블 (M) -->
+    <!-- ③ GPS 선수 테이블 (M그룹) -->
     <div style="overflow-x:auto;margin-bottom:14px">
       <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
         ${tableHeader}
@@ -7026,14 +7105,14 @@ async function loadTeamSummary(){
       </table>
     </div>
 
-    <!-- 서브/미엔트리 그룹 (S + SS 포함) -->
+    <!-- ④ 서브/미엔트리 그룹 -->
     ${indGps.length ? `
     <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         서브 평균 (${indGps.length}명)
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-        서브/미엔트리(S) ${indGps.length - ssGps.length}명${ssGps.length > 0 ? ` · <span style="color:#fbbf24;font-weight:600">대표팀 소집(SS) ${ssGps.length}명 — 팀 평균 미반영</span>` : ''}
+        서브/미엔트리(S) ${indGps.length - ssGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">대표팀 소집(SS) '+ssGps.length+'명 — 팀 평균 미반영</span>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
@@ -7052,9 +7131,8 @@ async function loadTeamSummary(){
           ${renderTable(indGps)}
         </table>
       </div>
-    </div>` : ''}`;
+    </div>` : ''}` : ''}`;
 }
-
 // 뒤로가기 히스토리 스택
 let _navHistory = [];
 
