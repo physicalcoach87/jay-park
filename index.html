@@ -1185,7 +1185,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <button id="ptab-custom" onclick="setProgTab('custom')"
       style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">🏋️ 운동 관리</button>
     <button id="ptab-cprog" onclick="setProgTab('cprog')"
-      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">📋 커스텀 프로그램</button>
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer">📋 프로그램 관리</button>
   </div>
   <!-- 서브 탭 콘텐츠 -->
   <div id="ptab-content-videos"></div>
@@ -1276,7 +1276,142 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       </div>
     </div>
   </div>
-  <div id="ptab-content-cprog" style="display:none"></div>
+  <div id="ptab-content-cprog" style="display:none">
+    <div class="vm-bar"><h3>📋 프로그램 관리</h3></div>
+
+    <!-- 운동 유형 서브탭 -->
+    <div style="display:flex;gap:8px;margin-bottom:16px">
+      <button id="pmgmt-tab-preact" onclick="setPmgmtTab('preact')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">⚡ 프리엑티베이션</button>
+      <button id="pmgmt-tab-gym" onclick="setPmgmtTab('gym')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">💪 근력운동</button>
+      <button id="pmgmt-tab-cardio" onclick="setPmgmtTab('cardio')"
+        style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🏃 유산소</button>
+    </div>
+
+    <!-- ▶ 프리엑티베이션 섹션 -->
+    <div id="pmgmt-content-preact">
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>프로그램 이름</label>
+          <input type="text" id="pm-pa-name" placeholder="예: MD-3 Pre-activation A" style="width:100%">
+        </div>
+        <div class="ctrl">
+          <label>운동 갯수</label>
+          <select id="pm-pa-cnt" style="width:100%" onchange="updatePmSelectionSummary('pa')">
+            <option value="3">3개</option>
+            <option value="4" selected>4개</option>
+            <option value="5">5개</option>
+            <option value="6">6개</option>
+            <option value="7">7개</option>
+            <option value="8">8개</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">카테고리 선택</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="pm-pa-cat-MOBILITY" onclick="setPaCat('MOBILITY')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">MOBILITY</button>
+          <button id="pm-pa-cat-ACTIVATION" onclick="setPaCat('ACTIVATION')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">ACTIVATION</button>
+          <button id="pm-pa-cat-DYNAMIC_PREP" onclick="setPaCat('DYNAMIC_PREP')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">DYNAMIC PREP</button>
+          <button id="pm-pa-cat-STRENGTH" onclick="setPaCat('STRENGTH')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">STRENGTH</button>
+        </div>
+      </div>
+      <div id="pm-pa-ex-list" style="max-height:320px;overflow-y:auto;margin-bottom:10px;border-radius:8px;border:1px solid var(--border2);padding:8px;display:none"></div>
+      <div id="pm-pa-selected" style="font-size:12px;color:var(--text3);margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:6px;display:none"></div>
+      <button onclick="savePmgmtProg('preact')" class="btn-exp pri" style="width:100%;padding:11px">💾 저장</button>
+      <div id="pm-pa-msg" style="font-size:12px;margin-top:6px;min-height:16px;text-align:center"></div>
+    </div>
+
+    <!-- ▶ 근력운동 섹션 -->
+    <div id="pmgmt-content-gym" style="display:none">
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>프로그램 이름</label>
+          <input type="text" id="pm-gym-name" placeholder="예: MD-4 Lower Body 근력" style="width:100%">
+        </div>
+        <div class="ctrl">
+          <label>운동 갯수</label>
+          <select id="pm-gym-cnt" style="width:100%" onchange="updatePmSelectionSummary('gym')">
+            <option value="3">3개</option>
+            <option value="4">4개</option>
+            <option value="5" selected>5개</option>
+            <option value="6">6개</option>
+            <option value="7">7개</option>
+            <option value="8">8개</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:10px">
+        <div style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">카테고리 선택</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="pm-gym-cat-UB" onclick="setGymCat('UB')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🏋️ Upper Body</button>
+          <button id="pm-gym-cat-LB" onclick="setGymCat('LB')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🦵 Lower Body</button>
+          <button id="pm-gym-cat-AB" onclick="setGymCat('AB')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">⚡ All Body</button>
+          <button id="pm-gym-cat-Core" onclick="setGymCat('Core')"
+            style="padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">🔄 Core</button>
+        </div>
+      </div>
+      <div id="pm-gym-ex-list" style="max-height:320px;overflow-y:auto;margin-bottom:10px;border-radius:8px;border:1px solid var(--border2);padding:8px;display:none"></div>
+      <div id="pm-gym-selected" style="font-size:12px;color:var(--text3);margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:6px;display:none"></div>
+      <button onclick="savePmgmtProg('gym')" class="btn-exp pri" style="width:100%;padding:11px">💾 저장</button>
+      <div id="pm-gym-msg" style="font-size:12px;margin-top:6px;min-height:16px;text-align:center"></div>
+    </div>
+
+    <!-- ▶ 유산소 운동 섹션 -->
+    <div id="pmgmt-content-cardio" style="display:none">
+      <div class="ctrls g2" style="margin-bottom:12px">
+        <div class="ctrl">
+          <label>프로그램 이름</label>
+          <input type="text" id="pm-cardio-name" placeholder="예: MD-3 인터벌 유산소" style="width:100%">
+        </div>
+        <div class="ctrl">
+          <label>운동 갯수</label>
+          <select id="pm-cardio-cnt" style="width:100%" onchange="updatePmSelectionSummary('cardio')">
+            <option value="2">2개</option>
+            <option value="3" selected>3개</option>
+            <option value="4">4개</option>
+            <option value="5">5개</option>
+          </select>
+        </div>
+      </div>
+      <div id="pm-cardio-ex-list" style="max-height:320px;overflow-y:auto;margin-bottom:10px;border-radius:8px;border:1px solid var(--border2);padding:8px"></div>
+      <div id="pm-cardio-selected" style="font-size:12px;color:var(--text3);margin-bottom:10px;padding:8px;background:var(--surface2);border-radius:6px;display:none"></div>
+      <button onclick="savePmgmtProg('cardio')" class="btn-exp pri" style="width:100%;padding:11px">💾 저장</button>
+      <div id="pm-cardio-msg" style="font-size:12px;margin-top:6px;min-height:16px;text-align:center"></div>
+    </div>
+
+    <!-- 저장된 프로그램 목록 -->
+    <div style="border-top:1px solid var(--border2);margin:20px 0 14px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px">저장된 프로그램</div>
+      <div style="display:flex;gap:6px">
+        <select id="cprog-filter-pos" onchange="loadCprogList()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:inherit">
+          <option value="">포지션 전체</option>
+          <option value="CB">CB</option><option value="FB">FB/WB</option>
+          <option value="CDM">CDM</option><option value="CM">CM</option>
+          <option value="CAM">CAM</option><option value="WG">WG</option>
+          <option value="ST">ST</option><option value="FREE">자유형</option>
+        </select>
+        <select id="cprog-filter-md" onchange="loadCprogList()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-family:inherit">
+          <option value="">MD 전체</option>
+          <option value="MD5">MD-5</option><option value="MD4">MD-4</option>
+          <option value="MD3">MD-3</option><option value="MD2">MD-2</option>
+          <option value="MD1">MD-1</option><option value="FREE">자유형</option>
+        </select>
+      </div>
+    </div>
+    <div id="cprog-list">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>
+    </div>
+  </div>
 </div>
 
 </div><!-- /tab-exercise 래퍼 끝 -->
@@ -1373,114 +1508,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 </div>
 
-<!-- 커스텀 프로그램 탭 -->
-<div id="tab-cprog" style="display:none">
-  <div class="vm-bar">
-    <h3>커스텀 프로그램</h3>
-    <div style="display:flex;gap:8px">
-      <button class="btn-exp" onclick="openImportPreset()" style="font-size:12px">📥 기존 처방 불러오기</button>
-      <button class="btn-exp pri" onclick="openCprogEditor(null)">✚ 새 프로그램</button>
-    </div>
-  </div>
-  <div class="coaching-box" style="margin-bottom:1rem">
-    <p>기존 처방 수정, 새 변형 추가, 완전 새 프로그램을 만들 수 있습니다. Supabase에 저장되어 모든 기기에서 공유됩니다.</p>
-  </div>
-
-  <!-- 🎲 랜덤 프로그램 생성기 -->
-  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1rem;margin-bottom:1rem">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;cursor:pointer" onclick="toggleRandGen()">
-      <div style="font-size:13px;font-weight:600;color:var(--text)">🎲 랜덤 프로그램 생성기</div>
-      <span id="rand-gen-arrow" style="color:var(--text3);font-size:14px">▼</span>
-    </div>
-    <div id="rand-gen-body">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px">세션 유형과 개수를 선택하면 커스텀 운동 라이브러리에서 랜덤으로 프로그램을 생성합니다.</div>
-      <!-- 세션 유형 체크박스 -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2)">
-          <input type="checkbox" id="rg-check-gym" checked style="accent-color:var(--accent)"> 💪 근력운동
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2)">
-          <input type="checkbox" id="rg-check-preact" checked style="accent-color:var(--accent)"> ⚡ Pre-activation
-        </label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;padding:6px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2)">
-          <input type="checkbox" id="rg-check-cardio" style="accent-color:var(--accent)"> 🏃 유산소
-        </label>
-      </div>
-      <!-- 카테고리 필터 -->
-      <div class="ctrls g2" style="margin-bottom:12px">
-        <div class="ctrl">
-          <label>근력 카테고리</label>
-          <select id="rg-gym-cat" style="width:100%">
-            <option value="">전체</option>
-            <option value="Upper Body">Upper Body</option>
-            <option value="Lower Body">Lower Body</option>
-            <option value="All Body">All Body</option>
-            <option value="Core">Core</option>
-          </select>
-        </div>
-        <div class="ctrl">
-          <label>Pre-activation 카테고리</label>
-          <select id="rg-preact-cat" style="width:100%">
-            <option value="">전체</option>
-            <option value="MOBILITY">MOBILITY</option>
-            <option value="ACTIVATION">ACTIVATION</option>
-            <option value="DYNAMIC PREP">DYNAMIC PREP</option>
-            <option value="STRENGTH">STRENGTH</option>
-          </select>
-        </div>
-      </div>
-      <!-- 운동 수 설정 -->
-      <div class="ctrls g2" style="margin-bottom:12px">
-        <div class="ctrl">
-          <label>근력 운동 수</label>
-          <select id="rg-gym-cnt" style="width:100%">
-            <option value="3">3개</option><option value="4">4개</option>
-            <option value="5" selected>5개</option><option value="6">6개</option>
-          </select>
-        </div>
-        <div class="ctrl">
-          <label>Pre-activation 운동 수</label>
-          <select id="rg-preact-cnt" style="width:100%">
-            <option value="3">3개</option><option value="4" selected>4개</option>
-            <option value="5">5개</option><option value="6">6개</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="generateRandomCprog()" class="btn-exp pri" style="flex:2;padding:10px">🎲 랜덤 생성</button>
-        <button onclick="document.getElementById('rg-preview').innerHTML=''" class="btn-exp" style="flex:1;padding:10px">초기화</button>
-      </div>
-      <div id="rg-preview" style="margin-top:12px"></div>
-    </div>
-  </div>
-
-  <!-- 필터 -->
-  <div class="ctrls g2" style="margin-bottom:1rem">
-    <div class="ctrl">
-      <label>포지션 필터</label>
-      <select id="cprog-filter-pos" onchange="loadCprogList()">
-        <option value="">전체</option>
-        <option value="CB">CB</option><option value="FB">FB/WB</option>
-        <option value="CDM">CDM</option><option value="CM">CM</option>
-        <option value="CAM">CAM</option><option value="WG">WG</option>
-        <option value="ST">ST</option><option value="FREE">자유형</option>
-      </select>
-    </div>
-    <div class="ctrl">
-      <label>MD 필터</label>
-      <select id="cprog-filter-md" onchange="loadCprogList()">
-        <option value="">전체</option>
-        <option value="MD5">MD-5</option><option value="MD4">MD-4</option>
-        <option value="MD3">MD-3</option><option value="MD2">MD-2</option>
-        <option value="MD1">MD-1</option><option value="FREE">자유형</option>
-      </select>
-    </div>
-  </div>
-
-  <div id="cprog-list">
-    <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>
-  </div>
-</div>
+<!-- 커스텀 프로그램 탭 (placeholder — 실제 UI는 ptab-content-cprog에 직접 렌더링됨) -->
+<div id="tab-cprog" style="display:none"></div>
 
 <!-- 기존 처방 불러오기 모달 -->
 <div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;align-items:center;justify-content:center;padding:1rem">
@@ -9013,6 +9042,193 @@ function editCurrentPreset(outputId){
   }
 }
 
+// ═══════════════════════════════════════════
+// 프로그램 관리 — 신규 생성 UI
+// ═══════════════════════════════════════════
+const CARDIO_EX_LIST = [
+  {n:'Assault bike intervals',    desc:'고강도 자전거 인터벌 (10~30초 전력/동일 회복)'},
+  {n:'Treadmill sprint',          desc:'트레드밀 전력 스프린트 (6~10초 반복)'},
+  {n:'Rowing intervals',          desc:'로잉머신 인터벌 (250~500m 반복)'},
+  {n:'Jump rope',                 desc:'줄넘기 — 발목 탄성 + 심폐 각성'},
+  {n:'Shuttle run (20m)',         desc:'20m 왕복 달리기 — COD 부하 포함'},
+  {n:'Cone drill (5-10-5)',       desc:'방향전환 드릴 — 가속·감속 복합'},
+  {n:'400m repeat',               desc:'400m 반복 — 젖산 역치 훈련'},
+  {n:'200m repeat',               desc:'200m 반복 — RSA / 스피드 지구력'},
+  {n:'60m acceleration sprint',   desc:'60m 가속 스프린트 — 최대속도 노출'},
+  {n:'Hill sprint (30m)',         desc:'오르막 스프린트 — 파워 + 심폐'},
+  {n:'Bike tempo (steady-state)', desc:'자전거 스테디 스테이트 (LIT 회복)'},
+  {n:'Swimming intervals',        desc:'수영 인터벌 — 관절 비부하 유산소'},
+];
+
+window._pmgmtTab = 'preact';
+window._pmPaCat  = 'MOBILITY';
+window._pmGymCat = 'UB';
+window._pmSelectedPa     = [];
+window._pmSelectedGym    = [];
+window._pmSelectedCardio = [];
+
+function setPmgmtTab(tab){
+  window._pmgmtTab = tab;
+  ['preact','gym','cardio'].forEach(t=>{
+    const btn  = document.getElementById('pmgmt-tab-'+t);
+    const cont = document.getElementById('pmgmt-content-'+t);
+    if(btn) btn.style.cssText = t===tab
+      ? 'flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit'
+      : 'flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit';
+    if(cont) cont.style.display = t===tab ? 'block' : 'none';
+  });
+  if(tab==='preact') setPaCat(window._pmPaCat||'MOBILITY');
+  else if(tab==='gym') setGymCat(window._pmGymCat||'UB');
+  else if(tab==='cardio') renderCardioExList();
+}
+
+function setPaCat(cat){
+  window._pmPaCat = cat;
+  ['MOBILITY','ACTIVATION','DYNAMIC_PREP','STRENGTH'].forEach(c=>{
+    const btn = document.getElementById('pm-pa-cat-'+c);
+    if(!btn) return;
+    btn.style.cssText = c===cat
+      ? 'padding:7px 12px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit'
+      : 'padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  });
+  renderPaExList();
+}
+
+function setGymCat(cat){
+  window._pmGymCat = cat;
+  ['UB','LB','AB','Core'].forEach(c=>{
+    const btn = document.getElementById('pm-gym-cat-'+c);
+    if(!btn) return;
+    btn.style.cssText = c===cat
+      ? 'padding:7px 12px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit'
+      : 'padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit';
+  });
+  renderGymExList();
+}
+
+function renderPaExList(){
+  const pool = PA_POOL[window._pmPaCat];
+  const listEl = document.getElementById('pm-pa-ex-list');
+  if(!pool || !listEl) return;
+  listEl.style.display='block';
+  let html='';
+  Object.values(pool.subs).forEach(sub=>{
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">${sub.label}</div>`;
+    sub.ex.forEach(ex=>{
+      const sel = window._pmSelectedPa.includes(ex.n);
+      const esc = ex.n.replace(/'/g,'&#39;');
+      html+=`<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:7px;border:1px solid ${sel?'var(--accent)':'var(--border2)'};background:${sel?'var(--accent-bg)':'var(--surface)'};margin-bottom:4px;cursor:pointer">
+        <input type="checkbox" value="${esc}" ${sel?'checked':''} onchange="togglePmSelection('pa',this.value,this.checked)" style="accent-color:var(--accent);margin-top:2px;flex-shrink:0">
+        <div><div style="font-size:13px;color:var(--text);font-weight:500">${ex.n}</div>
+        <div style="font-size:11px;color:var(--text3)">${ex.s||''} ${ex.i?'· '+ex.i:''}</div></div>
+      </label>`;
+    });
+  });
+  listEl.innerHTML=html;
+  updatePmSelectionSummary('pa');
+}
+
+function renderGymExList(){
+  const pool = GYM_POOL[window._pmGymCat];
+  const listEl = document.getElementById('pm-gym-ex-list');
+  if(!pool || !listEl) return;
+  listEl.style.display='block';
+  let html='';
+  Object.values(pool.subs).forEach(sub=>{
+    html+=`<div style="font-size:11px;font-weight:700;color:var(--text3);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.5px">${sub.label}</div>`;
+    sub.ex.forEach(ex=>{
+      const sel = window._pmSelectedGym.includes(ex.n);
+      const esc = ex.n.replace(/'/g,'&#39;');
+      html+=`<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:7px;border:1px solid ${sel?'var(--accent)':'var(--border2)'};background:${sel?'var(--accent-bg)':'var(--surface)'};margin-bottom:4px;cursor:pointer">
+        <input type="checkbox" value="${esc}" ${sel?'checked':''} onchange="togglePmSelection('gym',this.value,this.checked)" style="accent-color:var(--accent);margin-top:2px;flex-shrink:0">
+        <div><div style="font-size:13px;color:var(--text);font-weight:500">${ex.n}</div>
+        <div style="font-size:11px;color:var(--text3)">${ex.cue||''}</div></div>
+      </label>`;
+    });
+  });
+  listEl.innerHTML=html;
+  updatePmSelectionSummary('gym');
+}
+
+function renderCardioExList(){
+  const listEl = document.getElementById('pm-cardio-ex-list');
+  if(!listEl) return;
+  listEl.innerHTML=CARDIO_EX_LIST.map(ex=>{
+    const sel = window._pmSelectedCardio.includes(ex.n);
+    const esc = ex.n.replace(/'/g,'&#39;');
+    return `<label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border-radius:7px;border:1px solid ${sel?'var(--accent)':'var(--border2)'};background:${sel?'var(--accent-bg)':'var(--surface)'};margin-bottom:4px;cursor:pointer">
+      <input type="checkbox" value="${esc}" ${sel?'checked':''} onchange="togglePmSelection('cardio',this.value,this.checked)" style="accent-color:var(--accent);margin-top:2px;flex-shrink:0">
+      <div><div style="font-size:13px;color:var(--text);font-weight:500">${ex.n}</div>
+      <div style="font-size:11px;color:var(--text3)">${ex.desc||''}</div></div>
+    </label>`;
+  }).join('');
+  updatePmSelectionSummary('cardio');
+}
+
+function togglePmSelection(type, name, checked){
+  const arr = type==='pa'?window._pmSelectedPa:type==='gym'?window._pmSelectedGym:window._pmSelectedCardio;
+  if(checked && !arr.includes(name)) arr.push(name);
+  else if(!checked){ const i=arr.indexOf(name); if(i>-1) arr.splice(i,1); }
+  if(type==='pa') renderPaExList();
+  else if(type==='gym') renderGymExList();
+  else renderCardioExList();
+}
+
+function updatePmSelectionSummary(type){
+  const short = type==='preact'?'pa':type; // 'pa'/'gym'/'cardio'
+  const cntEl = document.getElementById('pm-'+short+'-cnt');
+  const arr   = short==='pa'?window._pmSelectedPa:short==='gym'?window._pmSelectedGym:window._pmSelectedCardio;
+  const el    = document.getElementById('pm-'+short+'-selected');
+  if(!el) return;
+  const target = parseInt(cntEl?.value)||4;
+  if(!arr.length){ el.style.display='none'; return; }
+  el.style.display='block';
+  const ok = arr.length>=target;
+  el.innerHTML=`<div style="color:${ok?'var(--accent2)':'var(--amber)'}">선택 ${arr.length}개 / 목표 ${target}개</div>
+    <div style="margin-top:4px;color:var(--text2);font-size:11px">${arr.join(' · ')}</div>`;
+}
+
+async function savePmgmtProg(type){
+  const short     = type==='preact'?'pa':type;
+  const nameId    = 'pm-'+short+'-name';
+  const msgId     = 'pm-'+short+'-msg';
+  const name      = document.getElementById(nameId)?.value.trim();
+  const msgEl     = document.getElementById(msgId);
+  const arr       = short==='pa'?window._pmSelectedPa:short==='gym'?window._pmSelectedGym:window._pmSelectedCardio;
+  const typeLabel = type==='preact'?'Pre-activation':type==='gym'?'근력운동':'유산소 운동';
+
+  const showMsg = (txt, color)=>{ if(msgEl){msgEl.textContent=txt;msgEl.style.color=color;} };
+
+  if(!name){ showMsg('프로그램 이름을 입력하세요','var(--red)'); return; }
+  if(arr.length<2){ showMsg('운동을 2개 이상 선택하세요','var(--red)'); return; }
+
+  const prog = {
+    name,
+    position:   'FREE',
+    md_stage:   'FREE',
+    variant:    typeLabel,
+    goal:       `${typeLabel} — ${arr.length}개 운동`,
+    coaching:   '',
+    blocks:     [{l:typeLabel, p:'main', ex:arr.map(n=>({n,s:'',i:'',r:''}))}],
+    created_by: currentUser?.email||'',
+    updated_at: new Date().toISOString()
+  };
+
+  const {error} = await supa.from('custom_programs').insert(prog);
+  if(error){ showMsg('저장 실패: '+error.message,'var(--red)'); return; }
+
+  showMsg(`✓ "${name}" 저장 완료`,'var(--accent2)');
+  setTimeout(()=>{ if(msgEl?.textContent.startsWith('✓')) msgEl.textContent=''; },3000);
+  document.getElementById(nameId).value='';
+  if(short==='pa')     window._pmSelectedPa=[];
+  else if(short==='gym') window._pmSelectedGym=[];
+  else                 window._pmSelectedCardio=[];
+  if(type==='preact') renderPaExList();
+  else if(type==='gym') renderGymExList();
+  else renderCardioExList();
+  loadCprogList();
+}
+
 let cprogEditId = null; // 수정 중인 프로그램 ID
 let cpBlockCount = 0;   // 블록 카운터
 
@@ -10034,9 +10250,8 @@ function setProgTab(name){
     updateCxCount();
   }
   if(name==='cprog'){
-    const src = document.getElementById('tab-cprog');
-    const dest = document.getElementById('ptab-content-cprog');
-    if(src && dest){ dest.innerHTML = src.innerHTML; loadCprogList(); }
+    setPmgmtTab(window._pmgmtTab||'preact');
+    loadCprogList();
   }
 }
 
