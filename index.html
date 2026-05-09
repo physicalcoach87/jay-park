@@ -6053,13 +6053,13 @@ async function loadMorningReport(){
         const cfg=levelCfg[risk.level];
         const action = risk.level==='red'?'즉시 부하 감소 / 출전 재고':risk.level==='amber'?'훈련량 조절 / 모니터링 강화':'부하 점검 / 웰니스 확인';
         return `<div style="margin-bottom:6px">
-          <div onclick="toggleRiskDetail('${player.id}','${player.name}','${player.position}','${cfg.border}','${cfg.color}')"
+          <div onclick="goToPlayerFromRisk('${player.id}')"
             style="background:${cfg.bg};border:0.5px solid ${cfg.border};border-radius:10px;padding:10px 12px;cursor:pointer;transition:opacity .12s">
             <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
               <div>
                 <span style="font-size:13px;font-weight:600;color:var(--text)">${player.name}</span>
                 <span style="font-size:11px;color:${cfg.color};margin-left:6px">${player.position} · CRI ${risk.score}</span>
-                <span style="font-size:10px;color:var(--text3);margin-left:8px">클릭하여 14일 데이터 보기</span>
+                <span style="font-size:10px;color:var(--text3);margin-left:8px">👤 클릭 → 개인데이터</span>
                 <div style="font-size:11px;color:${cfg.color};margin-top:3px">${risk.flags.map(f=>`• ${f.msg}`).join(' &nbsp; ')}</div>
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
@@ -6069,9 +6069,6 @@ async function loadMorningReport(){
               </div>
             </div>
             <div style="font-size:10px;color:var(--text3);margin-top:5px;padding-top:5px;border-top:0.5px solid ${cfg.border}33">→ ${action}</div>
-          </div>
-          <div id="risk-detail-${player.id}" style="display:none;border:0.5px solid ${cfg.border};border-top:none;border-radius:0 0 10px 10px;background:var(--surface);padding:12px 14px">
-            <div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">⏳ 데이터 불러오는 중...</div>
           </div>
         </div>`;
       }).join('')
@@ -6340,6 +6337,12 @@ function mrSwitchTab(tab){
 
 // ── 부상위험 선수 14일 개인데이터 토글 ─────────────────────────
 let _riskDetailOpen = null; // 현재 열린 선수 ID
+
+function goToPlayerFromRisk(playerId){
+  selectDashboardPlayer(playerId);
+  const tabBtn = document.querySelector('[onclick*=players]');
+  if(tabBtn) switchTab('players', tabBtn);
+}
 
 async function toggleRiskDetail(playerId, playerName, position, borderColor, textColor){
   const panel = document.getElementById(`risk-detail-${playerId}`);
@@ -7897,7 +7900,7 @@ async function loadPlayerDashboard(){
   since.setDate(since.getDate()-days);
   const sinceStr = since.toISOString().split('T')[0];
 
-  const [{data:gps},{data:rpeRows},{data:injuries}] = await Promise.all([
+  const [{data:gps},{data:rpeRows},{data:wellRows},{data:injuries}] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2')
       .eq('player_id',playerId)
@@ -7905,6 +7908,11 @@ async function loadPlayerDashboard(){
       .order('session_date',{ascending:false}),
     supa.from('session_records')
       .select('record_date,rpe')
+      .eq('player_id',playerId)
+      .gte('record_date',sinceStr)
+      .order('record_date',{ascending:false}),
+    supa.from('wellness_records')
+      .select('record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
       .eq('player_id',playerId)
       .gte('record_date',sinceStr)
       .order('record_date',{ascending:false}),
@@ -7918,6 +7926,20 @@ async function loadPlayerDashboard(){
   const sessions  = gps||[];
   const rpeMap    = {};
   (rpeRows||[]).forEach(r=>{ rpeMap[r.record_date]=r; });
+  const wellMap = {};
+  (wellRows||[]).forEach(r=>{ wellMap[r.record_date]=r; });
+  const wellAvgF = field => {
+    const vals = (wellRows||[]).map(r=>parseFloat(r[field])||0).filter(v=>v>0);
+    return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : null;
+  };
+  const avgFatigue = wellAvgF('fatigue');
+  const avgSleep   = wellAvgF('sleep_quality');
+  const avgStress  = wellAvgF('stress');
+  const avgMuscle  = wellAvgF('muscle_soreness');
+  const avgWellTotal = (avgFatigue&&avgSleep&&avgStress&&avgMuscle)
+    ? parseFloat((+avgFatigue + +avgSleep + +avgStress + +avgMuscle).toFixed(1)) : null;
+  const wScoreColor = v => !v?'var(--text3)':+v>=4?'#22c55e':+v>=3?'#eab308':'#ef4444';
+  const wTotalColor = v => !v?'var(--text3)':+v>=16?'#22c55e':+v>=12?'#eab308':'#ef4444';
 
   const avgF = (arr,field,dec=0) => {
     const vals = arr.map(r=>parseFloat(r[field])||0).filter(v=>v>0);
@@ -7978,6 +8000,12 @@ async function loadPlayerDashboard(){
     const dur    = parseFloat(r.duration)||parseFloat(rpe?.duration)||null;
     const sRPE   = rpeVal&&dur ? Math.round(dur*rpeVal) : null;
     const rpeColor = rpeVal>=8?'#ef4444':rpeVal>=6?'#f59e0b':'var(--text2)';
+    const w = wellMap[r.session_date];
+    const wellTotal = w ? (w.fatigue||0)+(w.sleep_quality||0)+(w.stress||0)+(w.muscle_soreness||0) : null;
+    const wellTd = wellTotal
+      ? `<div style="font-weight:600;color:${wTotalColor(wellTotal)}">${wellTotal}/20</div>
+         <div style="font-size:9px;color:var(--text3);margin-top:1px">피${w.fatigue||'—'} 수${w.sleep_quality||'—'} 스${w.stress||'—'} 근${w.muscle_soreness||'—'}</div>`
+      : '<span style="color:var(--text3)">—</span>';
     return `
       <tr style="border-bottom:1px solid var(--border)">
         <td style="padding:6px 8px;color:var(--text2);white-space:nowrap">${r.session_date}</td>
@@ -7992,6 +8020,7 @@ async function loadPlayerDashboard(){
         <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:${rpeColor}">${rpeVal||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:11px;line-height:1.3">${wellTd}</td>
         <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.opponent||'—'}</td>
       </tr>`;
   }).join('');
@@ -8018,6 +8047,33 @@ async function loadPlayerDashboard(){
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px">${statCardHtml(cards1)}</div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">${statCardHtml(cards2)}</div>
     </div>
+
+    ${avgWellTotal ? `
+    <div style="background:var(--surface);border:1px solid #15803d;border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#86efac;letter-spacing:.05em;margin-bottom:10px">기간 평균 웰니스 <span style="font-weight:400;color:var(--text3)">(${(wellRows||[]).length}회 응답)</span></div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">종합</div>
+          <div style="font-size:16px;font-weight:700;color:${wTotalColor(avgWellTotal)}">${avgWellTotal}<span style="font-size:10px;color:var(--text3)">/20</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">피로</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgFatigue)}">${avgFatigue||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">수면</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgSleep)}">${avgSleep||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">스트레스</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgStress)}">${avgStress||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">근육통</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgMuscle)}">${avgMuscle||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+      </div>
+    </div>` : ''}
 
     ${(avgFmpRM||avgFmpRH||avgFmpDM||avgFmpDH) ? `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
@@ -8047,7 +8103,7 @@ async function loadPlayerDashboard(){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">세션별 이력</div>
       <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:820px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:6px 8px;text-align:left;color:var(--text3)">날짜</th>
@@ -8062,6 +8118,7 @@ async function loadPlayerDashboard(){
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">sRPE</th>
+              <th style="padding:6px 8px;text-align:center;color:#86efac;font-weight:600">웰니스<span style="display:block;font-size:9px;font-weight:400;color:var(--text3)">피/수/스/근</span></th>
               <th style="padding:6px 8px;text-align:center;color:var(--text3)">주기화</th>
             </tr>
           </thead>
