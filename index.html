@@ -868,16 +868,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <option value="MD1">MD-1 — 테이퍼링</option>
       </select>
     </div>
-    <div class="ctrl">
-      <label>훈련 목적</label>
-      <select id="cardio-purpose" onchange="renderCardioRecommendation()">
-        <option value="vo2max">VO₂max 향상</option>
-        <option value="lt">LT 자극 (Threshold)</option>
-        <option value="speed">속도 개발 (Speed Dev)</option>
-        <option value="recovery">회복 / Extensive</option>
-        <option value="rhie">RHIE / 반복 스프린트</option>
-      </select>
-    </div>
   </div>
 
   <!-- ② 선수 피지컬 패널 -->
@@ -9860,55 +9850,65 @@ const CARDIO_EX_DATA = {
     }
   },
   cycle: {
-    'Extensive Aerobic': {
+    'Active Recovery': {
       color:'#4ade80', border:'#166534', bg:'#052e16',
-      domain:'< 75% MAS 상당', mdOptimal:'MD-5',
+      domain:'Z1 (< 55% FTP / RPE 1–3)', mdOptimal:'MD-5 / MD-1',
       exercises: [
-        {id:'cy_ext', name:'저강도 유산소', paramType:'time_only',
-         intensityUnit:'Watt / RPM', intensityRange:[0,0],
-         desc:'산화적 기저. 60–80 RPM. RPE 3–4.'}
+        {id:'cy_active_rec', name:'Active Recovery Spin', paramType:'cycle_continuous',
+         desc:'극저강도 지속 페달링. 근육 혈류 촉진. 유산소 능력 저하 없이 회복.'},
+        {id:'cy_easy_spin', name:'Easy Spin', paramType:'cycle_continuous',
+         desc:'저강도 안정적 페달링. Z1–Z2 구간. 산화적 기저 유지.'}
       ]
     },
-    'Threshold': {
+    'Threshold / Sweet Spot': {
       color:'#60a5fa', border:'#1d4ed8', bg:'#0d1f3c',
-      domain:'80–92% MAS 상당', mdOptimal:'MD-4',
+      domain:'Z3–Z4 (76–105% FTP / RPE 6–8)', mdOptimal:'MD-4',
       exercises: [
-        {id:'cy_thr_cont', name:'Continuous Tempo', paramType:'time_only',
-         intensityUnit:'Watt / RPM', intensityRange:[0,0],
-         desc:'지속 페달링. LT2 자극. RPE 6–7.'},
-        {id:'cy_thr_cruise', name:'Cruise Interval', paramType:'set_time_rest',
-         intensityUnit:'Watt / RPM', intensityRange:[0,0],
-         desc:'인터벌 Threshold. 짧은 휴식 반복.'}
+        {id:'cy_sweet_spot', name:'Sweet Spot', paramType:'cycle_continuous',
+         desc:'88–94% FTP 지속. FTP 향상에 가장 효율적. 1회 20–40분 가능.'},
+        {id:'cy_threshold_iv', name:'Threshold Interval', paramType:'cycle_interval',
+         desc:'96–105% FTP 반복. FTP 직접 자극. 세트 간 짧은 회복.'},
+        {id:'cy_over_under', name:'Over-Under', paramType:'cycle_over_under',
+         desc:'FTP 이상(108–120%) + FTP 이하(88–94%) 교대. 젖산 플러싱 능력 개발.'}
       ]
     },
-    'VO2max Long Interval': {
+    'VO2max Interval': {
       color:'#fb923c', border:'#c2410c', bg:'#1c0a03',
-      domain:'90–105% MAS 상당', mdOptimal:'MD-3~4',
+      domain:'Z5 (106–120% FTP / RPE 8–9)', mdOptimal:'MD-3~4',
       exercises: [
-        {id:'cy_vo2_4min', name:'4분 인터벌', paramType:'set_time_rest',
-         intensityUnit:'Watt / RPM', intensityRange:[0,0],
-         desc:'4분 고강도 페달링. VO₂max 자극.'},
-        {id:'cy_vo2_2min', name:'2분 인터벌', paramType:'set_time_rest',
-         intensityUnit:'Watt / RPM', intensityRange:[0,0],
-         desc:'2분 최대 출력. RPE 8–9.'}
+        {id:'cy_vo2_5min', name:'5분 인터벌', paramType:'cycle_interval',
+         desc:'106–115% FTP × 4–6세트. Cardiac output + VO₂max 직접 자극.'},
+        {id:'cy_vo2_3min', name:'3분 인터벌', paramType:'cycle_interval',
+         desc:'110–120% FTP × 4–8세트. VO₂max 간헐적 누적 자극.'},
+        {id:'cy_vo2_1min', name:'1분 인터벌', paramType:'cycle_interval',
+         desc:'120–130% FTP × 8–12세트. 짧고 강한 VO₂max 자극.'}
       ]
     },
-    'VO2max Short Interval': {
+    'Supramaximal Sprint': {
       color:'#a78bfa', border:'#6d28d9', bg:'#1a1030',
-      domain:'100–130% MAS 상당', mdOptimal:'MD-2~3',
+      domain:'Z6–Z7 (> 130% FTP / RPE 9–10)', mdOptimal:'MD-2~3',
       exercises: [
-        {id:'cy_30s', name:'30-30', paramType:'set_rep_rest',
-         intensityUnit:'Watt / RPM', workSec:30,
-         desc:'30초 최대 출력 / 30초 회복.'},
-        {id:'cy_20s', name:'20-20', paramType:'set_rep_rest',
-         intensityUnit:'Watt / RPM', workSec:20,
-         desc:'20초 최대 출력 / 20초 회복.'},
-        {id:'cy_15s', name:'15-15', paramType:'set_rep_rest',
-         intensityUnit:'Watt / RPM', workSec:15,
-         desc:'15초 폭발적 페달링 / 15초 회복.'},
-        {id:'cy_10s', name:'10-10', paramType:'set_rep_rest',
-         intensityUnit:'Watt / RPM', workSec:10,
-         desc:'10초 스프린트 페달링 / 10초 회복.'}
+        {id:'cy_tabata', name:'Tabata (20:10)', paramType:'cycle_sprint_fixed',
+         workSec:20, restSec:10,
+         desc:'20초 최대 출력 / 10초 완전 정지. VO₂max + 무산소 동시 자극.'},
+        {id:'cy_30s_wingate', name:'30초 Wingate형', paramType:'cycle_sprint_fixed',
+         workSec:30, restSec:180,
+         desc:'30초 전력 스프린트 / 3분 완전 회복. 무산소 파워 피크 측정/개발.'},
+        {id:'cy_10s_sprint', name:'10초 신경근 스프린트', paramType:'cycle_sprint_max',
+         workSec:10,
+         desc:'10초 최대 신경근 출력. PCr 계통. 완전 회복 후 반복.'}
+      ]
+    },
+    'Cadence Drill': {
+      color:'#34d399', border:'#065f46', bg:'#022c22',
+      domain:'기술 / 신경근 효율 (RPM 중심)', mdOptimal:'MD-4~5',
+      exercises: [
+        {id:'cy_high_cadence', name:'High Cadence Drill', paramType:'cycle_cadence',
+         desc:'고회전(100–120 RPM) 저저항 드릴. 신경근 효율 + 페달링 기술 개선.'},
+        {id:'cy_low_cadence', name:'Force Drill (Low Cadence)', paramType:'cycle_force',
+         desc:'저회전(50–60 RPM) 고저항 드릴. 근력 + 토크 개발.'},
+        {id:'cy_spin_up', name:'Spin-Up', paramType:'cycle_spinup',
+         desc:'RPM을 단계적으로 올리는 드릴. 최대 케이던스 개선 + 신경근 적응.'}
       ]
     }
   }
@@ -10054,28 +10054,36 @@ function renderCardioRecommendation(){
 
   const playerId = document.getElementById('cardio-player')?.value;
   const player   = _players.find(p=>p.id===playerId);
-  const purpose  = document.getElementById('cardio-purpose')?.value||'vo2max';
   const md       = document.getElementById('cardio-md')?.value||'MD3';
 
-  const purposeMap = {
-    vo2max:   {label:'VO₂max 향상', icon:'❤️'},
-    lt:       {label:'LT 자극',    icon:'🔥'},
-    speed:    {label:'속도 개발',   icon:'⚡'},
-    recovery: {label:'회복/유지',   icon:'🌿'},
-    rhie:     {label:'RHIE',       icon:'💥'},
-  };
-  const mdRec = {
+  // MD별 권장 카테고리 (장소에 따라 다름)
+  const mdRecOutdoor = {
     MD5:['Extensive Aerobic'],
     MD4:['Threshold','VO2max Long Interval'],
     MD3:['VO2max Long Interval','VO2max Short Interval','Speed Endurance'],
     MD2:['VO2max Short Interval','Speed Endurance','Pure Speed','RHIE'],
     MD1:['Extensive Aerobic'],
   };
+  const mdRecTreadmill = {
+    MD5:['Active Recovery / Easy Run'],
+    MD4:['Threshold Run','VO2max Interval'],
+    MD3:['VO2max Interval','Short Interval'],
+    MD2:['Short Interval'],
+    MD1:['Active Recovery / Easy Run'],
+  };
+  const mdRecCycle = {
+    MD5:['Active Recovery','Cadence Drill'],
+    MD4:['Threshold / Sweet Spot','Cadence Drill'],
+    MD3:['VO2max Interval','Threshold / Sweet Spot'],
+    MD2:['Supramaximal Sprint','VO2max Interval'],
+    MD1:['Active Recovery'],
+  };
 
-  const ft       = player ? getCardioFitnessType(player) : null;
-  const purpInfo = purposeMap[purpose] || purposeMap.vo2max;
+  const mdRecMap = {outdoor:mdRecOutdoor, treadmill:mdRecTreadmill, cycle:mdRecCycle};
+  const mdRec    = mdRecMap[_cardioLocation] || mdRecOutdoor;
   const mdCats   = mdRec[md] || [];
-  const isLocOk  = (purpose==='speed'||purpose==='rhie') ? _cardioLocation==='outdoor' : true;
+
+  const ft = player ? getCardioFitnessType(player) : null;
 
   let html = `<div style="font-size:11px;color:var(--accent2);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">💡 시스템 추천</div>
     <div style="font-size:12px;color:var(--text2);line-height:1.9">`;
@@ -10083,12 +10091,7 @@ function renderCardioRecommendation(){
   if(ft){
     html += `<strong style="color:${ft.color}">${ft.icon} ${ft.type}</strong> (ASR ${ft.asr.toFixed(1)} km/h) &nbsp;·&nbsp; `;
   }
-  html += `목적: <strong style="color:var(--accent2)">${purpInfo.icon} ${purpInfo.label}</strong> &nbsp;·&nbsp; `;
-  html += `권장 카테고리: <strong style="color:var(--text)">${mdCats.join(' / ')}</strong><br>`;
-
-  if(!isLocOk){
-    html += `<span style="color:#fbbf24">⚠️ Speed Endurance / Pure Speed / RHIE 는 야외 전용입니다. 장소를 🏃 야외로 변경하세요.</span><br>`;
-  }
+  html += `${md.replace('MD','MD-')} 권장 카테고리: <strong style="color:var(--text)">${mdCats.join(' / ')}</strong><br>`;
 
   if(_cardioCategory && _cardioExId){
     const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
@@ -10100,13 +10103,13 @@ function renderCardioRecommendation(){
       } else {
         html += `<span style="color:#fb923c">⚠️ <strong>${ex.name}</strong> — ${md.replace('MD','MD-')}에서 주의. 권장: ${mdCats[0]||'-'}</span><br>`;
       }
-      if(player && ex.intensityUnit.includes('MAS') && ex.intensityRange[0]>0){
+      if(player && ex.intensityUnit && ex.intensityUnit.includes('MAS') && ex.intensityRange && ex.intensityRange[0]>0){
         const mas=parseFloat(player.mas);
         const lo=+(mas*ex.intensityRange[0]/100).toFixed(1);
         const hi=+(mas*ex.intensityRange[1]/100).toFixed(1);
         html += `강도 범위: <strong style="color:var(--accent2)">${ex.intensityRange[0]}–${ex.intensityRange[1]}% MAS</strong> = <strong style="color:#4ade80">${lo}–${hi} km/h</strong><br>`;
       }
-      if(player && (ex.intensityUnit.includes('Vmax')||ex.intensityUnit.includes('MSS')) && ex.intensityRange[0]>0){
+      if(player && ex.intensityUnit && (ex.intensityUnit.includes('Vmax')||ex.intensityUnit.includes('MSS')) && ex.intensityRange && ex.intensityRange[0]>0){
         const mss=parseFloat(player.mss);
         const lo=+(mss*ex.intensityRange[0]/100).toFixed(1);
         const hi=+(mss*ex.intensityRange[1]/100).toFixed(1);
@@ -10248,6 +10251,207 @@ function renderCardioParamConfig(ex, catData){
       <div class="ctrl"><label>Rep 간 휴식 (초)</label>
         <input type="number" id="cp-rep-rest" value="180" min="30" max="600" step="10" style="${inputStyle}">
       </div>
+    </div>`;
+
+  // ── 사이클 전용 파라미터 유형 ──────────────────
+
+  } else if(ex.paramType==='cycle_continuous'){
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>목표 출력 (Watt)</label>
+        <input type="number" id="cp-watt" placeholder="예: 180" min="50" max="800" step="5" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>목표 케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="85" min="50" max="130" step="1" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>운동 시간 (min)</label>
+        <input type="number" id="cp-duration" value="20" min="5" max="90" step="1" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      Watt = 파워 미터 또는 저항 다이얼 설정 기준 &nbsp;·&nbsp; FTP 없을 시 RPE 기준으로 설정
+    </div>`;
+
+  } else if(ex.paramType==='cycle_interval'){
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>Work 출력 (Watt)</label>
+        <input type="number" id="cp-watt" placeholder="예: 220" min="50" max="900" step="5" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>회복 출력 (Watt)</label>
+        <input type="number" id="cp-watt-rest" placeholder="예: 120" min="30" max="400" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="90" min="60" max="120" step="1" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}">
+          ${[2,3,4,5,6,8].map(n=>`<option value="${n}" ${n===4?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>Work 시간 (min)</label>
+        <input type="number" id="cp-work-min" value="4" min="0.5" max="20" step="0.5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>회복 시간 (min)</label>
+        <input type="number" id="cp-rest-min" value="4" min="0.5" max="15" step="0.5" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      Work 구간: 고출력 페달링 &nbsp;·&nbsp; 회복 구간: 저출력 Active Recovery
+    </div>`;
+
+  } else if(ex.paramType==='cycle_over_under'){
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>Over 출력 (Watt) — FTP 이상</label>
+        <input type="number" id="cp-watt-over" placeholder="예: 240" min="100" max="900" step="5" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>Under 출력 (Watt) — FTP 이하</label>
+        <input type="number" id="cp-watt-under" placeholder="예: 190" min="80" max="700" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="88" min="70" max="110" step="1" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}">
+          ${[2,3,4,5].map(n=>`<option value="${n}" ${n===3?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>Over 구간 (초)</label>
+        <input type="number" id="cp-over-sec" value="30" min="15" max="120" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>Under 구간 (초)</label>
+        <input type="number" id="cp-under-sec" value="30" min="15" max="120" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트당 반복 횟수</label>
+        <select id="cp-reps" style="${selStyle}">
+          ${[3,4,5,6,8].map(n=>`<option value="${n}" ${n===4?'selected':''}>${n}회</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>세트 간 회복 (min)</label>
+        <input type="number" id="cp-rest-min" value="5" min="2" max="15" step="0.5" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      Over → Under 교대 반복 &nbsp;·&nbsp; 젖산 생성 → 빠른 플러싱 능력 개발
+    </div>`;
+
+  } else if(ex.paramType==='cycle_sprint_fixed'){
+    const ws  = ex.workSec  || 20;
+    const rs  = ex.restSec  || 10;
+    const defSets = ws===20 ? 2 : 1;
+    const defReps = ws===20 ? 8 : 5;
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>목표 케이던스 Work (RPM)</label>
+        <input type="number" id="cp-rpm" value="110" min="80" max="140" step="1" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}">
+          ${[1,2,3,4].map(n=>`<option value="${n}" ${n===defSets?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>Rep 수 (세트당)</label>
+        <select id="cp-reps" style="${selStyle}">
+          ${[4,5,6,7,8,10,12].map(n=>`<option value="${n}" ${n===defReps?'selected':''}>${n}회</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>세트 간 회복 (min)</label>
+        <input type="number" id="cp-rest-min" value="5" min="2" max="15" step="0.5" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      Work <strong style="color:${c}">${ws}초 최대 출력</strong> &nbsp;·&nbsp; Rest <strong style="color:var(--text2)">${rs}초 완전 정지 또는 극저항</strong> (고정)
+    </div>`;
+
+  } else if(ex.paramType==='cycle_sprint_max'){
+    const ws = ex.workSec || 10;
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>목표 케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="120" min="90" max="150" step="1" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>Rep 수</label>
+        <select id="cp-reps" style="${selStyle}">
+          ${[4,5,6,7,8,10].map(n=>`<option value="${n}" ${n===6?'selected':''}>${n}회</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>Rep 간 회복 (초)</label>
+        <input type="number" id="cp-rep-rest" value="180" min="60" max="600" step="10" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      ${ws}초 최대 신경근 출력 &nbsp;·&nbsp; PCr 완전 재합성 위해 완전 회복 필수 (≥ 3min)
+    </div>`;
+
+  } else if(ex.paramType==='cycle_cadence'){
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>목표 케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="110" min="90" max="130" step="1" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>저항 (Watt — 낮게 설정)</label>
+        <input type="number" id="cp-watt" placeholder="예: 100" min="30" max="300" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}">
+          ${[2,3,4,5].map(n=>`<option value="${n}" ${n===3?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>세트 시간 (초)</label>
+        <input type="number" id="cp-work-sec" value="60" min="30" max="120" step="10" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 간 회복 (초)</label>
+        <input type="number" id="cp-set-rest-sec" value="60" min="30" max="120" step="10" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      저항은 최소화 &nbsp;·&nbsp; 페달링 부드럽게 유지 &nbsp;·&nbsp; 바운싱 없이 회전수만 극대화
+    </div>`;
+
+  } else if(ex.paramType==='cycle_force'){
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>저항 출력 (Watt — 높게)</label>
+        <input type="number" id="cp-watt" placeholder="예: 280" min="100" max="900" step="10" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>목표 케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="55" min="40" max="70" step="1" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}">
+          ${[2,3,4,5].map(n=>`<option value="${n}" ${n===3?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>세트 시간 (초)</label>
+        <input type="number" id="cp-work-sec" value="60" min="20" max="120" step="10" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 간 회복 (초)</label>
+        <input type="number" id="cp-set-rest-sec" value="90" min="30" max="180" step="10" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      고저항 저회전 &nbsp;·&nbsp; 근력 + 토크 개발 &nbsp;·&nbsp; 슬관절 부하 주의 (무릎 통증 선수 금지)
+    </div>`;
+
+  } else if(ex.paramType==='cycle_spinup'){
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>시작 케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm-start" value="80" min="60" max="100" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>최대 목표 케이던스 (RPM)</label>
+        <input type="number" id="cp-rpm" value="120" min="100" max="150" step="5" style="${intStyle}">
+      </div>
+      <div class="ctrl"><label>저항 (Watt — 낮게)</label>
+        <input type="number" id="cp-watt" placeholder="예: 80" min="30" max="200" step="5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}">
+          ${[2,3,4,5,6].map(n=>`<option value="${n}" ${n===4?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>세트 시간 (초)</label>
+        <input type="number" id="cp-work-sec" value="60" min="30" max="90" step="10" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>세트 간 회복 (초)</label>
+        <input type="number" id="cp-set-rest-sec" value="60" min="30" max="120" step="10" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
+      시작 RPM에서 목표 RPM까지 점진적으로 증가 &nbsp;·&nbsp; 최대 RPM 도달 시 5–10초 유지 후 회복
     </div>`;
   }
 
@@ -10541,6 +10745,245 @@ function buildCardioPrescriptionBlock(ex, catData, p){
     </div>`;
   }
 
+  // ── 사이클 전용 처방 블록 ─────────────────────
+
+  if(ex.paramType==='cycle_continuous'){
+    const watt      = parseInt(document.getElementById('cp-watt')?.value||0);
+    const rpm       = parseInt(document.getElementById('cp-rpm')?.value||85);
+    const durMin    = parseFloat(document.getElementById('cp-duration')?.value||0);
+    const totalSec  = Math.round(durMin*60);
+    const kj        = watt && totalSec ? Math.round(watt*totalSec/1000) : null;
+    const wattLabel = watt ? `${watt} W` : '—';
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:600;color:${c};margin-bottom:12px">${ex.name} — 지속 사이클링</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:${c}">${wattLabel}</div>
+          <div style="font-size:11px;color:var(--text3)">목표 출력</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#93c5fd">${rpm} rpm</div>
+          <div style="font-size:11px;color:var(--text3)">케이던스</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:var(--text)">${durMin} min</div>
+          <div style="font-size:11px;color:var(--text3)">운동 시간</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:12px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:var(--accent2)">${kj!==null?kj+' kJ':'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">총 일량 (예상)</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(ex.paramType==='cycle_interval'){
+    const watt     = parseInt(document.getElementById('cp-watt')?.value||0);
+    const wattR    = parseInt(document.getElementById('cp-watt-rest')?.value||0);
+    const rpm      = parseInt(document.getElementById('cp-rpm')?.value||90);
+    const sets     = parseInt(document.getElementById('cp-sets')?.value||4);
+    const workMin  = parseFloat(document.getElementById('cp-work-min')?.value||4);
+    const restMin  = parseFloat(document.getElementById('cp-rest-min')?.value||4);
+    const workSec  = Math.round(workMin*60);
+    const restSec  = Math.round(restMin*60);
+    const kjWork   = watt   ? Math.round(watt *workSec/1000*sets) : null;
+    const totalMin = Math.round((workSec+restSec)*sets/60);
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:${c}">${ex.name}</div>
+        <div style="font-size:11px;color:var(--text3)">${sets}세트 × ${workMin}min / 회복 ${restMin}min</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:17px;font-weight:700;color:${c}">${watt||'—'} W</div>
+          <div style="font-size:11px;color:var(--text3)">Work 출력</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:17px;font-weight:700;color:var(--text3)">${wattR||'—'} W</div>
+          <div style="font-size:11px;color:var(--text3)">회복 출력</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:17px;font-weight:700;color:#93c5fd">${rpm} rpm</div>
+          <div style="font-size:11px;color:var(--text3)">케이던스</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:17px;font-weight:700;color:var(--accent2)">${kjWork!==null?kjWork+' kJ':'—'}</div>
+          <div style="font-size:11px;color:var(--text3)">Work 일량</div>
+        </div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:10px">
+        <tr style="background:var(--surface2)">
+          <th style="padding:8px;text-align:center;color:var(--text3)">Set</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">Work</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">출력 / RPM</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">회복</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">회복 출력</th>
+        </tr>
+        ${Array.from({length:sets},(_,i)=>`
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px;text-align:center;font-weight:600;color:var(--text)">${i+1}</td>
+          <td style="padding:8px;text-align:center;color:${c};font-weight:600">${workMin}min (${workSec}s)</td>
+          <td style="padding:8px;text-align:center;color:${c}">${watt||'—'}W @ ${rpm}rpm</td>
+          <td style="padding:8px;text-align:center;color:var(--text3)">${i<sets-1?restMin+'min':'—'}</td>
+          <td style="padding:8px;text-align:center;color:var(--text3)">${wattR||'—'}W</td>
+        </tr>`).join('')}
+      </table>
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:12px">
+        <div><div style="font-weight:600;color:${c}">${sets}세트</div><div style="color:var(--text3)">총 세트</div></div>
+        <div><div style="font-weight:600;color:var(--text)">${workMin*sets}min</div><div style="color:var(--text3)">총 Work</div></div>
+        <div><div style="font-weight:600;color:var(--text3)">${totalMin}min</div><div style="color:var(--text3)">총 소요</div></div>
+      </div>
+    </div>`;
+  }
+
+  if(ex.paramType==='cycle_over_under'){
+    const wattO    = parseInt(document.getElementById('cp-watt-over')?.value||0);
+    const wattU    = parseInt(document.getElementById('cp-watt-under')?.value||0);
+    const rpm      = parseInt(document.getElementById('cp-rpm')?.value||88);
+    const sets     = parseInt(document.getElementById('cp-sets')?.value||3);
+    const reps     = parseInt(document.getElementById('cp-reps')?.value||4);
+    const overSec  = parseInt(document.getElementById('cp-over-sec')?.value||30);
+    const underSec = parseInt(document.getElementById('cp-under-sec')?.value||30);
+    const restMin  = parseFloat(document.getElementById('cp-rest-min')?.value||5);
+    const setCycleSec = (overSec+underSec)*reps;
+    const totalMin = Math.round((setCycleSec*sets + restMin*60*(sets-1))/60);
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:${c}">Over-Under Interval</div>
+        <div style="font-size:11px;color:var(--text3)">${sets}세트 × ${reps}회 교대 / 세트 간 ${restMin}min</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;border:1px solid ${brd}">
+          <div style="font-size:16px;font-weight:700;color:${c}">${wattO||'—'} W</div>
+          <div style="font-size:11px;color:var(--text3)">Over (${overSec}초)</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center;border:1px solid var(--border2)">
+          <div style="font-size:16px;font-weight:700;color:#60a5fa">${wattU||'—'} W</div>
+          <div style="font-size:11px;color:var(--text3)">Under (${underSec}초)</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#93c5fd">${rpm} rpm</div>
+          <div style="font-size:11px;color:var(--text3)">케이던스</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text3)">${totalMin}min</div>
+          <div style="font-size:11px;color:var(--text3)">총 소요</div>
+        </div>
+      </div>
+      <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text2)">
+        1세트 = [Over ${overSec}초 → Under ${underSec}초] × ${reps}회 = ${Math.round(setCycleSec/60*10)/10}분 &nbsp;·&nbsp; 세트 간 완전 회복 ${restMin}분
+      </div>
+    </div>`;
+  }
+
+  if(ex.paramType==='cycle_sprint_fixed'){
+    const ws       = ex.workSec || 20;
+    const rs       = ex.restSec || 10;
+    const rpm      = parseInt(document.getElementById('cp-rpm')?.value||110);
+    const sets     = parseInt(document.getElementById('cp-sets')?.value||2);
+    const reps     = parseInt(document.getElementById('cp-reps')?.value||8);
+    const restMin  = parseFloat(document.getElementById('cp-rest-min')?.value||5);
+    const totalReps = sets*reps;
+    const setWorkSec = (ws+rs)*reps - rs;
+    const totalMin  = Math.round((setWorkSec*sets + restMin*60*(sets-1))/60);
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:${c}">${ex.name} (${ws}초:${rs}초)</div>
+        <div style="font-size:11px;color:var(--text3)">${sets}세트 × ${reps}rep / 세트 간 ${restMin}min</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:${c}">${ws}초</div>
+          <div style="font-size:11px;color:var(--text3)">최대 출력 (Work)</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text3)">${rs}초</div>
+          <div style="font-size:11px;color:var(--text3)">회복 (Rest)</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#93c5fd">${rpm} rpm</div>
+          <div style="font-size:11px;color:var(--text3)">목표 케이던스</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${reps}rep × ${sets}set</div>
+          <div style="font-size:11px;color:var(--text3)">구성</div>
+        </div>
+      </div>
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;font-size:12px">
+        <div><div style="font-weight:600;color:${c}">${totalReps}회</div><div style="color:var(--text3)">총 Sprint</div></div>
+        <div><div style="font-weight:600;color:var(--text)">${ws*totalReps}초</div><div style="color:var(--text3)">총 Work</div></div>
+        <div><div style="font-weight:600;color:var(--text3)">${totalMin}min</div><div style="color:var(--text3)">총 소요</div></div>
+      </div>
+    </div>`;
+  }
+
+  if(ex.paramType==='cycle_sprint_max'){
+    const ws      = ex.workSec || 10;
+    const rpm     = parseInt(document.getElementById('cp-rpm')?.value||120);
+    const reps    = parseInt(document.getElementById('cp-reps')?.value||6);
+    const repRest = parseInt(document.getElementById('cp-rep-rest')?.value||180);
+    const totalMin = Math.round((ws*reps + repRest*(reps-1))/60);
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:${c}">10초 신경근 스프린트</div>
+        <div style="font-size:11px;color:var(--text3)">${reps}rep / rep 간 ${repRest}초 완전 회복</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:${c}">${ws}초</div>
+          <div style="font-size:11px;color:var(--text3)">최대 출력</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#93c5fd">${rpm} rpm</div>
+          <div style="font-size:11px;color:var(--text3)">목표 케이던스</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${reps}회</div>
+          <div style="font-size:11px;color:var(--text3)">총 Rep</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--amber)">${repRest}초</div>
+          <div style="font-size:11px;color:var(--text3)">Rep 간 회복</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if(ex.paramType==='cycle_cadence'||ex.paramType==='cycle_force'||ex.paramType==='cycle_spinup'){
+    const rpm      = parseInt(document.getElementById('cp-rpm')?.value||0);
+    const watt     = parseInt(document.getElementById('cp-watt')?.value||0);
+    const sets     = parseInt(document.getElementById('cp-sets')?.value||3);
+    const workSec  = parseInt(document.getElementById('cp-work-sec')?.value||60);
+    const restSec  = parseInt(document.getElementById('cp-set-rest-sec')?.value||60);
+    const rpmStart = parseInt(document.getElementById('cp-rpm-start')?.value||0);
+    const drillName = ex.paramType==='cycle_cadence'?'High Cadence Drill':ex.paramType==='cycle_force'?'Force Drill':'Spin-Up Drill';
+    const totalMin  = Math.round((workSec+restSec)*sets/60);
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:${c}">${drillName}</div>
+        <div style="font-size:11px;color:var(--text3)">${sets}세트 × ${workSec}초 / 세트 간 ${restSec}초</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">
+        ${rpmStart?`<div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:16px;font-weight:700;color:var(--text3)">${rpmStart} rpm</div><div style="font-size:11px;color:var(--text3)">시작 RPM</div></div>`:''}
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:${c}">${rpm||'—'} rpm</div>
+          <div style="font-size:11px;color:var(--text3)">${rpmStart?'목표 RPM':'목표 케이던스'}</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text)">${watt||'—'} W</div>
+          <div style="font-size:11px;color:var(--text3)">저항 출력</div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:var(--text3)">${totalMin}min</div>
+          <div style="font-size:11px;color:var(--text3)">총 소요</div>
+        </div>
+      </div>
+      <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text2)">
+        ${sets}세트 × ${workSec}초 드릴 / 세트 간 ${restSec}초 회복
+      </div>
+    </div>`;
+  }
+
   return `<div style="padding:14px;background:var(--surface);border-radius:10px;border:1px solid ${brd};color:var(--text2)">처방 데이터를 확인하세요.</div>`;
 }
 
@@ -10563,6 +11006,21 @@ function getCardioCoachNote(exId, md){
     ps_fly:       {MD5:'금지 또는 1rep.',MD4:'플라잉 스타트 패턴.',MD3:'완전 회복. 최대속도 집중.',MD2:'신경근 자극.',MD1:'금지.'},
     rhie_5:       {MD5:'저볼륨. 패턴 유지.',MD4:'반복 스프린트 개발. 완전 회복.',MD3:'최대 부하. GPS 속도 확인.',MD2:'경기 특이적. 세트 수 조절.',MD1:'2세트.'},
     rhie_3:       {MD5:'최대 폭발력 유지.',MD4:'짧고 강하게. 최대 출력.',MD3:'최대 폭발력 반복.',MD2:'순간 파워 + 반복.',MD1:'1–2세트.'},
+    // 사이클 전용 노트
+    cy_active_rec:  {MD5:'완전 회복. 파워 미터 없이도 가능. RPE 2–3.',MD4:'보조 세션.',MD3:'쿨다운 또는 사용 금지.',MD2:'경기 후 회복.',MD1:'15분 이내.'},
+    cy_easy_spin:   {MD5:'Z1–Z2 안정. 케이던스 80–90 RPM. RPE 3–4.',MD4:'필드 훈련 보완.',MD3:'보조 운동.',MD2:'활성화 목적.',MD1:'15분 이내.'},
+    cy_sweet_spot:  {MD5:'금지 (너무 강함).',MD4:'20–30분 유지. FTP 직접 자극. HR 안정 확인.',MD3:'볼륨 축적 가능. 총 Work 60분 이내.',MD2:'15–20분 짧게.',MD1:'금지.'},
+    cy_threshold_iv:{MD5:'금지.',MD4:'FTP 구간 반복. 세트 간 완전 회복 (1:1).',MD3:'최대 Threshold 볼륨. 세트 내 출력 저하 체크.',MD2:'2–3세트 짧게.',MD1:'금지.'},
+    cy_over_under:  {MD5:'금지.',MD4:'Over/Under 교대. 젖산 플러싱 능력.',MD3:'최대 자극. 세트 수로 볼륨 조절.',MD2:'2세트.',MD1:'금지.'},
+    cy_vo2_5min:    {MD5:'금지.',MD4:'볼륨 축적. GPS 파워 확인.',MD3:'최대 VO₂max 자극. 마지막 세트 출력 저하 시 중단.',MD2:'2–3세트.',MD1:'금지.'},
+    cy_vo2_3min:    {MD5:'금지.',MD4:'VO₂max 준비.',MD3:'3분 최대. 마지막 30초 출력 유지.',MD2:'고강도 짧게.',MD1:'금지.'},
+    cy_vo2_1min:    {MD5:'금지.',MD4:'짧은 자극.',MD3:'1분 최대 반복. 세트 간 완전 회복.',MD2:'경기 특이적 파워.',MD1:'금지.'},
+    cy_tabata:      {MD5:'금지.',MD4:'Tabata 준비 세션.',MD3:'20:10 최대 출력. RPM 110+ 목표.',MD2:'경기 특이적 반복 파워.',MD1:'1세트.'},
+    cy_30s_wingate: {MD5:'금지.',MD4:'30초 최대 파워 개발.',MD3:'완전 회복 후 반복. 파워 저하 < 10% 목표.',MD2:'경기 특이적 무산소 자극.',MD1:'금지.'},
+    cy_10s_sprint:  {MD5:'신경근 유지 2–3rep.',MD4:'10초 폭발 파워.',MD3:'완전 회복. 각 rep 피크 출력.',MD2:'신경근 자극.',MD1:'1–2rep.'},
+    cy_high_cadence:{MD5:'80–90 RPM에서 100–120 RPM 점진 상승.',MD4:'케이던스 드릴 포함.',MD3:'보조 드릴.',MD2:'웜업 포함.',MD1:'웜업.'},
+    cy_low_cadence: {MD5:'금지 (슬관절 과부하).',MD4:'Force Drill 포함. 무릎 통증 선수 금지.',MD3:'토크 개발.',MD2:'보조 드릴.',MD1:'금지.'},
+    cy_spin_up:     {MD5:'Spin-Up 웜업.',MD4:'케이던스 범위 확장.',MD3:'보조 드릴.',MD2:'활성화.',MD1:'웜업.'},
   };
   const fallback = '강도와 볼륨을 MD 목적에 맞게 조절하세요. GPS 실시간 속도 모니터링 권장.';
   const exNotes = notes[exId];
