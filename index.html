@@ -849,8 +849,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <div id="tab-cardio" style="display:none">
 
   <!-- ① 컨트롤 -->
-  <div class="ctrls g4" style="margin-bottom:12px">
-    <div class="ctrl">
+  <div class="ctrls g4" style="margin-bottom:12px;align-items:end">
+    <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end">
       <label>선수 선택
         <button onclick="openPlayerMgmt()" style="margin-left:6px;font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:inherit">관리</button>
       </label>
@@ -858,7 +858,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <option value="">선수를 선택하세요</option>
       </select>
     </div>
-    <div class="ctrl">
+    <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end">
       <label>MD 단계</label>
       <select id="cardio-md" onchange="renderCardioRecommendation()">
         <option value="MD5">MD-5 — 회복 / 유지</option>
@@ -5552,11 +5552,37 @@ function renderWeekGrid(){
 }
 
 function addGridRow(date){
+  // 현재 DOM에 입력된 값을 _weekGridData에 먼저 동기화
+  const container = document.getElementById('week-grid-content');
+  if(container){
+    _weekGridData.filter(r=>!r._del).forEach(row=>{
+      const el = container.querySelector('[data-rowid="'+row.rowId+'"]');
+      if(!el) return;
+      row.time  = el.querySelector('[data-field="time"]').value;
+      row.type  = el.querySelector('[data-field="type"]').value;
+      row.md    = el.querySelector('[data-field="md"]').value;
+      row.title = el.querySelector('[data-field="title"]').value.trim();
+      row.team  = el.querySelector('[data-field="team"]').value;
+    });
+  }
   _weekGridRowCnt++;
   _weekGridData.push({rowId:'new_'+_weekGridRowCnt,id:null,date,time:'',type:'TRAINING',md:'',title:'',team:'ALL',_del:false});
   renderWeekGrid();
 }
 function deleteGridRow(rowId){
+  // 현재 DOM에 입력된 값을 _weekGridData에 먼저 동기화
+  const container = document.getElementById('week-grid-content');
+  if(container){
+    _weekGridData.filter(r=>!r._del).forEach(row=>{
+      const el = container.querySelector('[data-rowid="'+row.rowId+'"]');
+      if(!el) return;
+      row.time  = el.querySelector('[data-field="time"]').value;
+      row.type  = el.querySelector('[data-field="type"]').value;
+      row.md    = el.querySelector('[data-field="md"]').value;
+      row.title = el.querySelector('[data-field="title"]').value.trim();
+      row.team  = el.querySelector('[data-field="team"]').value;
+    });
+  }
   const row = _weekGridData.find(r=>r.rowId===rowId);
   if(row){ row._del=true; renderWeekGrid(); }
 }
@@ -9802,7 +9828,7 @@ const CARDIO_EX_DATA = {
       domain:'< 75% MAS 상당', mdOptimal:'MD-5',
       exercises: [
         {id:'tm_ext', name:'저강도 유산소', paramType:'time_only',
-         intensityUnit:'km/h', intensityRange:[0,0],
+         intensityUnit:'% MAS', intensityRange:[50,74],
          desc:'산화적 기저. RPE 3–4. 완전 회복 촉진.'}
       ]
     },
@@ -9811,10 +9837,10 @@ const CARDIO_EX_DATA = {
       domain:'80–92% MAS 상당', mdOptimal:'MD-4',
       exercises: [
         {id:'tm_thr_cont', name:'Continuous Tempo', paramType:'time_only',
-         intensityUnit:'km/h', intensityRange:[0,0],
+         intensityUnit:'% MAS', intensityRange:[80,92],
          desc:'지속 달리기. RPE 6–7. LT2 자극.'},
         {id:'tm_thr_cruise', name:'Cruise Interval', paramType:'set_time_rest',
-         intensityUnit:'km/h', intensityRange:[0,0],
+         intensityUnit:'% MAS', intensityRange:[80,92],
          desc:'짧은 휴식 반복. LT2 상향.'}
       ]
     },
@@ -9823,10 +9849,10 @@ const CARDIO_EX_DATA = {
       domain:'90–105% MAS 상당', mdOptimal:'MD-3~4',
       exercises: [
         {id:'tm_vo2_4min', name:'4분 인터벌', paramType:'set_time_rest_perset',
-         intensityUnit:'km/h', intensityRange:[0,0],
+         intensityUnit:'% MAS', intensityRange:[90,105],
          desc:'4분 고강도 + 휴식. VO₂max 자극.'},
         {id:'tm_vo2_2min', name:'2분 인터벌', paramType:'set_time_rest_perset',
-         intensityUnit:'km/h', intensityRange:[0,0],
+         intensityUnit:'% MAS', intensityRange:[90,105],
          desc:'2분 고강도 반복. RPE 8–9.'}
       ]
     },
@@ -9835,16 +9861,16 @@ const CARDIO_EX_DATA = {
       domain:'100–130% MAS 상당', mdOptimal:'MD-2~3',
       exercises: [
         {id:'tm_30s', name:'30-30', paramType:'set_rep_rest',
-         intensityUnit:'km/h', workSec:30,
+         intensityUnit:'% MAS', intensityRange:[100,130], workSec:30,
          desc:'30초 고강도 / 30초 회복.'},
         {id:'tm_20s', name:'20-20', paramType:'set_rep_rest',
-         intensityUnit:'km/h', workSec:20,
+         intensityUnit:'% MAS', intensityRange:[100,130], workSec:20,
          desc:'20초 고강도 / 20초 회복.'},
         {id:'tm_15s', name:'15-15', paramType:'set_rep_rest',
-         intensityUnit:'km/h', workSec:15,
+         intensityUnit:'% MAS', intensityRange:[100,130], workSec:15,
          desc:'15초 고강도 / 15초 회복.'},
         {id:'tm_10s', name:'10-10', paramType:'set_rep_rest',
-         intensityUnit:'km/h', workSec:10,
+         intensityUnit:'% MAS', intensityRange:[100,130], workSec:10,
          desc:'10초 고강도 / 10초 회복.'}
       ]
     }
@@ -10065,11 +10091,11 @@ function renderCardioRecommendation(){
     MD1:['Extensive Aerobic'],
   };
   const mdRecTreadmill = {
-    MD5:['Active Recovery / Easy Run'],
-    MD4:['Threshold Run','VO2max Interval'],
-    MD3:['VO2max Interval','Short Interval'],
-    MD2:['Short Interval'],
-    MD1:['Active Recovery / Easy Run'],
+    MD5:['Extensive Aerobic'],
+    MD4:['Threshold','VO2max Long Interval'],
+    MD3:['VO2max Long Interval','VO2max Short Interval'],
+    MD2:['VO2max Short Interval'],
+    MD1:['Extensive Aerobic'],
   };
   const mdRecCycle = {
     MD5:['Active Recovery','Cadence Drill'],
