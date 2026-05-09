@@ -9730,10 +9730,10 @@ const CARDIO_EX_DATA = {
       color:'#fb923c', border:'#c2410c', bg:'#1c0a03',
       domain:'90–105% MAS', mdOptimal:'MD-3~4',
       exercises: [
-        {id:'vo2_4min', name:'4분 인터벌', paramType:'set_time_rest',
+        {id:'vo2_4min', name:'4분 인터벌', paramType:'set_time_rest_perset',
          intensityUnit:'% MAS', intensityRange:[95,105],
          desc:'Cardiac output 최대화. 4분 연속 운동.'},
-        {id:'vo2_2min', name:'2분 인터벌', paramType:'set_time_rest',
+        {id:'vo2_2min', name:'2분 인터벌', paramType:'set_time_rest_perset',
          intensityUnit:'% MAS', intensityRange:[95,110],
          desc:'VO₂max 간헐적 자극. 더 높은 강도 가능.'}
       ]
@@ -9822,10 +9822,10 @@ const CARDIO_EX_DATA = {
       color:'#fb923c', border:'#c2410c', bg:'#1c0a03',
       domain:'90–105% MAS 상당', mdOptimal:'MD-3~4',
       exercises: [
-        {id:'tm_vo2_4min', name:'4분 인터벌', paramType:'set_time_rest',
+        {id:'tm_vo2_4min', name:'4분 인터벌', paramType:'set_time_rest_perset',
          intensityUnit:'km/h', intensityRange:[0,0],
          desc:'4분 고강도 + 휴식. VO₂max 자극.'},
-        {id:'tm_vo2_2min', name:'2분 인터벌', paramType:'set_time_rest',
+        {id:'tm_vo2_2min', name:'2분 인터벌', paramType:'set_time_rest_perset',
          intensityUnit:'km/h', intensityRange:[0,0],
          desc:'2분 고강도 반복. RPE 8–9.'}
       ]
@@ -10176,6 +10176,37 @@ function renderCardioParamConfig(ex, catData){
       </div>
     </div>`;
 
+  } else if(ex.paramType==='set_time_rest_perset'){
+    // 세트 수 선택 + Work/Rest 시간 + 세트별 강도 입력
+    const defWork = ex.id.includes('4min') || ex.id.includes('4Min') ? 4 : 2;
+    const defRest = defWork;
+    html += `<div class="ctrls g2">
+      <div class="ctrl"><label>세트 수</label>
+        <select id="cp-sets" style="${selStyle}" onchange="renderCardioPerSetInputs()">
+          ${[2,3,4,5,6].map(n=>`<option value="${n}" ${n===4?'selected':''}>${n}세트</option>`).join('')}
+        </select>
+      </div>
+      <div class="ctrl"><label>Work 시간 (min)</label>
+        <input type="number" id="cp-work-min" value="${defWork}" min="0.5" max="30" step="0.5" style="${inputStyle}">
+      </div>
+      <div class="ctrl"><label>휴식 시간 (min)</label>
+        <input type="number" id="cp-rest-min" value="${defRest}" min="0.5" max="30" step="0.5" style="${inputStyle}">
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;color:var(--accent2);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">세트별 강도 (${unitLabel})</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">
+        <button onclick="applyCardioIntensityPreset('uniform')"  style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer">균일</button>
+        <button onclick="applyCardioIntensityPreset('ascend')"   style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer">점증 ▲</button>
+        <button onclick="applyCardioIntensityPreset('descend')"  style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer">점감 ▼</button>
+        <button onclick="applyCardioIntensityPreset('pyramid')"  style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer">피라미드 △</button>
+        <button onclick="applyCardioIntensityPreset('reverse')"  style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer">역피라미드 ▽</button>
+      </div>
+      <div id="cardio-perset-inputs" style="display:grid;gap:6px"></div>
+    </div>`;
+    // 초기 렌더링은 cfg.innerHTML 세팅 후 호출
+    setTimeout(()=>renderCardioPerSetInputs(), 10);
+
   } else if(ex.paramType==='set_rep_rest'){
     const ws = ex.workSec || 30;
     html += `<div class="ctrls g2">
@@ -10458,6 +10489,89 @@ function renderCardioParamConfig(ex, catData){
   cfg.innerHTML = html;
 }
 
+// ── 세트별 강도 입력 렌더 ───────────────────────
+function renderCardioPerSetInputs(){
+  const wrap = document.getElementById('cardio-perset-inputs');
+  if(!wrap) return;
+  const sets = parseInt(document.getElementById('cp-sets')?.value||4);
+  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
+  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
+  const playerId = document.getElementById('cardio-player')?.value;
+  const player   = _players.find(p=>p.id===playerId);
+  const mas = player ? parseFloat(player.mas) : null;
+  const isMAS = ex && ex.intensityUnit && ex.intensityUnit.includes('MAS');
+  const c   = catData ? catData.color  : 'var(--accent2)';
+  const brd = catData ? catData.border : 'var(--border2)';
+  const defVal = ex && ex.intensityRange && ex.intensityRange[0] > 0 ? ex.intensityRange[0] : (isMAS ? 100 : 14);
+
+  // 기존 입력값 보존
+  const prev = [];
+  for(let i=0;i<sets;i++){
+    const el = document.getElementById(`cp-set-intensity-${i}`);
+    prev.push(el ? el.value : defVal);
+  }
+
+  wrap.innerHTML = Array.from({length:sets},(_,i)=>{
+    const spdPreview = (isMAS && mas && prev[i])
+      ? `<span id="perset-spd-${i}" style="font-size:11px;color:#4ade80;margin-left:6px">→ ${+(mas*prev[i]/100).toFixed(1)} km/h</span>` : '';
+    return `<div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);min-width:52px">Set ${i+1}</div>
+      <input type="number" id="cp-set-intensity-${i}" value="${prev[i]||defVal}"
+        min="40" max="200" step="1"
+        style="width:90px;font-size:14px;padding:6px 8px;border-radius:7px;border:1px solid ${brd};background:var(--surface2);color:var(--text);font-family:inherit;outline:none"
+        oninput="updatePerSetSpdPreview(${i})">
+      <span style="font-size:11px;color:var(--text3)">${ex ? ex.intensityUnit : ''}</span>
+      ${spdPreview}
+    </div>`;
+  }).join('');
+}
+
+function updatePerSetSpdPreview(i){
+  const playerId = document.getElementById('cardio-player')?.value;
+  const player   = _players.find(p=>p.id===playerId);
+  if(!player) return;
+  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
+  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
+  if(!ex || !ex.intensityUnit || !ex.intensityUnit.includes('MAS')) return;
+  const mas = parseFloat(player.mas);
+  const val = parseFloat(document.getElementById(`cp-set-intensity-${i}`)?.value||0);
+  const el  = document.getElementById(`perset-spd-${i}`);
+  if(el && val && mas) el.textContent = `→ ${+(mas*val/100).toFixed(1)} km/h`;
+}
+
+function applyCardioIntensityPreset(type){
+  const sets = parseInt(document.getElementById('cp-sets')?.value||4);
+  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
+  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
+  const lo  = ex && ex.intensityRange ? ex.intensityRange[0] : 95;
+  const hi  = ex && ex.intensityRange ? ex.intensityRange[1] : 105;
+  const mid = Math.round((lo+hi)/2);
+  let vals = [];
+  if(type==='uniform'){
+    vals = Array(sets).fill(mid);
+  } else if(type==='ascend'){
+    // lo → hi 선형 증가
+    for(let i=0;i<sets;i++) vals.push(Math.round(lo + (hi-lo)*i/(sets-1||1)));
+  } else if(type==='descend'){
+    // hi → lo 선형 감소
+    for(let i=0;i<sets;i++) vals.push(Math.round(hi - (hi-lo)*i/(sets-1||1)));
+  } else if(type==='pyramid'){
+    // 중간 피크: lo → hi → lo
+    const half = Math.ceil(sets/2);
+    for(let i=0;i<half;i++) vals.push(Math.round(lo + (hi-lo)*i/(half-1||1)));
+    for(let i=half;i<sets;i++) vals.push(Math.round(hi - (hi-lo)*(i-half+1)/(sets-half||1)));
+  } else if(type==='reverse'){
+    // 역피라미드: hi → lo → hi
+    const half = Math.ceil(sets/2);
+    for(let i=0;i<half;i++) vals.push(Math.round(hi - (hi-lo)*i/(half-1||1)));
+    for(let i=half;i<sets;i++) vals.push(Math.round(lo + (hi-lo)*(i-half+1)/(sets-half||1)));
+  }
+  vals.forEach((v,i)=>{
+    const el = document.getElementById(`cp-set-intensity-${i}`);
+    if(el){ el.value = v; updatePerSetSpdPreview(i); }
+  });
+}
+
 // ── 강도 미리보기 ─────────────────────────────
 function updateCardioIntensityPreview(){
   const playerId = document.getElementById('cardio-player')?.value;
@@ -10532,9 +10646,19 @@ async function generateCardio(){
     </div>`;
   }
 
+  // 세트별 강도 수집 (set_time_rest_perset 전용)
+  const perSetIntensities = [];
+  if(ex.paramType==='set_time_rest_perset'){
+    for(let i=0;i<sets;i++){
+      const v = parseFloat(document.getElementById(`cp-set-intensity-${i}`)?.value||intensity);
+      perSetIntensities.push(v);
+    }
+  }
+
   html += buildCardioPrescriptionBlock(ex, catData, {
     intensity, sets, reps, durationMin, workMin, restMin,
-    distance, repRest, setRestSec, setRestMin, speedKmh, mas, mss
+    distance, repRest, setRestSec, setRestMin, speedKmh, mas, mss,
+    perSetIntensities
   });
 
   const coachNote = getCardioCoachNote(ex.id, md);
@@ -10613,6 +10737,51 @@ function buildCardioPrescriptionBlock(ex, catData, p){
         <div><div style="font-weight:600;color:var(--text)">${totalWork}min</div><div style="color:var(--text3)">총 Work</div></div>
         <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalSec/60)}min</div><div style="color:var(--text3)">총 소요</div></div>
         <div><div style="font-weight:600;color:var(--accent2)">${p.speedKmh?calcDist(p.speedKmh,workSec)*p.sets+'m':'—'}</div><div style="color:var(--text3)">총 Work 거리</div></div>
+      </div>
+    </div>`;
+  }
+
+  if(ex.paramType==='set_time_rest_perset'){
+    const workSec   = Math.round(p.workMin*60);
+    const restSec   = Math.round(p.restMin*60);
+    const totalWork = p.workMin * p.sets;
+    const totalSec  = (workSec+restSec)*p.sets - restSec;
+    const intArr    = p.perSetIntensities && p.perSetIntensities.length === p.sets
+                      ? p.perSetIntensities
+                      : Array(p.sets).fill(p.intensity||100);
+    const isMAS = ex.intensityUnit && ex.intensityUnit.includes('MAS');
+    return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:600;color:${c}">${ex.name} — 세트별 강도</div>
+        <div style="font-size:11px;color:var(--text3)">${p.sets}세트 × ${p.workMin}min / 휴식 ${p.restMin}min</div>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">
+        <tr style="background:var(--surface2)">
+          <th style="padding:8px;text-align:center;color:var(--text3)">Set</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">강도</th>
+          ${isMAS && p.mas ? `<th style="padding:8px;text-align:center;color:var(--text3)">속도</th>` : ''}
+          <th style="padding:8px;text-align:center;color:var(--text3)">Work</th>
+          ${isMAS && p.mas ? `<th style="padding:8px;text-align:center;color:var(--text3)">거리(야외)</th>` : ''}
+          <th style="padding:8px;text-align:center;color:var(--text3)">휴식</th>
+        </tr>
+        ${intArr.map((intVal,i)=>{
+          const spdKmh = (isMAS && p.mas) ? +(p.mas*intVal/100).toFixed(1) : null;
+          const dist   = spdKmh ? `${calcDist(spdKmh, workSec)}m` : '';
+          return `<tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:8px;text-align:center;font-weight:600;color:var(--text)">${i+1}</td>
+            <td style="padding:8px;text-align:center;color:${c};font-weight:700">${intVal} ${ex.intensityUnit}</td>
+            ${isMAS && p.mas ? `<td style="padding:8px;text-align:center;color:#4ade80;font-weight:600">${spdKmh} km/h</td>` : ''}
+            <td style="padding:8px;text-align:center;color:var(--text)">${p.workMin}min (${workSec}s)</td>
+            ${isMAS && p.mas ? `<td style="padding:8px;text-align:center;color:var(--accent2)">${dist}</td>` : ''}
+            <td style="padding:8px;text-align:center;color:var(--text3)">${i<p.sets-1?p.restMin+'min':'—'}</td>
+          </tr>`;
+        }).join('')}
+      </table>
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:12px">
+        <div><div style="font-weight:600;color:${c}">${p.sets}세트</div><div style="color:var(--text3)">총 세트</div></div>
+        <div><div style="font-weight:600;color:var(--text)">${totalWork}min</div><div style="color:var(--text3)">총 Work</div></div>
+        <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalSec/60)}min</div><div style="color:var(--text3)">총 소요</div></div>
+        <div><div style="font-weight:600;color:var(--accent2)">${intArr[0]}–${intArr[intArr.length-1]} ${ex.intensityUnit}</div><div style="color:var(--text3)">강도 범위</div></div>
       </div>
     </div>`;
   }
