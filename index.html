@@ -296,7 +296,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 </div>
 
 <div class="tabs" id="main-tabs">
-  <button class="tab admin-only active" onclick="switchTab('report',this)">📋 Morning Report</button>
+  <button class="tab admin-only active" onclick="switchTab('report',this)">📋 데일리 브리핑</button>
   <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
   <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
@@ -305,7 +305,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <!-- 모닝 레포트 탭 -->
 <div id="tab-report" style="display:none">
   <div class="vm-bar" style="margin-bottom:12px">
-    <h3>📋 Morning Report</h3>
+    <h3>📋 데일리 브리핑</h3>
     <div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:12px;color:var(--text3)" id="report-generated-time"></span>
       <button onclick="loadMorningReport()" style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 새로고침</button>
@@ -4904,6 +4904,15 @@ async function loadPlayerManagement(){
   if(sel){
     sel.innerHTML = '<option value="">선수를 선택하세요</option>' +
       _players.map(p=>`<option value="${p.id}">${p.name} (${p.position})</option>`).join('');
+    // 부상 위험 카드에서 바로 이동 시 → 선수 목록 로드 완료 후 자동 선택
+    if(window._pendingDashboardPlayerId){
+      const pid = window._pendingDashboardPlayerId;
+      window._pendingDashboardPlayerId = null;
+      sel.value = pid;
+      setPlayerView('dashboard');
+      loadPlayerDashboard();
+      return; // team summary / cal은 백그라운드 불필요
+    }
   }
   loadTeamSummary();
   loadTwoWeekCal(today);
@@ -6181,7 +6190,7 @@ async function loadMorningReport(){
     <!-- 헤더 -->
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <div>
-        <div style="font-size:15px;font-weight:600;color:var(--text)">Morning Report</div>
+        <div style="font-size:15px;font-weight:600;color:var(--text)">데일리 브리핑</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">${today} (${WEEK_DAYS[now.getDay()]}) · ${todayMD}${todayOpp2?' · vs '+todayOpp2:''}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -6339,9 +6348,16 @@ function mrSwitchTab(tab){
 let _riskDetailOpen = null; // 현재 열린 선수 ID
 
 function goToPlayerFromRisk(playerId){
-  selectDashboardPlayer(playerId);
   const tabBtn = document.querySelector('[onclick*=players]');
-  if(tabBtn) switchTab('players', tabBtn);
+  if(_players && _players.length){
+    // _players 이미 로드됨 → 바로 이동
+    if(tabBtn) switchTab('players', tabBtn);
+    selectDashboardPlayer(playerId);
+  } else {
+    // _players 미로드 → switchTab 내 loadPlayerManagement 완료 후 자동 처리
+    window._pendingDashboardPlayerId = playerId;
+    if(tabBtn) switchTab('players', tabBtn);
+  }
 }
 
 async function toggleRiskDetail(playerId, playerName, position, borderColor, textColor){
@@ -8002,9 +8018,10 @@ async function loadPlayerDashboard(){
     const rpeColor = rpeVal>=8?'#ef4444':rpeVal>=6?'#f59e0b':'var(--text2)';
     const w = wellMap[r.session_date];
     const wellTotal = w ? (w.fatigue||0)+(w.sleep_quality||0)+(w.stress||0)+(w.muscle_soreness||0) : null;
+    const wVal = v => `<span style="color:${v==1?'#ef4444':v==2?'#f97316':'var(--text3)'}">${v||'—'}</span>`;
     const wellTd = wellTotal
-      ? `<div style="font-weight:600;color:${wTotalColor(wellTotal)}">${wellTotal}/20</div>
-         <div style="font-size:9px;color:var(--text3);margin-top:1px">피${w.fatigue||'—'} 수${w.sleep_quality||'—'} 스${w.stress||'—'} 근${w.muscle_soreness||'—'}</div>`
+      ? `<span style="font-weight:600;color:${wTotalColor(wellTotal)}">${wellTotal}/20</span>
+         <span style="font-size:10px;margin-left:5px">피${wVal(w.fatigue)} 수${wVal(w.sleep_quality)} 스${wVal(w.stress)} 근${wVal(w.muscle_soreness)}</span>`
       : '<span style="color:var(--text3)">—</span>';
     return `
       <tr style="border-bottom:1px solid var(--border)">
@@ -8020,7 +8037,7 @@ async function loadPlayerDashboard(){
         <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:${rpeColor}">${rpeVal||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>
-        <td style="padding:6px 8px;text-align:center;font-size:11px;line-height:1.3">${wellTd}</td>
+        <td style="padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap">${wellTd}</td>
         <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.opponent||'—'}</td>
       </tr>`;
   }).join('');
