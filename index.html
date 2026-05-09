@@ -6348,16 +6348,11 @@ function mrSwitchTab(tab){
 let _riskDetailOpen = null; // 현재 열린 선수 ID
 
 function goToPlayerFromRisk(playerId){
+  // 항상 pending 방식으로 통일 → loadPlayerManagement 완료 후 select 재설정 보장
+  window._pendingDashboardPlayerId = playerId;
+  window._prevMainTab = 'report'; // 이전으로 버튼용
   const tabBtn = document.querySelector('[onclick*=players]');
-  if(_players && _players.length){
-    // _players 이미 로드됨 → 바로 이동
-    if(tabBtn) switchTab('players', tabBtn);
-    selectDashboardPlayer(playerId);
-  } else {
-    // _players 미로드 → switchTab 내 loadPlayerManagement 완료 후 자동 처리
-    window._pendingDashboardPlayerId = playerId;
-    if(tabBtn) switchTab('players', tabBtn);
-  }
+  if(tabBtn) switchTab('players', tabBtn);
 }
 
 async function toggleRiskDetail(playerId, playerName, position, borderColor, textColor){
@@ -7896,6 +7891,15 @@ function selectDashboardPlayer(playerId, fromView){
 }
 
 function goBack(){
+  // 메인 탭에서 진입한 경우 → 해당 메인 탭으로 복귀
+  if(window._prevMainTab){
+    const tab = window._prevMainTab;
+    window._prevMainTab = null;
+    const tabBtn = document.querySelector(`[onclick*=${tab}]`);
+    if(tabBtn) switchTab(tab, tabBtn);
+    return;
+  }
+  // 선수 통합관리 내 서브탭 이동의 경우 → 이전 서브뷰로
   const prev = _navHistory.pop();
   if(prev) setPlayerView(prev);
 }
