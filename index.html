@@ -5282,8 +5282,11 @@ const WELLNESS_LABELS = {1:'최악',2:'나쁨',3:'보통',4:'좋음',5:'최상'}
 async function initWellnessView(){
   const today = new Date().toISOString().split('T')[0];
 
-  if(isAdmin){
-    // 관리자: 팀 웰니스 현황
+  // 관리자 또는 staff 역할(coach/physical/medical)은 팀 웰니스 현황 표시
+  const isStaff = isAdmin || ['admin','coach','physical','medical'].includes(currentRole);
+
+  if(isStaff){
+    // 관리자/코치: 팀 웰니스 현황
     document.getElementById('wellness-player-view').style.display='none';
     document.getElementById('wellness-admin-view').style.display='block';
     const dateEl = document.getElementById('wellness-view-date');
@@ -5291,7 +5294,7 @@ async function initWellnessView(){
     loadTeamWellness();
     loadWellnessTwoWeekCal(today);
   } else {
-    // 선수: 본인 컨디션 입력
+    // 선수(player) 역할: 본인 컨디션 입력 폴백
     document.getElementById('wellness-player-view').style.display='block';
     document.getElementById('wellness-admin-view').style.display='none';
     document.getElementById('wellness-date-label').textContent = `📅 ${today}`;
@@ -12026,10 +12029,10 @@ async function saveMatchData(){
 
   btn.textContent='저장 중...'; btn.disabled=true;
 
-  // 선수+날짜 단위 삭제 후 재삽입 (기존 다른 선수 데이터 유지)
+  // 선수+경기상대 단위 삭제 후 재삽입 (날짜 오차로 중복 저장된 기존 데이터도 함께 제거)
   for(const r of _matchParseData){
     await supa.from('match_records').delete()
-      .eq('match_date', r.match_date)
+      .eq('opponent', r.opponent)
       .eq('player_id', r.player_id);
   }
 
@@ -12179,18 +12182,19 @@ async function loadMatchList(){
     return;
   }
 
-  // 중복 제거: match_date + opponent 기준 unique 경기 목록
+  // 중복 제거: opponent 기준 unique 경기 목록 (날짜 오차로 중복 저장된 경우 방지)
+  // order by match_date desc 이므로 첫 번째 등장 = 가장 최신 날짜
   const seen=new Set();
   const matches=allRows.filter(m=>{
-    const k=m.match_date+'|'+(m.opponent||'');
+    const k=(m.opponent||'');
     if(seen.has(k)) return false;
     seen.add(k); return true;
   });
 
-  // 경기별 선수 수 (player_id distinct count)
+  // 경기별 선수 수 (player_id distinct count) — opponent 기준으로 전체 집계
   const cntMap={};
   allRows.forEach(r=>{
-    const k=r.match_date+'|'+(r.opponent||'');
+    const k=(r.opponent||'');
     if(!cntMap[k]) cntMap[k]=new Set();
     cntMap[k].add(r.player_id);
   });
@@ -12217,7 +12221,7 @@ async function loadMatchList(){
         </thead>
         <tbody>
           ${matches.map(m=>{
-            const k=m.match_date+'|'+(m.opponent||'');
+            const k=(m.opponent||'');
             const cnt=cntMap[k]?cntMap[k].size:0;
             const esc=s=>(s||'').replace(/'/g,"\\'");
             return `<tr style="border-bottom:1px solid var(--border)">
@@ -12242,8 +12246,9 @@ async function loadMatchList(){
 // ── 경기 삭제 ──────────────────────────────────────────────────────
 async function deleteMatch(date, opponent){
   if(!confirm(`${date} vs ${opponent||'?'} 경기 데이터를 삭제할까요?\n(모든 선수 데이터가 삭제됩니다)`)) return;
+  // opponent 기준으로 삭제 — 날짜 오차로 중복 저장된 데이터도 함께 제거
   const {error}=await supa.from('match_records').delete()
-    .eq('match_date',date).eq('opponent',opponent);
+    .eq('opponent',opponent);
   if(error){ alert('삭제 실패: '+error.message); return; }
   loadMatchList();
 }
