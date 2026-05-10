@@ -10641,9 +10641,23 @@ function renderCardioParamConfig(ex, catData){
       <div class="ctrl"><label>세트 간 휴식 (min)</label>
         <input type="number" id="cp-set-rest" value="3" min="1" max="15" step="0.5" style="${inputStyle}">
       </div>
+      <div class="ctrl"><label>방향전환 각도</label>
+        <select id="cp-cod-angle" style="${selStyle}">
+          <option value="0">없음 (직선)</option>
+          <option value="90">90° 턴</option>
+          <option value="180">180° 턴 (셔틀)</option>
+        </select>
+      </div>
+      <div class="ctrl"><label>방향전환 횟수 (rep당)</label>
+        <select id="cp-cod-count" style="${selStyle}">
+          <option value="1" selected>1회</option>
+          <option value="2">2회</option>
+          <option value="3">3회</option>
+        </select>
+      </div>
     </div>
     <div style="padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3);margin-top:8px">
-      Work:Rest = <strong style="color:${c}">${ws}초 : ${ws}초 (1:1 고정)</strong> &nbsp;·&nbsp; 세트 간 휴식은 위에서 설정
+      Work:Rest = <strong style="color:${c}">${ws}초 : ${ws}초 (1:1 고정)</strong> &nbsp;·&nbsp; 방향전환 설정 시 COD 손실 거리 자동 보정
     </div>`;
 
   } else if(ex.paramType==='rhie_sprint'){
@@ -11036,6 +11050,8 @@ async function generateCardio(){
   const repRest      = parseInt(document.getElementById('cp-rep-rest')?.value||0);
   const setRestSec   = parseInt(document.getElementById('cp-set-rest-sec')?.value||0);
   const setRestMin   = parseFloat(document.getElementById('cp-set-rest')?.value||0);
+  const codAngle     = parseInt(document.getElementById('cp-cod-angle')?.value||0);
+  const codCount     = parseInt(document.getElementById('cp-cod-count')?.value||1);
 
   // 속도 계산 (야외 + %단위)
   let speedKmh = null;
@@ -11072,7 +11088,7 @@ async function generateCardio(){
   html += buildCardioPrescriptionBlock(ex, catData, {
     intensity, sets, reps, durationMin, workMin, restMin,
     distance, repRest, setRestSec, setRestMin, speedKmh, mas, mss,
-    perSetIntensities
+    perSetIntensities, codAngle, codCount
   });
 
   const coachNote = getCardioCoachNote(ex.id, md);
@@ -11207,7 +11223,37 @@ function buildCardioPrescriptionBlock(ex, catData, p){
     const setWorkSec  = ws*p.reps + ws*(p.reps-1);
     const totalSec    = setWorkSec*p.sets + setRestSec*(p.sets-1);
     const spdText     = p.speedKmh ? `${p.speedKmh} km/h` : `${p.intensity||'—'} ${ex.intensityUnit}`;
-    const distPer     = p.speedKmh ? `${calcDist(p.speedKmh,ws)}m` : '—';
+
+    // COD 보정
+    const codAngle       = p.codAngle || 0;
+    const codCount       = p.codCount || 1;
+    const codLossMap     = {90: 4.5, 180: 8.5};
+    const codLossPerTurn = codLossMap[codAngle] || 0;
+    const codLossPerRep  = Math.round(codLossPerTurn * codCount);
+    const distStraight   = p.speedKmh ? calcDist(p.speedKmh, ws) : null;
+    const distActual     = distStraight !== null ? Math.max(0, distStraight - codLossPerRep) : null;
+    const distPer        = distActual !== null ? `${distActual}m` : (distStraight !== null ? `${distStraight}m` : '—');
+    const distLabel      = codAngle > 0 ? `${ws}초 거리 (보정)` : `${ws}초 거리`;
+    const totalDistVal   = distActual !== null ? totalReps * distActual : (distStraight !== null ? totalReps * distStraight : null);
+    const totalDistStr   = totalDistVal !== null ? `${totalDistVal}m` : '—';
+
+    // COD 레이아웃 설명
+    const codIcon        = codAngle === 180 ? '🔄' : codAngle === 90 ? '↩️' : '';
+    const codAngleLabel  = codAngle === 90 ? '90° 턴' : codAngle === 180 ? '180° 턴 (셔틀)' : '';
+    const codInfoHtml    = (codAngle > 0 && distStraight !== null) ? `
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:12px">
+        <div style="font-size:22px;line-height:1">${codIcon}</div>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:4px">방향전환 ${codAngleLabel} × ${codCount}회/rep</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.7">
+            이론 거리 <strong style="color:var(--text)">${distStraight}m</strong> (${ws}초 × ${p.speedKmh}km/h)
+            &nbsp;→&nbsp; COD 손실 <strong style="color:#f87171">${codLossPerRep}m</strong> (${codAngle}°×${codCount}회 × ${codLossPerTurn}m/턴)
+            &nbsp;→&nbsp; 실제 처방 <strong style="color:var(--accent2)">${distActual}m</strong>
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--text3)">선수 기준 — ${ws}초 동안 <strong style="color:var(--accent2);font-size:13px">${distActual}m</strong>를 달리고 ${codAngleLabel}로 방향 전환 (${codCount}회)</div>
+        </div>
+      </div>` : '';
+
     return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:13px;font-weight:600;color:${c}">${ex.name} (Work:Rest = ${ws}s:${ws}s)</div>
@@ -11228,15 +11274,16 @@ function buildCardioPrescriptionBlock(ex, catData, p){
         </div>
         <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
           <div style="font-size:15px;font-weight:700;color:var(--accent2)">${distPer}</div>
-          <div style="font-size:11px;color:var(--text3)">${ws}초 거리</div>
+          <div style="font-size:11px;color:var(--text3)">${distLabel}</div>
         </div>
       </div>
+      ${codInfoHtml}
       <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:12px">
         <div><div style="font-weight:600;color:${c}">${totalReps}회</div><div style="color:var(--text3)">총 반복</div></div>
         <div><div style="font-weight:600;color:var(--text)">${ws*totalReps}초</div><div style="color:var(--text3)">총 Work</div></div>
         <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalSec/60)}분</div><div style="color:var(--text3)">총 소요</div></div>
         <div><div style="font-weight:600;color:var(--amber)">${p.setRestMin}min</div><div style="color:var(--text3)">세트간 휴식</div></div>
-        <div><div style="font-weight:600;color:var(--accent2)">${p.speedKmh?totalReps*calcDist(p.speedKmh,ws)+'m':'—'}</div><div style="color:var(--text3)">총 거리</div></div>
+        <div><div style="font-weight:600;color:var(--accent2)">${totalDistStr}</div><div style="color:var(--text3)">총 거리${codAngle>0?' (보정)':''}</div></div>
       </div>
     </div>`;
   }
