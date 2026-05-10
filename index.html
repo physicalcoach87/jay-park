@@ -11096,11 +11096,102 @@ async function generateCardio(){
     <div class="coaching-box"><p>${coachNote}</p></div>
     <div class="export-bar">
       <button class="btn-exp" onclick="window.print()">인쇄</button>
-      <button class="btn-exp admin-only" onclick="sendKakao('cardio-output')" style="background:#FEE500;border-color:#FEE500;color:#000;font-weight:600">💬 카카오톡</button>
-    </div>`;
+      ${player ? `<button id="btn-send-cardio" class="btn-exp admin-only" onclick="sendCardioPrescription()" style="background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600">📲 선수앱 전송</button>` : ''}
+    </div>
+    <div id="cardio-send-msg" style="text-align:center;font-size:12px;min-height:16px;margin-top:6px"></div>`;
+
+  // 전송용 처방 데이터 저장
+  window._cardioPrescription = {
+    playerId, player,
+    exName: ex.name, mdLabel, paramType: ex.paramType,
+    intensityUnit: ex.intensityUnit, ws: ex.workSec || null,
+    intensity, sets, reps, durationMin, workMin, restMin,
+    speedKmh, codAngle, codCount, coachNote
+  };
 
   document.getElementById('cardio-output').innerHTML = html;
   document.getElementById('cardio-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+}
+
+async function sendCardioPrescription(){
+  const rx = window._cardioPrescription;
+  if(!rx || !rx.playerId){ alert('선수를 선택한 후 처방을 생성하세요'); return; }
+
+  const btn = document.getElementById('btn-send-cardio');
+  const msg = document.getElementById('cardio-send-msg');
+  if(btn){ btn.disabled=true; btn.textContent='전송 중...'; }
+
+  // 처방 내용 텍스트 빌드
+  const ws = rx.ws || 0;
+  const codLossMap = {90:4.5, 180:8.5};
+  const codLoss    = rx.codAngle > 0 ? Math.round((codLossMap[rx.codAngle]||0) * rx.codCount) : 0;
+  const distStraight = (rx.speedKmh && ws) ? Math.round(rx.speedKmh / 3.6 * ws) : null;
+  const distActual   = distStraight !== null ? Math.max(0, distStraight - codLoss) : null;
+
+  const lines = [];
+  if(rx.speedKmh) lines.push(`속도: ${rx.speedKmh} km/h (${rx.intensity}${rx.intensityUnit})`);
+  else             lines.push(`강도: ${rx.intensity} ${rx.intensityUnit}`);
+
+  if(rx.paramType === 'set_rep_rest'){
+    lines.push(`구성: ${rx.sets}세트 × ${rx.reps}rep`);
+    lines.push(`Work:Rest = ${ws}초 : ${ws}초`);
+    if(distActual !== null){
+      lines.push(`rep당 거리: ${distActual}m${rx.codAngle > 0 ? ` (COD 보정: ${rx.codAngle}°×${rx.codCount}회)` : ''}`);
+      if(rx.codAngle === 180){
+        const segs = rx.codCount + 1;
+        const segDist = Math.round(distActual / segs);
+        const pathArr = ['A'];
+        for(let i=0;i<rx.codCount;i++) pathArr.push(i%2===0?'B':'A');
+        lines.push(`레이아웃: ${segDist}m 콘 간격 · ${pathArr.join('→')}`);
+      } else if(rx.codAngle === 90){
+        const segs = rx.codCount + 1;
+        lines.push(`레이아웃: ${Math.round(distActual/segs)}m 구간 × ${segs} (L자/Z자)`);
+      }
+      lines.push(`총 거리: ${rx.sets * rx.reps * distActual}m`);
+    }
+  } else if(rx.paramType === 'set_time_rest' || rx.paramType === 'set_time_rest_perset'){
+    lines.push(`구성: ${rx.sets}세트 × ${rx.workMin}min`);
+    lines.push(`세트 간 휴식: ${rx.restMin}min`);
+    if(distStraight) lines.push(`세트당 거리: ~${Math.round(rx.speedKmh/3.6*(rx.workMin*60))}m`);
+  } else if(rx.paramType === 'time_only'){
+    lines.push(`지속 시간: ${rx.durationMin}min`);
+    if(distStraight) lines.push(`예상 거리: ~${Math.round(rx.speedKmh/3.6*(rx.durationMin*60))}m`);
+  }
+  if(rx.coachNote) lines.push(`\n📌 코칭 포인트\n${rx.coachNote}`);
+
+  const title = `[유산소 처방] ${rx.exName} · ${rx.mdLabel}`;
+  const body  = lines.join('\n');
+
+  const {error} = await supa.from('notifications').insert({
+    title, body,
+    target_type: 'player', target_value: rx.playerId,
+    created_by: currentUser?.email || 'coach'
+  });
+
+  if(error){
+    if(msg){ msg.textContent='❌ 전송 실패: '+error.message; msg.style.color='var(--red)'; }
+    if(btn){ btn.disabled=false; btn.textContent='📲 선수앱 전송'; }
+    return;
+  }
+
+  // 푸시 알림
+  try {
+    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'
+      },
+      body: JSON.stringify({ title:'🏃 유산소 훈련이 처방되었습니다', body:`${rx.exName} · ${rx.mdLabel} 처방이 등록됐습니다. 처방 탭에서 확인하세요.`, target_type:'player', target_value:rx.playerId, player_id:rx.playerId })
+    });
+  } catch(e){ console.warn('push error:', e); }
+
+  if(btn){ btn.textContent='✅ 전송 완료!'; btn.style.background='#16a34a'; }
+  if(msg){ msg.textContent=`✅ ${rx.player.name} 선수 앱으로 처방이 전송됐습니다`; msg.style.color='var(--accent2)'; }
+  setTimeout(()=>{
+    if(btn){ btn.disabled=false; btn.textContent='📲 선수앱 전송'; btn.style.background=''; }
+    if(msg){ msg.textContent=''; }
+  }, 4000);
 }
 
 // ── 처방 블록 빌더 ─────────────────────────────
