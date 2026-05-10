@@ -11227,14 +11227,15 @@ function buildCardioPrescriptionBlock(ex, catData, p){
           <div style="font-size:11px;color:var(--text3)">Work:Rest</div>
         </div>
         <div style="background:var(--surface2);border-radius:8px;padding:10px;text-align:center">
-          <div style="font-size:15px;font-weight:700;color:var(--amber)">${p.setRestMin}min</div>
-          <div style="font-size:11px;color:var(--text3)">세트 간 휴식</div>
+          <div style="font-size:15px;font-weight:700;color:var(--accent2)">${distPer}</div>
+          <div style="font-size:11px;color:var(--text3)">${ws}초 거리</div>
         </div>
       </div>
-      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:12px">
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:12px">
         <div><div style="font-weight:600;color:${c}">${totalReps}회</div><div style="color:var(--text3)">총 반복</div></div>
         <div><div style="font-weight:600;color:var(--text)">${ws*totalReps}초</div><div style="color:var(--text3)">총 Work</div></div>
         <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalSec/60)}분</div><div style="color:var(--text3)">총 소요</div></div>
+        <div><div style="font-weight:600;color:var(--amber)">${p.setRestMin}min</div><div style="color:var(--text3)">세트간 휴식</div></div>
         <div><div style="font-weight:600;color:var(--accent2)">${p.speedKmh?totalReps*calcDist(p.speedKmh,ws)+'m':'—'}</div><div style="color:var(--text3)">총 거리</div></div>
       </div>
     </div>`;
