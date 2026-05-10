@@ -247,23 +247,32 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <input type="password" id="su-pw" placeholder="6자리 이상"
           style="width:100%;font-size:14px;padding:12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
       </div>
+      <div>
+        <label style="font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:6px">직책</label>
+        <select id="su-role"
+          style="width:100%;font-size:14px;padding:12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;cursor:pointer">
+          <option value="coach">⚽ 코치</option>
+          <option value="physical">⚡ 피지컬코치</option>
+          <option value="medical">🏥 의무팀</option>
+        </select>
+      </div>
       <div id="su-err" style="font-size:12px;color:var(--red);min-height:16px;text-align:center"></div>
       <button id="su-btn" onclick="doSignup()"
         style="width:100%;padding:13px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;font-family:inherit">
         가입 신청
       </button>
       <div style="font-size:12px;color:var(--text3);text-align:center;line-height:1.6">
-        가입 후 코치님 승인이 필요합니다
+        가입 후 관리자 승인이 필요합니다
       </div>
     </div>
   </div>
 </div>
 
-<!-- 관리자 선수 관리 모달 -->
+<!-- 관리자 스텝 관리 모달 -->
 <div id="mgmt-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:99998;align-items:center;justify-content:center;padding:1rem">
-  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:100%;max-width:480px;max-height:80vh;display:flex;flex-direction:column">
+  <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
-      <div style="font-size:15px;font-weight:600">👥 선수 관리</div>
+      <div style="font-size:15px;font-weight:600">👥 스텝 관리</div>
       <button onclick="hideMgmt()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1">×</button>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:1rem">
@@ -273,7 +282,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       </button>
       <button onclick="loadMgmt('approved')" id="mgmt-tab-approved"
         style="flex:1;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">
-        ✅ 승인된 선수
+        ✅ 승인된 스텝
       </button>
     </div>
     <div id="mgmt-list" style="overflow-y:auto;flex:1">
@@ -289,7 +298,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div style="display:flex;gap:8px;align-items:center">
     <span id="user-role" style="font-size:11px;color:var(--accent2);font-weight:600"></span>
     <span id="user-email" style="font-size:11px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-    <button onclick="openMgmt()" class="admin-only" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">👥 선수 관리</button>
+    <button onclick="openMgmt()" class="admin-only" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">👥 스텝 관리</button>
     <button onclick="doLogout()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">로그아웃</button>
     <span class="hbadge">IPARK FC</span>
   </div>
@@ -1646,6 +1655,105 @@ const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
 let currentUser = null;
 let isAdmin = false;
+let currentRole = 'coach';
+let userPermissions = {};
+
+// ── 역할 레이블 ───────────────────────────────
+const ROLE_LABELS = {
+  admin:    '👑 관리자',
+  coach:    '⚽ 코치',
+  physical: '⚡ 피지컬코치',
+  medical:  '🏥 의무팀'
+};
+
+// ── 역할별 기본 탭 권한 (1=접근가능, 0=숨김) ──
+// 메인탭: report, players, exercise, notify
+// 선수관리 서브탭: pvbtn-team/dashboard/wellness/roster/match/upload
+// 운동처방 서브탭: extab-gym/preact/cardio/progmgmt
+const ROLE_PERMISSIONS = {
+  // 관리자: 전체 권한
+  admin: {
+    report:1, players:1, exercise:1, notify:1,
+    'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
+    'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
+    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-progmgmt':1
+  },
+  // 코치: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
+  coach: {
+    report:1, players:1, exercise:0, notify:1,
+    'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
+    'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
+    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-progmgmt':0
+  },
+  // 피지컬코치: 전체 권한
+  physical: {
+    report:1, players:1, exercise:1, notify:1,
+    'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
+    'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
+    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-progmgmt':1
+  },
+  // 의무팀: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
+  medical: {
+    report:1, players:1, exercise:0, notify:1,
+    'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
+    'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
+    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-progmgmt':0
+  }
+};
+
+const TAB_LABELS = {
+  report:'📋 데일리 브리핑', players:'📊 선수 통합관리',
+  exercise:'🏋️ 운동 처방', notify:'🔔 알림/메시지',
+  'pvbtn-team':'팀 요약', 'pvbtn-dashboard':'선수 개인데이터',
+  'pvbtn-wellness':'웰니스', 'pvbtn-roster':'선수 명단',
+  'pvbtn-match':'경기 데이터', 'pvbtn-upload':'GPS 업로드',
+  'extab-gym':'근력 운동', 'extab-preact':'Pre-activation',
+  'extab-cardio':'유산소 운동', 'extab-progmgmt':'프로그램 관리'
+};
+
+// ── 사용자 권한 로드 (role 기본값 + 개인 오버라이드) ──
+async function loadUserPermissions(userId, role){
+  currentRole = role || 'coach';
+  userPermissions = Object.assign({}, ROLE_PERMISSIONS[currentRole] || ROLE_PERMISSIONS.coach);
+  if(userId){
+    const {data} = await supa.from('user_tab_overrides')
+      .select('tab_id,allowed').eq('user_id', userId);
+    if(data) data.forEach(r=>{ userPermissions[r.tab_id] = r.allowed ? 1 : 0; });
+  }
+}
+
+// ── 탭 권한 적용 (show/hide) ──────────────────
+function applyTabPermissions(){
+  // 메인 탭 버튼
+  const mainMap = {
+    report:   "[onclick*=\"switchTab('report'\"]",
+    players:  "[onclick*=\"switchTab('players'\"]",
+    exercise: "[onclick*=\"switchTab('exercise'\"]",
+    notify:   "[onclick*=\"switchTab('notify'\"]"
+  };
+  Object.entries(mainMap).forEach(([key, sel])=>{
+    const el = document.querySelector(sel);
+    if(el) el.style.display = userPermissions[key] ? '' : 'none';
+  });
+  // 선수관리 서브탭 (by ID)
+  ['pvbtn-team','pvbtn-dashboard','pvbtn-wellness',
+   'pvbtn-roster','pvbtn-match','pvbtn-upload'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = userPermissions[id] ? '' : 'none';
+  });
+  // 운동처방 서브탭 (by ID)
+  ['extab-gym','extab-preact','extab-cardio','extab-progmgmt'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = userPermissions[id] ? '' : 'none';
+  });
+  // admin-only 요소 (편집버튼, 스텝 관리 버튼 등)
+  document.querySelectorAll('.admin-only').forEach(el=>{
+    el.style.display = isAdmin ? '' : 'none';
+  });
+  // 역할 배지
+  const roleEl = document.getElementById('user-role');
+  if(roleEl) roleEl.textContent = ROLE_LABELS[currentRole] || '';
+}
 
 function checkAdmin(user){
   if(!user) return false;
@@ -1655,34 +1763,33 @@ function checkAdmin(user){
   return Array.isArray(roles) && roles.includes('admin');
 }
 
-function applyRole(user){
-  isAdmin = checkAdmin(user);
-  const videoTab  = document.querySelector('[onclick="switchTab(\'videos\',this)"]');
-  const customTab = document.querySelector('[onclick="switchTab(\'custom\',this)"]');
-  if(videoTab)  videoTab.style.display  = isAdmin ? '' : 'none';
-  if(customTab) customTab.style.display = isAdmin ? '' : 'none';
-  document.querySelectorAll('.admin-only').forEach(el=>{
-    el.style.display = isAdmin ? '' : 'none';
-  });
-  const roleEl = document.getElementById('user-role');
-  if(roleEl) roleEl.textContent = isAdmin ? '👑 관리자' : '선수';
-}
-
-function showApp(user){
+async function showApp(user, preloadedRole){
   currentUser = user;
   document.getElementById('login-overlay').style.display='none';
   document.getElementById('main-app').style.display='block';
   const emailEl = document.getElementById('user-email');
   if(emailEl && user?.email) emailEl.textContent = user.email;
-  applyRole(user);
-  // 로그인 직후 레포트 탭 첫 화면 표시
-  setTimeout(()=>{
+  isAdmin = checkAdmin(user);
+  // 역할 결정
+  let role = preloadedRole;
+  if(!role){
     if(isAdmin){
-      const allTabs = document.querySelectorAll('.tab');
-      const reportBtn = [...allTabs].find(btn => btn.getAttribute('onclick')?.includes("'report'"));
-      if(reportBtn) switchTab('report', reportBtn);
+      role = 'admin';
     } else {
-      loadPlayerManagement();
+      const {data:prof} = await supa.from('profiles').select('role').eq('id', user.id).single();
+      role = prof?.role || 'coach';
+    }
+  }
+  await loadUserPermissions(user.id, role);
+  applyTabPermissions();
+  // 로그인 직후 첫 화면
+  setTimeout(()=>{
+    if(userPermissions['report']){
+      const btn = document.querySelector(".tab[onclick*=\"switchTab('report'\"]");
+      if(btn) switchTab('report', btn);
+    } else if(userPermissions['players']){
+      const btn = document.querySelector(".tab[onclick*=\"switchTab('players'\"]");
+      if(btn){ switchTab('players', btn); loadPlayerManagement(); }
     }
   }, 100);
 }
@@ -1690,6 +1797,8 @@ function showApp(user){
 function showLogin(){
   currentUser = null;
   isAdmin = false;
+  currentRole = 'coach';
+  userPermissions = {};
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('main-app').style.display='none';
 }
@@ -1721,7 +1830,7 @@ async function doResetPw(){
 
 function testLogin(admin){
   const mockUser={email:admin?'coach@ipark.com':'player@ipark.com',app_metadata:{roles:admin?['admin']:[]}};
-  showApp(mockUser);
+  showApp(mockUser, admin?'admin':'coach');
 }
 
 // ── 로그인 시 승인 여부 확인 ──────────────────
@@ -1744,15 +1853,19 @@ async function doLogin(){
   const user = data.user;
   currentUser = user;
   const admin = checkAdmin(user);
+  let profileRole = 'coach';
   if(!admin){
-    const {data: profile} = await supa.from('profiles').select('approved').eq('id', user.id).single();
+    const {data: profile} = await supa.from('profiles').select('approved,role').eq('id', user.id).single();
     if(!profile || profile.approved === false){
       await supa.auth.signOut();
-      errEl.textContent='코치님 승인 대기 중입니다. 승인 후 접속 가능합니다';
+      errEl.textContent='관리자 승인 대기 중입니다. 승인 후 접속 가능합니다';
       return;
     }
+    profileRole = profile?.role || 'coach';
+  } else {
+    profileRole = 'admin';
   }
-  showApp(user);
+  showApp(user, profileRole);
 }
 
 // ── 회원가입 ─────────────────────────────────
@@ -1771,6 +1884,7 @@ async function doSignup(){
   const name  = document.getElementById('su-name').value.trim();
   const email = document.getElementById('su-email').value.trim();
   const pw    = document.getElementById('su-pw').value;
+  const role  = document.getElementById('su-role').value || 'coach';
   const errEl = document.getElementById('su-err');
   const btn   = document.getElementById('su-btn');
   if(!name){ errEl.textContent='이름을 입력하세요'; return; }
@@ -1780,17 +1894,17 @@ async function doSignup(){
   errEl.textContent='';
   const {data, error} = await supa.auth.signUp({
     email, password: pw,
-    options: { data: { name, approved: false } }
+    options: { data: { name, role, approved: false } }
   });
   btn.textContent='가입 신청'; btn.disabled=false;
   if(error){ errEl.textContent='오류: '+error.message; return; }
   await supa.auth.signOut();
   hideSignup();
-  document.getElementById('login-msg').textContent='✅ 가입 신청 완료! 코치님 승인 후 접속 가능합니다';
+  document.getElementById('login-msg').textContent='✅ 가입 신청 완료! 관리자 승인 후 접속 가능합니다';
   document.getElementById('login-msg').style.color='var(--accent2)';
 }
 
-// ── 선수 관리 모달 ─────────────────────────────
+// ── 스텝 관리 모달 ────────────────────────────
 function openMgmt(){
   document.getElementById('mgmt-modal').style.display='flex';
   loadMgmt('pending');
@@ -1810,15 +1924,11 @@ async function loadMgmt(mode){
     }
   });
   listEl.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>';
-
-  // Supabase admin API — service_role 키 없이는 전체 유저 조회 불가
-  // 대신 profiles 테이블 방식으로 처리
   const {data, error} = await supa.from('profiles').select('*').eq('approved', mode==='approved');
-
   if(error){
     listEl.innerHTML=`<div style="padding:1rem;text-align:center">
       <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">
-        선수 목록 기능을 활성화하려면<br>아래 SQL을 Supabase에서 실행해주세요
+        스텝 목록 기능을 활성화하려면<br>아래 SQL을 Supabase에서 실행해주세요
       </div>
       <button onclick="showMgmtSetup()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit">설정 보기</button>
     </div>`;
@@ -1828,21 +1938,42 @@ async function loadMgmt(mode){
 }
 
 function showMgmtSetup(){
-  const sql = `-- Supabase SQL Editor에서 실행하세요
+  const sql = `-- Supabase SQL Editor에서 실행하세요 (권한관리 시스템 v2)
+
+-- 1. profiles 테이블 (role 컬럼 포함)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email text,
   name text,
+  role text DEFAULT 'coach',
   approved boolean DEFAULT false,
   created_at timestamptz DEFAULT now()
 );
+-- 기존 테이블에 role 컬럼 추가 (이미 있으면 무시됨)
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS role text DEFAULT 'coach';
 
--- 회원가입 시 자동으로 profiles 테이블에 추가
+-- 2. 개인별 탭 권한 오버라이드 테이블
+CREATE TABLE IF NOT EXISTS public.user_tab_overrides (
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
+  tab_id text NOT NULL,
+  allowed boolean NOT NULL,
+  PRIMARY KEY(user_id, tab_id)
+);
+ALTER TABLE public.user_tab_overrides ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "user_tab_overrides_read" ON public.user_tab_overrides FOR SELECT USING (true);
+CREATE POLICY "user_tab_overrides_write" ON public.user_tab_overrides FOR ALL USING (true);
+
+-- 3. 회원가입 시 자동으로 profiles 추가 (role 포함)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, name, approved)
-  VALUES (new.id, new.email, new.raw_user_meta_data->>'name', false);
+  INSERT INTO public.profiles (id, email, name, role, approved)
+  VALUES (
+    new.id, new.email,
+    new.raw_user_meta_data->>'name',
+    COALESCE(new.raw_user_meta_data->>'role', 'coach'),
+    false
+  );
   RETURN new;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -1852,16 +1983,16 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- RLS 활성화
+-- 4. RLS
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "admin can read all" ON public.profiles FOR SELECT USING (true);
-CREATE POLICY "admin can update" ON public.profiles FOR UPDATE USING (true);`;
+CREATE POLICY "profiles_select" ON public.profiles FOR SELECT USING (true);
+CREATE POLICY "profiles_update" ON public.profiles FOR UPDATE USING (true);`;
 
   const modal = document.createElement('div');
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
-  modal.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1.5rem;max-width:560px;width:100%;max-height:80vh;overflow-y:auto">
+  modal.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1.5rem;max-width:580px;width:100%;max-height:85vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
-      <div style="font-size:14px;font-weight:600">Supabase 설정 SQL</div>
+      <div style="font-size:14px;font-weight:600">Supabase 설정 SQL (권한관리 v2)</div>
       <button onclick="this.closest('[style*=fixed]').remove()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:20px">×</button>
     </div>
     <pre style="font-size:11px;color:var(--text2);background:var(--surface2);padding:12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;line-height:1.6">${sql}</pre>
@@ -1871,25 +2002,78 @@ CREATE POLICY "admin can update" ON public.profiles FOR UPDATE USING (true);`;
   modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
 }
 
+const ROLE_OPT_HTML = `
+  <option value="coach">⚽ 코치</option>
+  <option value="physical">⚡ 피지컬코치</option>
+  <option value="medical">🏥 의무팀</option>`;
+
 function renderMgmtList(users, mode){
   const listEl = document.getElementById('mgmt-list');
   if(!users.length){
-    listEl.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${mode==='pending'?'승인 대기 중인 선수가 없습니다':'승인된 선수가 없습니다'}</div>`;
+    listEl.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${mode==='pending'?'승인 대기 중인 스텝이 없습니다':'승인된 스텝이 없습니다'}</div>`;
     return;
   }
-  listEl.innerHTML=users.map(u=>`
-    <div style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:8px">
-      <div>
-        <div style="font-size:13px;font-weight:500;color:var(--text)">${u.name||'이름 없음'}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${u.email}</div>
-      </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
-        ${mode==='pending'
-          ?`<button onclick="approveUser('${u.id}')" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">✅ 승인</button>`
-          :`<button onclick="revokeUser('${u.id}')" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">🚫 차단</button>`
-        }
-      </div>
-    </div>`).join('');
+  // 전역 변수에 users 저장 (onclick에서 안전하게 참조)
+  window._mgmtUsers = users;
+  if(mode==='pending'){
+    listEl.innerHTML=users.map((u,i)=>`
+      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:13px;font-weight:500;color:var(--text)">${u.name||'이름 없음'}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${u.email}</div>
+          </div>
+          <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select id="pending-role-${i}"
+            style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">
+            ${ROLE_OPT_HTML}
+          </select>
+          <button onclick="approvePendingUser(${i})"
+            style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;white-space:nowrap">✅ 승인</button>
+        </div>
+      </div>`).join('');
+    // select 초기값 설정
+    users.forEach((u,i)=>{
+      const sel = document.getElementById('pending-role-'+i);
+      if(sel && u.role) sel.value = u.role;
+    });
+  } else {
+    listEl.innerHTML=users.map((u,i)=>`
+      <div style="padding:12px 0;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div>
+            <div style="font-size:13px;font-weight:500;color:var(--text)">${u.name||'이름 없음'}</div>
+            <div style="font-size:11px;color:var(--text3);margin-top:2px">${u.email}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <select id="approved-role-${i}" onchange="changeUserRole('${u.id}',this.value)"
+            style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">
+            ${ROLE_OPT_HTML}
+          </select>
+          <button onclick="openPermModal(${i})"
+            style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">🔐 탭 권한</button>
+          <button onclick="revokeUser('${u.id}')"
+            style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">🚫 차단</button>
+        </div>
+      </div>`).join('');
+    // select 초기값
+    users.forEach((u,i)=>{
+      const sel = document.getElementById('approved-role-'+i);
+      if(sel && u.role) sel.value = u.role;
+    });
+  }
+}
+
+async function approvePendingUser(idx){
+  const u = window._mgmtUsers[idx];
+  const sel = document.getElementById('pending-role-'+idx);
+  const role = sel ? sel.value : (u.role||'coach');
+  const {error} = await supa.from('profiles').update({approved:true, role}).eq('id', u.id);
+  if(error){ alert('오류: '+error.message); return; }
+  loadMgmt('pending');
 }
 
 async function approveUser(uid){
@@ -1898,11 +2082,110 @@ async function approveUser(uid){
   loadMgmt('pending');
 }
 
+async function changeUserRole(uid, role){
+  const {error} = await supa.from('profiles').update({role}).eq('id', uid);
+  if(error){ alert('역할 변경 오류: '+error.message); }
+}
+
 async function revokeUser(uid){
-  if(!confirm('이 선수의 접속을 차단하시겠습니까?')) return;
+  if(!confirm('이 스텝의 접속을 차단하시겠습니까?')) return;
   const {error} = await supa.from('profiles').update({approved:false}).eq('id',uid);
   if(error){ alert('오류: '+error.message); return; }
   loadMgmt('approved');
+}
+
+// ── 탭 권한 설정 모달 ─────────────────────────
+let _permUserId = null;
+let _permUserRole = 'coach';
+
+async function openPermModal(idx){
+  const u = window._mgmtUsers[idx];
+  _permUserId = u.id;
+  _permUserRole = u.role || 'coach';
+  // 현재 오버라이드 로드
+  const {data: overrides} = await supa.from('user_tab_overrides')
+    .select('tab_id,allowed').eq('user_id', u.id);
+  const overrideMap = {};
+  if(overrides) overrides.forEach(r=>{ overrideMap[r.tab_id] = r.allowed; });
+  const roleDef = ROLE_PERMISSIONS[_permUserRole] || ROLE_PERMISSIONS.coach;
+
+  const tabGroups = [
+    { label:'메인 탭', keys:['report','players','exercise','notify'] },
+    { label:'선수관리 서브탭', keys:['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'] },
+    { label:'운동처방 서브탭', keys:['extab-gym','extab-preact','extab-cardio','extab-progmgmt'] }
+  ];
+
+  const rowsHtml = tabGroups.map(g=>`
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">${g.label}</div>
+      ${g.keys.map(k=>{
+        const isChecked = overrideMap.hasOwnProperty(k) ? overrideMap[k] : !!roleDef[k];
+        const isDefault = !overrideMap.hasOwnProperty(k);
+        return `<label style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);cursor:pointer">
+          <input type="checkbox" id="perm-cb-${k}" ${isChecked?'checked':''} style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer">
+          <span style="font-size:13px;color:var(--text);flex:1">${TAB_LABELS[k]||k}</span>
+          ${isDefault?'<span style="font-size:10px;color:var(--text3);background:var(--surface2);padding:2px 6px;border-radius:8px">기본값</span>':'<span style="font-size:10px;color:var(--accent2);background:var(--accent-bg);padding:2px 6px;border-radius:8px">개별설정</span>'}
+        </label>`;
+      }).join('')}
+    </div>`).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'perm-modal';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:199999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  modal.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:100%;max-width:440px;max-height:85vh;display:flex;flex-direction:column">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div style="font-size:15px;font-weight:600">🔐 탭 권한 설정</div>
+        <button onclick="document.getElementById('perm-modal').remove()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1">×</button>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">${u.name||u.email} · ${ROLE_LABELS[_permUserRole]||''}</div>
+      <div style="overflow-y:auto;flex:1;padding-right:4px">${rowsHtml}</div>
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button onclick="resetPermOverrides()" style="flex:1;padding:10px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">🔄 기본값 초기화</button>
+        <button onclick="savePermOverrides()" style="flex:1;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">💾 저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+async function savePermOverrides(){
+  if(!_permUserId) return;
+  const allTabIds = Object.keys(TAB_LABELS);
+  const roleDef = ROLE_PERMISSIONS[_permUserRole] || ROLE_PERMISSIONS.coach;
+  const upserts = [];
+  const deletes = [];
+  allTabIds.forEach(k=>{
+    const cb = document.getElementById('perm-cb-'+k);
+    if(!cb) return;
+    const checked = cb.checked;
+    const defaultVal = !!roleDef[k];
+    if(checked !== defaultVal){
+      upserts.push({user_id: _permUserId, tab_id: k, allowed: checked});
+    } else {
+      deletes.push(k);
+    }
+  });
+  // 기본값과 같은 것들은 오버라이드 삭제
+  if(deletes.length){
+    await supa.from('user_tab_overrides')
+      .delete().eq('user_id', _permUserId).in('tab_id', deletes);
+  }
+  // 다른 것들은 upsert
+  if(upserts.length){
+    const {error} = await supa.from('user_tab_overrides').upsert(upserts);
+    if(error){ alert('저장 오류: '+error.message); return; }
+  }
+  document.getElementById('perm-modal')?.remove();
+  alert('권한이 저장되었습니다.');
+}
+
+async function resetPermOverrides(){
+  if(!_permUserId || !confirm('개별 설정을 모두 초기화하고 역할 기본값으로 되돌리시겠습니까?')) return;
+  const {error} = await supa.from('user_tab_overrides').delete().eq('user_id', _permUserId);
+  if(error){ alert('오류: '+error.message); return; }
+  document.getElementById('perm-modal')?.remove();
+  alert('기본값으로 초기화되었습니다.');
 }
 
 const D={
