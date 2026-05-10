@@ -11180,6 +11180,13 @@ function buildCardioPrescriptionBlock(ex, catData, p){
                       ? p.perSetIntensities
                       : Array(p.sets).fill(p.intensity||100);
     const isMAS = ex.intensityUnit && ex.intensityUnit.includes('MAS');
+    // 총 Work 거리 (세트별 거리 합산)
+    let totalWorkDist = 0;
+    let hasDist = false;
+    if(isMAS && p.mas){
+      intArr.forEach(intVal=>{ totalWorkDist += calcDist(+(p.mas*intVal/100).toFixed(1), workSec); });
+      hasDist = true;
+    }
     return `<div style="background:var(--surface);border:1px solid ${brd};border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div style="font-size:13px;font-weight:600;color:${c}">${ex.name} — 세트별 강도</div>
@@ -11189,29 +11196,31 @@ function buildCardioPrescriptionBlock(ex, catData, p){
         <tr style="background:var(--surface2)">
           <th style="padding:8px;text-align:center;color:var(--text3)">Set</th>
           <th style="padding:8px;text-align:center;color:var(--text3)">강도</th>
-          ${isMAS && p.mas ? `<th style="padding:8px;text-align:center;color:var(--text3)">속도</th>` : ''}
+          ${isMAS ? `<th style="padding:8px;text-align:center;color:var(--text3)">속도</th>` : ''}
           <th style="padding:8px;text-align:center;color:var(--text3)">Work</th>
-          ${isMAS && p.mas ? `<th style="padding:8px;text-align:center;color:var(--text3)">거리(야외)</th>` : ''}
+          ${isMAS ? `<th style="padding:8px;text-align:center;color:var(--text3)">거리(야외)</th>` : ''}
           <th style="padding:8px;text-align:center;color:var(--text3)">휴식</th>
         </tr>
         ${intArr.map((intVal,i)=>{
           const spdKmh = (isMAS && p.mas) ? +(p.mas*intVal/100).toFixed(1) : null;
-          const dist   = spdKmh ? `${calcDist(spdKmh, workSec)}m` : '';
+          const dist   = spdKmh ? `${calcDist(spdKmh, workSec)}m` : '—';
+          const spdTxt = spdKmh ? `${spdKmh} km/h` : '—';
           return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:8px;text-align:center;font-weight:600;color:var(--text)">${i+1}</td>
             <td style="padding:8px;text-align:center;color:${c};font-weight:700">${intVal} ${ex.intensityUnit}</td>
-            ${isMAS && p.mas ? `<td style="padding:8px;text-align:center;color:#4ade80;font-weight:600">${spdKmh} km/h</td>` : ''}
+            ${isMAS ? `<td style="padding:8px;text-align:center;color:#4ade80;font-weight:600">${spdTxt}</td>` : ''}
             <td style="padding:8px;text-align:center;color:var(--text)">${p.workMin}min (${workSec}s)</td>
-            ${isMAS && p.mas ? `<td style="padding:8px;text-align:center;color:var(--accent2)">${dist}</td>` : ''}
+            ${isMAS ? `<td style="padding:8px;text-align:center;color:var(--accent2);font-weight:600">${dist}</td>` : ''}
             <td style="padding:8px;text-align:center;color:var(--text3)">${i<p.sets-1?p.restMin+'min':'—'}</td>
           </tr>`;
         }).join('')}
       </table>
-      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;font-size:12px">
+      <div style="padding:10px;background:var(--surface2);border-radius:8px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;text-align:center;font-size:12px">
         <div><div style="font-weight:600;color:${c}">${p.sets}세트</div><div style="color:var(--text3)">총 세트</div></div>
         <div><div style="font-weight:600;color:var(--text)">${totalWork}min</div><div style="color:var(--text3)">총 Work</div></div>
         <div><div style="font-weight:600;color:var(--text3)">${Math.round(totalSec/60)}min</div><div style="color:var(--text3)">총 소요</div></div>
         <div><div style="font-weight:600;color:var(--accent2)">${intArr[0]}–${intArr[intArr.length-1]} ${ex.intensityUnit}</div><div style="color:var(--text3)">강도 범위</div></div>
+        <div><div style="font-weight:600;color:var(--accent2)">${hasDist ? totalWorkDist+'m' : '—'}</div><div style="color:var(--text3)">총 Work 거리</div></div>
       </div>
     </div>`;
   }
