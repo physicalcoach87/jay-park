@@ -6854,29 +6854,46 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
   `;
 }
 
+// 🔔 Web Push 발송 헬퍼 (Edge Function 호출)
+const _PUSH_FN_URL = 'https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push';
+const _PUSH_AUTH   = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI';
+async function _firePush(payload){
+  try {
+    await fetch(_PUSH_FN_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':_PUSH_AUTH},
+      body: JSON.stringify(payload)
+    });
+  } catch(e){ console.warn('push error:', e); }
+}
+
 // 웰니스 입력 요청 발송 (개별)
 async function sendWellnessReminder(playerId, playerName, btn){
   btn.textContent='⏳ 발송 중...'; btn.disabled=true;
+  const title = '📋 웰니스 입력 요청';
+  const body  = `${playerName} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!`;
   await supa.from('notifications').insert({
-    title:'📋 웰니스 입력 요청',
-    body:`${playerName} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!`,
+    title, body,
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
   });
+  await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
   btn.textContent='✅ 발송됨';
 }
 
 // 웰니스 입력 요청 발송 (전체)
 async function sendWellnessReminderAll(players, btn){
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
-  await Promise.all(players.map(p=>
-    supa.from('notifications').insert({
-      title:'📋 웰니스 입력 요청',
-      body:`${p.name} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!`,
+  await Promise.all(players.map(async p=>{
+    const title = '📋 웰니스 입력 요청';
+    const body  = `${p.name} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!`;
+    await supa.from('notifications').insert({
+      title, body,
       target_type:'player', target_value:p.id,
       created_by: currentUser?.email||'coach',
-    })
-  ));
+    });
+    await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
+  }));
   btn.textContent='✅ 전체 발송 완료';
 }
 
@@ -6884,26 +6901,30 @@ async function sendWellnessReminderAll(players, btn){
 // ── RPE 입력 요청 알림 ────────────────────────────────────────────
 async function sendRpeReminder(playerId, playerName, btn){
   btn.textContent='⏳ 발송 중...'; btn.disabled=true;
+  const title = '💪 RPE 입력 요청';
+  const body  = `${playerName} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`;
   await supa.from('notifications').insert({
-    title:'💪 RPE 입력 요청',
-    body:`${playerName} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`,
+    title, body,
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
   });
+  await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
   btn.textContent='✅ 발송됨';
 }
 
 // RPE 입력 요청 발송 (전체)
 async function sendRpeReminderAll(players, btn){
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
-  await Promise.all(players.map(p=>
-    supa.from('notifications').insert({
-      title:'💪 RPE 입력 요청',
-      body:`${p.name} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`,
+  await Promise.all(players.map(async p=>{
+    const title = '💪 RPE 입력 요청';
+    const body  = `${p.name} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`;
+    await supa.from('notifications').insert({
+      title, body,
       target_type:'player', target_value:p.id,
       created_by: currentUser?.email||'coach',
-    })
-  ));
+    });
+    await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
+  }));
   btn.textContent='✅ 전체 발송 완료';
 }
 
