@@ -1724,33 +1724,40 @@ async function loadUserPermissions(userId, role){
 
 // ── 탭 권한 적용 (show/hide) ──────────────────
 function applyTabPermissions(){
-  // 메인 탭 버튼
-  const mainMap = {
-    report:   "[onclick*=\"switchTab('report'\"]",
-    players:  "[onclick*=\"switchTab('players'\"]",
-    exercise: "[onclick*=\"switchTab('exercise'\"]",
-    notify:   "[onclick*=\"switchTab('notify'\"]"
+  // ① admin-only 먼저 처리 (편집버튼, 스텝 관리 버튼 등)
+  //    탭 버튼 중 admin-only 클래스가 붙은 것도 있어서
+  //    이 단계에서 일단 isAdmin 기준으로 설정
+  document.querySelectorAll('.admin-only').forEach(el=>{
+    el.style.display = isAdmin ? '' : 'none';
+  });
+
+  // ② 메인 탭 버튼 → 권한 기준으로 덮어쓰기
+  //    (report·notify 탭에 admin-only 클래스가 붙어있어도 권한으로 최종 결정)
+  const mainTabIds = {
+    report:   "switchTab('report',this)",
+    players:  "switchTab('players',this)",
+    exercise: "switchTab('exercise',this)",
+    notify:   "switchTab('notify',this)"
   };
-  Object.entries(mainMap).forEach(([key, sel])=>{
-    const el = document.querySelector(sel);
+  Object.entries(mainTabIds).forEach(([key, onclickVal])=>{
+    const el = document.querySelector(`.tab[onclick="${onclickVal}"]`);
     if(el) el.style.display = userPermissions[key] ? '' : 'none';
   });
-  // 선수관리 서브탭 (by ID)
+
+  // ③ 선수관리 서브탭 → 권한 기준으로 덮어쓰기
   ['pvbtn-team','pvbtn-dashboard','pvbtn-wellness',
    'pvbtn-roster','pvbtn-match','pvbtn-upload'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = userPermissions[id] ? '' : 'none';
   });
-  // 운동처방 서브탭 (by ID)
+
+  // ④ 운동처방 서브탭 → 권한 기준으로 덮어쓰기
   ['extab-gym','extab-preact','extab-cardio','extab-progmgmt'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = userPermissions[id] ? '' : 'none';
   });
-  // admin-only 요소 (편집버튼, 스텝 관리 버튼 등)
-  document.querySelectorAll('.admin-only').forEach(el=>{
-    el.style.display = isAdmin ? '' : 'none';
-  });
-  // 역할 배지
+
+  // ⑤ 역할 배지
   const roleEl = document.getElementById('user-role');
   if(roleEl) roleEl.textContent = ROLE_LABELS[currentRole] || '';
 }
