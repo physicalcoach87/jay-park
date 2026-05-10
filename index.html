@@ -11249,6 +11249,71 @@ function buildCardioPrescriptionBlock(ex, catData, p){
     // COD 레이아웃 설명
     const codIcon        = codAngle === 180 ? '🔄' : codAngle === 90 ? '↩️' : '';
     const codAngleLabel  = codAngle === 90 ? '90° 턴' : codAngle === 180 ? '180° 턴 (셔틀)' : '';
+
+    // 피치 레이아웃 가이드 계산
+    let layoutGuideHtml = '';
+    if(codAngle > 0 && distActual !== null){
+      const segs    = codCount + 1;
+      const segDist = Math.round(distActual / segs);
+      if(codAngle === 180){
+        const returnsToStart = (codCount % 2 === 1);
+        const pathArr = ['A'];
+        for(let i=0;i<codCount;i++) pathArr.push(i%2===0?'B':'A');
+        const pathStr = pathArr.join(' → ');
+        const fullShuttles = Math.floor(segs / 2);
+        const shuttleDesc = returnsToStart
+          ? `왕복 ${fullShuttles}회 (출발점 복귀 ✅)`
+          : `${segs}구간 ⚠️ 마지막 rep 반대편 종료`;
+        layoutGuideHtml = `
+          <div style="margin-top:10px;padding:10px 12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px">
+            <div style="font-size:11px;font-weight:700;color:#93c5fd;margin-bottom:7px">📐 피치 레이아웃 가이드</div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:7px">
+              <div style="text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--accent2)">${segDist}m</div>
+                <div style="font-size:10px;color:var(--text3)">콘 간격</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--text)">${segs}구간</div>
+                <div style="font-size:10px;color:var(--text3)">${segDist}m × ${segs}</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:14px;font-weight:700;color:${returnsToStart?'#4ade80':'#fbbf24'}">${shuttleDesc}</div>
+                <div style="font-size:10px;color:var(--text3)">운동 구성</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:5px">이동 경로 &nbsp;<span style="color:var(--accent2);font-weight:600;letter-spacing:1px">${pathStr}</span></div>
+            <div style="background:var(--surface);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--text3)">
+              <span style="color:#4ade80;font-weight:700">A●</span>
+              <span style="color:var(--text3)">──── ${segDist}m ────</span>
+              <span style="color:#f87171;font-weight:700">●B</span>
+              &nbsp;&nbsp;콘 2개만 설치 · ${returnsToStart?`${fullShuttles}회 왕복 후 A 복귀`:`${segs}구간 이동`}
+            </div>
+          </div>`;
+      } else if(codAngle === 90){
+        const pathArr = ['A'];
+        for(let i=0;i<codCount;i++) pathArr.push(String.fromCharCode(66+i));
+        const pathStr = pathArr.join(' → ');
+        layoutGuideHtml = `
+          <div style="margin-top:10px;padding:10px 12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:8px">
+            <div style="font-size:11px;font-weight:700;color:#93c5fd;margin-bottom:7px">📐 피치 레이아웃 가이드</div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap;margin-bottom:7px">
+              <div style="text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--accent2)">${segDist}m</div>
+                <div style="font-size:10px;color:var(--text3)">구간당 거리</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:18px;font-weight:800;color:var(--text)">${segs}구간</div>
+                <div style="font-size:10px;color:var(--text3)">L자/Z자 배치</div>
+              </div>
+            </div>
+            <div style="font-size:11px;color:var(--text3);margin-bottom:5px">이동 경로 &nbsp;<span style="color:var(--accent2);font-weight:600;letter-spacing:1px">${pathStr}</span></div>
+            <div style="background:var(--surface);border-radius:6px;padding:8px 10px;font-size:11px;color:var(--text3)">
+              콘 ${segs}개 설치 · 각 전환 지점에서 90° 수직 방향으로 <strong style="color:var(--accent2)">${segDist}m</strong> 질주
+            </div>
+          </div>`;
+      }
+    }
+
     const codInfoHtml    = (codAngle > 0 && distStraight !== null) ? `
       <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:flex-start;gap:12px">
         <div style="font-size:22px;line-height:1">${codIcon}</div>
@@ -11259,7 +11324,8 @@ function buildCardioPrescriptionBlock(ex, catData, p){
             &nbsp;→&nbsp; COD 손실 <strong style="color:#f87171">${codLossPerRep}m</strong> (${codAngle}°×${codCount}회 × ${codLossPerTurn}m/턴)
             &nbsp;→&nbsp; 실제 처방 <strong style="color:var(--accent2)">${distActual}m</strong>
           </div>
-          <div style="margin-top:6px;font-size:11px;color:var(--text3)">선수 기준 — ${ws}초 동안 <strong style="color:var(--accent2);font-size:13px">${distActual}m</strong>를 달리고 ${codAngleLabel}로 방향 전환 (${codCount}회)</div>
+          <div style="margin-top:4px;font-size:11px;color:var(--text3)">선수 기준 — ${ws}초 동안 <strong style="color:var(--accent2);font-size:13px">${distActual}m</strong>를 달리고 ${codAngleLabel}로 방향 전환 (${codCount}회)</div>
+          ${layoutGuideHtml}
         </div>
       </div>` : '';
 
