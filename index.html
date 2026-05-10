@@ -1776,8 +1776,8 @@ async function showApp(user, preloadedRole){
     if(isAdmin){
       role = 'admin';
     } else {
-      const {data:prof} = await supa.from('profiles').select('role').eq('id', user.id).single();
-      role = prof?.role || 'coach';
+      const {data:prof, error:pe} = await supa.from('profiles').select('role').eq('id', user.id).single();
+      role = (pe || !prof) ? 'coach' : (prof.role || 'coach');
     }
   }
   await loadUserPermissions(user.id, role);
@@ -1855,13 +1855,22 @@ async function doLogin(){
   const admin = checkAdmin(user);
   let profileRole = 'coach';
   if(!admin){
-    const {data: profile} = await supa.from('profiles').select('approved,role').eq('id', user.id).single();
-    if(!profile || profile.approved === false){
+    // role 컬럼 없을 때를 대비해 fallback 처리
+    let profData = null;
+    const {data: p1, error: pe1} = await supa.from('profiles').select('approved,role').eq('id', user.id).single();
+    if(pe1 && pe1.message?.includes('role')){
+      // role 컬럼 미존재 → approved만 조회
+      const {data: p2} = await supa.from('profiles').select('approved').eq('id', user.id).single();
+      profData = p2;
+    } else {
+      profData = p1;
+    }
+    if(!profData || profData.approved === false){
       await supa.auth.signOut();
       errEl.textContent='관리자 승인 대기 중입니다. 승인 후 접속 가능합니다';
       return;
     }
-    profileRole = profile?.role || 'coach';
+    profileRole = profData?.role || 'coach';
   } else {
     profileRole = 'admin';
   }
@@ -2071,7 +2080,11 @@ async function approvePendingUser(idx){
   const u = window._mgmtUsers[idx];
   const sel = document.getElementById('pending-role-'+idx);
   const role = sel ? sel.value : (u.role||'coach');
-  const {error} = await supa.from('profiles').update({approved:true, role}).eq('id', u.id);
+  let {error} = await supa.from('profiles').update({approved:true, role}).eq('id', u.id);
+  if(error && error.message?.includes('role')){
+    // role 컬럼 미존재 시 → approved만 업데이트
+    ({error} = await supa.from('profiles').update({approved:true}).eq('id', u.id));
+  }
   if(error){ alert('오류: '+error.message); return; }
   loadMgmt('pending');
 }
@@ -2084,6 +2097,10 @@ async function approveUser(uid){
 
 async function changeUserRole(uid, role){
   const {error} = await supa.from('profiles').update({role}).eq('id', uid);
+  if(error && error.message?.includes('role')){
+    alert('⚠️ role 컬럼이 없습니다.\nSupabase SQL Editor에서 설정 SQL을 먼저 실행해주세요.\n(스텝 관리 → 설정 보기)');
+    return;
+  }
   if(error){ alert('역할 변경 오류: '+error.message); }
 }
 
