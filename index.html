@@ -12041,10 +12041,17 @@ async function generateMatchReport(){
     .limit(300);
 
   // 1분 롤링 mpm (§ 7용 — 없으면 § 7 카드 비활성화)
-  const {data:minuteRows} = await supa.from('match_minute_records')
-    .select('player_id,player_name,minute,mpm')
-    .eq('match_date',date).eq('opponent',opponent)
+  // opponent 이름 불일치 (예: '천안시티' vs '11R 천안시티') 대응 → 같은 날짜 전체 fetch 후 fuzzy match
+  const {data:minuteAll} = await supa.from('match_minute_records')
+    .select('player_id,player_name,minute,mpm,opponent')
+    .eq('match_date',date)
     .order('minute',{ascending:true});
+  const oppNorm = s => (s||'').toString().replace(/\s+/g,'').replace(/^\d+R/i,'').toLowerCase();
+  const tgtOpp = oppNorm(opponent);
+  const minuteRows = (minuteAll||[]).filter(r => {
+    const ro = oppNorm(r.opponent);
+    return ro===tgtOpp || ro.includes(tgtOpp) || tgtOpp.includes(ro);
+  });
 
   // ── 2. 헬퍼 ───────────────────────────────────────────
   const n = v => (v!=null && !isNaN(v)) ? parseFloat(v) : null;
@@ -13071,10 +13078,16 @@ async function parseMinuteFile(file){
     return;
   }
 
-  // 매칭되는 경기가 match_records에 있는지 체크
-  const {data:matchCheck} = await supa.from('match_records')
-    .select('opponent,match_date').eq('match_date', meta.date).eq('opponent', meta.opponent).limit(1);
-  const matched = matchCheck && matchCheck.length>0;
+  // 매칭되는 경기가 match_records에 있는지 체크 (opponent 이름 차이 허용)
+  const {data:matchCheckAll} = await supa.from('match_records')
+    .select('opponent,match_date').eq('match_date', meta.date).limit(50);
+  const oppNorm = s => (s||'').toString().replace(/\s+/g,'').replace(/^\d+R/i,'').toLowerCase();
+  const tgtOpp = oppNorm(meta.opponent);
+  const matchedRow = (matchCheckAll||[]).find(r=>{
+    const ro = oppNorm(r.opponent);
+    return ro===tgtOpp || ro.includes(tgtOpp) || tgtOpp.includes(ro);
+  });
+  const matched = !!matchedRow;
 
   // 미리보기 렌더링
   const previewEl = document.getElementById('minute-upload-preview');
