@@ -12395,9 +12395,11 @@ async function generateMatchReport(){
   `)}
 
   ${card(`
-    ${secHead('📊','팀 합계 — 최근 3경기 비교','FT 출전 전원 합산')}
+    ${secHead('📊','팀 합계 종합 분석','최근 3경기 비교 + 전·후반')}
+
+    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 최근 3경기 비교 (FT 출전 전원 합산)</div>
     ${last3.length>=2?`
-    <div style="overflow-x:auto">
+    <div style="overflow-x:auto;margin-bottom:20px">
       <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
         <thead>
           <tr style="background:var(--surface2)">
@@ -12418,86 +12420,47 @@ async function generateMatchReport(){
         </tbody>
       </table>
     </div>
-    `:`<div style="color:var(--text3);font-size:12px">비교 데이터 부족 (${last3.length}경기)</div>`}
-  `)}
+    `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${last3.length}경기)</div>`}
 
-  ${hasHalf?card(`
-    ${secHead('⏱️','전·후반 비교','팀 합계 + 개인별 mpm 낙폭')}
-    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">팀 합계</div>
-    <div style="overflow-x:auto;margin-bottom:16px">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:380px">
-        <thead>
-          <tr style="background:var(--surface2)">
-            <th style="padding:6px 8px;text-align:left;color:var(--text3)">지표</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">1Q</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">2Q</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">Δ</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${[
-            {l:'선수 수',    v1:q1Stats.cnt,    v2:q2Stats.cnt,    fmt:v=>v+'명',                  noPct:true},
-            {l:'TD (m)',    v1:q1Stats.td,     v2:q2Stats.td,     fmt:v=>Math.round(v).toLocaleString()},
-            {l:'평균 m/min',v1:q1Stats.avgMpm, v2:q2Stats.avgMpm, fmt:v=>v.toFixed(1)},
-            {l:'HIR+Sprint',v1:q1Stats.hir,    v2:q2Stats.hir,    fmt:v=>Math.round(v).toLocaleString()},
-            {l:'Band4 (m)', v1:q1Stats.b4,     v2:q2Stats.b4,     fmt:v=>Math.round(v)},
-            {l:'Sprint (m)',v1:q1Stats.b5,     v2:q2Stats.b5,     fmt:v=>Math.round(v)},
-            {l:'가속 (회)', v1:q1Stats.acc,    v2:q2Stats.acc,    fmt:v=>Math.round(v)},
-            {l:'감속 (회)', v1:q1Stats.dec,    v2:q2Stats.dec,    fmt:v=>Math.round(v)},
-            {l:'Player Load',v1:q1Stats.pl,    v2:q2Stats.pl,     fmt:v=>Math.round(v)},
-            {l:'RHIE',      v1:q1Stats.rhie,   v2:q2Stats.rhie,   fmt:v=>Math.round(v)},
-          ].map(row=>{
-            const delta = (!row.noPct&&row.v1>0)?(row.v2-row.v1)/row.v1*100:null;
-            const dc = delta==null?'var(--text3)':delta>0?'#4ade80':'#f87171';
-            return `<tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:5px 8px;color:var(--text2)">${row.l}</td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v1)}</td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v2)}</td>
-              <td style="padding:5px 8px;text-align:right;color:${dc}">${delta!=null?(delta>0?'+':'')+delta.toFixed(1)+'%':'-'}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-    ${halfPlayers.length?`
-    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">개인별 mpm 낙폭 (낙폭 큰 순)</div>
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
-        <thead>
-          <tr style="background:var(--surface2)">
-            <th style="padding:5px 8px;text-align:left;color:var(--text3)">선수</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">1Q TD</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">2Q TD</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">TD Δ%</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">1Q mpm</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">2Q mpm</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">mpm Δ%</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">RHIE Δ</th>
-            <th style="padding:5px 8px;text-align:center;color:var(--text3)">플래그</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${halfPlayers.map(({r,q1,q2,mpmDrop,tdDelta,rhieDelta})=>{
-            const mc = mpmDrop==null?'var(--text3)':mpmDrop<=-14?'#ef4444':mpmDrop<=-10?'#f97316':mpmDrop<=-6?'#eab308':'#22c55e';
-            const mfl = mpmDrop==null?'':mpmDrop<=-14?'🔴 고피로':mpmDrop<=-10?'🟠 주의':mpmDrop<=-6?'🟡 모니터':'';
-            return `<tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:5px 8px"><span style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'—'}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">${r.player_profiles?.position||''}</span></td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${q1?.td?Math.round(q1.td).toLocaleString():'—'}</td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${q2?.td?Math.round(q2.td).toLocaleString():'—'}</td>
-              <td style="padding:5px 8px;text-align:right">${tdDelta!=null?`<span style="color:${tdDelta>=0?'#4ade80':'#f87171'}">${tdDelta>0?'+':''}${tdDelta.toFixed(1)}%</span>`:'—'}</td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${q1?.mpm?q1.mpm.toFixed(1):'—'}</td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${q2?.mpm?q2.mpm.toFixed(1):'—'}</td>
-              <td style="padding:5px 8px;text-align:right"><span style="font-weight:700;color:${mc}">${mpmDrop!=null?(mpmDrop>0?'+':'')+mpmDrop.toFixed(1)+'%':'—'}</span></td>
-              <td style="padding:5px 8px;text-align:right;color:var(--text2)">${rhieDelta!=null?(rhieDelta>0?'+':'')+Math.round(rhieDelta):'—'}</td>
-              <td style="padding:5px 8px;text-align:center;font-size:11px">${mfl}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`:''}
-  `):card(`
-    ${secHead('⏱️','전·후반 비교')}
-    <div style="color:var(--text3);font-size:12px;text-align:center;padding:8px">1Q / 2Q 데이터가 없습니다</div>
+    ${hasHalf?`
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 전·후반 비교 (팀 합계)</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:380px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">지표</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">1Q</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">2Q</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Δ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[
+              {l:'선수 수',    v1:q1Stats.cnt,    v2:q2Stats.cnt,    fmt:v=>v+'명',                  noPct:true},
+              {l:'TD (m)',    v1:q1Stats.td,     v2:q2Stats.td,     fmt:v=>Math.round(v).toLocaleString()},
+              {l:'평균 m/min',v1:q1Stats.avgMpm, v2:q2Stats.avgMpm, fmt:v=>v.toFixed(1)},
+              {l:'HIR+Sprint',v1:q1Stats.hir,    v2:q2Stats.hir,    fmt:v=>Math.round(v).toLocaleString()},
+              {l:'Band4 (m)', v1:q1Stats.b4,     v2:q2Stats.b4,     fmt:v=>Math.round(v)},
+              {l:'Sprint (m)',v1:q1Stats.b5,     v2:q2Stats.b5,     fmt:v=>Math.round(v)},
+              {l:'가속 (회)', v1:q1Stats.acc,    v2:q2Stats.acc,    fmt:v=>Math.round(v)},
+              {l:'감속 (회)', v1:q1Stats.dec,    v2:q2Stats.dec,    fmt:v=>Math.round(v)},
+              {l:'Player Load',v1:q1Stats.pl,    v2:q2Stats.pl,     fmt:v=>Math.round(v)},
+              {l:'RHIE',      v1:q1Stats.rhie,   v2:q2Stats.rhie,   fmt:v=>Math.round(v)},
+            ].map(row=>{
+              const delta = (!row.noPct&&row.v1>0)?(row.v2-row.v1)/row.v1*100:null;
+              const dc = delta==null?'var(--text3)':delta>0?'#4ade80':'#f87171';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:5px 8px;color:var(--text2)">${row.l}</td>
+                <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v1)}</td>
+                <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v2)}</td>
+                <td style="padding:5px 8px;text-align:right;color:${dc}">${delta!=null?(delta>0?'+':'')+delta.toFixed(1)+'%':'-'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`:`<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;color:var(--text3);font-size:12px;text-align:center">전·후반 분리 데이터 없음 (1Q/2Q 미업로드)</div>`}
   `)}
 
   ${(()=>{
@@ -12506,10 +12469,67 @@ async function generateMatchReport(){
     const nameCell = p => `<td style="padding:6px 8px"><div style="font-weight:600;color:var(--text)">${p.name}</div><div style="font-size:10px;color:var(--text3)">${p.pos}</div></td>`;
     const durCell  = p => `<td style="padding:6px 8px;text-align:right;color:var(--text2)">${p.dur?Math.round(p.dur)+"'":'—'}</td>`;
 
+    // ── § 2: 총이동거리 (TD 내림차순) ─────────────────────
+    const sec2Sorted = [...secPl].sort(byDesc(p=>p.td.v));
+    const tdAbsPct = (v, mx) => (v!=null&&mx!=null&&mx>0) ? Math.round(v/mx*100) : null;
+    const mpmAbsPct = (v, mx) => (v!=null&&mx!=null&&mx>0) ? Math.round(v/mx*100) : null;
+    const tdBadge = p => {
+      const absPct = tdAbsPct(p.td.v, p.td.mx);
+      const intPct = mpmAbsPct(p.mpm.v, p.mpm.mx);
+      const absBg  = absPct==null?'var(--surface2)':absPct>=80?'#16a34a33':absPct>=60?'#ca8a0433':'#dc262633';
+      const absCol = absPct==null?'var(--text3)':absPct>=80?'#4ade80':absPct>=60?'#fbbf24':'#f87171';
+      const absLbl = absPct==null?'—':(absPct>=80?'🟢':absPct>=60?'🟡':'🔴')+' '+absPct+'%';
+      const intBg  = intPct==null?'var(--surface2)':intPct>=80?'#16a34a33':intPct>=60?'#ca8a0433':'#dc262633';
+      const intCol = intPct==null?'var(--text3)':intPct>=80?'#4ade80':intPct>=60?'#fbbf24':'#f87171';
+      const intLbl = intPct==null?'—':(intPct>=80?'🟢':intPct>=60?'🟡':'🔴')+' '+intPct+'%';
+      return {absPct,intPct,absCol,absLbl,absBg,intCol,intLbl,intBg};
+    };
+    const sec2td = card(`
+      ${secHead('📏','총이동거리 — 개인별 Match Max 대비','TD 내림차순 · 절대% = TD/Match Max · 강도% = MPM/Match Max')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--accent2)">TD (m)</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">Match Max TD</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--accent2)">절대% (TD)</th>
+            <th style="padding:6px 8px;text-align:right;color:#f59e0b">MPM</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">Max MPM</th>
+            <th style="padding:6px 8px;text-align:center;color:#f59e0b">강도% (MPM)</th>
+          </tr></thead>
+          <tbody>
+            ${sec2Sorted.map(p=>{
+              const b = tdBadge(p);
+              return `<tr style="border-bottom:1px solid var(--border)">
+                ${nameCell(p)}${durCell(p)}
+                <td style="padding:6px 8px;text-align:right;color:var(--accent2);font-weight:700;font-size:12px">${p.td.v!=null?Math.round(p.td.v).toLocaleString():'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text3)">${p.td.mx!=null?Math.round(p.td.mx).toLocaleString():'—'}</td>
+                <td style="padding:6px 8px;text-align:center">
+                  <span style="display:inline-block;padding:2px 7px;border-radius:4px;background:${b.absBg};color:${b.absCol};font-weight:700;font-size:11px">${b.absLbl}</span>
+                </td>
+                <td style="padding:6px 8px;text-align:right;color:#f59e0b;font-weight:600">${p.mpm.v!=null?p.mpm.v.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text3)">${p.mpm.mx!=null?p.mpm.mx.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:center">
+                  <span style="display:inline-block;padding:2px 7px;border-radius:4px;background:${b.intBg};color:${b.intCol};font-weight:700;font-size:11px">${b.intLbl}</span>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
+        <strong style="color:var(--text2)">기준 (CLAUDE.md Match Max 비교):</strong>
+        🟢 ≥80% 경기 수준 충족 · 🟡 60~79% 주의 · 🔴 &lt;60% 미달 —
+        <strong>절대%</strong> = 이 경기 TD ÷ 개인 커리어 최고 TD ·
+        <strong>강도%</strong> = 이 경기 MPM ÷ 개인 커리어 최고 MPM
+      </div>
+    `);
+
     // ── § 3: 고강도 러닝 + 스프린트 (HSR 내림차순) ─────────
     const sec3Sorted = [...secPl].sort(byDesc(p=>p.hsr.v));
     const sec3 = card(`
-      ${secHead('🏃','§ 3 고강도 러닝 + 스프린트 (개인별)','HIR+Sprint 내림차순 · 본인 Match Max 대비')}
+      ${secHead('🏃','고강도 러닝 + 스프린트 (개인별)','HIR+Sprint 내림차순 · 본인 Match Max 대비')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
           <thead><tr style="background:var(--surface2)">
@@ -12541,7 +12561,7 @@ async function generateMatchReport(){
     // ── § 4: 가속 + RHIE (RHIE 내림차순) ─────────────
     const sec4Sorted = [...secPl].sort(byDesc(p=>p.rhie.v));
     const sec4 = card(`
-      ${secHead('⚡','§ 4 가속·감속 + RHIE (개인별)','RHIE 내림차순 · 본인 Match Max 대비')}
+      ${secHead('⚡','가속·감속 + RHIE (개인별)','RHIE 내림차순 · 본인 Match Max 대비')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:480px">
           <thead><tr style="background:var(--surface2)">
@@ -12568,7 +12588,7 @@ async function generateMatchReport(){
     // ── § 5: FMP (Dyn.H 내림차순) ─────────────────
     const sec5Sorted = [...secPl].sort(byDesc(p=>p.fmpDynH.v));
     const sec5 = card(`
-      ${secHead('🦵','§ 5 FMP (Functional Movement Profile)','FMP Dynamic.H 내림차순 · 본인 Match Max 대비 · Dyn H/M 비율 = eccentric 부하 지표')}
+      ${secHead('🦵','FMP (Functional Movement Profile)','FMP Dynamic.H 내림차순 · 본인 Match Max 대비 · Dyn H/M 비율 = eccentric 부하 지표')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
           <thead><tr style="background:var(--surface2)">
@@ -12604,7 +12624,7 @@ async function generateMatchReport(){
     // ── § 6: 최고 스피드 (Vmax 내림차순) ──────────
     const sec6Sorted = [...secPl].sort(byDesc(p=>p.vmax.v));
     const sec6 = card(`
-      ${secHead('💨','§ 6 최고 스피드 (Vmax)','Vmax 내림차순 · 본인 Match Max 대비 · MSS 90% 노출 체크')}
+      ${secHead('💨','최고 스피드 (Vmax)','Vmax 내림차순 · 본인 Match Max 대비 · MSS 90% 노출 체크')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:420px">
           <thead><tr style="background:var(--surface2)">
@@ -12633,14 +12653,14 @@ async function generateMatchReport(){
       </div>
     `);
 
-    return sec3 + sec4 + sec5 + sec6;
+    return sec2td + sec3 + sec4 + sec5 + sec6;
   })()}
 
   ${(()=>{
     // ── § 7: 팀 1분 롤링 mpm 분석 ──────────────────
     if(!minuteRows || !minuteRows.length){
       return card(`
-        ${secHead('📈','§ 7 팀 1분 롤링 mpm 분석')}
+        ${secHead('📈','팀 1분 롤링 mpm 분석')}
         <div style="color:var(--text3);font-size:12px;text-align:center;padding:14px">
           이 경기의 1분 롤링 데이터가 없습니다.<br>
           <span style="color:var(--text2)">📤 GPS 업로드 탭 → 1분 롤링 mpm 파일 업로드</span> 후 다시 보고서를 생성하세요.
@@ -12751,7 +12771,7 @@ async function generateMatchReport(){
     }).join('');
 
     return card(`
-      ${secHead('📈','§ 7 팀 1분 롤링 mpm 분석',`팀 평균 m/min · 5분 이동평균 · 1Q 종료: ${halfBreak}' / 2Q 시작: ${halfStart}'`)}
+      ${secHead('📈','팀 1분 롤링 mpm 분석',`팀 평균 m/min · 5분 이동평균 · 1Q 종료: ${halfBreak}' / 2Q 시작: ${halfStart}'`)}
       <div style="overflow-x:auto">
         <svg viewBox="0 0 ${W} ${H+14}" style="width:100%;height:auto;display:block;background:var(--surface2);border-radius:8px">
           ${zoneRects}
@@ -12919,7 +12939,7 @@ async function generateMatchReport(){
     const selectOpts = stats.map((s,i)=>`<option value="${i}">${s.name}${s.pos?` (${s.pos})`:''} · ${s.dur}분 · 낙폭 ${s.drop!=null?(s.drop>0?'+':'')+s.drop.toFixed(1)+'%':'—'}</option>`).join('');
 
     return card(`
-      ${secHead('👤','§ 8 개인별 1분 롤링 mpm 분석','출전 전 선수 · 후반 낙폭 큰 순 · 5분 MA 기준')}
+      ${secHead('👤','개인별 1분 롤링 mpm 분석','출전 전 선수 · 후반 낙폭 큰 순 · 5분 MA 기준')}
       <div style="overflow-x:auto;margin-bottom:14px">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:680px">
           <thead><tr style="background:var(--surface2)">
@@ -13129,8 +13149,10 @@ function printMatchReport(){
   /* ── 페이지 설정 ── */
   @page{
     size:A4 portrait;
-    margin:15mm 14mm;
+    margin:12mm 0 8mm 0;
   }
+  ul,ol{ padding-left:0 !important; margin-left:0 !important; }
+  li{ list-style:none !important; }
   @media print{
     body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -13231,7 +13253,8 @@ function downloadMatchReportHTML(){
   [style*="color:#ef4444"]{color:#dc2626!important}[style*="color:#f97316"]{color:#ea580c!important}
   [style*="color:#22c55e"],[style*="color:#4ade80"]{color:#16a34a!important}
   [style*="color:#fbbf24"]{color:#d97706!important}[style*="color:#60a5fa"]{color:#2563eb!important}
-  @page{size:A4 portrait;margin:15mm 14mm}
+  ul,ol{padding-left:0!important;margin-left:0!important}li{list-style:none!important}
+  @page{size:A4 portrait;margin:12mm 0 8mm 0}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.lh{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head><body>
