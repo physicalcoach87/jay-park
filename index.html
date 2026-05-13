@@ -12002,13 +12002,27 @@ async function loadReportMatchSel(){
     .select('match_date,opponent,result')
     .eq('time_type','FT')
     .order('match_date',{ascending:false});
-  const seen=new Set();
-  const unique=(data||[]).filter(r=>{
-    const k=r.match_date+'|'+(r.opponent||'');
-    if(seen.has(k)) return false; seen.add(k); return true;
-  });
+  // 중복 제거: 같은 opponent+result 조합이 2일 이내면 동일 경기로 판단 → 최신 날짜만 유지
+  // (KST/UTC 업로드 날짜 차이 1일 오류 방지)
+  const deduped = [];
+  for(const r of (data||[])){
+    const opp = (r.opponent||'').trim();
+    const res = (r.result||'').trim();
+    const ms  = new Date(r.match_date).getTime();
+    const dup = deduped.findIndex(f=>{
+      return (f.opponent||'').trim()===opp &&
+             (f.result||'').trim()===res &&
+             Math.abs(new Date(f.match_date).getTime()-ms) <= 2*86400*1000;
+    });
+    if(dup>=0){
+      // 더 늦은 날짜로 교체 (경기 목록 기준 날짜 우선)
+      if(ms > new Date(deduped[dup].match_date).getTime()) deduped[dup]=r;
+    } else {
+      deduped.push(r);
+    }
+  }
   sel.innerHTML='<option value="">경기를 선택하세요</option>'+
-    unique.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${r.opponent||'?'} (${r.result||'—'})</option>`).join('');
+    deduped.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${(r.opponent||'?')} (${(r.result||'—').trim()})</option>`).join('');
 }
 
 // ── § 8: 선수 1명 선택 시 상세 차트 + 5분 구간 렌더 ──
