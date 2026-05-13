@@ -6146,7 +6146,7 @@ async function loadMorningReport(){
       .gte('record_date', since7Str).order('record_date',{ascending:false}),
     supa.from('injury_records')
       .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
-      .in('status',['치료중','재활중','복귀'])
+      .in('status',['치료중','재활중','부분 참여'])
       .order('injury_date',{ascending:false}),
   ]);
 
@@ -6370,13 +6370,13 @@ async function loadMorningReport(){
     .select('player_id,session_date,max_speed,duration,session_type2')
     .gte('session_date',since28Str).order('session_date',{ascending:false});
 
-  // 치료중/재활중 선수는 이미 부상자 현황에 표시되므로 위험 목록에서 제외
+  // 치료중/재활중/부분참여 선수는 이미 부상자 현황에 표시되므로 위험 목록에서 제외
   const injuredActiveIds = new Set(
-    (injuredAll||[]).filter(r=>r.status==='치료중'||r.status==='재활중').map(r=>r.player_id)
+    (injuredAll||[]).filter(r=>r.status==='치료중'||r.status==='재활중'||r.status==='부분 참여').map(r=>r.player_id)
   );
   const riskResults = [];
   for(const player of _players){
-    if(injuredActiveIds.has(player.id)) continue; // 치료중/재활중 → 부상 위험 목록 제외
+    if(injuredActiveIds.has(player.id)) continue; // 치료중/재활중/부분참여 → 부상 위험 목록 제외
     const pid = player.id;
     const mss = parseFloat(player.mss)||0;
     const pgps = (gps28||[]).filter(r=>r.player_id===pid); // 개인 데이터 전체 포함
@@ -6591,6 +6591,7 @@ async function loadMorningReport(){
               const player = _players.find(p=>p.id===inj.player_id);
           const statusColor = inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
                             : inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
+                            : inj.status==='부분 참여'?{bg:'#134e4a',text:'#5eead4'}
                             : {bg:'#78350f',text:'#fcd34d'};
           const injDays = inj.injury_date
             ? Math.floor((new Date(today) - new Date(inj.injury_date)) / 86400000)
@@ -6744,7 +6745,7 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
     supa.from('injury_records')
       .select('body_part,injury_type,status,injury_date')
       .eq('player_id', playerId)
-      .in('status',['치료중','재활중','복귀'])
+      .in('status',['치료중','재활중','부분 참여','복귀'])
       .limit(1),
   ]);
 
@@ -8312,7 +8313,7 @@ async function loadPlayerDashboard(){
       .order('record_date',{ascending:false}),
     supa.from('injury_records')
       .select('*').eq('player_id',playerId)
-      .in('status',['치료중','재활중','복귀'])
+      .in('status',['치료중','재활중','부분 참여','복귀'])
       .order('injury_date',{ascending:false})
   ]);
 
@@ -8536,7 +8537,7 @@ async function loadPlayerDashboard(){
             ${inj.notes?`<div style="font-size:11px;color:var(--text3);margin-top:1px">${inj.notes}</div>`:''}
           </div>
           <div style="display:flex;align-items:center;gap:5px;flex-shrink:0">
-            <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='재활중'?'#312e81':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='재활중'?'#a5b4fc':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
+            <span style="font-size:11px;padding:3px 8px;border-radius:4px;background:${inj.status==='치료중'?'#7f1d1d':inj.status==='재활중'?'#312e81':inj.status==='부분 참여'?'#134e4a':inj.status==='복귀'?'#78350f':'#052e16'};color:${inj.status==='치료중'?'#fca5a5':inj.status==='재활중'?'#a5b4fc':inj.status==='부분 참여'?'#5eead4':inj.status==='복귀'?'#fcd34d':'#4ade80'}">${inj.status}</span>
             <button onclick="openInjuryForm('${playerId}','${inj.id}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">✏️</button>
             <button onclick="deleteInjury('${inj.id}','${inj.body_part}')" style="font-size:11px;padding:3px 8px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:#fca5a5;cursor:pointer;font-family:inherit">🗑️</button>
           </div>
@@ -8997,10 +8998,10 @@ async function runInjuryRiskAnalysis(){
       .gte('record_date', since7Str).order('record_date', {ascending:false}),
     supa.from('injury_records')
       .select('player_id,status')
-      .in('status',['치료중','재활중']),
+      .in('status',['치료중','재활중','부분 참여']),
   ]);
 
-  // 치료중/재활중 선수는 이미 부상자 현황에 표시되므로 위험 분석 제외
+  // 치료중/재활중/부분참여 선수는 이미 부상자 현황에 표시되므로 위험 분석 제외
   const injuredNowIds = new Set((injuredNow||[]).map(r=>r.player_id));
 
   const results = [];
@@ -9253,8 +9254,8 @@ async function openInjuryForm(playerId, injuryId=null){
             <select id="inj-status" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
               <option value="치료중" ${inj?.status==='치료중'?'selected':''}>치료중</option>
               <option value="재활중" ${inj?.status==='재활중'?'selected':''}>재활중</option>
+              <option value="부분 참여" ${inj?.status==='부분 참여'?'selected':''}>부분 참여</option>
               <option value="복귀" ${inj?.status==='복귀'?'selected':''}>복귀</option>
-              <option value="완치" ${inj?.status==='완치'?'selected':''}>완치</option>
             </select>
           </div>
         </div>
