@@ -738,7 +738,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <!-- 경기 엑셀 업로드 섹션 -->
     <div id="uv-match" style="display:none">
       <div class="coaching-box" style="margin-bottom:1rem">
-        <p>BePro 경기 Excel 파일을 업로드합니다.<br>
+        <p>GPS 경기 Excel 파일을 업로드합니다.<br>
         컬럼: 날짜 / 경기상대 / TIME(FT·1Q·2Q) / 선수명 / TD / MPM / HSR+SPRINT / Band4 TD / Band5 TD / 가속 / RHIE / 최고속도 / P.Load / FMP Running.M·H / FMP Dynamic.M·H</p>
       </div>
       <div id="match-drop-zone" style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
@@ -12753,7 +12753,14 @@ async function parseMatchFile(file){
   if(msgTop) msgTop.innerHTML = '';
 
   if(!toInsert.length){
-    if(msgTop) msgTop.innerHTML = '<span style="color:#ef4444">⚠️ 저장할 데이터가 없습니다. 선수 이름을 확인하세요.</span>';
+    // 1분 롤링 파일을 잘못 올렸는지 자동 감지
+    const headersStr = (header||[]).map(h=>(h||'').toString().toLowerCase()).join('|');
+    const looksLikeMinute = /meterage per minute/.test(headersStr) && !/total distance|hir|sprint/.test(headersStr);
+    if(looksLikeMinute){
+      if(msgTop) msgTop.innerHTML = '<span style="color:#f59e0b">⚠️ 이 파일은 <strong>1분 롤링 mpm 파일</strong>로 보입니다. 이 영역(GPS 경기 엑셀)이 아니라 <strong>아래로 스크롤 → 📈 1분 롤링 분당이동거리 파일</strong> 영역에 업로드하세요.</span>';
+    } else {
+      if(msgTop) msgTop.innerHTML = '<span style="color:#ef4444">⚠️ 저장할 데이터가 없습니다. 선수 이름을 확인하세요.</span>';
+    }
     if(unknown.size) alert(`⚠️ 미등록 선수 (${[...unknown].join(', ')}) — 선수명 확인 필요`);
     return;
   }
@@ -12983,17 +12990,20 @@ async function parseMinuteFile(file){
   const header = raw[0].map(h => (h||'').toString().trim());
   const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
   const COL = {
-    name: ci('Name'),
-    jersey: ci('Jersey'),
-    mpm: ci('Meterage Per Minute'),
+    name:   ci('Name'),
+    jersey: ci('Jersey'),    // 형식 A: 'Name=Gabriel - 00:01:00' + 'Jersey=Gabriel'
+    time:   ci('Time'),      // 형식 B: 'Name=Gabriel'             + 'Time=00:01:00'
+    mpm:    ci('Meterage Per Minute'),
   };
+  // 형식 결정
+  const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
 
-  if(COL.name<0 || COL.jersey<0 || COL.mpm<0){
-    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락. 발견: ${header.join(', ')}</span>`;
+  if(COL.name<0 || COL.mpm<0 || !FORMAT){
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락 (Name + Meterage Per Minute + (Jersey 또는 Time) 필요).<br>발견: ${header.join(', ')}</span>`;
     return;
   }
 
-  // 선수명 → ID 매핑 (Jersey 컬럼 기준)
+  // 선수명 → ID 매핑
   if(!_players.length){
     const {data} = await supa.from('player_profiles').select('id,name');
     _players = data || [];
@@ -13007,16 +13017,37 @@ async function parseMinuteFile(file){
   let invalidTime = 0;
 
   for(const row of raw.slice(1)){
-    if(!row[COL.name] || !row[COL.jersey]) continue;
-    const fullName = String(row[COL.name]).trim();
-    const jersey   = String(row[COL.jersey]).trim();
-    const mpm      = parseFloat(row[COL.mpm]);
+    if(!row[COL.name]) continue;
+    const mpm = parseFloat(row[COL.mpm]);
     if(isNaN(mpm)) continue;
-    // 'Gabriel - 00:01:00' → 시간 추출
-    const parts = fullName.split(' - ');
-    const timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
-    const minute = hmsToMin(timeStr);
+
+    // 선수명 + 시간 추출 (형식 A/B 분기)
+    let jersey, timeStr, minute;
+    if(FORMAT==='B'){
+      jersey  = String(row[COL.name]).trim();
+      const t = row[COL.time];
+      // datetime.time → 'HH:MM:SS' / Date 객체 / 'HH:MM:SS' 문자열 / fraction(0~1)
+      if(t == null) { invalidTime++; continue; }
+      else if(t instanceof Date){
+        const hh = String(t.getUTCHours()).padStart(2,'0');
+        const mm = String(t.getUTCMinutes()).padStart(2,'0');
+        const ss = String(t.getUTCSeconds()).padStart(2,'0');
+        timeStr = `${hh}:${mm}:${ss}`;
+      } else {
+        timeStr = String(t).trim();
+      }
+      minute = hmsToMin(timeStr);
+    } else {
+      // 형식 A: Name='Gabriel - 00:01:00', Jersey='Gabriel'
+      if(!row[COL.jersey]) continue;
+      jersey = String(row[COL.jersey]).trim();
+      const fullName = String(row[COL.name]).trim();
+      const parts = fullName.split(' - ');
+      timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
+      minute = hmsToMin(timeStr);
+    }
     if(minute==null){ invalidTime++; continue; }
+
     const pid = nameMap[jersey] || null;
     if(!pid) unknownPlayers.add(jersey);
     else playersFound.add(jersey);
