@@ -8246,6 +8246,24 @@ async function loadTeamSummary(){
         </table>
       </div>
     </div>` : ''}` : ''}`;
+
+  // ── 훈련 보고서 액션바 ──
+  window._trainingReportDate = date;
+  const tPrintBar = `
+    <div id="training-report-action-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2)">
+        📋 훈련 데이터 보고서 &nbsp;—&nbsp; <span style="color:var(--accent2)">${date}</span>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="printTrainingReport()" style="font-size:12px;padding:7px 14px;border-radius:7px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">
+          🖨️ 인쇄 / PDF 저장
+        </button>
+        <button onclick="downloadTrainingReportHTML()" style="font-size:12px;padding:7px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">
+          📥 HTML 저장
+        </button>
+      </div>
+    </div>`;
+  out.innerHTML = tPrintBar + out.innerHTML;
 }
 // 뒤로가기 히스토리 스택
 let _navHistory = [];
@@ -13401,6 +13419,215 @@ ${printContent}
   const a    = document.createElement('a');
   a.href = url;
   a.download = `경기보고서_vs${opponent}_${date}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url), 2000);
+}
+
+// ── 훈련 보고서 인쇄 콘텐츠 추출 ────────────────────────────────
+function _getTrainingReportPrintContent(){
+  const wrap = document.getElementById('team-summary-output');
+  if(!wrap) return '';
+  const clone = wrap.cloneNode(true);
+  const bar = clone.querySelector('#training-report-action-bar');
+  if(bar) bar.remove();
+  return clone.innerHTML;
+}
+
+// ── 훈련 보고서 인쇄 / PDF 저장 ──────────────────────────────────
+function printTrainingReport(){
+  const date = window._trainingReportDate || '';
+  const printContent = _getTrainingReportPrintContent();
+  const w = window.open('', '_blank', 'width=900,height=700');
+  if(!w){ alert('팝업이 차단되어 있습니다. 팝업을 허용한 후 다시 시도하세요.'); return; }
+  const now = new Date();
+  const printDate = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  w.document.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>훈련 데이터 보고서 — ${date}</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{
+    --bg:#ffffff; --surface:#ffffff; --surface2:#f4f5f6;
+    --border:#d1d5db; --border2:#9ca3af;
+    --text:#111827; --text2:#374151; --text3:#6b7280;
+    --accent:#16a34a; --accent2:#15803d; --accent-bg:#f0fdf4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:#fff; color:#111827;
+    font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;
+    font-size:12px; line-height:1.55;
+    padding:0; margin:0;
+  }
+  .report-header{
+    background:#0a2540; color:#fff;
+    padding:18px 28px 14px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom:3px solid #16a34a;
+  }
+  .report-header-left{ display:flex; align-items:center; gap:14px; }
+  .report-logo{
+    width:44px; height:44px; background:#16a34a; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:22px; font-weight:700; color:#fff; flex-shrink:0;
+  }
+  .report-org{ font-size:11px; color:#94a3b8; letter-spacing:1px; text-transform:uppercase; }
+  .report-title{ font-size:17px; font-weight:700; letter-spacing:-0.3px; }
+  .report-sub{ font-size:11px; color:#cbd5e1; margin-top:2px; }
+  .report-meta{ text-align:right; font-size:11px; color:#94a3b8; line-height:1.8; }
+  .report-meta strong{ color:#e2e8f0; }
+  .report-body{ padding:20px 28px 16px; }
+  div[style*="background:var(--surface)"],
+  div[style*="background:var(--surface2)"]{background:#f9fafb !important;}
+  [style*="color:var(--text)"]:not([style*="color:var(--text2)"]):not([style*="color:var(--text3)"]){color:#111827 !important}
+  [style*="color:var(--text2)"]{ color:#374151 !important }
+  [style*="color:var(--text3)"]{ color:#6b7280 !important }
+  [style*="color:var(--accent2)"]{ color:#16a34a !important }
+  [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{ border-color:#9ca3af !important }
+  svg[style*="background:var(--surface2)"]{ background:#f4f5f6 !important }
+  #training-report-action-bar, select, button{ display:none !important }
+  div[style*="border-radius:10px"]{
+    break-inside:avoid;
+    page-break-inside:avoid;
+    margin-bottom:10px;
+  }
+  table{ border-collapse:collapse; width:100%; }
+  tr[style*="background:var(--surface2)"]{ background:#f3f4f6 !important }
+  td,th{ border-bottom:1px solid #d1d5db !important }
+  [style*="color:#ef4444"]{ color:#dc2626 !important }
+  [style*="color:#f97316"]{ color:#ea580c !important }
+  [style*="color:#eab308"]{ color:#ca8a04 !important }
+  [style*="color:#22c55e"],[style*="color:#4ade80"]{ color:#16a34a !important }
+  [style*="color:#fbbf24"]{ color:#d97706 !important }
+  [style*="color:#60a5fa"]{ color:#2563eb !important }
+  [style*="color:#fb923c"]{ color:#ea580c !important }
+  [style*="color:#a78bfa"]{ color:#7c3aed !important }
+  [style*="color:#c084fc"]{ color:#9333ea !important }
+  [style*="color:#34d399"]{ color:#059669 !important }
+  [style*="color:#f59e0b"]{ color:#d97706 !important }
+  .report-footer{
+    margin-top:24px; padding:12px 28px;
+    border-top:1px solid #e5e7eb;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:10px; color:#9ca3af;
+  }
+  .screen-print-btn{
+    position:fixed; bottom:24px; right:24px;
+    background:#16a34a; color:#fff;
+    border:none; border-radius:10px;
+    padding:12px 20px; font-size:14px; font-weight:700;
+    cursor:pointer; font-family:inherit;
+    box-shadow:0 4px 20px rgba(22,163,74,.35);
+    z-index:9999;
+  }
+  @page{ size:A4 portrait; margin:12mm 0 8mm 0; }
+  @media print{
+    body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .report-logo{ background:#16a34a !important; }
+    div[style*="border-radius:10px"]{ break-inside:avoid; page-break-inside:avoid; }
+    .screen-print-btn{ display:none !important }
+  }
+</style>
+</head>
+<body>
+  <div class="report-header">
+    <div class="report-header-left">
+      <div class="report-logo">⚽</div>
+      <div>
+        <div class="report-org">Busan IPark FC &nbsp;·&nbsp; Physical Performance</div>
+        <div class="report-title">훈련 데이터 보고서</div>
+        <div class="report-sub">${date}</div>
+      </div>
+    </div>
+    <div class="report-meta">
+      <div>작성일 &nbsp;<strong>${printDate}</strong></div>
+      <div>작성자 &nbsp;<strong>피지컬 코치</strong></div>
+      <div style="margin-top:4px;font-size:10px;color:#64748b">CONFIDENTIAL — FOR INTERNAL USE ONLY</div>
+    </div>
+  </div>
+  <div class="report-body">
+    ${printContent}
+  </div>
+  <div class="report-footer">
+    <div>부산아이파크 FC &nbsp;·&nbsp; 피지컬 퍼포먼스 팀</div>
+    <div>${date} &nbsp;|&nbsp; 생성: ${printDate}</div>
+  </div>
+  <button class="screen-print-btn" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+</body></html>`);
+  w.document.close();
+}
+
+// ── 훈련 보고서 HTML 다운로드 ─────────────────────────────────────
+function downloadTrainingReportHTML(){
+  const date = window._trainingReportDate || 'training';
+  const printContent = _getTrainingReportPrintContent();
+  const now = new Date();
+  const printDate = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  const html = `<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="UTF-8">
+<title>훈련 데이터 보고서 ${date}</title>
+<style>
+  @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+  :root{--bg:#fff;--surface:#fff;--surface2:#f4f5f6;--border:#d1d5db;--border2:#9ca3af;--text:#111827;--text2:#374151;--text3:#6b7280;--accent:#16a34a;--accent2:#15803d;--accent-bg:#f0fdf4;}
+  *{box-sizing:border-box}
+  body{background:#fff;color:#111827;font-family:'Pretendard','Apple SD Gothic Neo','Noto Sans KR',sans-serif;font-size:12px;line-height:1.55;padding:24px 32px}
+  .lh{background:#0a2540;color:#fff;padding:16px 20px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;border-bottom:3px solid #16a34a}
+  .lh-l{display:flex;align-items:center;gap:12px}
+  .lh-ico{width:40px;height:40px;background:#16a34a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700}
+  .lh-t{font-size:16px;font-weight:700}.lh-s{font-size:10px;color:#94a3b8;margin-top:2px}
+  .lh-r{text-align:right;font-size:10px;color:#94a3b8;line-height:1.8}
+  .footer{margin-top:24px;padding-top:12px;border-top:1.5px solid #9ca3af;font-size:10px;color:#6b7280;display:flex;justify-content:space-between}
+  #training-report-action-bar,select,button{display:none!important}
+  svg[style*="background:var(--surface2)"]{background:#f4f5f6!important}
+  [style*="color:var(--text)"]:not([style*="color:var(--text2)"]):not([style*="color:var(--text3)"]){color:#111827!important}
+  [style*="color:var(--text2)"]{color:#374151!important}
+  [style*="color:var(--text3)"]{color:#6b7280!important}
+  [style*="color:var(--accent2)"]{color:#16a34a!important}
+  [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{border-color:#9ca3af!important}
+  div[style*="border-radius:10px"]{margin-bottom:10px}
+  table{border-collapse:collapse;width:100%}
+  td,th{border-bottom:1px solid #d1d5db!important}
+  tr[style*="background:var(--surface2)"]{background:#f3f4f6!important}
+  [style*="color:#ef4444"]{color:#dc2626!important}[style*="color:#f97316"]{color:#ea580c!important}
+  [style*="color:#22c55e"],[style*="color:#4ade80"]{color:#16a34a!important}
+  [style*="color:#fbbf24"]{color:#d97706!important}[style*="color:#60a5fa"]{color:#2563eb!important}
+  [style*="color:#a78bfa"]{color:#7c3aed!important}[style*="color:#c084fc"]{color:#9333ea!important}
+  [style*="color:#34d399"]{color:#059669!important}[style*="color:#f59e0b"]{color:#d97706!important}
+  [style*="color:#fb923c"]{color:#ea580c!important}
+  @page{size:A4 portrait;margin:12mm 0 8mm 0}
+  @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.lh{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+</style>
+</head><body>
+<div class="lh">
+  <div class="lh-l">
+    <div class="lh-ico">⚽</div>
+    <div>
+      <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px">Busan IPark FC · Physical Performance</div>
+      <div class="lh-t">훈련 데이터 보고서</div>
+      <div class="lh-s">${date}</div>
+    </div>
+  </div>
+  <div class="lh-r">
+    <div>작성일 <strong style="color:#e2e8f0">${printDate}</strong></div>
+    <div>작성자 <strong style="color:#e2e8f0">피지컬 코치</strong></div>
+    <div style="margin-top:2px;font-size:9px;color:#64748b">CONFIDENTIAL — INTERNAL USE ONLY</div>
+  </div>
+</div>
+${printContent}
+<div class="footer"><div>부산아이파크 FC · 피지컬 퍼포먼스 팀</div><div>${date} | 생성: ${printDate}</div></div>
+</body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `훈련보고서_${date}.html`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
