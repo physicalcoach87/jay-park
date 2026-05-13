@@ -12046,7 +12046,7 @@ async function generateMatchReport(){
     .select('player_id,player_name,minute,mpm,opponent')
     .eq('match_date',date)
     .order('minute',{ascending:true});
-  const oppNorm = s => (s||'').toString().replace(/\s+/g,'').replace(/^vs/i,'').replace(/^\d+R/i,'').replace(/^vs/i,'').toLowerCase();
+  const oppNorm = s => (s||'').toString().normalize('NFC').toLowerCase().replace(/[^a-z0-9\uac00-\ud7a3]/g,'').replace(/^vs/,'').replace(/^\d+r/,'').replace(/^vs/,'');
   const tgtOpp = oppNorm(opponent);
   // 1) 정확 일치 우선
   let minuteRows = (minuteAll||[]).filter(r => r.opponent===opponent);
@@ -13098,7 +13098,7 @@ async function parseMinuteFile(file){
   // 매칭되는 경기가 match_records에 있는지 체크 (opponent 이름 차이 허용)
   const {data:matchCheckAll} = await supa.from('match_records')
     .select('opponent,match_date').eq('match_date', meta.date).limit(50);
-  const oppNorm = s => (s||'').toString().replace(/\s+/g,'').replace(/^\d+R/i,'').toLowerCase();
+  const oppNorm = s => (s||'').toString().normalize('NFC').toLowerCase().replace(/[^a-z0-9\uac00-\ud7a3]/g,'').replace(/^vs/,'').replace(/^\d+r/,'').replace(/^vs/,'');
   const tgtOpp = oppNorm(meta.opponent);
   const matchedRow = (matchCheckAll||[]).find(r=>{
     const ro = oppNorm(r.opponent);
