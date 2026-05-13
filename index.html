@@ -12318,7 +12318,7 @@ async function generateMatchReport(){
         <div style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:4px">vs ${opponent}</div>
         <div style="font-size:12px;color:var(--text3)">${date} · ${info.home_away==='H'?'🏠 홈':'✈️ 원정'}</div>
         <div style="font-size:14px;color:var(--text2);margin-top:6px;font-weight:600">${info.score||'—'}</div>
-        ${hasHalf?`<div style="font-size:11px;color:var(--text3);margin-top:4px">1H ${durQ1?durQ1+"'":"—"} · 2H ${durQ2?durQ2+"'":"—"}</div>`:''}
+        ${hasHalf?`<div style="font-size:11px;color:var(--text3);margin-top:4px">1Q ${durQ1?durQ1+"'":"—"} · 2Q ${durQ2?durQ2+"'":"—"}</div>`:''}
       </div>
       <div style="text-align:right">
         <div style="background:${resultBg};color:${resultColor};padding:6px 20px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block">${resultLabel}</div>
@@ -12363,8 +12363,8 @@ async function generateMatchReport(){
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">지표</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">1H</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">2H</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">1Q</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">2Q</th>
             <th style="padding:6px 8px;text-align:right;color:var(--text3)">Δ</th>
           </tr>
         </thead>
@@ -12400,11 +12400,11 @@ async function generateMatchReport(){
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:5px 8px;text-align:left;color:var(--text3)">선수</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">1H TD</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">2H TD</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text3)">1Q TD</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text3)">2Q TD</th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3)">TD Δ%</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">1H mpm</th>
-            <th style="padding:5px 8px;text-align:right;color:var(--text3)">2H mpm</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text3)">1Q mpm</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text3)">2Q mpm</th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3)">mpm Δ%</th>
             <th style="padding:5px 8px;text-align:right;color:var(--text3)">RHIE Δ</th>
             <th style="padding:5px 8px;text-align:center;color:var(--text3)">플래그</th>
@@ -12645,41 +12645,70 @@ async function generateMatchReport(){
     const path1 = teamAvg.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
     const path2 = ma5.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
     const yTicks = [0, yMax/2, yMax].map(v=>`<line x1="${PAD.l}" x2="${W-PAD.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="0.5"/><text x="${PAD.l-4}" y="${Y(v)+3}" fill="var(--text3)" font-size="9" text-anchor="end">${v.toFixed(0)}</text>`).join('');
-    const halfLine = `<line x1="${X(halfBreak)}" x2="${X(halfBreak)}" y1="${PAD.t}" y2="${H-PAD.b}" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3"/><text x="${X(halfBreak)+3}" y="${PAD.t+10}" fill="#fbbf24" font-size="9">HT ${halfBreak}'</text>`;
-    const fatigueRects = top3Fatigue.map(s=>`<rect x="${X(s.from)}" y="${PAD.t}" width="${X(s.to)-X(s.from)}" height="${innerH}" fill="#ef4444" opacity="0.08"/>`).join('');
+    // 1Q/2Q 구역 배경 분리
+    const halfX = X(halfBreak);
+    const zoneRects = `
+      <rect x="${PAD.l}" y="${PAD.t}" width="${halfX-PAD.l}" height="${innerH}" fill="#3b82f6" opacity="0.06"/>
+      <rect x="${halfX}" y="${PAD.t}" width="${W-PAD.r-halfX}" height="${innerH}" fill="#f97316" opacity="0.06"/>
+      <text x="${PAD.l+6}" y="${PAD.t+14}" fill="#60a5fa" font-size="10" font-weight="700" opacity="0.7">1Q</text>
+      <text x="${halfX+6}" y="${PAD.t+14}" fill="#fb923c" font-size="10" font-weight="700" opacity="0.7">2Q</text>
+    `;
+    // 하프타임 구분선 (두께+색 강화)
+    const halfLine = `<line x1="${halfX}" x2="${halfX}" y1="${PAD.t}" y2="${H-PAD.b}" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <text x="${halfX+3}" y="${PAD.t+26}" fill="#fbbf24" font-size="9" font-weight="600">HT ${halfBreak}'</text>`;
+    const fatigueRects = top3Fatigue.map(s=>`<rect x="${X(s.from)}" y="${PAD.t}" width="${Math.max(1,X(s.to)-X(s.from))}" height="${innerH}" fill="#ef4444" opacity="0.12"/>`).join('');
+
+    // 분 단위 최대 낙폭 마커 (MA 기준 단일 분 하락률 top3)
+    const maDrops = ma5.map((t,i)=>{
+      if(i===0) return null;
+      const prev = ma5[i-1];
+      if(prev.v===0) return null;
+      return {m:t.m, drop:(t.v-prev.v)/prev.v*100, y:Y(t.v)};
+    }).filter(Boolean).sort((a,b)=>a.drop-b.drop).slice(0,3);
+    const dropMarkers = maDrops.map(d=>{
+      const cx = X(d.m); const cy = d.y;
+      const label = d.drop.toFixed(1)+'%';
+      return `<circle cx="${cx}" cy="${cy}" r="3.5" fill="#ef4444" opacity="0.85"/>
+        <line x1="${cx}" x2="${cx}" y1="${cy+4}" y2="${H-PAD.b}" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="2,2" opacity="0.5"/>
+        <text x="${cx}" y="${H-PAD.b+10}" fill="#ef4444" font-size="8" text-anchor="middle">${d.m}'</text>
+        <text x="${cx}" y="${cy-6}" fill="#ef4444" font-size="8" text-anchor="middle">${label}</text>`;
+    }).join('');
 
     return card(`
       ${secHead('📈','§ 7 팀 1분 롤링 mpm 분석',`팀 평균 m/min · 5분 이동평균 · 하프타임 자동감지: ${halfBreak}분`)}
       <div style="overflow-x:auto">
-        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;background:var(--surface2);border-radius:8px">
+        <svg viewBox="0 0 ${W} ${H+14}" style="width:100%;height:auto;display:block;background:var(--surface2);border-radius:8px">
+          ${zoneRects}
           ${yTicks}
           ${fatigueRects}
           ${halfLine}
-          <path d="${path1}" fill="none" stroke="#94a3b8" stroke-width="1" opacity="0.55"/>
-          <path d="${path2}" fill="none" stroke="var(--accent2)" stroke-width="2"/>
+          <path d="${path1}" fill="none" stroke="#94a3b8" stroke-width="1" opacity="0.45"/>
+          <path d="${path2}" fill="none" stroke="var(--accent2)" stroke-width="2.5"/>
+          ${dropMarkers}
           <text x="${PAD.l}" y="${H-6}" fill="var(--text3)" font-size="9">${xMin}'</text>
           <text x="${W-PAD.r}" y="${H-6}" fill="var(--text3)" font-size="9" text-anchor="end">${xMax}'</text>
           <text x="${W-PAD.r-4}" y="${PAD.t+10}" fill="var(--accent2)" font-size="9" text-anchor="end">— 5분 MA</text>
           <text x="${W-PAD.r-4}" y="${PAD.t+22}" fill="#94a3b8" font-size="9" text-anchor="end">— 1분 raw</text>
+          <text x="${W-PAD.r-4}" y="${PAD.t+34}" fill="#ef4444" font-size="8.5" text-anchor="end">● 낙폭 top3</text>
         </svg>
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">
-        <div style="background:var(--surface2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--text3)">전반 평균 mpm</div>
+        <div style="background:var(--surface2);padding:10px;border-radius:8px;border-top:2px solid #3b82f6">
+          <div style="font-size:10px;color:var(--text3)">1Q 평균 mpm</div>
           <div style="font-size:18px;font-weight:700;color:var(--text)">${h1Avg.toFixed(1)}</div>
         </div>
-        <div style="background:var(--surface2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--text3)">후반 평균 mpm</div>
+        <div style="background:var(--surface2);padding:10px;border-radius:8px;border-top:2px solid #f97316">
+          <div style="font-size:10px;color:var(--text3)">2Q 평균 mpm</div>
           <div style="font-size:18px;font-weight:700;color:var(--text)">${h2Avg.toFixed(1)}</div>
         </div>
-        <div style="background:var(--surface2);padding:10px;border-radius:8px">
-          <div style="font-size:10px;color:var(--text3)">후반 낙폭</div>
+        <div style="background:var(--surface2);padding:10px;border-radius:8px;border-top:2px solid ${drop<=-10?'#ef4444':drop<=-6?'#f97316':drop<=-3?'#eab308':'#4ade80'}">
+          <div style="font-size:10px;color:var(--text3)">2Q 낙폭 (vs 1Q)</div>
           <div style="font-size:18px;font-weight:700;color:${drop<=-10?'#ef4444':drop<=-6?'#f97316':drop<=-3?'#eab308':'#4ade80'}">${drop>0?'+':''}${drop.toFixed(1)}%</div>
         </div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
         <div>
-          <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">전반 5분 구간</div>
+          <div style="font-size:11px;font-weight:600;color:#60a5fa;margin-bottom:6px">🔵 1Q 5분 구간</div>
           <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="background:var(--surface2)"><th style="padding:4px 6px;text-align:left;color:var(--text3)">구간</th><th style="padding:4px 6px;text-align:right;color:var(--text3)">m/min</th></tr></thead>
             <tbody>
@@ -12688,7 +12717,7 @@ async function generateMatchReport(){
           </table>
         </div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">후반 5분 구간</div>
+          <div style="font-size:11px;font-weight:600;color:#fb923c;margin-bottom:6px">🟠 2Q 5분 구간 (vs 1Q 평균)</div>
           <table style="width:100%;border-collapse:collapse;font-size:11px">
             <thead><tr style="background:var(--surface2)"><th style="padding:4px 6px;text-align:left;color:var(--text3)">구간</th><th style="padding:4px 6px;text-align:right;color:var(--text3)">m/min</th></tr></thead>
             <tbody>
@@ -12819,8 +12848,8 @@ async function generateMatchReport(){
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">mpm 추이</th>
             <th style="padding:6px 8px;text-align:right;color:var(--text3)">평균</th>
             <th style="padding:6px 8px;text-align:right;color:var(--text3)">5분 peak</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">1H 평균</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">2H 평균</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">1Q 평균</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">2Q 평균</th>
             <th style="padding:6px 8px;text-align:right;color:var(--text3)">후반 낙폭</th>
           </tr></thead>
           <tbody>
