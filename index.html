@@ -9348,6 +9348,8 @@ async function loadNotifyTab(){
   }
   setNotifyTab('notice');
   loadNotifyHistory();
+  // Realtime 구독 (최초 1회)
+  if(!_realtimeCh) initMessageRealtime();
 }
 
 function setNotifyTab(tab){
@@ -9592,8 +9594,83 @@ async function loadMessageList(){
   }
 }
 
-// 30초마다 새 메시지 체크
+// 30초마다 새 메시지 체크 (Realtime 보조 폴링)
 setInterval(loadMessageList, 30000);
+
+/* ── Supabase Realtime: 선수 답장 즉시 감지 ── */
+let _realtimeCh = null;
+function initMessageRealtime(){
+  if(!supa) return;
+  if(_realtimeCh) { supa.removeChannel(_realtimeCh); _realtimeCh = null; }
+  _realtimeCh = supa
+    .channel('coach-msg-realtime')
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'messages',
+      filter: 'sender=eq.player'
+    }, (payload) => {
+      const msg = payload.new;
+      const player = _players.find(p => p.id === msg.player_id);
+      const name = player?.name || '선수';
+      // 토스트 알림
+      showMsgToast(name, msg.content);
+      // beep
+      playBeep();
+      // 현재 해당 선수 채팅 열어있으면 즉시 갱신
+      if(_msgPlayerId === msg.player_id) renderMessageThread(msg.player_id);
+      // 선수 목록 뱃지 갱신
+      loadMessageList();
+    })
+    .subscribe();
+}
+
+function showMsgToast(playerName, content){
+  // 기존 토스트 제거
+  const old = document.getElementById('msg-toast');
+  if(old) old.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'msg-toast';
+  const preview = (content||'').slice(0, 40) + ((content||'').length > 40 ? '…' : '');
+  toast.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:3px">💬 ${playerName} 답장</div>
+    <div style="font-size:12px;color:rgba(255,255,255,0.8)">${preview}</div>`;
+  toast.style.cssText = `
+    position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+    background:linear-gradient(135deg,#2a80eb,#1a60cb);
+    border-radius:12px;padding:12px 18px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.5);
+    z-index:99999;cursor:pointer;max-width:300px;min-width:220px;
+    animation:toastIn 0.3s ease;`;
+
+  if(!document.getElementById('toast-style')){
+    const s = document.createElement('style');
+    s.id = 'toast-style';
+    s.textContent = `@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(20px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`;
+    document.head.appendChild(s);
+  }
+
+  toast.onclick = () => {
+    toast.remove();
+    // 알림/메시지 탭 → 1:1 메시지로 이동
+    switchTab('notify', document.querySelector('[onclick*="notify"]'));
+    setTimeout(() => {
+      setNotifyTab('message');
+      const sel = document.getElementById('msg-player-sel');
+      if(sel && _players.find(p => p.name === playerName)){
+        const pid = _players.find(p => p.name === playerName)?.id;
+        if(pid){ sel.value = pid; loadMessageThread(); }
+      }
+    }, 300);
+  };
+
+  document.body.appendChild(toast);
+  setTimeout(() => { if(toast.parentNode) toast.style.opacity='0'; toast.style.transition='opacity 0.4s'; setTimeout(()=>toast.remove(), 400); }, 5000);
+  // 탭 타이틀 뱃지 즉시 갱신
+  document.title = `(!) ${playerName} 답장 | 부산아이파크`;
+  setTimeout(() => { if(document.title.startsWith('(!)')) document.title = '부산아이파크 | Coach'; }, 8000);
+}
 
 async function renderEditedProg(outputId, prog, pos, md, v){
   const links = await loadL();
