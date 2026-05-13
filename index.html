@@ -7642,7 +7642,7 @@ async function loadTwoWeekCal(baseDate){
     const d = new Date(start); d.setDate(start.getDate() + i);
     const ymd = d.toISOString().split('T')[0];
 
-    // SS(대표팀/개인 일정), X(엔트리 제외)는 팀 캘린더에서 완전 제외 → 개인 데이터 탭에서만 확인
+    // SS(스페셜 세션), X(엔트리 제외)는 팀 캘린더에서 완전 제외 → 개인 데이터 탭에서만 확인
     const dayAll = (gpsAll||[]).filter(r => { const _t=(r.session_type2||'').trim().toUpperCase(); return r.session_date === ymd && _t !== 'SS' && _t !== 'X'; });
     const dayM   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
     const dayS   = dayAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'S');
@@ -7843,10 +7843,10 @@ async function renderTwoWeekDetail(idx){
   const rpeMap = {};
   (dayRpe||[]).forEach(r => { rpeMap[r.player_id] = r; });
 
-  // SS(대표팀/개인 일정), X(엔트리 제외)는 팀 상세 뷰에서도 제외 → 개인 데이터 탭에서만 확인
+  // SS(스페셜 세션), X(엔트리 제외)는 팀 상세 뷰에서도 제외 → 개인 데이터 탭에서만 확인
   // session_type2 = 'M'  → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
   // session_type2 = 'S'  → 서브/미엔트리 개인컨디셔닝 → 팀 평균 제외
-  // session_type2 = 'SS' → 대표팀 소집/개인 일정 → 팀 뷰 전체 제외
+  // session_type2 = 'SS' → 스페셜 세션(Special Session) → 팀 뷰 전체 제외
   // session_type2 = 'X'  → 엔트리 제외(Non squad) → 팀 뷰 전체 제외
   const teamGps = (dayGps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
   const indGps  = (dayGps||[]).filter(r => { const t=(r.session_type2||'').trim().toUpperCase(); return t !== 'M' && t !== 'SS' && t !== 'X'; });
@@ -8226,7 +8226,7 @@ async function loadTeamSummary(){
         서브 평균 (${indGps.length}명)
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-        서브/미엔트리(S) ${indGps.length - ssGps.length - xGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">대표팀 소집(SS) '+ssGps.length+'명 — 팀 평균 미반영</span>' : ''}${xGps.length > 0 ? ' · <span style="color:#f87171;font-weight:600">엔트리 제외(X) '+xGps.length+'명 — 팀 평균 미반영</span>' : ''}
+        서브/미엔트리(S) ${indGps.length - ssGps.length - xGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">스페셜 세션(SS) '+ssGps.length+'명 — 팀 평균 미반영</span>' : ''}${xGps.length > 0 ? ' · <span style="color:#f87171;font-weight:600">엔트리 제외(X) '+xGps.length+'명 — 팀 평균 미반영</span>' : ''}
       </div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin-bottom:12px">
         <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
