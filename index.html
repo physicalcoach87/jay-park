@@ -308,7 +308,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab admin-only active" onclick="switchTab('report',this)">📋 데일리 브리핑</button>
   <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
   <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
-  <button class="tab admin-only" onclick="switchTab('notify',this)">🔔 알림/메시지</button>
+  <button class="tab admin-only" onclick="switchTab('notify',this)" id="tab-btn-notify" style="position:relative">🔔 알림/메시지<span id="notify-tab-badge" style="display:none;position:absolute;top:4px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button>
 </div>
 
 <!-- 모닝 레포트 탭 -->
@@ -9339,6 +9339,9 @@ let _msgPlayerId = null;
 let _msgInterval = null;
 
 async function loadNotifyTab(){
+  // 탭 진입 시 뱃지 클리어
+  const badge = document.getElementById('notify-tab-badge');
+  if(badge) badge.style.display = 'none';
   const {data} = await supa.from('player_profiles').select('*').order('position').order('name');
   _players = data||[];
   const msgSel = document.getElementById('msg-player-sel');
@@ -9478,8 +9481,14 @@ async function deleteAllMessages(playerId){
 async function renderMessageThread(playerId){
   const el = document.getElementById('msg-thread');
   if(!el) return;
+  const myEmail = currentUser?.email || null;
+  // 내가 보낸 코치 메시지 + 나에게 온 선수 답장만 표시
   const {data} = await supa.from('messages').select('*')
-    .eq('player_id',playerId).order('created_at',{ascending:true}).limit(50);
+    .eq('player_id', playerId)
+    .or(myEmail
+      ? `and(sender.eq.coach,coach_email.eq.${myEmail}),and(sender.eq.player,coach_email.eq.${myEmail}),and(sender.eq.player,coach_email.is.null)`
+      : 'sender.eq.coach,sender.eq.player')
+    .order('created_at',{ascending:true}).limit(50);
 
   // 대화 전체 삭제 버튼
   const delAllWrap = document.getElementById('msg-del-all-wrap');
@@ -9524,7 +9533,7 @@ async function sendMessage(){
   const content = document.getElementById('msg-input').value.trim();
   if(!playerId){ alert('선수를 선택해주세요'); return; }
   if(!content) return;
-  await supa.from('messages').insert({player_id:playerId, sender:'coach', content, is_read:false});
+  await supa.from('messages').insert({player_id:playerId, sender:'coach', content, is_read:false, coach_email: currentUser?.email||null});
   document.getElementById('msg-input').value='';
   renderMessageThread(playerId);
   // 해당 선수에게 푸시 알림 발송
@@ -9563,7 +9572,11 @@ function playBeep(){
 }
 
 async function loadMessageList(){
-  const {data} = await supa.from('messages').select('player_id').eq('sender','player').eq('is_read',false);
+  const myEmail = currentUser?.email || null;
+  // 내게 온 미읽음 선수 메시지만
+  let q = supa.from('messages').select('player_id').eq('sender','player').eq('is_read',false);
+  if(myEmail) q = q.eq('coach_email', myEmail);
+  const {data} = await q;
   const unreadIds = new Set((data||[]).map(m=>m.player_id));
   
   // 새 메시지 감지
@@ -9571,19 +9584,20 @@ async function loadMessageList(){
   for(const id of unreadIds){
     if(!_prevUnreadIds.has(id)){ newMsg = true; break; }
   }
+  // 탭 뱃지 갱신
+  const badge = document.getElementById('notify-tab-badge');
+  const cnt = unreadIds.size;
+  if(badge){
+    if(cnt > 0){ badge.textContent = cnt > 99 ? '99+' : cnt; badge.style.display = 'inline-block'; }
+    else { badge.style.display = 'none'; }
+  }
+
   if(newMsg && _prevUnreadIds.size > 0){
     playBeep();
-    // 탭 타이틀 뱃지
-    const count = unreadIds.size;
-    document.title = count > 0 ? `(${count}) 새 메시지 | 부산아이파크` : '부산아이파크 | Coach';
-    // 🔔 알림 탭 버튼 강조
-    const notifyTab = document.querySelector('[onclick*="notify"]');
-    if(notifyTab) notifyTab.style.color = 'var(--red)';
+    document.title = cnt > 0 ? `(${cnt}) 새 메시지 | 부산아이파크` : '부산아이파크 | Coach';
   }
-  if(unreadIds.size === 0){
+  if(cnt === 0){
     document.title = '부산아이파크 | Coach';
-    const notifyTab = document.querySelector('[onclick*="notify"]');
-    if(notifyTab) notifyTab.style.color = '';
   }
   _prevUnreadIds = unreadIds;
   
