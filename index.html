@@ -1689,6 +1689,17 @@ const SUPA_URL = 'https://gmrhkbddhzpfqzkhuvgf.supabase.co';
 const SUPA_KEY = 'sb_publishable_sj1Pro0Pwv3i-RzQdHsEPw_WLJUsa9V';
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 
+// ── KST 날짜 헬퍼 (UTC+9 보정 — toISOString()은 UTC 기준이므로 오전9시 이전엔 전날 반환 버그 발생)
+function getKSTDateStr(dateObj) {
+  const d = dateObj ? new Date(dateObj) : new Date();
+  const kst = new Date(d.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split('T')[0];
+}
+function getKSTNow() {
+  const now = new Date();
+  return new Date(now.getTime() + 9 * 60 * 60 * 1000);
+}
+
 let currentUser = null;
 let isAdmin = false;
 let currentRole = 'coach';
@@ -5237,7 +5248,7 @@ let _matchParseData = []; // 파싱된 경기 데이터 임시 저장
 let _minuteParseData = null; // 파싱된 1분 롤링 데이터 (rows + meta)
 
 async function loadPlayerManagement(){
-  const today = new Date().toISOString().split('T')[0];
+  const today = getKSTDateStr();
   const dateEl = document.getElementById('team-date');
   if(dateEl && !dateEl.value) dateEl.value = today;
   const wDateEl = document.getElementById('wellness-view-date');
@@ -5278,7 +5289,7 @@ function setPlayerView(view){
   if(backWrap) backWrap.style.display = (view==='dashboard' && _navHistory.length > 0) ? 'block' : 'none';
 
   if(view==='team'){
-    const today = new Date().toISOString().split('T')[0];
+    const today = getKSTDateStr();
     const dateEl = document.getElementById('team-date');
     if(dateEl && !dateEl.value) dateEl.value = today;
     const base = (dateEl && dateEl.value) ? dateEl.value : today;
@@ -5317,7 +5328,7 @@ const WELLNESS_COLORS = {1:'#ef4444',2:'#f97316',3:'#eab308',4:'#84cc16',5:'#22c
 const WELLNESS_LABELS = {1:'최악',2:'나쁨',3:'보통',4:'좋음',5:'최상'};
 
 async function initWellnessView(){
-  const today = new Date().toISOString().split('T')[0];
+  const today = getKSTDateStr();
 
   // 관리자 또는 staff 역할(coach/physical/medical)은 팀 웰니스 현황 표시
   const isStaff = isAdmin || ['admin','coach','physical','medical'].includes(currentRole);
@@ -5425,7 +5436,7 @@ async function saveWellness(){
   const wrap = document.getElementById('wellness-form-items');
   const playerId = wrap.dataset.playerId;
   const existingId = wrap.dataset.existingId;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getKSTDateStr();
   const msg = document.getElementById('wellness-msg');
 
   const payload = {
@@ -6096,7 +6107,7 @@ async function loadMorningReport(){
   if(!out) return;
   out.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text3);font-size:13px">⏳ 레포트 생성 중...</div>';
 
-  const now   = new Date();
+  const now   = getKSTNow();  // KST 기준 (오전9시 이전 UTC 전날 버그 방지)
   const today = now.toISOString().split('T')[0];
   const yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
   const yesterdayStr = yesterday.toISOString().split('T')[0];
@@ -8989,7 +9000,7 @@ async function runInjuryRiskAnalysis(){
   if(!out) return;
   out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">⏳ 부상 위험 분석 중...</div>';
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getKSTDateStr();
   const since28 = new Date(); since28.setDate(since28.getDate()-28);
   const since28Str = since28.toISOString().split('T')[0];
   const since21 = new Date(); since21.setDate(since21.getDate()-21);
@@ -9237,7 +9248,7 @@ async function openInjuryForm(playerId, injuryId=null){
     inj = data;
   }
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getKSTDateStr();
   const modal = document.createElement('div');
   modal.id = 'injury-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
@@ -9321,7 +9332,7 @@ async function saveInjuryForm(){
     injury_type: type||'',
     severity:    document.getElementById('inj-severity')?.value||'경미',
     status:      document.getElementById('inj-status')?.value||'치료중',
-    injury_date: document.getElementById('inj-date')?.value||new Date().toISOString().split('T')[0],
+    injury_date: document.getElementById('inj-date')?.value||getKSTDateStr(),
     return_date: document.getElementById('inj-return')?.value||null,
     notes:       document.getElementById('inj-notes')?.value?.trim()||null,
   };
@@ -14236,7 +14247,7 @@ async function updateMatchMax(playerIds){
       match_max_fmp_run_h:maxF('fmp_run_h'),
       match_max_fmp_dyn_m:maxF('fmp_dyn_m'),
       match_max_fmp_dyn_h:maxF('fmp_dyn_h'),
-      match_max_updated:  new Date().toISOString().split('T')[0],
+      match_max_updated:  getKSTDateStr(),
     };
     await supa.from('player_profiles').update(payload).eq('id',pid);
     const p=_players.find(pl=>pl.id===pid);
