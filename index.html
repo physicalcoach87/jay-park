@@ -769,6 +769,42 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏟️ 업로드된 경기 기록</div>
         <div id="match-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
       </div>
+
+      <!-- ── 1분 롤링 mpm 업로드 (분석 보고서 § 7용) ── -->
+      <div style="margin-top:1.6rem;padding-top:1.2rem;border-top:2px dashed var(--border)">
+        <div class="coaching-box" style="margin-bottom:1rem">
+          <p><strong style="color:var(--accent2)">📈 1분 롤링 분당이동거리 파일</strong><br>
+          파일명: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">YYYY-MM-DD_상대팀.xlsx</code> 또는 <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">YYYY.MM.DD_상대팀.xlsx</code><br>
+          시트 컬럼: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">Name / Jersey / Meterage Per Minute</code><br>
+          파일명에서 날짜·상대팀을 자동 추출해 해당 경기에 매칭됩니다.</p>
+        </div>
+        <div id="minute-drop-zone" style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
+          onclick="document.getElementById('minute-file-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
+          ondragleave="this.style.borderColor='var(--border2)'"
+          ondrop="event.preventDefault();handleMinuteFileSelect({target:{files:event.dataTransfer.files}})">
+          <div style="font-size:32px;margin-bottom:8px">📈</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text2)">1분 롤링 mpm 파일 클릭 또는 드래그</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
+        </div>
+        <input type="file" id="minute-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleMinuteFileSelect(event)">
+        <!-- 미리보기 -->
+        <div id="minute-upload-preview" style="display:none">
+          <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="minute-preview-title"></div>
+          <div id="minute-preview-summary" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px">
+            <button onclick="saveMinuteData()" class="btn-exp pri" style="flex:2;padding:11px" id="minute-save-btn">💾 Supabase에 저장</button>
+            <button onclick="cancelMinuteUpload()" class="btn-exp" style="flex:1;padding:11px">취소</button>
+          </div>
+          <div id="minute-upload-msg" style="font-size:12px;margin-top:8px;min-height:16px;color:var(--text3)"></div>
+        </div>
+        <div id="minute-upload-msg-top" style="font-size:12px;margin-top:4px;min-height:16px;color:var(--text3)"></div>
+        <!-- 업로드된 롤링 파일 목록 -->
+        <div style="margin-top:1.2rem">
+          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">📈 업로드된 롤링 데이터</div>
+          <div id="minute-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -5198,6 +5234,7 @@ function doImportPreset(){
 // ═══════════════════════════════════════════
 let _gpsParseData = [];   // 파싱된 GPS 데이터 임시 저장
 let _matchParseData = []; // 파싱된 경기 데이터 임시 저장
+let _minuteParseData = null; // 파싱된 1분 롤링 데이터 (rows + meta)
 
 async function loadPlayerManagement(){
   const today = new Date().toISOString().split('T')[0];
@@ -5250,7 +5287,7 @@ function setPlayerView(view){
   }
   if(view==='roster') loadRosterList();
   if(view==='wellness') initWellnessView();
-  if(view==='upload'){ setUploadTab('gps'); loadGpsHistory(); loadMatchHistory(); }
+  if(view==='upload'){ setUploadTab('gps'); loadGpsHistory(); loadMatchHistory(); loadMinuteHistory(); }
   if(view==='match'){
     setMatchTab('list');
     loadMatchList();
@@ -8769,7 +8806,7 @@ function setUploadTab(tab){
       btn.style.color      =t===tab?'var(--accent2)':'var(--text2)';
     }
   });
-  if(tab==='match') loadMatchHistory();
+  if(tab==='match'){ loadMatchHistory(); loadMinuteHistory(); }
 }
 
 
@@ -11998,10 +12035,16 @@ async function generateMatchReport(){
 
   // 최근 3경기 팀 합계용 (FT 전체)
   const {data:recentAll} = await supa.from('match_records')
-    .select('match_date,opponent,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed')
+    .select('match_date,opponent,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
     .order('match_date',{ascending:false})
     .limit(300);
+
+  // 1분 롤링 mpm (§ 7용 — 없으면 § 7 카드 비활성화)
+  const {data:minuteRows} = await supa.from('match_minute_records')
+    .select('player_id,player_name,minute,mpm')
+    .eq('match_date',date).eq('opponent',opponent)
+    .order('minute',{ascending:true});
 
   // ── 2. 헬퍼 ───────────────────────────────────────────
   const n = v => (v!=null && !isNaN(v)) ? parseFloat(v) : null;
@@ -12084,21 +12127,29 @@ async function generateMatchReport(){
     const hsrDelta = (q1?.hir_sprint&&q2?.hir_sprint)?(q2.hir_sprint-q1.hir_sprint)/q1.hir_sprint*100:null;
     const rhieDelta= (q1&&q2)?((n(q2.rhie)||0)-(n(q1.rhie)||0)):null;
     return {r,q1,q2,mpmDrop,tdDelta,hsrDelta,rhieDelta};
-  }).sort((a,b)=>(a.mpmDrop||0)-(b.mpmDrop||0));
+  }).sort((a,b)=>((n(b.r.td)||0)-(n(a.r.td)||0))); // § 2 요건: TD 내림차순
 
-  // ── SECTION 4: 개인 vs Match Max ──────────────────────
+  // ── SECTION 3~6: 개인 vs Match Max ────────────────────
   const secPl = ftRows.map(r=>{
     const mx=r.player_profiles;
     return {
-      r, name:mx?.name||'—', pos:mx?.position||'',
+      r, pid:r.player_id, name:mx?.name||'—', pos:mx?.position||'',
       td:  {v:n(r.td),          mx:n(mx?.match_max_td)},
       mpm: {v:n(r.mpm),         mx:n(mx?.match_max_mpm)},
       hsr: {v:n(r.hir_sprint),  mx:n(mx?.match_max_hir)},
-      b5:  {v:n(r.band5_td),    mx:null},
+      b4:  {v:n(r.band4_td),    mx:null},
+      b5:  {v:n(r.band5_td),    mx:n(mx?.match_max_band5_td)},
+      b4n: {v:n(r.band4_n),     mx:null},
+      b5n: {v:n(r.band5_n),     mx:null},
       vmax:{v:n(r.max_speed),   mx:n(mx?.match_max_speed)},
       rhie:{v:n(r.rhie),        mx:n(mx?.match_max_rhie)},
       accel:{v:n(r.accel),      mx:n(mx?.match_max_accel)},
+      decel:{v:n(r.decel),      mx:null},
       pl:  {v:n(r.player_load), mx:null},
+      fmpRunM:{v:n(r.fmp_run_m), mx:n(mx?.match_max_fmp_run_m)},
+      fmpRunH:{v:n(r.fmp_run_h), mx:n(mx?.match_max_fmp_run_h)},
+      fmpDynM:{v:n(r.fmp_dyn_m), mx:n(mx?.match_max_fmp_dyn_m)},
+      fmpDynH:{v:n(r.fmp_dyn_h), mx:n(mx?.match_max_fmp_dyn_h)},
       dur: n(r.duration),
     };
   });
@@ -12260,53 +12311,293 @@ async function generateMatchReport(){
     <div style="color:var(--text3);font-size:12px;text-align:center;padding:8px">1Q / 2Q 데이터가 없습니다</div>
   `)}
 
-  ${card(`
-    ${secHead('👤','개인별 — Match Max 대비','★ ≥90% · - 70~89% · ↓ <70%')}
-    <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:680px">
-        <thead>
-          <tr style="background:var(--surface2)">
+  ${(()=>{
+    // 정렬 헬퍼 — null은 0 취급, 내림차순
+    const byDesc = field => (a,b) => ((field(b)||0) - (field(a)||0));
+    const nameCell = p => `<td style="padding:6px 8px"><div style="font-weight:600;color:var(--text)">${p.name}</div><div style="font-size:10px;color:var(--text3)">${p.pos}</div></td>`;
+    const durCell  = p => `<td style="padding:6px 8px;text-align:right;color:var(--text2)">${p.dur?Math.round(p.dur)+"'":'—'}</td>`;
+
+    // ── § 3: 고강도 러닝 + 스프린트 (HSR 내림차순) ─────────
+    const sec3Sorted = [...secPl].sort(byDesc(p=>p.hsr.v));
+    const sec3 = card(`
+      ${secHead('🏃','§ 3 고강도 러닝 + 스프린트 (개인별)','HIR+Sprint 내림차순 · 본인 Match Max 대비')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
+          <thead><tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
             <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--accent2)">TD</th>
-            <th style="padding:6px 8px;text-align:right;color:#f59e0b">m/min</th>
-            <th style="padding:6px 8px;text-align:right;color:#ef4444">HIR+Spr</th>
-            <th style="padding:6px 8px;text-align:right;color:#a78bfa">Sprint</th>
-            <th style="padding:6px 8px;text-align:right;color:#60a5fa">Vmax</th>
-            <th style="padding:6px 8px;text-align:right;color:#34d399">RHIE</th>
-            <th style="padding:6px 8px;text-align:right;color:#fb923c">가속</th>
-            <th style="padding:6px 8px;text-align:right;color:#c084fc">P.Load</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${secPl.map(p=>{
-            const vp=pct(p.vmax.v,p.vmax.mx);
-            return `<tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 8px">
-                <div style="font-weight:600;color:var(--text)">${p.name}</div>
-                <div style="font-size:10px;color:var(--text3)">${p.pos}</div>
-              </td>
-              <td style="padding:6px 8px;text-align:right;color:var(--text2)">${p.dur?Math.round(p.dur)+"'":'—'}</td>
-              ${cellMax(p.td,'var(--accent2)')}
-              ${cellMax(p.mpm,'#f59e0b')}
+            <th style="padding:6px 8px;text-align:right;color:#ef4444">HIR+Spr (m)</th>
+            <th style="padding:6px 8px;text-align:right;color:#fb923c">Band4 (m)</th>
+            <th style="padding:6px 8px;text-align:right;color:#a78bfa">Sprint Band5 (m)</th>
+            <th style="padding:6px 8px;text-align:right;color:#fbbf24">B4 (회)</th>
+            <th style="padding:6px 8px;text-align:right;color:#a78bfa">B5 (회)</th>
+          </tr></thead>
+          <tbody>
+            ${sec3Sorted.map(p=>`<tr style="border-bottom:1px solid var(--border)">
+              ${nameCell(p)}${durCell(p)}
               ${cellMax(p.hsr,'#ef4444')}
-              <td style="padding:6px 8px;text-align:right;color:#a78bfa;font-weight:600">${p.b5.v!=null?Math.round(p.b5.v):'—'}</td>
-              <td style="padding:6px 8px;text-align:right">
-                <div style="color:#60a5fa;font-weight:600">${p.vmax.v!=null?p.vmax.v.toFixed(1):'—'}</div>
-                ${p.vmax.mx?`<div style="font-size:9px;color:${flagColor(vp)};font-weight:700">${flag(vp)}${vp!=null?' '+vp+'%':''}</div>`:''}
-              </td>
+              <td style="padding:6px 8px;text-align:right;color:#fb923c;font-weight:600">${p.b4.v!=null?Math.round(p.b4.v):'—'}</td>
+              ${cellMax(p.b5,'#a78bfa')}
+              <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600">${p.b4n.v!=null?Math.round(p.b4n.v):'—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:#a78bfa;font-weight:600">${p.b5n.v!=null?Math.round(p.b5n.v):'—'}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
+        ★ ≥90% (커리어 최고치) · - 70~89% · ↓ &lt;70% (Match Max 컬럼만)
+      </div>
+    `);
+
+    // ── § 4: 가속 + RHIE (RHIE 내림차순) ─────────────
+    const sec4Sorted = [...secPl].sort(byDesc(p=>p.rhie.v));
+    const sec4 = card(`
+      ${secHead('⚡','§ 4 가속·감속 + RHIE (개인별)','RHIE 내림차순 · 본인 Match Max 대비')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:480px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
+            <th style="padding:6px 8px;text-align:right;color:#34d399">RHIE (회)</th>
+            <th style="padding:6px 8px;text-align:right;color:#fb923c">가속 (회)</th>
+            <th style="padding:6px 8px;text-align:right;color:#f87171">감속 (회)</th>
+            <th style="padding:6px 8px;text-align:right;color:#c084fc">P.Load</th>
+          </tr></thead>
+          <tbody>
+            ${sec4Sorted.map(p=>`<tr style="border-bottom:1px solid var(--border)">
+              ${nameCell(p)}${durCell(p)}
               ${cellMax(p.rhie,'#34d399')}
               ${cellMax(p.accel,'#fb923c')}
+              <td style="padding:6px 8px;text-align:right;color:#f87171;font-weight:600">${p.decel.v!=null?Math.round(p.decel.v):'—'}</td>
               <td style="padding:6px 8px;text-align:right;color:#c084fc;font-weight:600">${p.pl.v!=null?Math.round(p.pl.v):'—'}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>
-    <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
-      ★ 커리어 최고치 수준 (≥90%) &nbsp;·&nbsp; - 평균 범위 (70~89%) &nbsp;·&nbsp; ↓ 최대 대비 저하 (&lt;70%)
-    </div>
-  `)}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    `);
+
+    // ── § 5: FMP (Dyn.H 내림차순) ─────────────────
+    const sec5Sorted = [...secPl].sort(byDesc(p=>p.fmpDynH.v));
+    const sec5 = card(`
+      ${secHead('🦵','§ 5 FMP (Functional Movement Profile)','FMP Dynamic.H 내림차순 · 본인 Match Max 대비 · Dyn H/M 비율 = eccentric 부하 지표')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
+            <th style="padding:6px 8px;text-align:right;color:#34d399">FMP Run.M</th>
+            <th style="padding:6px 8px;text-align:right;color:#22d3ee">FMP Run.H</th>
+            <th style="padding:6px 8px;text-align:right;color:#fb923c">FMP Dyn.M</th>
+            <th style="padding:6px 8px;text-align:right;color:#ef4444">FMP Dyn.H</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text2)">Dyn H/M %</th>
+          </tr></thead>
+          <tbody>
+            ${sec5Sorted.map(p=>{
+              const ratio = (p.fmpDynM.v && p.fmpDynM.v>0) ? Math.round((p.fmpDynH.v||0)/p.fmpDynM.v*100) : null;
+              const rc = ratio==null?'var(--text3)' : ratio>=100?'#ef4444' : ratio>=75?'#f97316' : 'var(--text2)';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                ${nameCell(p)}${durCell(p)}
+                ${cellMax(p.fmpRunM,'#34d399')}
+                ${cellMax(p.fmpRunH,'#22d3ee')}
+                ${cellMax(p.fmpDynM,'#fb923c')}
+                ${cellMax(p.fmpDynH,'#ef4444')}
+                <td style="padding:6px 8px;text-align:right;font-weight:700;color:${rc}">${ratio!=null?ratio+'%':'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
+        Dyn H/M ≥100% → 하지 eccentric 부하 高 (MD+1 비하중 권장) · 75~99% 모니터링 · &lt;75% 정상
+      </div>
+    `);
+
+    // ── § 6: 최고 스피드 (Vmax 내림차순) ──────────
+    const sec6Sorted = [...secPl].sort(byDesc(p=>p.vmax.v));
+    const sec6 = card(`
+      ${secHead('💨','§ 6 최고 스피드 (Vmax)','Vmax 내림차순 · 본인 Match Max 대비 · MSS 90% 노출 체크')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:420px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
+            <th style="padding:6px 8px;text-align:right;color:#60a5fa">Vmax (km/h)</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">Match Max</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">% / 노출</th>
+          </tr></thead>
+          <tbody>
+            ${sec6Sorted.map(p=>{
+              const vp = pct(p.vmax.v, p.vmax.mx);
+              const exposed90 = (p.vmax.v && p.vmax.mx) ? p.vmax.v >= p.vmax.mx*0.9 : null;
+              return `<tr style="border-bottom:1px solid var(--border)">
+                ${nameCell(p)}${durCell(p)}
+                <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700;font-size:13px">${p.vmax.v!=null?p.vmax.v.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text3)">${p.vmax.mx!=null?p.vmax.mx.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:center">
+                  ${vp!=null?`<span style="color:${flagColor(vp)};font-weight:700">${flag(vp)} ${vp}%</span>`:'<span style="color:var(--text3)">—</span>'}
+                  ${exposed90===true?'<div style="font-size:9px;color:#4ade80;font-weight:700">✅ MSS 90%+</div>':exposed90===false?'<div style="font-size:9px;color:#f97316">⚠️ 미노출</div>':''}
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `);
+
+    return sec3 + sec4 + sec5 + sec6;
+  })()}
+
+  ${(()=>{
+    // ── § 7: 팀 1분 롤링 mpm 분석 ──────────────────
+    if(!minuteRows || !minuteRows.length){
+      return card(`
+        ${secHead('📈','§ 7 팀 1분 롤링 mpm 분석')}
+        <div style="color:var(--text3);font-size:12px;text-align:center;padding:14px">
+          이 경기의 1분 롤링 데이터가 없습니다.<br>
+          <span style="color:var(--text2)">📤 GPS 업로드 탭 → 1분 롤링 mpm 파일 업로드</span> 후 다시 보고서를 생성하세요.
+        </div>
+      `);
+    }
+    // 분 단위 팀 평균 (활동 선수만 평균)
+    const byMin = {};
+    minuteRows.forEach(r=>{
+      const m = parseInt(r.minute,10); const v = parseFloat(r.mpm);
+      if(isNaN(m)||isNaN(v)) return;
+      (byMin[m] = byMin[m]||[]).push(v);
+    });
+    const minutes = Object.keys(byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+    const teamAvg = minutes.map(m => ({m, v: byMin[m].reduce((a,b)=>a+b,0)/byMin[m].length, n: byMin[m].length}));
+
+    // 하프타임 자동 감지: 활동 선수 수가 ≤2인 연속 ≥3분 갭
+    let halfBreak = null;
+    let runStart=null, runLen=0;
+    for(const t of teamAvg){
+      if(t.n<=2){ if(runStart==null){runStart=t.m;} runLen++; }
+      else { if(runLen>=3 && t.m>30 && t.m<70){ halfBreak = runStart + Math.floor(runLen/2); break; } runStart=null; runLen=0; }
+    }
+    if(halfBreak==null) halfBreak = 47; // fallback
+
+    const half1 = teamAvg.filter(t=>t.m<=halfBreak);
+    const half2 = teamAvg.filter(t=>t.m> halfBreak);
+    const avg = arr => arr.length?arr.reduce((s,t)=>s+t.v,0)/arr.length:0;
+    const h1Avg = avg(half1), h2Avg = avg(half2);
+    const drop = h1Avg>0 ? (h2Avg-h1Avg)/h1Avg*100 : 0;
+
+    // 5분 구간 평균 (각 반)
+    const bin5 = (arr, originMin) => {
+      const bins = {};
+      arr.forEach(t=>{
+        const offset = t.m - originMin;
+        const bin = Math.floor(offset/5); // 0=0-4, 1=5-9, ...
+        (bins[bin] = bins[bin]||[]).push(t.v);
+      });
+      return Object.keys(bins).map(k=>parseInt(k,10)).sort((a,b)=>a-b).map(k=>({
+        bin:k, label:`${k*5}-${k*5+4}'`, avg: bins[k].reduce((a,b)=>a+b,0)/bins[k].length, n:bins[k].length
+      }));
+    };
+    const h1Origin = half1.length ? half1[0].m : 1;
+    const h2Origin = half2.length ? half2[0].m : halfBreak+1;
+    const h1Bins = bin5(half1, h1Origin);
+    const h2Bins = bin5(half2, h2Origin);
+
+    // 체력 저하 구간 검출: 연속 ≥3분 5분이동평균 하락
+    const ma5 = teamAvg.map((t,i)=>{
+      const window = teamAvg.slice(Math.max(0,i-2), i+3);
+      return {m:t.m, v:window.reduce((a,b)=>a+b.v,0)/window.length};
+    });
+    const fatigueSegs = [];
+    let segStart=null, segLen=0, prevV=null;
+    for(const p of ma5){
+      if(prevV!=null && p.v<prevV){ if(segStart==null) segStart=p.m; segLen++; }
+      else { if(segLen>=3) fatigueSegs.push({from:segStart, to:p.m-1, len:segLen}); segStart=null; segLen=0; }
+      prevV = p.v;
+    }
+    if(segLen>=3) fatigueSegs.push({from:segStart, to:ma5[ma5.length-1].m, len:segLen});
+    fatigueSegs.sort((a,b)=>b.len-a.len);
+    const top3Fatigue = fatigueSegs.slice(0,3);
+
+    // SVG 라인차트 (1분 + 5분 MA)
+    const W=720, H=200, PAD={l:36,r:14,t:10,b:24};
+    const innerW=W-PAD.l-PAD.r, innerH=H-PAD.t-PAD.b;
+    const xs = teamAvg.map(t=>t.m);
+    const xMin=Math.min(...xs), xMax=Math.max(...xs);
+    const yMax = Math.max(...teamAvg.map(t=>t.v), ...ma5.map(t=>t.v))*1.1;
+    const yMin = 0;
+    const X = m => PAD.l + (m-xMin)/(xMax-xMin)*innerW;
+    const Y = v => PAD.t + (1 - (v-yMin)/(yMax-yMin))*innerH;
+    const path1 = teamAvg.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
+    const path2 = ma5.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
+    const yTicks = [0, yMax/2, yMax].map(v=>`<line x1="${PAD.l}" x2="${W-PAD.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="0.5"/><text x="${PAD.l-4}" y="${Y(v)+3}" fill="var(--text3)" font-size="9" text-anchor="end">${v.toFixed(0)}</text>`).join('');
+    const halfLine = `<line x1="${X(halfBreak)}" x2="${X(halfBreak)}" y1="${PAD.t}" y2="${H-PAD.b}" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3"/><text x="${X(halfBreak)+3}" y="${PAD.t+10}" fill="#fbbf24" font-size="9">HT ${halfBreak}'</text>`;
+    const fatigueRects = top3Fatigue.map(s=>`<rect x="${X(s.from)}" y="${PAD.t}" width="${X(s.to)-X(s.from)}" height="${innerH}" fill="#ef4444" opacity="0.08"/>`).join('');
+
+    return card(`
+      ${secHead('📈','§ 7 팀 1분 롤링 mpm 분석',`팀 평균 m/min · 5분 이동평균 · 하프타임 자동감지: ${halfBreak}분`)}
+      <div style="overflow-x:auto">
+        <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;background:var(--surface2);border-radius:8px">
+          ${yTicks}
+          ${fatigueRects}
+          ${halfLine}
+          <path d="${path1}" fill="none" stroke="#94a3b8" stroke-width="1" opacity="0.55"/>
+          <path d="${path2}" fill="none" stroke="var(--accent2)" stroke-width="2"/>
+          <text x="${PAD.l}" y="${H-6}" fill="var(--text3)" font-size="9">${xMin}'</text>
+          <text x="${W-PAD.r}" y="${H-6}" fill="var(--text3)" font-size="9" text-anchor="end">${xMax}'</text>
+          <text x="${W-PAD.r-4}" y="${PAD.t+10}" fill="var(--accent2)" font-size="9" text-anchor="end">— 5분 MA</text>
+          <text x="${W-PAD.r-4}" y="${PAD.t+22}" fill="#94a3b8" font-size="9" text-anchor="end">— 1분 raw</text>
+        </svg>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px">
+        <div style="background:var(--surface2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--text3)">전반 평균 mpm</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">${h1Avg.toFixed(1)}</div>
+        </div>
+        <div style="background:var(--surface2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--text3)">후반 평균 mpm</div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">${h2Avg.toFixed(1)}</div>
+        </div>
+        <div style="background:var(--surface2);padding:10px;border-radius:8px">
+          <div style="font-size:10px;color:var(--text3)">후반 낙폭</div>
+          <div style="font-size:18px;font-weight:700;color:${drop<=-10?'#ef4444':drop<=-6?'#f97316':drop<=-3?'#eab308':'#4ade80'}">${drop>0?'+':''}${drop.toFixed(1)}%</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">전반 5분 구간</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="background:var(--surface2)"><th style="padding:4px 6px;text-align:left;color:var(--text3)">구간</th><th style="padding:4px 6px;text-align:right;color:var(--text3)">m/min</th></tr></thead>
+            <tbody>
+              ${h1Bins.map(b=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 6px;color:var(--text2)">${b.label}</td><td style="padding:4px 6px;text-align:right;color:var(--text)">${b.avg.toFixed(1)}</td></tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">후반 5분 구간</div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="background:var(--surface2)"><th style="padding:4px 6px;text-align:left;color:var(--text3)">구간</th><th style="padding:4px 6px;text-align:right;color:var(--text3)">m/min</th></tr></thead>
+            <tbody>
+              ${h2Bins.map(b=>{
+                const cmpAvg = h1Bins.length ? h1Bins.reduce((s,x)=>s+x.avg,0)/h1Bins.length : 0;
+                const dlt = cmpAvg>0 ? (b.avg-cmpAvg)/cmpAvg*100 : 0;
+                const dc = dlt<=-10?'#ef4444':dlt<=-6?'#f97316':dlt<=-3?'#eab308':'#4ade80';
+                return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 6px;color:var(--text2)">${b.label}</td><td style="padding:4px 6px;text-align:right;color:${dc}">${b.avg.toFixed(1)}</td></tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      ${top3Fatigue.length?`
+      <div style="margin-top:12px;padding:10px;background:#1a1310;border-left:3px solid #ef4444;border-radius:6px">
+        <div style="font-size:11px;font-weight:700;color:#ef4444;margin-bottom:4px">🔥 체력 저하 구간 (5분 MA 연속 하락 ≥ 3분)</div>
+        ${top3Fatigue.map((s,i)=>`<div style="font-size:11px;color:var(--text2);margin-top:2px">#${i+1} ${s.from}–${s.to}분 (${s.len}분 연속 하락)</div>`).join('')}
+      </div>`:''}
+      <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.5">
+        <strong style="color:var(--text2)">롤링 평균 활용 팁:</strong>
+        ① <strong>1분 raw</strong> = 순간 강도 확인 (스파이크/회복 패턴), <strong>5분 MA</strong> = 지속 강도 트렌드 (Bradley et al., 2009)<br>
+        ② <strong>후반 낙폭</strong> ≤ −10% → 팀 전체 피로 누적, 다음 마이크로사이클 MD-3 볼륨 5–10% 감량 검토<br>
+        ③ <strong>5분 구간 비교</strong> = 후반 동일 구간이 전반 평균 대비 −10% 이하면 PIP(Peak Intensity Period) 손실 — 회복훈련 처방 우선
+      </div>
+    `);
+  })()}
 
   ${card(`
     ${secHead('🏥','회복 우선순위','45분+ 출전 선수 · RHIE / PL / 후반 mpm 낙폭 종합')}
@@ -12619,11 +12910,282 @@ async function deleteMatchDate(date){
   loadMatchList();
 }
 
+// ══════════════════════════════════════════════════════════════════
+// 1분 롤링 mpm 파일 — 파싱 / 저장 / 이력 / 삭제
+// ══════════════════════════════════════════════════════════════════
+
+// 파일명에서 (YYYY-MM-DD | YYYY.MM.DD | YYMMDD)_상대팀 추출
+function parseMinuteFilename(fname){
+  // 확장자 제거
+  const base = fname.replace(/\.(xlsx|xls)$/i,'');
+  // 1) YYYY-MM-DD_상대 / YYYY.MM.DD_상대 / YYYY/MM/DD_상대
+  let m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[_\s-]+(.+)/);
+  if(m){
+    const date = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    return {date, opponent: m[4].trim()};
+  }
+  // 2) YYMMDD_상대
+  m = base.match(/^(\d{2})(\d{2})(\d{2})[_\s-]+(.+)/);
+  if(m){
+    const yy = parseInt(m[1],10);
+    const yyyy = yy >= 50 ? 1900+yy : 2000+yy;
+    const date = `${yyyy}-${m[2]}-${m[3]}`;
+    return {date, opponent: m[4].trim()};
+  }
+  // 3) vs_상대_YYYYMMDD
+  m = base.match(/vs[_\s-]+(.+?)[_\s-]+(\d{4})(\d{2})(\d{2})/i);
+  if(m){
+    const date = `${m[2]}-${m[3]}-${m[4]}`;
+    return {date, opponent: m[1].trim()};
+  }
+  return null;
+}
+
+// 'HH:MM:SS' → 분 (정수). '00:01:00' → 1
+function hmsToMin(t){
+  if(!t) return null;
+  const s = String(t).trim();
+  const m = s.match(/^(\d{1,2}):(\d{2}):(\d{2})$/);
+  if(m) return parseInt(m[1],10)*60 + parseInt(m[2],10);
+  // 엑셀이 시간을 0~1 사이 fraction으로 줬을 때
+  const num = parseFloat(s);
+  if(!isNaN(num) && num<1) return Math.round(num*24*60);
+  return null;
+}
+
+function handleMinuteFileSelect(e){
+  const file = e.target.files[0];
+  if(file) parseMinuteFile(file);
+}
+
+async function parseMinuteFile(file){
+  const msgEl = document.getElementById('minute-upload-msg-top');
+  if(msgEl) msgEl.innerHTML = '<span style="color:var(--accent2)">⏳ 파싱 중...</span>';
+
+  // 파일명에서 매칭 정보 추출
+  const meta = parseMinuteFilename(file.name);
+  if(!meta){
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 파일명에서 날짜/상대 추출 실패: <code>${file.name}</code><br>형식: YYYY-MM-DD_상대팀.xlsx</span>`;
+    return;
+  }
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+  const buf  = await file.arrayBuffer();
+  const wb   = XLSX.read(buf,{type:'array',cellDates:false});
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const raw  = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+  if(!raw.length || !raw[0]){
+    if(msgEl) msgEl.innerHTML = '<span style="color:#ef4444">⚠️ 빈 파일</span>';
+    return;
+  }
+
+  const header = raw[0].map(h => (h||'').toString().trim());
+  const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+  const COL = {
+    name: ci('Name'),
+    jersey: ci('Jersey'),
+    mpm: ci('Meterage Per Minute'),
+  };
+
+  if(COL.name<0 || COL.jersey<0 || COL.mpm<0){
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락. 발견: ${header.join(', ')}</span>`;
+    return;
+  }
+
+  // 선수명 → ID 매핑 (Jersey 컬럼 기준)
+  if(!_players.length){
+    const {data} = await supa.from('player_profiles').select('id,name');
+    _players = data || [];
+  }
+  const nameMap = {};
+  _players.forEach(p => { nameMap[p.name] = p.id; });
+
+  const rows = [];
+  const unknownPlayers = new Set();
+  const playersFound = new Set();
+  let invalidTime = 0;
+
+  for(const row of raw.slice(1)){
+    if(!row[COL.name] || !row[COL.jersey]) continue;
+    const fullName = String(row[COL.name]).trim();
+    const jersey   = String(row[COL.jersey]).trim();
+    const mpm      = parseFloat(row[COL.mpm]);
+    if(isNaN(mpm)) continue;
+    // 'Gabriel - 00:01:00' → 시간 추출
+    const parts = fullName.split(' - ');
+    const timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
+    const minute = hmsToMin(timeStr);
+    if(minute==null){ invalidTime++; continue; }
+    const pid = nameMap[jersey] || null;
+    if(!pid) unknownPlayers.add(jersey);
+    else playersFound.add(jersey);
+    rows.push({
+      match_date:  meta.date,
+      opponent:    meta.opponent,
+      player_id:   pid,
+      player_name: jersey,
+      minute,
+      mpm:        Math.round(mpm*100)/100,
+      raw_time:   timeStr,
+    });
+  }
+
+  _minuteParseData = {meta, rows, unknownPlayers:[...unknownPlayers], playersFound:[...playersFound], invalidTime};
+
+  if(msgEl) msgEl.innerHTML = '';
+
+  if(!rows.length){
+    if(msgEl) msgEl.innerHTML = '<span style="color:#ef4444">⚠️ 저장할 행이 없습니다</span>';
+    return;
+  }
+
+  // 매칭되는 경기가 match_records에 있는지 체크
+  const {data:matchCheck} = await supa.from('match_records')
+    .select('opponent,match_date').eq('match_date', meta.date).eq('opponent', meta.opponent).limit(1);
+  const matched = matchCheck && matchCheck.length>0;
+
+  // 미리보기 렌더링
+  const previewEl = document.getElementById('minute-upload-preview');
+  const titleEl   = document.getElementById('minute-preview-title');
+  const sumEl     = document.getElementById('minute-preview-summary');
+  const dz        = document.getElementById('minute-drop-zone');
+  if(!previewEl || !titleEl || !sumEl) return;
+
+  // 분 범위
+  const minutes = rows.map(r=>r.minute);
+  const minMin = Math.min(...minutes), maxMin = Math.max(...minutes);
+
+  titleEl.textContent = `📋 미리보기 — ${meta.date} vs ${meta.opponent}`;
+  sumEl.innerHTML = `
+    <div style="display:grid;gap:6px">
+      <div>📊 총 <strong style="color:var(--text)">${rows.length.toLocaleString()}</strong>개 분당 레코드 · 시간 범위 <strong>${minMin}~${maxMin}분</strong></div>
+      <div>👥 매칭된 선수 (${playersFound.size}명): <span style="color:var(--text)">${[...playersFound].join(', ')||'-'}</span></div>
+      ${unknownPlayers.size?`<div style="color:#f59e0b">⚠️ 미등록 선수 (${unknownPlayers.size}명, player_id=null로 저장): ${[...unknownPlayers].join(', ')}</div>`:''}
+      ${invalidTime?`<div style="color:#f59e0b">⚠️ 시간 파싱 실패 ${invalidTime}행 제외</div>`:''}
+      <div>🎯 경기 매칭: ${matched?`<span style="color:#4ade80">✅ match_records에 ${meta.date} vs ${meta.opponent} 발견</span>`:`<span style="color:#f97316">⚠️ 해당 경기가 match_records에 없습니다 (먼저 경기 엑셀을 업로드하면 보고서에서 자동 연동됩니다)</span>`}</div>
+    </div>`;
+
+  if(dz) dz.style.display = 'none';
+  previewEl.style.display = 'block';
+}
+
+async function saveMinuteData(){
+  const btn = document.getElementById('minute-save-btn');
+  const msg = document.getElementById('minute-upload-msg');
+  if(!_minuteParseData || !_minuteParseData.rows?.length){
+    if(msg) msg.textContent = '저장할 데이터가 없습니다'; return;
+  }
+
+  btn.textContent='저장 중...'; btn.disabled=true;
+
+  const {meta, rows} = _minuteParseData;
+
+  // 같은 경기 기존 데이터 삭제 후 재삽입
+  await supa.from('match_minute_records')
+    .delete().eq('match_date', meta.date).eq('opponent', meta.opponent);
+
+  // 청크 단위 insert (Supabase 1000 row 제한)
+  const CHUNK = 500;
+  for(let i=0; i<rows.length; i+=CHUNK){
+    const slice = rows.slice(i, i+CHUNK);
+    const {error} = await supa.from('match_minute_records').insert(slice);
+    if(error){
+      if(msg) msg.innerHTML = `<span style="color:#ef4444">❌ 오류: ${error.message}</span>`;
+      btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
+      return;
+    }
+  }
+
+  const savedCount = rows.length;
+  _minuteParseData = null;
+  document.getElementById('minute-upload-preview').style.display = 'none';
+  document.getElementById('minute-drop-zone').style.display = 'block';
+  document.getElementById('minute-file-input').value = '';
+  btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
+  if(msg) msg.innerHTML='';
+
+  loadMinuteHistory();
+
+  // 토스트
+  const dz = document.getElementById('minute-drop-zone');
+  if(dz){
+    const toast = document.createElement('div');
+    toast.style.cssText='background:#0a1f10;border:1px solid #22c55e;border-radius:8px;padding:10px 14px;font-size:13px;color:#4ade80;font-weight:600;margin-bottom:10px;text-align:center';
+    toast.textContent=`✅ ${meta.date} vs ${meta.opponent} — ${savedCount.toLocaleString()}개 분당 레코드 저장 완료!`;
+    dz.parentNode.insertBefore(toast, dz);
+    setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 3500);
+  }
+}
+
+function cancelMinuteUpload(){
+  _minuteParseData = null;
+  document.getElementById('minute-upload-preview').style.display = 'none';
+  document.getElementById('minute-drop-zone').style.display = 'block';
+  document.getElementById('minute-file-input').value = '';
+  const msg = document.getElementById('minute-upload-msg');
+  if(msg) msg.innerHTML = '';
+}
+
+async function loadMinuteHistory(){
+  const listEl = document.getElementById('minute-history-list');
+  if(!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
+
+  // 경기별 집계 — match_date+opponent 단위로 grouping
+  const {data, error} = await supa.from('match_minute_records')
+    .select('match_date,opponent,player_id,player_name,minute')
+    .order('match_date',{ascending:false}).limit(20000);
+
+  if(error || !data?.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">업로드된 롤링 데이터가 없습니다.</div>';
+    return;
+  }
+
+  const byMatch = {};
+  data.forEach(r => {
+    const k = r.match_date+'||'+r.opponent;
+    if(!byMatch[k]) byMatch[k] = {date:r.match_date, opp:r.opponent, players:new Set(), minutes:new Set()};
+    byMatch[k].players.add(r.player_id || r.player_name);
+    byMatch[k].minutes.add(r.minute);
+  });
+
+  // 전역 변수로 전달 (onclick 따옴표 중첩 회피)
+  window._minuteHistoryMap = {};
+  const entries = Object.entries(byMatch).sort((a,b)=>b[1].date.localeCompare(a[1].date));
+  entries.forEach(([k, info], i) => { window._minuteHistoryMap[i] = {date:info.date, opp:info.opp}; });
+
+  const rows = entries.map(([k, info], i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${info.date}</span>
+          <span style="font-size:12px;color:var(--accent2)">${info.opp}</span>
+          <span style="font-size:11px;color:var(--text3)">${info.players.size}명 · ${Math.min(...info.minutes)}~${Math.max(...info.minutes)}분</span>
+        </div>
+        <button onclick="deleteMinuteMatchByIdx(${i})"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
+          🗑 삭제
+        </button>
+      </div>`).join('');
+
+  listEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">${rows}</div>`;
+}
+
+async function deleteMinuteMatchByIdx(idx){
+  const info = (window._minuteHistoryMap||{})[idx];
+  if(!info) return;
+  if(!confirm(`${info.date} vs ${info.opp} 의 1분 롤링 데이터를 삭제할까요?`)) return;
+  const {error} = await supa.from('match_minute_records').delete()
+    .eq('match_date', info.date).eq('opponent', info.opp);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  loadMinuteHistory();
+}
+
 // ── Match Max 자동 갱신 ───────────────────────────────────────────
 async function updateMatchMax(playerIds){
   const pids=[...new Set(playerIds)];
   const {data:ftData}=await supa.from('match_records')
-    .select('player_id,td,mpm,hir_sprint,band5_td,accel,rhie,max_speed,player_load,duration')
+    .select('player_id,td,mpm,hir_sprint,band5_td,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
     .in('player_id',pids);
 
@@ -12640,6 +13202,10 @@ async function updateMatchMax(playerIds){
       match_max_rhie:     maxF('rhie'),
       match_max_speed:    maxF('max_speed'),
       match_max_pl:       maxF('player_load'),
+      match_max_fmp_run_m:maxF('fmp_run_m'),
+      match_max_fmp_run_h:maxF('fmp_run_h'),
+      match_max_fmp_dyn_m:maxF('fmp_dyn_m'),
+      match_max_fmp_dyn_h:maxF('fmp_dyn_h'),
       match_max_updated:  new Date().toISOString().split('T')[0],
     };
     await supa.from('player_profiles').update(payload).eq('id',pid);
