@@ -12011,6 +12011,88 @@ async function loadReportMatchSel(){
     unique.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${r.opponent||'?'} (${r.result||'—'})</option>`).join('');
 }
 
+// ── § 8: 선수 1명 선택 시 상세 차트 + 5분 구간 렌더 ──
+function renderP8Detail(idx){
+  const out = document.getElementById('p8-detail-output');
+  if(!out) return;
+  if(idx==='' || idx==null){ out.innerHTML=''; return; }
+  const stats = window._reportP8Stats || [];
+  const halfBreak = window._reportP8HalfBreak || 47;
+  const xRange = window._reportP8XRange || {xMin:1, xMax:90};
+  const s = stats[parseInt(idx,10)];
+  if(!s){ out.innerHTML=''; return; }
+
+  // 라인차트 (선수 1명 1분 raw + 5분 MA)
+  const W=720, H=180, PAD={l:36,r:14,t:10,b:24};
+  const innerW=W-PAD.l-PAD.r, innerH=H-PAD.t-PAD.b;
+  const xMin=xRange.xMin, xMax=xRange.xMax;
+  const yMax = Math.max(...s.sorted.map(t=>t.v), ...s.ma5.map(t=>t.v))*1.1 || 1;
+  const X = m => PAD.l + (m-xMin)/(xMax-xMin)*innerW;
+  const Y = v => PAD.t + (1 - v/yMax)*innerH;
+  const path1 = s.sorted.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
+  const path2 = s.ma5.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
+  const yTicks = [0, yMax/2, yMax].map(v=>`<line x1="${PAD.l}" x2="${W-PAD.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--border)" stroke-width="0.5"/><text x="${PAD.l-4}" y="${Y(v)+3}" fill="var(--text3)" font-size="9" text-anchor="end">${v.toFixed(0)}</text>`).join('');
+  const halfLine = `<line x1="${X(halfBreak)}" x2="${X(halfBreak)}" y1="${PAD.t}" y2="${H-PAD.b}" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3"/><text x="${X(halfBreak)+3}" y="${PAD.t+10}" fill="#fbbf24" font-size="9">HT ${halfBreak}'</text>`;
+
+  // 5분 구간 평균
+  const bin5 = (arr, originMin) => {
+    const bins = {};
+    arr.forEach(t=>{
+      const offset = t.m - originMin;
+      const bin = Math.floor(offset/5);
+      (bins[bin] = bins[bin]||[]).push(t.v);
+    });
+    return Object.keys(bins).map(k=>parseInt(k,10)).sort((a,b)=>a-b).map(k=>({
+      label:`${k*5}-${k*5+4}'`, avg: bins[k].reduce((a,b)=>a+b,0)/bins[k].length
+    }));
+  };
+  const h1 = s.sorted.filter(t=>t.m<=halfBreak);
+  const h2 = s.sorted.filter(t=>t.m> halfBreak);
+  const h1Origin = h1.length ? h1[0].m : 1;
+  const h2Origin = h2.length ? h2[0].m : halfBreak+1;
+  const h1Bins = bin5(h1, h1Origin);
+  const h2Bins = bin5(h2, h2Origin);
+  const cmpAvg = h1Bins.length ? h1Bins.reduce((s,x)=>s+x.avg,0)/h1Bins.length : 0;
+
+  out.innerHTML = `
+    <div style="background:var(--surface2);padding:10px;border-radius:8px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">${s.name}${s.pos?` <span style="font-size:10px;color:var(--text3);font-weight:400">${s.pos}</span>`:''} · ${s.firstMin}~${s.lastMin}분 (${s.dur}분 출전)</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+        ${yTicks}${halfLine}
+        <path d="${path1}" fill="none" stroke="#94a3b8" stroke-width="1" opacity="0.55"/>
+        <path d="${path2}" fill="none" stroke="var(--accent2)" stroke-width="2"/>
+        <text x="${PAD.l}" y="${H-6}" fill="var(--text3)" font-size="9">${s.firstMin}'</text>
+        <text x="${W-PAD.r}" y="${H-6}" fill="var(--text3)" font-size="9" text-anchor="end">${s.lastMin}'</text>
+        <text x="${W-PAD.r-4}" y="${PAD.t+10}" fill="var(--accent2)" font-size="9" text-anchor="end">— 5분 MA</text>
+        <text x="${W-PAD.r-4}" y="${PAD.t+22}" fill="#94a3b8" font-size="9" text-anchor="end">— 1분 raw</text>
+      </svg>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">전반 5분 구간</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:var(--surface2)"><th style="padding:4px 6px;text-align:left;color:var(--text3)">구간</th><th style="padding:4px 6px;text-align:right;color:var(--text3)">m/min</th></tr></thead>
+          <tbody>
+            ${h1Bins.length?h1Bins.map(b=>`<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 6px;color:var(--text2)">${b.label}</td><td style="padding:4px 6px;text-align:right;color:var(--text)">${b.avg.toFixed(1)}</td></tr>`).join(''):'<tr><td colspan="2" style="padding:6px;text-align:center;color:var(--text3)">전반 미출전</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">후반 5분 구간 (vs 전반 평균)</div>
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:var(--surface2)"><th style="padding:4px 6px;text-align:left;color:var(--text3)">구간</th><th style="padding:4px 6px;text-align:right;color:var(--text3)">m/min</th></tr></thead>
+          <tbody>
+            ${h2Bins.length?h2Bins.map(b=>{
+              const dlt = cmpAvg>0 ? (b.avg-cmpAvg)/cmpAvg*100 : 0;
+              const dc = dlt<=-10?'#ef4444':dlt<=-6?'#f97316':dlt<=-3?'#eab308':'#4ade80';
+              return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:4px 6px;color:var(--text2)">${b.label}</td><td style="padding:4px 6px;text-align:right;color:${dc}">${b.avg.toFixed(1)}</td></tr>`;
+            }).join(''):'<tr><td colspan="2" style="padding:6px;text-align:center;color:var(--text3)">후반 미출전</td></tr>'}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 async function generateMatchReport(){
   const sel=document.getElementById('report-match-sel');
   const out=document.getElementById('match-report-output');
@@ -12067,6 +12149,23 @@ async function generateMatchReport(){
     const oppCount = Object.keys(byOpp).length;
     if(oppCount>1){
       console.warn(`[§7] ${date} 에 fuzzy 매칭되는 opponent가 ${oppCount}개 (${Object.keys(byOpp).join(', ')}). '${bestOpp}'만 사용. 정리는 GPS 업로드 탭에서 삭제`);
+    }
+  }
+
+  // 하프타임 자동 감지 (§ 7 + § 8 공유) — 활동 선수 수 ≤2인 연속 ≥3분 갭
+  let halfBreakShared = 47;
+  if(minuteRows.length){
+    const _byMin = {};
+    minuteRows.forEach(r=>{
+      const _m=parseInt(r.minute,10); const _v=parseFloat(r.mpm);
+      if(!isNaN(_m)&&!isNaN(_v)) (_byMin[_m]=_byMin[_m]||[]).push(_v);
+    });
+    const _mins = Object.keys(_byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+    const _team = _mins.map(_m=>({m:_m, n:_byMin[_m].length}));
+    let _start=null, _len=0;
+    for(const t of _team){
+      if(t.n<=2){ if(_start==null) _start=t.m; _len++; }
+      else { if(_len>=3 && t.m>30 && t.m<70){ halfBreakShared = _start + Math.floor(_len/2); break; } _start=null; _len=0; }
     }
   }
 
@@ -12492,14 +12591,8 @@ async function generateMatchReport(){
     const minutes = Object.keys(byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
     const teamAvg = minutes.map(m => ({m, v: byMin[m].reduce((a,b)=>a+b,0)/byMin[m].length, n: byMin[m].length}));
 
-    // 하프타임 자동 감지: 활동 선수 수가 ≤2인 연속 ≥3분 갭
-    let halfBreak = null;
-    let runStart=null, runLen=0;
-    for(const t of teamAvg){
-      if(t.n<=2){ if(runStart==null){runStart=t.m;} runLen++; }
-      else { if(runLen>=3 && t.m>30 && t.m<70){ halfBreak = runStart + Math.floor(runLen/2); break; } runStart=null; runLen=0; }
-    }
-    if(halfBreak==null) halfBreak = 47; // fallback
+    // 하프타임은 외부 스코프(halfBreakShared)에서 한 번 계산해 § 7/§ 8 공유
+    const halfBreak = halfBreakShared;
 
     const half1 = teamAvg.filter(t=>t.m<=halfBreak);
     const half2 = teamAvg.filter(t=>t.m> halfBreak);
@@ -12619,6 +12712,146 @@ async function generateMatchReport(){
         ① <strong>1분 raw</strong> = 순간 강도 확인 (스파이크/회복 패턴), <strong>5분 MA</strong> = 지속 강도 트렌드 (Bradley et al., 2009)<br>
         ② <strong>후반 낙폭</strong> ≤ −10% → 팀 전체 피로 누적, 다음 마이크로사이클 MD-3 볼륨 5–10% 감량 검토<br>
         ③ <strong>5분 구간 비교</strong> = 후반 동일 구간이 전반 평균 대비 −10% 이하면 PIP(Peak Intensity Period) 손실 — 회복훈련 처방 우선
+      </div>
+    `);
+  })()}
+
+  ${(()=>{
+    // ── § 8: 개인별 1분 롤링 mpm 분석 ──────────────────
+    if(!minuteRows || !minuteRows.length){
+      return ''; // § 7에서 이미 안내. 중복 표시 X
+    }
+    const halfBreak = halfBreakShared;
+
+    // 선수별 그룹핑
+    const byPlayer = {};
+    minuteRows.forEach(r=>{
+      const key = r.player_id || r.player_name;
+      if(!key) return;
+      const m = parseInt(r.minute,10); const v = parseFloat(r.mpm);
+      if(isNaN(m)||isNaN(v)) return;
+      if(!byPlayer[key]){
+        byPlayer[key] = {pid:r.player_id, name:r.player_name, rows:[]};
+      }
+      byPlayer[key].rows.push({m, v});
+    });
+
+    // 선수 메타 (포지션) 매핑 — _players 사용
+    const pidName = {};
+    (_players||[]).forEach(p=>{ pidName[p.id]={name:p.name, pos:p.position}; });
+
+    // 통계 계산
+    const stats = Object.entries(byPlayer).map(([key, p])=>{
+      const sorted = p.rows.sort((a,b)=>a.m-b.m);
+      // 5분 이동평균
+      const ma5 = sorted.map((t,i)=>{
+        const w = sorted.slice(Math.max(0,i-2), i+3);
+        return {m:t.m, v:w.reduce((s,x)=>s+x.v,0)/w.length};
+      });
+      const h1 = sorted.filter(t=>t.m<=halfBreak);
+      const h2 = sorted.filter(t=>t.m> halfBreak);
+      const avg = a => a.length?a.reduce((s,t)=>s+t.v,0)/a.length:0;
+      const overallAvg = avg(sorted);
+      const h1Avg = avg(h1), h2Avg = avg(h2);
+      const drop = (h1Avg>0 && h2Avg>0) ? (h2Avg-h1Avg)/h1Avg*100 : null;
+      // 5분 윈도우 peak (5min 이상 출전한 선수만)
+      let peak5 = 0;
+      if(sorted.length>=5){
+        for(let i=0;i<=sorted.length-5;i++){
+          const w = sorted.slice(i,i+5);
+          const a = w.reduce((s,x)=>s+x.v,0)/5;
+          if(a>peak5){ peak5=a; }
+        }
+      }
+      const meta = pidName[p.pid] || {name:p.name||'—', pos:''};
+      return {
+        key, pid:p.pid, name: meta.name, pos: meta.pos,
+        sorted, ma5,
+        dur: sorted.length,
+        firstMin: sorted[0]?.m, lastMin: sorted[sorted.length-1]?.m,
+        overallAvg, h1Avg, h2Avg, drop, peak5,
+        played1H: h1.length>0, played2H: h2.length>0,
+      };
+    }).sort((a,b)=>{
+      // 후반 낙폭 큰 순 (drop이 음수일수록 큼). null은 뒤로.
+      const ad = a.drop==null?999:a.drop;
+      const bd = b.drop==null?999:b.drop;
+      return ad-bd;
+    });
+
+    if(!stats.length) return '';
+
+    // 모든 선수 mini sparkline용 공통 y축 max
+    const globalMax = Math.max(...stats.flatMap(s=>s.sorted.map(t=>t.v))) * 1.05;
+    const xMin = Math.min(...stats.flatMap(s=>s.sorted.map(t=>t.m)));
+    const xMax = Math.max(...stats.flatMap(s=>s.sorted.map(t=>t.m)));
+
+    // mini sparkline (60x18)
+    const sparkline = (sorted) => {
+      if(!sorted.length) return '';
+      const W=80, H=20;
+      const X = m => (m-xMin)/(xMax-xMin)*W;
+      const Y = v => (1 - v/globalMax) * H;
+      const path = sorted.map((t,i)=>`${i===0?'M':'L'}${X(t.m).toFixed(1)},${Y(t.v).toFixed(1)}`).join(' ');
+      const halfX = X(halfBreak);
+      return `<svg viewBox="0 0 ${W} ${H}" style="width:80px;height:20px;display:block">
+        <line x1="${halfX}" x2="${halfX}" y1="0" y2="${H}" stroke="#fbbf24" stroke-width="0.5" stroke-dasharray="1,1" opacity="0.6"/>
+        <path d="${path}" fill="none" stroke="var(--accent2)" stroke-width="1"/>
+      </svg>`;
+    };
+
+    const dropColor = d => d==null?'var(--text3)':d<=-15?'#ef4444':d<=-10?'#f97316':d<=-5?'#eab308':'#4ade80';
+    const dropFlag  = d => d==null?'-':d<=-15?'🔴':d<=-10?'🟠':d<=-5?'🟡':'🟢';
+
+    // 드롭다운 옵션 + 전역 데이터 저장 (onclick 따옴표 회피)
+    window._reportP8Stats = stats;
+    window._reportP8HalfBreak = halfBreak;
+    window._reportP8XRange = {xMin, xMax};
+    const selectOpts = stats.map((s,i)=>`<option value="${i}">${s.name}${s.pos?` (${s.pos})`:''} · ${s.dur}분 · 낙폭 ${s.drop!=null?(s.drop>0?'+':'')+s.drop.toFixed(1)+'%':'—'}</option>`).join('');
+
+    return card(`
+      ${secHead('👤','§ 8 개인별 1분 롤링 mpm 분석','출전 전 선수 · 후반 낙폭 큰 순 · 5분 MA 기준')}
+      <div style="overflow-x:auto;margin-bottom:14px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:680px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">mpm 추이</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">평균</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">5분 peak</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">1H 평균</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">2H 평균</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">후반 낙폭</th>
+          </tr></thead>
+          <tbody>
+            ${stats.map(s=>`<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px"><div style="font-weight:600;color:var(--text)">${s.name}</div><div style="font-size:10px;color:var(--text3)">${s.pos||''}</div></td>
+              <td style="padding:6px 8px;text-align:right;color:var(--text2)">${s.dur}'</td>
+              <td style="padding:4px 8px;text-align:center">${sparkline(s.sorted)}</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--text)">${s.overallAvg.toFixed(1)}</td>
+              <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600">${s.peak5.toFixed(1)}</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--text2)">${s.played1H?s.h1Avg.toFixed(1):'—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--text2)">${s.played2H?s.h2Avg.toFixed(1):'—'}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:700;color:${dropColor(s.drop)}">
+                ${dropFlag(s.drop)} ${s.drop!=null?(s.drop>0?'+':'')+s.drop.toFixed(1)+'%':'—'}
+              </td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap">
+        <label style="font-size:11px;color:var(--text3)">선수 상세:</label>
+        <select id="p8-player-sel" onchange="renderP8Detail(this.value)" style="flex:1;min-width:240px;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit">
+          <option value="">선수 선택 (1분/5분MA 차트 + 5분 구간)</option>
+          ${selectOpts}
+        </select>
+      </div>
+      <div id="p8-detail-output"></div>
+      <div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.5">
+        <strong style="color:var(--text2)">활용:</strong>
+        🔴 후반 낙폭 ≤ −15% → 다음 경기 로테이션 후보 / 🟠 −10~−15% → MD+1 비하중 회복
+        · 5분 peak (PIP) → 경기 내 최대 강도 노출 확인 (개인 컨디셔닝 타깃 설정)
+        · sparkline → 교체 타이밍 패턴 시각 확인
       </div>
     `);
   })()}
