@@ -12270,8 +12270,11 @@ async function generateMatchReport(){
   const resultColor = {W:'#4ade80',D:'#fbbf24',L:'#f87171'}[info.result]||'var(--text2)';
   const resultBg    = {W:'#14532d',D:'#422006',L:'#7f1d1d'}[info.result]||'var(--surface2)';
   const resultLabel = {W:'WIN',D:'DRAW',L:'LOSE'}[info.result]||info.result||'—';
-  const avgDur = arr => arr.length ? Math.round(arr.reduce((a,r)=>a+(n(r.duration)||0),0)/arr.length) : null;
-  const durQ1=avgDur(q1Rows), durQ2=avgDur(q2Rows);
+  // 실제 경기 시간 = 해당 반 최대 출전 시간 (평균 아님)
+  const maxDur = arr => arr.length ? Math.max(...arr.map(r=>n(r.duration)||0)) : null;
+  const durQ1 = maxDur(q1Rows);
+  const durQ2 = maxDur(q2Rows);
+  const durFT  = maxDur(ftRows);   // 풀타임 경기 총 시간
   const ftFullPlayers = ftRows.filter(r=>n(r.duration)>=85).length;
 
   // ── SECTION 2: 최근 3경기 팀 합계 비교 ─────────────────
@@ -12385,7 +12388,7 @@ async function generateMatchReport(){
       </div>
       <div style="text-align:right">
         <div style="background:${resultBg};color:${resultColor};padding:6px 20px;border-radius:8px;font-size:15px;font-weight:700;display:inline-block">${resultLabel}</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:8px">출전 ${ftRows.length}명 · FT(85min+) ${ftFullPlayers}명</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:8px">출전 ${ftRows.length}명 · FT ${durFT?durFT+"'":"—"} · 풀타임 ${ftFullPlayers}명</div>
         ${q1Rows.length?`<div style="font-size:11px;color:var(--text3)">1Q ${q1Rows.length}명 · 2Q ${q2Rows.length}명</div>`:''}
       </div>
     </div>
