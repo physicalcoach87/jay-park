@@ -12166,9 +12166,10 @@ async function generateMatchReport(){
     }
   }
 
-  // 하프타임 자동 감지 (§ 7 + § 8 공유) — 활동 선수 수 ≤2인 연속 ≥3분 갭
+  // 하프타임 자동 감지 (§ 7 + § 8 공유)
   // halfBreakShared  : 1Q 마지막 분 (갭 직전)
   // halfStartShared  : 2Q 첫 번째 분 (갭 직후 데이터 재개)
+  // 감지 우선순위: ①데이터 갭 ≥3분 → ②팀평균 mpm<50 구간 ≥5분 → ③활동선수 ≤2 구간 ≥3분
   let halfBreakShared = 47;  // 1Q 끝
   let halfStartShared = 48;  // 2Q 시작
   if(minuteRows.length){
@@ -12178,17 +12179,41 @@ async function generateMatchReport(){
       if(!isNaN(_m)&&!isNaN(_v)) (_byMin[_m]=_byMin[_m]||[]).push(_v);
     });
     const _mins = Object.keys(_byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
-    const _team = _mins.map(_m=>({m:_m, n:_byMin[_m].length}));
-    let _start=null, _len=0;
-    for(const t of _team){
-      if(t.n<=2){ if(_start==null) _start=t.m; _len++; }
-      else {
-        if(_len>=3 && t.m>30 && t.m<70){
-          halfBreakShared = _start - 1;  // 갭 직전 = 1Q 마지막 분
-          halfStartShared = t.m;          // 갭 직후 = 2Q 첫 번째 분
-          break;
+    let _foundHT = false;
+
+    // 방법1: 데이터 갭 ≥3분 (GPS가 하프타임에 멈추는 경우 — 가장 명확한 신호)
+    for(let i=1;i<_mins.length;i++){
+      if(_mins[i]-_mins[i-1]>=3 && _mins[i-1]>30 && _mins[i]<80){
+        halfBreakShared = _mins[i-1];
+        halfStartShared = _mins[i];
+        _foundHT = true; break;
+      }
+    }
+
+    // 방법2: 팀 평균 mpm < 50 구간 ≥5분 (GPS가 하프타임에도 계속 기록되는 경우)
+    if(!_foundHT){
+      const _tAvg = _mins.map(_m=>({m:_m, avg:_byMin[_m].reduce((a,b)=>a+b,0)/_byMin[_m].length}));
+      let _s=null, _l=0;
+      for(const t of _tAvg){
+        if(t.m>30 && t.m<80 && t.avg<50){ if(_s==null) _s=t.m; _l++; }
+        else { if(_l>=5 && _s!=null){ halfBreakShared=_s-1; halfStartShared=t.m; _foundHT=true; break; } _s=null; _l=0; }
+      }
+    }
+
+    // 방법3 (폴백): 활동 선수 ≤2 구간 ≥3분
+    if(!_foundHT){
+      const _team = _mins.map(_m=>({m:_m, n:_byMin[_m].length}));
+      let _start=null, _len=0;
+      for(const t of _team){
+        if(t.n<=2){ if(_start==null) _start=t.m; _len++; }
+        else {
+          if(_len>=3 && t.m>30 && t.m<70){
+            halfBreakShared = _start - 1;
+            halfStartShared = t.m;
+            break;
+          }
+          _start=null; _len=0;
         }
-        _start=null; _len=0;
       }
     }
   }
@@ -12681,12 +12706,14 @@ async function generateMatchReport(){
       <text x="${PAD.l+6}" y="${PAD.t+14}" fill="#60a5fa" font-size="10" font-weight="700" opacity="0.8">1Q</text>
       <text x="${htStartX+6}" y="${PAD.t+14}" fill="#fb923c" font-size="10" font-weight="700" opacity="0.8">2Q</text>
     `;
-    // 1Q 끝 선 + 2Q 시작 선
+    // 1Q 끝 선 + 2Q 시작 선 + HT 레이블
+    const htMidX = (htEndX + htStartX) / 2;
     const halfLine = `
       <line x1="${htEndX}" x2="${htEndX}" y1="${PAD.t}" y2="${H-PAD.b}" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3,3" opacity="0.7"/>
-      <text x="${htEndX-3}" y="${PAD.t+10}" fill="#fbbf24" font-size="8.5" text-anchor="end" opacity="0.9">1Q ${halfBreak}'</text>
+      ${htGapW>=30?`<text x="${htEndX-3}" y="${PAD.t+10}" fill="#fbbf24" font-size="8.5" text-anchor="end" opacity="0.9">1Q ${halfBreak}'</text>`:`<text x="${htEndX-3}" y="${H-PAD.b+10}" fill="#fbbf24" font-size="8" text-anchor="end" opacity="0.8">${halfBreak}'</text>`}
+      ${htGapW>=16?`<text x="${htMidX}" y="${PAD.t+innerH/2+4}" fill="#fbbf24" font-size="11" font-weight="700" text-anchor="middle" opacity="0.55">HT</text>`:''}
       <line x1="${htStartX}" x2="${htStartX}" y1="${PAD.t}" y2="${H-PAD.b}" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="4,3"/>
-      <text x="${htStartX+3}" y="${PAD.t+10}" fill="#fb923c" font-size="9" font-weight="700">2Q ${halfStart}'</text>
+      ${htGapW>=30?`<text x="${htStartX+3}" y="${PAD.t+10}" fill="#fb923c" font-size="9" font-weight="700">2Q ${halfStart}'</text>`:`<text x="${htStartX+3}" y="${H-PAD.b+10}" fill="#fb923c" font-size="8" font-weight="700">${halfStart}'</text>`}
     `;
     const fatigueRects = top3Fatigue.map(s=>`<rect x="${X(s.from)}" y="${PAD.t}" width="${Math.max(1,X(s.to)-X(s.from))}" height="${innerH}" fill="#ef4444" opacity="0.12"/>`).join('');
 
