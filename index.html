@@ -12041,17 +12041,34 @@ async function generateMatchReport(){
     .limit(300);
 
   // 1분 롤링 mpm (§ 7용 — 없으면 § 7 카드 비활성화)
-  // opponent 이름 불일치 (예: '천안시티' vs '11R 천안시티') 대응 → 같은 날짜 전체 fetch 후 fuzzy match
+  // opponent 이름 불일치 (예: '천안시티' vs '11R 천안시티' vs 'vs 11R 천안시티') 대응
   const {data:minuteAll} = await supa.from('match_minute_records')
     .select('player_id,player_name,minute,mpm,opponent')
     .eq('match_date',date)
     .order('minute',{ascending:true});
-  const oppNorm = s => (s||'').toString().replace(/\s+/g,'').replace(/^\d+R/i,'').toLowerCase();
+  const oppNorm = s => (s||'').toString().replace(/\s+/g,'').replace(/^vs/i,'').replace(/^\d+R/i,'').replace(/^vs/i,'').toLowerCase();
   const tgtOpp = oppNorm(opponent);
-  const minuteRows = (minuteAll||[]).filter(r => {
-    const ro = oppNorm(r.opponent);
-    return ro===tgtOpp || ro.includes(tgtOpp) || tgtOpp.includes(ro);
-  });
+  // 1) 정확 일치 우선
+  let minuteRows = (minuteAll||[]).filter(r => r.opponent===opponent);
+  // 2) 없으면 fuzzy — opponent별로 그룹핑 후 가장 많은 행을 가진 하나만 선택 (중복 업로드 데이터 왜곡 방지)
+  if(!minuteRows.length && (minuteAll||[]).length){
+    const fuzzy = (minuteAll||[]).filter(r => {
+      const ro = oppNorm(r.opponent);
+      return ro===tgtOpp || ro.includes(tgtOpp) || tgtOpp.includes(ro);
+    });
+    const byOpp = {};
+    fuzzy.forEach(r => { (byOpp[r.opponent] = byOpp[r.opponent]||[]).push(r); });
+    const bestOpp = Object.entries(byOpp).sort((a,b)=>b[1].length-a[1].length)[0]?.[0];
+    minuteRows = bestOpp ? byOpp[bestOpp] : [];
+    if(bestOpp && bestOpp!==opponent){
+      console.log(`[§7 fuzzy match] '${opponent}' → minute_records에서 '${bestOpp}' 사용 (${minuteRows.length} rows)`);
+    }
+    // 같은 날짜에 여러 opponent의 롤링 데이터가 있으면 중복 경고
+    const oppCount = Object.keys(byOpp).length;
+    if(oppCount>1){
+      console.warn(`[§7] ${date} 에 fuzzy 매칭되는 opponent가 ${oppCount}개 (${Object.keys(byOpp).join(', ')}). '${bestOpp}'만 사용. 정리는 GPS 업로드 탭에서 삭제`);
+    }
+  }
 
   // ── 2. 헬퍼 ───────────────────────────────────────────
   const n = v => (v!=null && !isNaN(v)) ? parseFloat(v) : null;
