@@ -13081,7 +13081,7 @@ function printMatchReport(){
   [style*="color:var(--text3)"]{ color:#6b7280 !important }
   [style*="color:var(--accent2)"]{ color:#16a34a !important }
   /* ── 테두리 재정의 ── */
-  [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{ border-color:#d1d5db !important }
+  [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{ border-color:#9ca3af !important }
   /* ── SVG 배경 ── */
   svg[style*="background:var(--surface2)"]{ background:#f4f5f6 !important }
   /* ── 인터랙티브 요소 숨김 ── */
@@ -13089,14 +13089,16 @@ function printMatchReport(){
   #p8-detail-output{ display:none !important }
   /* ── 카드 스타일 ── */
   div[style*="border-radius:12px"]{
-    border:1px solid #e5e7eb !important;
+    border:1.5px solid #9ca3af !important;
     background:#fff !important;
     break-inside:avoid;
     page-break-inside:avoid;
+    margin-bottom:10px;
   }
   /* ── 표 ── */
   table{ border-collapse:collapse; width:100%; }
   tr[style*="background:var(--surface2)"]{ background:#f3f4f6 !important }
+  td,th{ border-bottom:1px solid #d1d5db !important }
   /* ── 하이라이트 색상 유지 ── */
   [style*="color:#ef4444"]{ color:#dc2626 !important }
   [style*="color:#f97316"]{ color:#ea580c !important }
@@ -13110,7 +13112,7 @@ function printMatchReport(){
   /* ── 페이지 설정 ── */
   @page{
     size:A4 portrait;
-    margin:0;
+    margin:15mm 14mm;
   }
   @media print{
     body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -13194,7 +13196,7 @@ function downloadMatchReportHTML(){
   .lh-ico{width:40px;height:40px;background:#16a34a;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700}
   .lh-t{font-size:16px;font-weight:700}.lh-s{font-size:10px;color:#94a3b8;margin-top:2px}
   .lh-r{text-align:right;font-size:10px;color:#94a3b8;line-height:1.8}
-  .footer{margin-top:24px;padding-top:12px;border-top:1px solid #e5e7eb;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between}
+  .footer{margin-top:24px;padding-top:12px;border-top:1.5px solid #9ca3af;font-size:10px;color:#6b7280;display:flex;justify-content:space-between}
   #report-action-bar,select,button{display:none!important}
   #p8-detail-output{display:none!important}
   svg[style*="background:var(--surface2)"]{background:#f4f5f6!important}
@@ -13202,11 +13204,17 @@ function downloadMatchReportHTML(){
   [style*="color:var(--text2)"]{color:#374151!important}
   [style*="color:var(--text3)"]{color:#6b7280!important}
   [style*="color:var(--accent2)"]{color:#16a34a!important}
-  div[style*="border-radius:12px"]{border:1px solid #e5e7eb!important;background:#fff!important}
+  [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{border-color:#9ca3af!important}
+  div[style*="border-radius:12px"]{border:1.5px solid #9ca3af!important;background:#fff!important;margin-bottom:10px}
+  table{border-collapse:collapse;width:100%}
+  td,th{border-bottom:1px solid #d1d5db!important}
   tr[style*="background:var(--surface2)"]{background:#f3f4f6!important}
   [style*="background:#1a1310"]{background:#fef2f2!important}
   [style*="border-left:3px solid #ef4444"]{border-left-color:#dc2626!important}
-  @page{size:A4 portrait;margin:15mm 12mm}
+  [style*="color:#ef4444"]{color:#dc2626!important}[style*="color:#f97316"]{color:#ea580c!important}
+  [style*="color:#22c55e"],[style*="color:#4ade80"]{color:#16a34a!important}
+  [style*="color:#fbbf24"]{color:#d97706!important}[style*="color:#60a5fa"]{color:#2563eb!important}
+  @page{size:A4 portrait;margin:15mm 14mm}
   @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.lh{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 </style>
 </head><body>
