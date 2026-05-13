@@ -12518,11 +12518,13 @@ async function generateMatchReport(){
           </tbody>
         </table>
       </div>
-      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
-        <strong style="color:var(--text2)">기준 (CLAUDE.md Match Max 비교):</strong>
-        🟢 ≥80% 경기 수준 충족 · 🟡 60~79% 주의 · 🔴 &lt;60% 미달 —
-        <strong>절대%</strong> = 이 경기 TD ÷ 개인 커리어 최고 TD ·
-        <strong>강도%</strong> = 이 경기 MPM ÷ 개인 커리어 최고 MPM
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.7">
+        <strong style="color:var(--text2)">배지 기준 (본인 Match Max 대비):</strong>
+        <span style="color:#4ade80;font-weight:700">🟢 ≥80%</span> 경기 수준 충족 ·
+        <span style="color:#fbbf24;font-weight:700">🟡 60~79%</span> 주의 ·
+        <span style="color:#f87171;font-weight:700">🔴 &lt;60%</span> 미달 —
+        <strong>절대%</strong> = 이 경기 TD ÷ 커리어 최고 TD ·
+        <strong>강도%</strong> = 이 경기 MPM ÷ 커리어 최고 MPM
       </div>
     `);
 
@@ -12554,8 +12556,10 @@ async function generateMatchReport(){
         </table>
       </div>
       <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
-        <strong style="color:var(--text2)">Match Max 대비 기준:</strong>
-        🟢 ≥80% 충족 · 🟡 60~79% 주의 · 🔴 &lt;60% 미달 — HIR+Spr · Band5(Sprint)에 적용 ·
+        <strong style="color:var(--text2)">수치 아래 심볼 기준 (본인 Match Max 대비):</strong>
+        <span style="color:#fbbf24;font-weight:700">★ ≥90%</span> 커리어 최고치 근접 ·
+        <span style="color:#94a3b8;font-weight:700">- 70~89%</span> 정상 범위 ·
+        <span style="color:#ef4444;font-weight:700">↓ &lt;70%</span> 주의 — HIR+Spr · Band5(Sprint)에 적용 ·
         <strong>Band4(m)</strong>은 절대값 참고 · <strong>B4/B5 횟수</strong>는 강도 노출 빈도
       </div>
     `);
@@ -12586,8 +12590,10 @@ async function generateMatchReport(){
         </table>
       </div>
       <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
-        <strong style="color:var(--text2)">Match Max 대비 기준:</strong>
-        🟢 ≥80% 충족 · 🟡 60~79% 주의 · 🔴 &lt;60% 미달 — RHIE · 가속에 적용 ·
+        <strong style="color:var(--text2)">수치 아래 심볼 기준 (본인 Match Max 대비):</strong>
+        <span style="color:#fbbf24;font-weight:700">★ ≥90%</span> 커리어 최고치 근접 ·
+        <span style="color:#94a3b8;font-weight:700">- 70~89%</span> 정상 범위 ·
+        <span style="color:#ef4444;font-weight:700">↓ &lt;70%</span> 주의 — RHIE · 가속에 적용 ·
         <strong>감속 · P.Load</strong>는 Match Max 미등록 → 절대값 참고 ·
         RHIE ≥50회 또는 P.Load ≥1,100 → 회복 우선순위 RED
       </div>
@@ -12625,8 +12631,10 @@ async function generateMatchReport(){
         </table>
       </div>
       <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
-        <strong style="color:var(--text2)">Match Max 대비 기준:</strong>
-        🟢 ≥80% 충족 · 🟡 60~79% 주의 · 🔴 &lt;60% 미달 — Run.M · Run.H · Dyn.M · Dyn.H에 적용 ·
+        <strong style="color:var(--text2)">수치 아래 심볼 기준 (본인 Match Max 대비):</strong>
+        <span style="color:#fbbf24;font-weight:700">★ ≥90%</span> 커리어 최고치 근접 ·
+        <span style="color:#94a3b8;font-weight:700">- 70~89%</span> 정상 범위 ·
+        <span style="color:#ef4444;font-weight:700">↓ &lt;70%</span> 주의 — Run.M · Run.H · Dyn.M · Dyn.H에 적용 ·
         <strong>Dyn H/M 비율:</strong> ≥100% 하지 eccentric 부하 高 → MD+1 비하중 권장 · 75~99% 모니터링 · &lt;75% 정상
       </div>
     `);
@@ -12662,9 +12670,11 @@ async function generateMatchReport(){
         </table>
       </div>
       <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
-        <strong style="color:var(--text2)">Match Max 대비 기준:</strong>
-        🟢 ≥80% 충족 · 🟡 60~79% 주의 · 🔴 &lt;60% 미달 — Vmax(커리어 최고속도 대비) ·
-        <strong>MSS 90%+ 노출 여부:</strong> ✅ 이 경기에서 개인 최고속도의 90% 이상 도달 · ⚠️ 미노출 → 14일 이상 시 고위험
+        <strong style="color:var(--text2)">수치 아래 심볼 기준 (본인 Match Max 대비):</strong>
+        <span style="color:#fbbf24;font-weight:700">★ ≥90%</span> 커리어 최고치 근접 ·
+        <span style="color:#94a3b8;font-weight:700">- 70~89%</span> 정상 범위 ·
+        <span style="color:#ef4444;font-weight:700">↓ &lt;70%</span> 주의 — Vmax(커리어 최고속도 대비) ·
+        <strong>MSS 90%+ 노출 여부:</strong> ✅ 개인 최고속도의 90% 이상 도달 · ⚠️ 미노출 → 14일 이상 시 고위험
       </div>
     `);
 
