@@ -8027,7 +8027,7 @@ async function loadTeamSummary(){
 
   const [{data:gps},{data:sessions},{data:wellness}] = await Promise.all([
     supa.from('gps_records')
-      .select('*, player_profiles(name, position, match_max_td, match_max_hir, match_max_accel, match_max_rhie, match_max_speed, match_max_pl)')
+      .select('*, player_profiles(name, position, match_max_td, match_max_hsr, match_max_sprint, match_max_accel, match_max_rhie, match_max_speed, match_max_pl)')
       .eq('session_date', date)
       .order('td', {ascending:false}),
     supa.from('session_records')
@@ -8167,10 +8167,8 @@ async function loadTeamSummary(){
     const wDiff = preW&&postW ? (parseFloat(postW)-parseFloat(preW)).toFixed(1) : null;
     const wDiffColor = wDiff===null?'var(--text3)':parseFloat(wDiff)<=-1?'#ef4444':parseFloat(wDiff)<0?'#f59e0b':'#34d399';
     const mx = r.player_profiles||{};
-    // HSR+Sprint 합산 → match_max_hir 대비 %
     const hsrVal = parseFloat(r.running_high)||0;
     const sprVal = parseFloat(r.sprint)||0;
-    const hsrSprintSum = hsrVal + sprVal;
     return `
     <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
       <td style="padding:7px 8px">
@@ -8179,8 +8177,8 @@ async function loadTeamSummary(){
       </td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${hsrSprintSum&&mx.match_max_hir?mmPct(hsrSprintSum,mx.match_max_hir):''}</td>
-      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}</td>
+      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint)}</td>
       <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel)}</td>
       <td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie)}</td>
       <td style="padding:7px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}${mmPct(r.max_speed, mx.match_max_speed)}</td>
@@ -8449,19 +8447,20 @@ async function loadPlayerDashboard(){
   }).join('');
 
   // match_max는 _players(select('*'))에 이미 포함
+  // match_max_hsr = Band4(HSR 단독), match_max_sprint = Band5(Sprint 단독)
   const cards1 = [
     {label:'운동시간',val:avgDur, unit:'min', color:'var(--text2)',    mx:null},
-    {label:'TD',      val:avgTD,  unit:'m',   color:'var(--accent2)', mx:player.match_max_td?Math.round(player.match_max_td):null},
-    {label:'HSR',     val:avgHSR, unit:'m',   color:'#f59e0b',        mx:player.match_max_hir?Math.round(player.match_max_hir):null},
-    {label:'Sprint',  val:avgSP,  unit:'m',   color:'#ef4444',        mx:null},
-    {label:'가속',    val:avgAcc, unit:'회',  color:'#fb923c',        mx:player.match_max_accel?Math.round(player.match_max_accel):null},
+    {label:'TD',      val:avgTD,  unit:'m',   color:'var(--accent2)', mx:player.match_max_td!=null?Math.round(player.match_max_td):null},
+    {label:'HSR',     val:avgHSR, unit:'m',   color:'#f59e0b',        mx:player.match_max_hsr!=null?Math.round(player.match_max_hsr):null},
+    {label:'Sprint',  val:avgSP,  unit:'m',   color:'#ef4444',        mx:player.match_max_sprint!=null?Math.round(player.match_max_sprint):null},
+    {label:'가속',    val:avgAcc, unit:'회',  color:'#fb923c',        mx:player.match_max_accel!=null?Math.round(player.match_max_accel):null},
   ];
   const cards2 = [
-    {label:'RHIE',    val:avgRHIE,unit:'회',  color:'#34d399', mx:player.match_max_rhie?Math.round(player.match_max_rhie):null},
-    {label:'최고속도',val:avgMS,  unit:'km/h',color:'#60a5fa', mx:player.match_max_speed?parseFloat(player.match_max_speed).toFixed(1):null},
+    {label:'RHIE',    val:avgRHIE,unit:'회',  color:'#34d399', mx:player.match_max_rhie!=null?Math.round(player.match_max_rhie):null},
+    {label:'최고속도',val:avgMS,  unit:'km/h',color:'#60a5fa', mx:player.match_max_speed!=null?parseFloat(player.match_max_speed).toFixed(1):null},
     {label:'RPE',     val:avgRPE, unit:'',    color:'#f87171', mx:null},
     {label:'sRPE',    val:avgSRPE,unit:'AU',  color:'#c084fc', mx:null},
-    {label:'P.Load',  val:avgPL,  unit:'',    color:'#a78bfa', mx:player.match_max_pl?parseFloat(player.match_max_pl).toFixed(1):null},
+    {label:'P.Load',  val:avgPL,  unit:'',    color:'#a78bfa', mx:player.match_max_pl!=null?parseFloat(player.match_max_pl).toFixed(1):null},
   ];
 
   const sessionRows = sessions.map(r=>{
@@ -14365,7 +14364,7 @@ async function deleteMinuteMatchByIdx(idx){
 async function updateMatchMax(playerIds){
   const pids=[...new Set(playerIds)];
   const {data:ftData}=await supa.from('match_records')
-    .select('player_id,td,mpm,hir_sprint,band5_td,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
+    .select('player_id,td,mpm,hir_sprint,band4_td,band5_td,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
     .in('player_id',pids);
 
@@ -14374,18 +14373,20 @@ async function updateMatchMax(playerIds){
     if(!rows.length) continue;
     const maxF=field=>Math.max(...rows.map(r=>parseFloat(r[field])||0));
     const payload={
-      match_max_td:       maxF('td'),
-      match_max_mpm:      maxF('mpm'),
-      match_max_hir:      maxF('hir_sprint'),
-      match_max_band5_td: maxF('band5_td'),
-      match_max_accel:    maxF('accel'),
-      match_max_rhie:     maxF('rhie'),
-      match_max_speed:    maxF('max_speed'),
-      match_max_pl:       maxF('player_load'),
-      match_max_fmp_run_m:maxF('fmp_run_m'),
-      match_max_fmp_run_h:maxF('fmp_run_h'),
-      match_max_fmp_dyn_m:maxF('fmp_dyn_m'),
-      match_max_fmp_dyn_h:maxF('fmp_dyn_h'),
+      match_max_td:       Math.round(maxF('td')),
+      match_max_mpm:      parseFloat(maxF('mpm').toFixed(1)),
+      match_max_hir:      Math.round(maxF('hir_sprint')),
+      match_max_hsr:      Math.round(maxF('band4_td')),    // HSR 단독 (Band4)
+      match_max_sprint:   Math.round(maxF('band5_td')),    // Sprint 단독 (Band5)
+      match_max_band5_td: Math.round(maxF('band5_td')),
+      match_max_accel:    Math.round(maxF('accel')),
+      match_max_rhie:     Math.round(maxF('rhie')),
+      match_max_speed:    parseFloat(maxF('max_speed').toFixed(1)),
+      match_max_pl:       parseFloat(maxF('player_load').toFixed(1)),
+      match_max_fmp_run_m:parseFloat(maxF('fmp_run_m').toFixed(1)),
+      match_max_fmp_run_h:parseFloat(maxF('fmp_run_h').toFixed(1)),
+      match_max_fmp_dyn_m:parseFloat(maxF('fmp_dyn_m').toFixed(1)),
+      match_max_fmp_dyn_h:parseFloat(maxF('fmp_dyn_h').toFixed(1)),
       match_max_updated:  getKSTDateStr(),
     };
     await supa.from('player_profiles').update(payload).eq('id',pid);
@@ -14729,13 +14730,14 @@ async function loadMatchMax(){
   out.innerHTML=`
     <div style="font-size:11px;color:var(--text3);margin-bottom:10px">FT(풀타임) 기준 선수별 경기 최대값 — 훈련 강도 비교 기준</div>
     <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:680px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px">
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:7px 8px;text-align:left;color:var(--text3)">선수</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">TD Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">MPM Max</th>
-            <th style="padding:7px 8px;text-align:right;color:var(--text3)">HIR+Spr Max</th>
+            <th style="padding:7px 8px;text-align:right;color:#f59e0b">HSR Max</th>
+            <th style="padding:7px 8px;text-align:right;color:#ef4444">Sprint Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속 Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도 Max</th>
@@ -14751,9 +14753,10 @@ async function loadMatchMax(){
               </td>
               <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${p.match_max_td?Math.round(p.match_max_td).toLocaleString()+'m':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#f59e0b">${p.match_max_mpm?parseFloat(p.match_max_mpm).toFixed(1):'—'}</td>
-              <td style="padding:7px 8px;text-align:right;color:#ef4444">${p.match_max_hir?Math.round(p.match_max_hir).toLocaleString()+'m':'—'}</td>
-              <td style="padding:7px 8px;text-align:right;color:#fb923c">${p.match_max_accel||'—'}</td>
-              <td style="padding:7px 8px;text-align:right;color:#34d399">${p.match_max_rhie||'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#f59e0b;font-weight:600">${p.match_max_hsr!=null?Math.round(p.match_max_hsr).toLocaleString()+'m':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#ef4444;font-weight:600">${p.match_max_sprint!=null?Math.round(p.match_max_sprint).toLocaleString()+'m':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#fb923c">${p.match_max_accel!=null?Math.round(p.match_max_accel):'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#34d399">${p.match_max_rhie!=null?Math.round(p.match_max_rhie):'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#60a5fa">${p.match_max_speed?parseFloat(p.match_max_speed).toFixed(1)+'km/h':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:var(--text3)">${p.match_max_updated||'—'}</td>
             </tr>`).join('')}
