@@ -12472,26 +12472,76 @@ async function generateMatchReport(){
     };
   });
 
-  // ── SECTION 5: 회복 우선순위 ───────────────────────────
+  // ── SECTION 5: 회복 우선순위 (Tier 프레임워크) ─────────────────
+  // 개인 경기 베이스라인 산출 (현재 경기 제외, FT 65분 이상만 포함)
+  const playerBaselines = {};
+  (recentAll||[]).forEach(r=>{
+    if(r.match_date===date) return; // 현재 경기 제외
+    const pid=r.player_id;
+    if(!playerBaselines[pid]) playerBaselines[pid]={hsr:[],spr:[],pl:[],cnt:0};
+    const h=parseFloat(r.hir_sprint)||0;
+    const s=parseFloat(r.band5_td)||0;
+    const p=parseFloat(r.player_load)||0;
+    if(h>0) playerBaselines[pid].hsr.push(h);
+    if(s>0) playerBaselines[pid].spr.push(s);
+    if(p>0) playerBaselines[pid].pl.push(p);
+    playerBaselines[pid].cnt++;
+  });
+  const avg=arr=>arr.length?arr.reduce((a,v)=>a+v,0)/arr.length:null;
+  Object.keys(playerBaselines).forEach(pid=>{
+    const b=playerBaselines[pid];
+    b.avgHsr=avg(b.hsr); b.avgSpr=avg(b.spr); b.avgPl=avg(b.pl);
+    b.hasBL=b.cnt>=5; // 최소 5경기 이상이어야 개인 베이스라인 신뢰
+  });
+
   const recovList = ftRows.map(r=>{
     const pid=r.player_id;
     const q1=q1Rows.find(q=>q.player_id===pid);
     const q2=q2Rows.find(q=>q.player_id===pid);
-    const rhie = n(r.rhie)||0;
+    const bl=playerBaselines[pid]||{avgHsr:null,avgSpr:null,avgPl:null,hasBL:false,cnt:0};
+
+    const dur  = n(r.duration)||0;
+    const hsr  = n(r.hir_sprint)||0;
+    const spr  = n(r.band5_td)||0;
     const pl   = n(r.player_load)||0;
-    const mpmDrop = (q1?.mpm&&q2?.mpm)?(q2.mpm-q1.mpm)/q1.mpm*100:0;
-    const dynM = n(r.fmp_dyn_m)||0;
-    const dynH = n(r.fmp_dyn_h)||0;
-    const dynRatio = dynM>0?Math.round(dynH/dynM*100):0;
-    let grade,gc;
-    if(rhie>=50||pl>=1100||mpmDrop<=-12){grade='🔴 HIGH';gc='#ef4444';}
-    else if(rhie>=44||pl>=900||mpmDrop<=-10){grade='🟠 MOD-HIGH';gc='#f97316';}
-    else if(rhie>=40||pl>=800||mpmDrop<=-6){grade='🟡 MODERATE';gc='#eab308';}
-    else{grade='🟢 LOW';gc='#22c55e';}
-    return {r,name:r.player_profiles?.name||'—',rhie,pl:Math.round(pl),mpmDrop,dynRatio,grade,gc,dur:n(r.duration)||0};
+    const rhie = n(r.rhie)||0;
+    const mpmDrop=(q1?.mpm&&q2?.mpm)?(q2.mpm-q1.mpm)/q1.mpm*100:null;
+
+    // 상대 % (개인 베이스라인 대비)
+    const hsrPct = (bl.avgHsr&&hsr) ? Math.round(hsr/bl.avgHsr*100) : null;
+    const sprPct = (bl.avgSpr&&spr) ? Math.round(spr/bl.avgSpr*100) : null;
+    const plPct  = (bl.avgPl &&pl ) ? Math.round(pl /bl.avgPl *100) : null;
+
+    // Tier 1 트리거 (1개 이상 → Tier 1)
+    const t1=[];
+    if(dur>=65)                           t1.push(`출전${dur}'`);
+    if(hsrPct!=null&&hsrPct>=115)         t1.push(`HSR ${hsrPct}%`);
+    if(sprPct!=null&&sprPct>=115)         t1.push(`Sprint ${sprPct}%`);
+    if(plPct !=null&&plPct >=125)         t1.push(`PL ${plPct}%`);
+    if(mpmDrop!=null&&mpmDrop<=-12)       t1.push(`후반↓${mpmDrop.toFixed(1)}%`);
+
+    // Tier 2 트리거 (Tier 1 미해당, 1개 이상 → Tier 2)
+    const t2=[];
+    if(dur>=45&&dur<65)                   t2.push(`출전${dur}'`);
+    if(hsrPct!=null&&hsrPct>=100&&hsrPct<115) t2.push(`HSR ${hsrPct}%`);
+    if(plPct !=null&&plPct >=110&&plPct <125) t2.push(`PL ${plPct}%`);
+    if(mpmDrop!=null&&mpmDrop<=-10&&mpmDrop>-12) t2.push(`후반↓${mpmDrop.toFixed(1)}%`);
+
+    let tier,gc;
+    if(t1.length)      {tier='Tier 1';gc='#ef4444';}
+    else if(t2.length) {tier='Tier 2';gc='#f97316';}
+    else               {tier='Tier 3';gc='#22c55e';}
+
+    const triggers=t1.length?t1:t2;
+    return {
+      r, name:r.player_profiles?.name||'—',
+      dur, hsr:Math.round(hsr), spr:Math.round(spr), pl:Math.round(pl),
+      rhie, mpmDrop, hsrPct, sprPct, plPct,
+      tier, gc, triggers, hasBL:bl.hasBL, blCnt:bl.cnt
+    };
   }).filter(x=>x.dur>=45).sort((a,b)=>{
-    const o={'🔴 HIGH':0,'🟠 MOD-HIGH':1,'🟡 MODERATE':2,'🟢 LOW':3};
-    return (o[a.grade]??3)-(o[b.grade]??3);
+    const o={'Tier 1':0,'Tier 2':1,'Tier 3':2};
+    return (o[a.tier]??3)-(o[b.tier]??3);
   });
 
   // ── RENDER ────────────────────────────────────────────
@@ -13140,42 +13190,78 @@ async function generateMatchReport(){
   })()}
 
   ${card(`
-    ${secHead('🏥','회복 우선순위','45분+ 출전 선수 · RHIE / PL / 후반 mpm 낙폭 종합')}
+    ${secHead('🏥','회복 우선순위 (Tier 분류)','45분+ 출전 · 개인 베이스라인 대비 절대/상대 부하 종합')}
+
+    ${(()=>{
+      const noBL = recovList.filter(x=>!x.hasBL&&x.blCnt>0);
+      const zeroBL = recovList.filter(x=>x.blCnt===0);
+      const warns=[];
+      if(zeroBL.length) warns.push(`📌 베이스라인 0경기: ${zeroBL.map(x=>x.name).join(', ')} — 절대 출전시간 기준만 적용`);
+      if(noBL.length)   warns.push(`⚠️ 베이스라인 부족(5경기 미만): ${noBL.map(x=>x.name).join(', ')} — 상대% 신뢰도 낮음`);
+      return warns.length?`<div style="background:#1e293b;border-radius:6px;padding:8px 12px;font-size:10px;color:#94a3b8;margin-bottom:10px;line-height:1.6">${warns.join('<br>')}</div>`:'';
+    })()}
+
     <div style="overflow-x:auto;margin-bottom:14px">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:500px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">#</th>
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">P.Load</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">후반 mpm Δ</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">Dyn H/M%</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">등급</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">출전(′)</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">HSR%</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">Sprint%</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">PL%</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">후반Δ</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">Tier</th>
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">트리거</th>
           </tr>
         </thead>
         <tbody>
-          ${recovList.map((x,i)=>`
-          <tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:6px 8px;color:var(--text3);font-size:10px">${i+1}</td>
-            <td style="padding:6px 8px;font-weight:600;color:var(--text)">${x.name}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:${x.rhie>=44?700:400};color:${x.rhie>=50?'#ef4444':x.rhie>=44?'#f97316':'var(--text2)'}">${Math.round(x.rhie)}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:${x.pl>=900?700:400};color:${x.pl>=1100?'#ef4444':x.pl>=900?'#f97316':'var(--text2)'}">${x.pl.toLocaleString()}</td>
-            <td style="padding:6px 8px;text-align:right;font-weight:${x.mpmDrop<=-6?700:400};color:${x.mpmDrop<=-12?'#ef4444':x.mpmDrop<=-10?'#f97316':x.mpmDrop<=-6?'#eab308':'#22c55e'}">${x.mpmDrop?(x.mpmDrop>0?'+':'')+x.mpmDrop.toFixed(1)+'%':'—'}</td>
-            <td style="padding:6px 8px;text-align:right;color:${x.dynRatio>=100?'#ef4444':x.dynRatio>=75?'#f97316':'var(--text2)'}">${x.dynRatio?x.dynRatio+'%':'—'}</td>
-            <td style="padding:6px 8px;text-align:center;font-weight:700;color:${x.gc}">${x.grade}</td>
-          </tr>`).join('')}
+          ${recovList.map((x,i)=>{
+            const durC = x.dur>=65?'#ef4444':x.dur>=45?'#f97316':'var(--text2)';
+            const hsrC = x.hsrPct==null?'var(--text3)':x.hsrPct>=115?'#ef4444':x.hsrPct>=100?'#f97316':'#22c55e';
+            const sprC = x.sprPct==null?'var(--text3)':x.sprPct>=115?'#ef4444':x.sprPct>=100?'#f97316':'#22c55e';
+            const plC  = x.plPct ==null?'var(--text3)':x.plPct >=125?'#ef4444':x.plPct >=110?'#f97316':'#22c55e';
+            const dropC= x.mpmDrop==null?'var(--text3)':x.mpmDrop<=-12?'#ef4444':x.mpmDrop<=-10?'#f97316':x.mpmDrop<=-6?'#eab308':'#22c55e';
+            const dropStr=x.mpmDrop!=null?(x.mpmDrop>0?'+':'')+x.mpmDrop.toFixed(1)+'%':'—';
+            const tierBg=x.tier==='Tier 1'?'rgba(239,68,68,0.12)':x.tier==='Tier 2'?'rgba(249,115,22,0.12)':'rgba(34,197,94,0.10)';
+            return `<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px;color:var(--text3);font-size:10px">${i+1}</td>
+              <td style="padding:6px 8px;font-weight:600;color:var(--text)">${x.name}${!x.hasBL?`<sup style="color:#64748b;font-size:8px" title="베이스라인 ${x.blCnt}경기"> ★${x.blCnt}</sup>`:''}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:700;color:${durC}">${x.dur}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:${x.hsrPct!=null&&x.hsrPct>=100?700:400};color:${hsrC}">${x.hsrPct!=null?x.hsrPct+'%':'—'}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:${x.sprPct!=null&&x.sprPct>=100?700:400};color:${sprC}">${x.sprPct!=null?x.sprPct+'%':'—'}</td>
+              <td style="padding:6px 8px;text-align:right;font-weight:${x.plPct!=null&&x.plPct>=110?700:400};color:${plC}">${x.plPct!=null?x.plPct+'%':'—'}</td>
+              <td style="padding:6px 8px;text-align:right;color:${dropC}">${dropStr}</td>
+              <td style="padding:5px 8px;text-align:center">
+                <span style="background:${tierBg};color:${x.gc};font-weight:700;font-size:10px;padding:2px 8px;border-radius:12px;border:1px solid ${x.gc}40">${x.tier}</span>
+              </td>
+              <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${x.triggers.join(' · ')||'—'}</td>
+            </tr>`;
+          }).join('')}
         </tbody>
       </table>
     </div>
+
     <div style="background:var(--surface2);border-radius:8px;padding:12px;font-size:11px">
-      <div style="font-weight:600;color:var(--text2);margin-bottom:8px">마이크로사이클 적용 기준</div>
-      <div style="display:grid;gap:6px;color:var(--text2)">
-        <div><span style="color:#ef4444;font-weight:700">🔴 HIGH</span> — MD+1 비하중(자전거/풀 러닝) · MD+2 저강도 한정 · MD+3~ 볼륨 10–15% 감량 후 합류</div>
-        <div><span style="color:#f97316;font-weight:700">🟠 MOD-HIGH</span> — MD+1 저강도 · MD+3부터 팀 세션 합류</div>
-        <div><span style="color:#eab308;font-weight:700">🟡 MODERATE</span> — MD+1 일반 회복 세션 · 표준 마이크로사이클 적용</div>
-        <div><span style="color:#22c55e;font-weight:700">🟢 LOW</span> — 일반 마이크로사이클 적용</div>
-        <div style="margin-top:4px;color:var(--text3);font-size:10px">Dyn H/M ≥100% → 하지 eccentric 부하 MD+2까지 제한 · ★ 커리어 최고 경기 직후 → 다음 주 부하 신중 설계</div>
+      <div style="font-weight:600;color:var(--text2);margin-bottom:10px">Tier별 회복 개입 프로토콜</div>
+      <div style="display:grid;gap:8px;color:var(--text2)">
+        <div style="padding:8px;background:rgba(239,68,68,0.08);border-radius:6px;border-left:3px solid #ef4444">
+          <div style="font-weight:700;color:#ef4444;margin-bottom:4px">🔴 Tier 1 — 즉시 개입</div>
+          <div style="font-size:10px;color:var(--text3);line-height:1.6">MD+0 CWI 또는 Contrast Bath · 탄수화물 우선 보충 1.2g/kg/h × 4h · 수면 프로토콜 강조<br>MD+1 능동 회복 전용 (저강도 자전거 20–25분 또는 풀 러닝, HR &lt;65% HRmax)<br>MD+2 Wellness 재분류 → 저하 지속 시 MD+3~도 볼륨 10–15% 감량 후 합류</div>
+        </div>
+        <div style="padding:8px;background:rgba(249,115,22,0.08);border-radius:6px;border-left:3px solid #f97316">
+          <div style="font-weight:700;color:#f97316;margin-bottom:4px">🟠 Tier 2 — 24–48h 모니터링</div>
+          <div style="font-size:10px;color:var(--text3);line-height:1.6">표준 회복 루틴 · MD+1 능동 회복 + 저강도 팀훈련 참여 가능<br>수분·영양 모니터링 · MD+1 Wellness 확인 후 Tier 1으로 상향 가능</div>
+        </div>
+        <div style="padding:8px;background:rgba(34,197,94,0.08);border-radius:6px;border-left:3px solid #22c55e">
+          <div style="font-weight:700;color:#22c55e;margin-bottom:4px">🟢 Tier 3 — 표준 마이크로사이클</div>
+          <div style="font-size:10px;color:var(--text3)">표준 팀훈련 참여 · 일반 컨디셔닝 허용</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3);line-height:1.5">
+        ★ HSR%/Sprint%/PL% = 개인 시즌 경기 평균 대비 · ★★ Tier는 MD+1 Wellness 후 반드시 재분류 (상향 가능)
+        · ⚠️ GPS 임계값 절대 수치보다 개인 베이스라인 비율 우선 적용 (Rago et al., 2019)
       </div>
     </div>
   `)}`;
