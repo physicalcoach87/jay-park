@@ -14363,15 +14363,30 @@ async function deleteMinuteMatchByIdx(idx){
 // ── Match Max 자동 갱신 ───────────────────────────────────────────
 async function updateMatchMax(playerIds){
   const pids=[...new Set(playerIds)];
+
+  // 경기 데이터 (FT만)
   const {data:ftData}=await supa.from('match_records')
     .select('player_id,td,mpm,hir_sprint,band4_td,band5_td,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
+    .in('player_id',pids);
+
+  // 훈련 GPS 전체 기간 최고속도 — 경기 데이터보다 높을 수 있음
+  const {data:gpsSpeedData}=await supa.from('gps_records')
+    .select('player_id,max_speed')
     .in('player_id',pids);
 
   for(const pid of pids){
     const rows=(ftData||[]).filter(r=>r.player_id===pid);
     if(!rows.length) continue;
     const maxF=field=>Math.max(...rows.map(r=>parseFloat(r[field])||0));
+
+    // 최고속도: 경기 vs 훈련 전체 → 더 높은 값 사용 (진짜 Vmax)
+    const matchMaxSpd = maxF('max_speed');
+    const gpsMaxSpd   = Math.max(0,...(gpsSpeedData||[])
+      .filter(r=>r.player_id===pid)
+      .map(r=>parseFloat(r.max_speed)||0));
+    const trueMaxSpeed = parseFloat(Math.max(matchMaxSpd, gpsMaxSpd).toFixed(1));
+
     const payload={
       match_max_td:       Math.round(maxF('td')),
       match_max_mpm:      parseFloat(maxF('mpm').toFixed(1)),
@@ -14381,7 +14396,7 @@ async function updateMatchMax(playerIds){
       match_max_band5_td: Math.round(maxF('band5_td')),
       match_max_accel:    Math.round(maxF('accel')),
       match_max_rhie:     Math.round(maxF('rhie')),
-      match_max_speed:    parseFloat(maxF('max_speed').toFixed(1)),
+      match_max_speed:    trueMaxSpeed,                    // 경기 + 훈련 전체 최대값
       match_max_pl:       parseFloat(maxF('player_load').toFixed(1)),
       match_max_fmp_run_m:parseFloat(maxF('fmp_run_m').toFixed(1)),
       match_max_fmp_run_h:parseFloat(maxF('fmp_run_h').toFixed(1)),
@@ -14393,7 +14408,7 @@ async function updateMatchMax(playerIds){
     const p=_players.find(pl=>pl.id===pid);
     if(p) Object.assign(p,payload);
   }
-  console.log('Match Max 갱신 완료:', pids.length+'명');
+  console.log('Match Max 갱신 완료 (최고속도=경기+훈련 전체):', pids.length+'명');
 }
 
 // ── Match Max 전체 재계산 (기존 경기 데이터 기반) ─────────────────
