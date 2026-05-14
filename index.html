@@ -12539,7 +12539,7 @@ async function generateMatchReport(){
       rhie, mpmDrop, hsrPct, sprPct, plPct,
       tier, gc, triggers, hasBL:bl.hasBL, blCnt:bl.cnt
     };
-  }).filter(x=>x.dur>=45).sort((a,b)=>{
+  }).filter(x=>x.dur>0).sort((a,b)=>{
     const o={'Tier 1':0,'Tier 2':1,'Tier 3':2};
     return (o[a.tier]??3)-(o[b.tier]??3);
   });
@@ -13289,7 +13289,7 @@ async function generateMatchReport(){
 
         <!-- 기준 안내 (최소화) -->
         <div style="margin-top:10px;font-size:9px;color:var(--text3);line-height:1.6">
-          분류 기준: 출전 ≥65′ · HSR/Sprint ≥평균115% · PL ≥평균125% → Tier 1 &nbsp;|&nbsp; 출전 45–64′ · HSR ≥평균100% · PL ≥평균110% → Tier 2
+          분류 기준: 출전 ≥65′ · HSR/Sprint ≥평균115% · PL ≥평균125% → Tier 1 &nbsp;|&nbsp; 출전 45–64′ · HSR ≥평균100% · PL ≥평균110% → Tier 2 &nbsp;|&nbsp; 나머지 전원 → Tier 3
           &nbsp;·&nbsp; <strong style="color:var(--text2)">MD+1 Wellness 후 반드시 재분류</strong>
         </div>
       `;
