@@ -8435,25 +8435,33 @@ async function loadPlayerDashboard(){
   const fmpMax   = Math.max(avgFmpRM||0,avgFmpRH||0,avgFmpDM||0,avgFmpDH||0,1);
   const fmpBar   = v => v ? `<div style="height:4px;background:var(--border);border-radius:2px;margin-top:3px"><div style="height:4px;border-radius:2px;background:#3b82f6;width:${Math.round((v/fmpMax)*100)}%"></div></div>` : '';
 
-  const statCardHtml = cards => cards.map(c=>`
+  const statCardHtml = cards => cards.map(c=>{
+    const hasMx = c.mx != null;
+    const pct = hasMx && c.val ? Math.round((parseFloat(c.val)/parseFloat(c.mx))*100) : null;
+    const pctColor = pct==null?'':pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';
+    const pctBg    = pct==null?'':pct>=80?'#052e16':pct>=60?'#422006':'#3b1219';
+    return `
     <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
       <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${c.label}</div>
-      <div style="font-size:15px;font-weight:700;color:${c.color}">${fmt(c.val)}<span style="font-size:10px;color:var(--text3);margin-left:1px">${c.val!=null?c.unit:''}</span></div>
-    </div>`).join('');
+      <div style="font-size:15px;font-weight:700;color:${c.color}">${fmt(c.val)}<span style="font-size:10px;color:var(--text3);margin-left:1px">${c.val!=null?c.unit:''}</span>${pct!=null?`<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:${pctBg};color:${pctColor};margin-left:4px;font-weight:600">${pct}%</span>`:''}</div>
+      ${hasMx?`<div style="font-size:10px;color:var(--text3);margin-top:4px;border-top:0.5px solid var(--border);padding-top:3px">경기Max <span style="color:#9ca3af;font-weight:600">${fmt(c.mx)}${c.unit}</span></div>`:''}
+    </div>`;
+  }).join('');
 
+  // match_max는 _players(select('*'))에 이미 포함
   const cards1 = [
-    {label:'운동시간',val:avgDur, unit:'min',color:'var(--text2)'},
-    {label:'TD',      val:avgTD,  unit:'m',  color:'var(--accent2)'},
-    {label:'HSR',     val:avgHSR, unit:'m',  color:'#f59e0b'},
-    {label:'Sprint',  val:avgSP,  unit:'m',  color:'#ef4444'},
-    {label:'가속',    val:avgAcc, unit:'회', color:'#fb923c'},
+    {label:'운동시간',val:avgDur, unit:'min', color:'var(--text2)',    mx:null},
+    {label:'TD',      val:avgTD,  unit:'m',   color:'var(--accent2)', mx:player.match_max_td?Math.round(player.match_max_td):null},
+    {label:'HSR',     val:avgHSR, unit:'m',   color:'#f59e0b',        mx:player.match_max_hir?Math.round(player.match_max_hir):null},
+    {label:'Sprint',  val:avgSP,  unit:'m',   color:'#ef4444',        mx:null},
+    {label:'가속',    val:avgAcc, unit:'회',  color:'#fb923c',        mx:player.match_max_accel?Math.round(player.match_max_accel):null},
   ];
   const cards2 = [
-    {label:'RHIE',    val:avgRHIE,unit:'회', color:'#34d399'},
-    {label:'최고속도',val:avgMS,  unit:'km/h',color:'#60a5fa'},
-    {label:'RPE',     val:avgRPE, unit:'',   color:'#f87171'},
-    {label:'sRPE',    val:avgSRPE,unit:'AU', color:'#c084fc'},
-    {label:'P.Load',  val:avgPL,  unit:'',   color:'#a78bfa'},
+    {label:'RHIE',    val:avgRHIE,unit:'회',  color:'#34d399', mx:player.match_max_rhie?Math.round(player.match_max_rhie):null},
+    {label:'최고속도',val:avgMS,  unit:'km/h',color:'#60a5fa', mx:player.match_max_speed?parseFloat(player.match_max_speed).toFixed(1):null},
+    {label:'RPE',     val:avgRPE, unit:'',    color:'#f87171', mx:null},
+    {label:'sRPE',    val:avgSRPE,unit:'AU',  color:'#c084fc', mx:null},
+    {label:'P.Load',  val:avgPL,  unit:'',    color:'#a78bfa', mx:player.match_max_pl?parseFloat(player.match_max_pl).toFixed(1):null},
   ];
 
   const sessionRows = sessions.map(r=>{
