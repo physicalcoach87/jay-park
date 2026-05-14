@@ -12274,7 +12274,7 @@ async function generateMatchReport(){
 
   // 최근 3경기 팀 합계용 (FT 전체)
   const {data:recentAll} = await supa.from('match_records')
-    .select('match_date,opponent,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
+    .select('player_id,match_date,opponent,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
     .order('match_date',{ascending:false})
     .limit(300);
