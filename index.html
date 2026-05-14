@@ -13190,121 +13190,107 @@ async function generateMatchReport(){
   })()}
 
   ${card(`
-    ${secHead('🏥','회복 우선순위','경기 후 개인 부하 기반 Tier 분류')}
+    ${secHead('🏥','회복 필요 선수 명단','경기 후 우선순위 · 높을수록 즉시 개입 필요')}
 
     ${(()=>{
       const t1 = recovList.filter(x=>x.tier==='Tier 1');
       const t2 = recovList.filter(x=>x.tier==='Tier 2');
       const t3 = recovList.filter(x=>x.tier==='Tier 3');
+      const needsRecov = [...t1, ...t2]; // 회복 필요 선수
       const noBLnames = recovList.filter(x=>!x.hasBL).map(x=>x.name);
 
-      // 지표 색상
-      const hsrColor  = v => v==null?'var(--text3)':v>=115?'#ef4444':v>=100?'#f97316':'var(--text2)';
-      const sprColor  = v => v==null?'var(--text3)':v>=115?'#ef4444':v>=100?'#f97316':'var(--text2)';
-      const plColor   = v => v==null?'var(--text3)':v>=125?'#ef4444':v>=110?'#f97316':'var(--text2)';
-      const dropColor = v => v==null?'var(--text3)':v<=-12?'#ef4444':v<=-10?'#f97316':v<=-6?'#eab308':'var(--text2)';
-
-      // 트리거 태그 (작고 색상 있는 뱃지)
-      const trigTags = (x) => {
-        if(!x.triggers.length) return '<span style="font-size:9px;color:var(--text3)">—</span>';
-        return x.triggers.map(t=>{
-          const c = t.includes('출전')?'#ef4444':t.includes('후반')?'#f97316':'#f97316';
-          return `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:8px;background:${c}20;color:${c};border:1px solid ${c}44;white-space:nowrap">${t}</span>`;
+      // 트리거 요약 (가장 심각한 것 먼저, 최대 2개)
+      const mainTrigger = (x) => {
+        if(!x.triggers.length){
+          // 트리거 태그 없지만 Tier 분류된 경우 — 출전시간만
+          return `<span style="font-size:10px;color:var(--text3)">출전 ${x.dur}′</span>`;
+        }
+        return x.triggers.slice(0,2).map(t=>{
+          const c = x.tier==='Tier 1'?'#ef4444':'#f97316';
+          return `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:${c}18;color:${c};border:1px solid ${c}40;white-space:nowrap">${t}</span>`;
         }).join(' ');
       };
 
-      // Tier 배지
-      const tierBadge = (tier, gc) =>
-        `<span style="display:inline-block;background:${gc};color:#fff;font-weight:800;font-size:10px;padding:3px 10px;border-radius:6px;letter-spacing:0.3px">${tier}</span>`;
-
-      // 테이블 행
-      const tableRow = (x, i) => {
-        const durC = x.dur>=65?'#ef4444':x.dur>=45?'#f97316':'var(--text2)';
-        return `<tr style="border-bottom:1px solid var(--border)">
-          <td style="padding:7px 8px;color:var(--text3);font-size:10px">${i+1}</td>
-          <td style="padding:7px 8px;font-weight:700;color:var(--text)">
-            ${x.name}${!x.hasBL?`<sup style="font-size:8px;color:#64748b" title="${x.blCnt}경기 데이터"> BL${x.blCnt}</sup>`:''}
-          </td>
-          <td style="padding:7px 8px;text-align:center;font-weight:700;color:${durC}">${x.dur}′</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:${x.hsrPct!=null&&x.hsrPct>=100?700:400};color:${hsrColor(x.hsrPct)}">${x.hsrPct!=null?x.hsrPct+'%':'—'}</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:${x.sprPct!=null&&x.sprPct>=100?700:400};color:${sprColor(x.sprPct)}">${x.sprPct!=null?x.sprPct+'%':'—'}</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:${x.plPct!=null&&x.plPct>=110?700:400};color:${plColor(x.plPct)}">${x.plPct!=null?x.plPct+'%':'—'}</td>
-          <td style="padding:7px 8px;text-align:right;font-weight:${x.mpmDrop!=null&&x.mpmDrop<=-6?700:400};color:${dropColor(x.mpmDrop)}">${x.mpmDrop!=null?(x.mpmDrop>0?'+':'')+x.mpmDrop.toFixed(1)+'%':'—'}</td>
-          <td style="padding:7px 8px;text-align:left">${trigTags(x)}</td>
-          <td style="padding:7px 8px;text-align:center">${tierBadge(x.tier, x.gc)}</td>
-        </tr>`;
+      // 선수 한 줄
+      const playerRow = (x, rank) => {
+        const gc = x.tier==='Tier 1'?'#ef4444':'#f97316';
+        const tierLabel = x.tier==='Tier 1'?'즉시개입':'모니터링';
+        const durC = x.dur>=65?gc:'var(--text2)';
+        return `<div style="display:grid;grid-template-columns:24px 1fr auto auto;gap:0 12px;align-items:center;padding:9px 10px;border-bottom:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:800;color:${gc};text-align:center">${rank}</div>
+          <div>
+            <span style="font-size:13px;font-weight:700;color:var(--text)">${x.name}</span>
+            <span style="font-size:10px;color:${durC};margin-left:6px">${x.dur}′</span>
+            ${!x.hasBL?`<span style="font-size:9px;color:#64748b;margin-left:4px">(BL${x.blCnt}G)</span>`:''}
+            <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px">${mainTrigger(x)}</div>
+          </div>
+          <div style="text-align:right;font-size:10px;color:var(--text3)">${tierLabel}</div>
+          <div style="min-width:56px;text-align:center">
+            <span style="display:inline-block;background:${gc};color:#fff;font-weight:700;font-size:10px;padding:3px 9px;border-radius:6px">${x.tier}</span>
+          </div>
+        </div>`;
       };
 
-      // Tier 그룹 섹션
-      const tierGroup = (label, list, gc, icon, protocol) => {
-        if(!list.length) return '';
-        return `
-          <div style="margin-bottom:16px">
-            <!-- 그룹 헤더 -->
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:${gc}14;border-radius:8px 8px 0 0;border:1px solid ${gc}33;border-bottom:none">
-              <span style="font-size:13px;font-weight:800;color:${gc}">${icon} ${label}</span>
-              <span style="font-size:11px;font-weight:600;color:${gc};background:${gc}22;padding:1px 8px;border-radius:10px">${list.length}명</span>
-              <span style="font-size:10px;color:var(--text3);margin-left:4px">${protocol}</span>
-            </div>
-            <!-- 테이블 -->
-            <div style="overflow-x:auto;border:1px solid ${gc}33;border-radius:0 0 8px 8px;border-top:2px solid ${gc}">
-              <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:540px">
-                <thead>
-                  <tr style="background:var(--surface2)">
-                    <th style="padding:5px 8px;color:var(--text3);font-weight:500">#</th>
-                    <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">선수</th>
-                    <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:500">출전</th>
-                    <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">HSR%</th>
-                    <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">Sprint%</th>
-                    <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">PL%</th>
-                    <th style="padding:5px 8px;text-align:right;color:var(--text3);font-weight:500">후반Δ</th>
-                    <th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">트리거</th>
-                    <th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:500">등급</th>
-                  </tr>
-                </thead>
-                <tbody>${list.map(tableRow).join('')}</tbody>
-              </table>
-            </div>
-          </div>`;
-      };
+      // Tier 3 선수 명단 (이름만, 간결하게)
+      const standardNames = t3.map(x=>
+        `<span style="font-size:11px;color:var(--text2)">${x.name} <span style="color:var(--text3);font-size:10px">${x.dur}′</span></span>`
+      ).join('<span style="color:var(--border2);margin:0 6px">·</span>');
 
       return `
-        <!-- 요약 배너 -->
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">
-          <div style="background:rgba(239,68,68,0.08);border:1px solid #ef444440;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-            <div style="font-size:28px;font-weight:800;color:#ef4444;line-height:1">${t1.length}</div>
-            <div><div style="font-size:12px;font-weight:700;color:#ef4444">Tier 1</div><div style="font-size:10px;color:var(--text3)">즉시 개입</div></div>
+        <!-- 요약 카운트 -->
+        <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+          <div style="flex:1;min-width:80px;background:rgba(239,68,68,0.08);border:1px solid #ef444433;border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:26px;font-weight:800;color:#ef4444;line-height:1.1">${t1.length}</div>
+            <div style="font-size:10px;font-weight:700;color:#ef4444">즉시 개입</div>
           </div>
-          <div style="background:rgba(249,115,22,0.08);border:1px solid #f9731640;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-            <div style="font-size:28px;font-weight:800;color:#f97316;line-height:1">${t2.length}</div>
-            <div><div style="font-size:12px;font-weight:700;color:#f97316">Tier 2</div><div style="font-size:10px;color:var(--text3)">24–48h 모니터링</div></div>
+          <div style="flex:1;min-width:80px;background:rgba(249,115,22,0.08);border:1px solid #f9731633;border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:26px;font-weight:800;color:#f97316;line-height:1.1">${t2.length}</div>
+            <div style="font-size:10px;font-weight:700;color:#f97316">모니터링</div>
           </div>
-          <div style="background:rgba(34,197,94,0.08);border:1px solid #22c55e40;border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px">
-            <div style="font-size:28px;font-weight:800;color:#22c55e;line-height:1">${t3.length}</div>
-            <div><div style="font-size:12px;font-weight:700;color:#22c55e">Tier 3</div><div style="font-size:10px;color:var(--text3)">표준 마이크로사이클</div></div>
+          <div style="flex:1;min-width:80px;background:rgba(34,197,94,0.08);border:1px solid #22c55e33;border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:26px;font-weight:800;color:#22c55e;line-height:1.1">${t3.length}</div>
+            <div style="font-size:10px;font-weight:700;color:#22c55e">표준</div>
           </div>
         </div>
 
-        ${noBLnames.length?`<div style="font-size:10px;color:#64748b;margin-bottom:12px;padding:6px 10px;background:var(--surface2);border-radius:6px">
-          ⚠️ <strong>BL 데이터 부족</strong>: ${noBLnames.join(', ')} — 절대 출전시간 기준만 적용 / HSR%·Sprint%·PL% 미표시
+        ${noBLnames.length?`<div style="font-size:10px;color:#64748b;margin-bottom:10px;padding:5px 10px;background:var(--surface2);border-radius:6px">
+          ⚠️ 베이스라인 부족 (${noBLnames.join(', ')}) — 출전시간 기준만 적용
         </div>`:''}
 
-        <!-- Tier별 그룹 테이블 -->
-        ${tierGroup('Tier 1 — 즉시 개입', t1, '#ef4444', '🔴', 'MD+0 CWI · 탄수화물 보충 · MD+1 능동회복 전용')}
-        ${tierGroup('Tier 2 — 24–48h 모니터링', t2, '#f97316', '🟠', 'MD+1 저강도 팀훈련 참여 가능 · Wellness 재확인 필수')}
-        ${tierGroup('Tier 3 — 표준', t3, '#22c55e', '🟢', '일반 마이크로사이클 적용')}
+        <!-- 회복 필요 선수 명단 (Tier 1 + 2) -->
+        ${needsRecov.length ? `
+        <div style="border:1px solid var(--border2);border-radius:8px;overflow:hidden;margin-bottom:12px">
+          <!-- Tier 1 그룹 -->
+          ${t1.length?`
+          <div style="background:#ef444418;padding:6px 10px;border-bottom:2px solid #ef444455;display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;font-weight:700;color:#ef4444">🔴 Tier 1 — 즉시 개입 필요</span>
+            <span style="font-size:10px;color:var(--text3)">MD+1 능동회복 전용 · CWI 권장</span>
+          </div>
+          ${t1.map((x,i)=>playerRow(x,i+1)).join('')}
+          `:''}
+          <!-- Tier 2 그룹 -->
+          ${t2.length?`
+          <div style="background:#f9731618;padding:6px 10px;border-bottom:2px solid #f9731655;border-top:${t1.length?'1px solid var(--border)':'none'};display:flex;align-items:center;gap:8px">
+            <span style="font-size:11px;font-weight:700;color:#f97316">🟠 Tier 2 — 24–48h 모니터링</span>
+            <span style="font-size:10px;color:var(--text3)">MD+1 Wellness 재확인 · 저강도 참여 가능</span>
+          </div>
+          ${t2.map((x,i)=>playerRow(x,t1.length+i+1)).join('')}
+          `:''}
+        </div>
+        ` : `<div style="text-align:center;padding:14px;color:var(--text3);font-size:12px">회복 개입 필요 선수 없음 — 전원 표준 마이크로사이클 적용</div>`}
 
-        <!-- 프로토콜 + 기준 안내 -->
-        <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:10px">
-          <div style="font-weight:600;color:var(--text2);margin-bottom:6px">Tier별 회복 프로토콜</div>
-          <div style="display:grid;gap:4px;color:var(--text3)">
-            <div><span style="color:#ef4444;font-weight:700">🔴 Tier 1</span> — CWI or Contrast Bath · 탄수화물 1.2g/kg/h × 4h · MD+1 자전거 20–25′ HR&lt;65%HRmax · MD+2 Wellness 재분류</div>
-            <div><span style="color:#f97316;font-weight:700">🟠 Tier 2</span> — 표준 회복 루틴 · MD+1 저강도 팀훈련 참여 · MD+1 Wellness로 Tier 1 상향 가능</div>
-            <div><span style="color:#22c55e;font-weight:700">🟢 Tier 3</span> — 표준 팀훈련 · 일반 컨디셔닝 허용</div>
-          </div>
-          <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border);color:var(--text3)">
-            HSR%·Sprint%·PL% = 개인 시즌 경기 평균 대비 (Tier 1 임계: HSR/Sprint ≥115%, PL ≥125% · Tier 2: HSR ≥100%, PL ≥110%) · <strong>Tier는 MD+1 아침 Wellness 후 반드시 재분류</strong>
-          </div>
+        <!-- Tier 3 선수 (간결하게) -->
+        ${t3.length?`
+        <div style="padding:8px 10px;background:rgba(34,197,94,0.06);border:1px solid #22c55e30;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:10px;font-weight:700;color:#22c55e;white-space:nowrap">🟢 표준 (Tier 3)</span>
+          <span style="font-size:10px;color:var(--text3)">—</span>
+          ${standardNames}
+        </div>`:''}
+
+        <!-- 기준 안내 (최소화) -->
+        <div style="margin-top:10px;font-size:9px;color:var(--text3);line-height:1.6">
+          분류 기준: 출전 ≥65′ · HSR/Sprint ≥평균115% · PL ≥평균125% → Tier 1 &nbsp;|&nbsp; 출전 45–64′ · HSR ≥평균100% · PL ≥평균110% → Tier 2
+          &nbsp;·&nbsp; <strong style="color:var(--text2)">MD+1 Wellness 후 반드시 재분류</strong>
         </div>
       `;
     })()}
