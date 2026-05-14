@@ -6137,6 +6137,7 @@ async function loadMorningReport(){
     {data:todayWell},
     {data:well7},
     {data:injuredAll},
+    {data:todayRpeData},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
@@ -6159,6 +6160,10 @@ async function loadMorningReport(){
       .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
       .in('status',['치료중','재활중','부분 참여'])
       .order('injury_date',{ascending:false}),
+    supa.from('session_records')
+      .select('player_id,rpe,duration')
+      .eq('record_date', today)
+      .not('rpe','is',null),
   ]);
 
   // ── 주간 날짜별 팀 평균 집계 ──────────────────────────────────
@@ -6338,9 +6343,8 @@ async function loadMorningReport(){
   // ── 어제 RPE 집계 (전날 세션 상세용) ───────────────────────────
   const yRpeRespondedIds = new Set(yRpeRows.map(r=>r.player_id));
 
-  // ── 오늘 RPE 미응답 선수 ─────────────────────────────────────────
-  const todayRpeRows = (rpe28||[]).filter(r=>r.record_date===today);
-  const todayRpeRespondedIds = new Set(todayRpeRows.map(r=>r.player_id));
+  // ── 오늘 RPE 미응답 선수 (서버 사이드 쿼리 기준) ──────────────────
+  const todayRpeRespondedIds = new Set((todayRpeData||[]).map(r=>r.player_id));
   const noTodayRpeResp = _players.filter(p=>!todayRpeRespondedIds.has(p.id));
   window._noRpeRespPlayers = noTodayRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
@@ -14377,14 +14381,24 @@ async function updateMatchMax(playerIds){
 
   for(const pid of pids){
     const rows=(ftData||[]).filter(r=>r.player_id===pid);
-    if(!rows.length) continue;
+    // GPS 최고속도 (경기 데이터 유무와 무관하게 항상 계산)
+    const gpsMaxSpd=Math.max(0,...(gpsSpeedData||[])
+      .filter(r=>r.player_id===pid)
+      .map(r=>parseFloat(r.max_speed)||0));
+    if(!rows.length){
+      // FT 경기 없음 → GPS 최고속도만 갱신 (권준성·최동렬 등 미엔트리 선수)
+      if(gpsMaxSpd>0){
+        const spd=parseFloat(gpsMaxSpd.toFixed(1));
+        await supa.from('player_profiles').update({match_max_speed:spd,match_max_updated:getKSTDateStr()}).eq('id',pid);
+        const p=_players.find(pl=>pl.id===pid);
+        if(p){p.match_max_speed=spd;p.match_max_updated=getKSTDateStr();}
+      }
+      continue;
+    }
     const maxF=field=>Math.max(...rows.map(r=>parseFloat(r[field])||0));
 
     // 최고속도: 경기 vs 훈련 전체 → 더 높은 값 사용 (진짜 Vmax)
     const matchMaxSpd = maxF('max_speed');
-    const gpsMaxSpd   = Math.max(0,...(gpsSpeedData||[])
-      .filter(r=>r.player_id===pid)
-      .map(r=>parseFloat(r.max_speed)||0));
     const trueMaxSpeed = parseFloat(Math.max(matchMaxSpd, gpsMaxSpd).toFixed(1));
 
     const payload={
@@ -14415,11 +14429,13 @@ async function updateMatchMax(playerIds){
 async function recalcAllMatchMax(){
   const btn = event?.target;
   if(btn){ btn.disabled=true; btn.textContent='⏳ 재계산 중...'; }
-  // match_records에 데이터가 있는 모든 선수 ID 수집
-  const {data:pidRows}=await supa.from('match_records')
-    .select('player_id').eq('time_type','FT');
-  const pids=[...new Set((pidRows||[]).map(r=>r.player_id).filter(Boolean))];
-  if(!pids.length){ alert('재계산할 경기 데이터가 없습니다.'); if(btn){btn.disabled=false;btn.textContent='🔄 전체 재계산';} return; }
+  // match_records + gps_records 양쪽에서 선수 ID 수집 (GPS만 있는 선수도 최고속도 갱신)
+  const [{data:pidRows},{data:gpsPidRows}]=await Promise.all([
+    supa.from('match_records').select('player_id').eq('time_type','FT'),
+    supa.from('gps_records').select('player_id')
+  ]);
+  const pids=[...new Set([...(pidRows||[]),...(gpsPidRows||[])].map(r=>r.player_id).filter(Boolean))];
+  if(!pids.length){ alert('재계산할 데이터가 없습니다.'); if(btn){btn.disabled=false;btn.textContent='🔄 전체 재계산';} return; }
   await updateMatchMax(pids);
   // _players 최신화 후 재렌더
   const {data:fresh}=await supa.from('player_profiles').select('*');
