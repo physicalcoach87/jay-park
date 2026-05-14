@@ -12205,10 +12205,10 @@ function renderP8Detail(idx){
   };
   const h1 = s.sorted.filter(t=>t.m<=halfBreak);
   const h2 = s.sorted.filter(t=>t.m>=halfStart);
-  const h1Origin = h1.length ? h1[0].m : 1;
-  const h2Origin = h2.length ? h2[0].m : halfStart;
-  const h1Bins = bin5(h1, h1Origin);
-  const h2Bins = bin5(h2, h2Origin);
+  // ★ Q 시작 기준으로 구간 라벨 계산 (선수 투입 시점 기준 X)
+  // → 후반 15분 투입 시 "15-19'" 표시 (0-4' 아님)
+  const h1Bins = bin5(h1, xMin);       // 1Q 시작 기준 (경기 시작 분)
+  const h2Bins = bin5(h2, halfStart);  // 2Q 시작 기준 (후반 시작 분)
   const cmpAvg = h1Bins.length ? h1Bins.reduce((s,x)=>s+x.avg,0)/h1Bins.length : 0;
 
   out.innerHTML = `
