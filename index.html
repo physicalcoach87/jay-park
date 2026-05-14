@@ -6147,7 +6147,7 @@ async function loadMorningReport(){
       .eq('session_date', yesterdayStr)
       .order('td',{ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe')
+      .select('player_id,record_date,rpe,duration')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
@@ -6745,7 +6745,7 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
       .gte('session_date', since14Str)
       .order('session_date',{ascending:false}),
     supa.from('session_records')
-      .select('record_date,rpe')
+      .select('record_date,rpe,duration')
       .eq('player_id', playerId)
       .gte('record_date', since14Str),
     supa.from('wellness_records')
@@ -7203,7 +7203,7 @@ async function downloadDashboardExcel(){
       .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2')
       .eq('player_id',playerId).gte('session_date',sinceStr).order('session_date',{ascending:true}),
     supa.from('session_records')
-      .select('record_date,rpe')
+      .select('record_date,rpe,duration')
       .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true})
   ]);
 
@@ -9043,7 +9043,7 @@ async function runInjuryRiskAnalysis(){
       .select('player_id,session_date,max_speed,duration,session_type2')
       .gte('session_date', since28Str).order('session_date', {ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe')
+      .select('player_id,record_date,rpe,duration')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
