@@ -6916,11 +6916,34 @@ async function _firePush(payload){
   } catch(e){ console.warn('push error:', e); }
 }
 
+// ── 다국어 알림 텍스트 헬퍼 ────────────────────────────────────────
+function getNotifText(type, lang, name) {
+  const L = {
+    wellness: {
+      ko: { title:'📋 웰니스 입력 요청',      body:`${name} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!` },
+      en: { title:'📋 Wellness Check Request', body:`${name}, you haven't checked your condition today. Please input it now!` },
+      pt: { title:'📋 Registro de Bem-estar',  body:`${name}, você ainda não registrou sua condição hoje. Por favor, registre agora!` },
+    },
+    rpe: {
+      ko: { title:'💪 RPE 입력 요청',       body:`${name} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!` },
+      en: { title:'💪 RPE Input Request',    body:`${name}, you haven't entered your RPE after yesterday's training. Please input it now!` },
+      pt: { title:'💪 Registro de RPE',      body:`${name}, você ainda não registrou seu RPE após o treino de ontem. Por favor, registre agora!` },
+    }
+  };
+  return (L[type][lang] || L[type].ko);
+}
+
+// 선수 preferred_lang 일괄 조회 헬퍼
+async function getPlayersLangMap(ids) {
+  const { data } = await supa.from('player_profiles').select('id, preferred_lang').in('id', ids);
+  return Object.fromEntries((data||[]).map(r => [r.id, r.preferred_lang||'ko']));
+}
+
 // 웰니스 입력 요청 발송 (개별)
 async function sendWellnessReminder(playerId, playerName, btn){
   btn.textContent='⏳ 발송 중...'; btn.disabled=true;
-  const title = '📋 웰니스 입력 요청';
-  const body  = `${playerName} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!`;
+  const { data: pd } = await supa.from('player_profiles').select('preferred_lang').eq('id', playerId).single();
+  const { title, body } = getNotifText('wellness', pd?.preferred_lang||'ko', playerName);
   await supa.from('notifications').insert({
     title, body,
     target_type:'player', target_value:playerId,
@@ -6933,9 +6956,9 @@ async function sendWellnessReminder(playerId, playerName, btn){
 // 웰니스 입력 요청 발송 (전체)
 async function sendWellnessReminderAll(players, btn){
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
+  const langMap = await getPlayersLangMap(players.map(p=>p.id));
   await Promise.all(players.map(async p=>{
-    const title = '📋 웰니스 입력 요청';
-    const body  = `${p.name} 선수, 오늘 컨디션 체크를 아직 안 하셨어요. 지금 바로 입력해주세요!`;
+    const { title, body } = getNotifText('wellness', langMap[p.id]||'ko', p.name);
     await supa.from('notifications').insert({
       title, body,
       target_type:'player', target_value:p.id,
@@ -6950,8 +6973,8 @@ async function sendWellnessReminderAll(players, btn){
 // ── RPE 입력 요청 알림 ────────────────────────────────────────────
 async function sendRpeReminder(playerId, playerName, btn){
   btn.textContent='⏳ 발송 중...'; btn.disabled=true;
-  const title = '💪 RPE 입력 요청';
-  const body  = `${playerName} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`;
+  const { data: pd } = await supa.from('player_profiles').select('preferred_lang').eq('id', playerId).single();
+  const { title, body } = getNotifText('rpe', pd?.preferred_lang||'ko', playerName);
   await supa.from('notifications').insert({
     title, body,
     target_type:'player', target_value:playerId,
@@ -6964,9 +6987,9 @@ async function sendRpeReminder(playerId, playerName, btn){
 // RPE 입력 요청 발송 (전체)
 async function sendRpeReminderAll(players, btn){
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
+  const langMap = await getPlayersLangMap(players.map(p=>p.id));
   await Promise.all(players.map(async p=>{
-    const title = '💪 RPE 입력 요청';
-    const body  = `${p.name} 선수, 어제 훈련 후 RPE를 아직 입력하지 않으셨어요. 지금 바로 입력해주세요!`;
+    const { title, body } = getNotifText('rpe', langMap[p.id]||'ko', p.name);
     await supa.from('notifications').insert({
       title, body,
       target_type:'player', target_value:p.id,
