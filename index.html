@@ -14759,18 +14759,6 @@ async function loadMatchMax(){
     return ai-bi||a.name.localeCompare(b.name);
   });
 
-  // HSR/Sprint Max 누락 선수 감지 → 자동 재계산
-  const needsRecalc = playersWithMax.filter(p=>p.match_max_hsr==null||p.match_max_sprint==null);
-  if(needsRecalc.length){
-    const ids = needsRecalc.map(p=>p.id);
-    await updateMatchMax(ids);
-    // _players 갱신 후 재렌더
-    const {data:fresh}=await supa.from('player_profiles').select('*');
-    if(fresh) _players=fresh;
-    loadMatchMax();
-    return;
-  }
-
   out.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;color:var(--text3)">FT(풀타임) 기준 선수별 경기 최대값 — 훈련 강도 비교 기준</div>
