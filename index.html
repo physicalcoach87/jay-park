@@ -12478,70 +12478,66 @@ async function generateMatchReport(){
   (recentAll||[]).forEach(r=>{
     if(r.match_date===date) return; // 현재 경기 제외
     const pid=r.player_id;
-    if(!playerBaselines[pid]) playerBaselines[pid]={hsr:[],spr:[],pl:[],cnt:0};
+    if(!playerBaselines[pid]) playerBaselines[pid]={hsr:[],spr:[],pl:[],decel:[],cnt:0};
     const h=parseFloat(r.hir_sprint)||0;
     const s=parseFloat(r.band5_td)||0;
     const p=parseFloat(r.player_load)||0;
+    const dc=parseFloat(r.decel)||0;
     if(h>0) playerBaselines[pid].hsr.push(h);
     if(s>0) playerBaselines[pid].spr.push(s);
     if(p>0) playerBaselines[pid].pl.push(p);
+    if(dc>0) playerBaselines[pid].decel.push(dc);
     playerBaselines[pid].cnt++;
   });
   const avg=arr=>arr.length?arr.reduce((a,v)=>a+v,0)/arr.length:null;
   Object.keys(playerBaselines).forEach(pid=>{
     const b=playerBaselines[pid];
-    b.avgHsr=avg(b.hsr); b.avgSpr=avg(b.spr); b.avgPl=avg(b.pl);
+    b.avgHsr=avg(b.hsr); b.avgSpr=avg(b.spr); b.avgPl=avg(b.pl); b.avgDecel=avg(b.decel);
     b.hasBL=b.cnt>=5; // 최소 5경기 이상이어야 개인 베이스라인 신뢰
   });
 
   const recovList = ftRows.map(r=>{
     const pid=r.player_id;
-    const q1=q1Rows.find(q=>q.player_id===pid);
-    const q2=q2Rows.find(q=>q.player_id===pid);
-    const bl=playerBaselines[pid]||{avgHsr:null,avgSpr:null,avgPl:null,hasBL:false,cnt:0};
+    const bl=playerBaselines[pid]||{avgHsr:null,avgSpr:null,avgPl:null,avgDecel:null,hasBL:false,cnt:0};
 
-    const dur  = n(r.duration)||0;
-    const hsr  = n(r.hir_sprint)||0;
-    const spr  = n(r.band5_td)||0;
-    const pl   = n(r.player_load)||0;
-    const rhie = n(r.rhie)||0;
-    const mpmDrop=(q1?.mpm&&q2?.mpm)?(q2.mpm-q1.mpm)/q1.mpm*100:null;
+    const dur   = n(r.duration)||0;
+    const hsr   = n(r.hir_sprint)||0;
+    const spr   = n(r.band5_td)||0;
+    const pl    = n(r.player_load)||0;
+    const decel = n(r.decel)||0;
 
-    // 상대 % (개인 베이스라인 대비)
-    const hsrPct = (bl.avgHsr&&hsr) ? Math.round(hsr/bl.avgHsr*100) : null;
-    const sprPct = (bl.avgSpr&&spr) ? Math.round(spr/bl.avgSpr*100) : null;
-    const plPct  = (bl.avgPl &&pl ) ? Math.round(pl /bl.avgPl *100) : null;
+    // 기본 그룹 (출전시간 기준)
+    let group,groupColor,groupPri,groupLabel;
+    if(dur>=70)      {group='A';groupColor='#ef4444';groupPri=1;groupLabel='적극 회복';}
+    else if(dur>=45) {group='B';groupColor='#f97316';groupPri=2;groupLabel='회복 권장';}
+    else             {group='C';groupColor='#22c55e';groupPri=3;groupLabel='정상 훈련';}
 
-    // Tier 1 트리거 (1개 이상 → Tier 1)
-    const t1=[];
-    if(dur>=65)                           t1.push(`출전${dur}'`);
-    if(hsrPct!=null&&hsrPct>=115)         t1.push(`HSR ${hsrPct}%`);
-    if(sprPct!=null&&sprPct>=115)         t1.push(`Sprint ${sprPct}%`);
-    if(plPct !=null&&plPct >=125)         t1.push(`PL ${plPct}%`);
-    if(mpmDrop!=null&&mpmDrop<=-12)       t1.push(`후반↓${mpmDrop.toFixed(1)}%`);
+    // GPS 상대 % (개인 베이스라인 대비)
+    const hsrPct  = (bl.avgHsr  &&hsr  ) ? Math.round(hsr  /bl.avgHsr  *100) : null;
+    const sprPct  = (bl.avgSpr  &&spr  ) ? Math.round(spr  /bl.avgSpr  *100) : null;
+    const plPct   = (bl.avgPl   &&pl   ) ? Math.round(pl   /bl.avgPl   *100) : null;
+    const decelPct= (bl.avgDecel&&decel) ? Math.round(decel/bl.avgDecel*100) : null;
 
-    // Tier 2 트리거 (Tier 1 미해당, 1개 이상 → Tier 2)
-    const t2=[];
-    if(dur>=45&&dur<65)                   t2.push(`출전${dur}'`);
-    if(hsrPct!=null&&hsrPct>=100&&hsrPct<115) t2.push(`HSR ${hsrPct}%`);
-    if(plPct !=null&&plPct >=110&&plPct <125) t2.push(`PL ${plPct}%`);
-    if(mpmDrop!=null&&mpmDrop<=-10&&mpmDrop>-12) t2.push(`후반↓${mpmDrop.toFixed(1)}%`);
+    // GPS 위험 플래그 (가장 높은 항목 기준)
+    const pcts=[hsrPct,sprPct,plPct,decelPct].filter(x=>x!=null);
+    const maxPct=pcts.length?Math.max(...pcts):null;
+    let gpsRisk,gpsColor;
+    if(maxPct==null)       {gpsRisk='—';   gpsColor='#64748b';}
+    else if(maxPct>=130)   {gpsRisk='🔴';  gpsColor='#ef4444';}
+    else if(maxPct>=115)   {gpsRisk='🟡';  gpsColor='#f59e0b';}
+    else                   {gpsRisk='🟢';  gpsColor='#22c55e';}
 
-    let tier,gc;
-    if(t1.length)      {tier='Tier 1';gc='#ef4444';}
-    else if(t2.length) {tier='Tier 2';gc='#f97316';}
-    else               {tier='Tier 3';gc='#22c55e';}
-
-    const triggers=t1.length?t1:t2;
     return {
       r, name:r.player_profiles?.name||'—',
-      dur, hsr:Math.round(hsr), spr:Math.round(spr), pl:Math.round(pl),
-      rhie, mpmDrop, hsrPct, sprPct, plPct,
-      tier, gc, triggers, hasBL:bl.hasBL, blCnt:bl.cnt
+      dur, hsr:Math.round(hsr), spr:Math.round(spr), pl:Math.round(pl), decel:Math.round(decel),
+      group, groupColor, groupPri, groupLabel,
+      hsrPct, sprPct, plPct, decelPct, maxPct,
+      gpsRisk, gpsColor,
+      hasBL:bl.hasBL, blCnt:bl.cnt
     };
   }).filter(x=>x.dur>0).sort((a,b)=>{
-    const o={'Tier 1':0,'Tier 2':1,'Tier 3':2};
-    return (o[a.tier]??3)-(o[b.tier]??3);
+    if(a.groupPri!==b.groupPri) return a.groupPri-b.groupPri;
+    return (b.maxPct||0)-(a.maxPct||0); // 같은 그룹 내: GPS 위험 높은 순
   });
 
   // ── RENDER ────────────────────────────────────────────
@@ -13190,107 +13186,88 @@ async function generateMatchReport(){
   })()}
 
   ${card(`
-    ${secHead('🏥','회복 필요 선수 명단','경기 후 우선순위 · 높을수록 즉시 개입 필요')}
+    ${secHead('🏥','회복 우선순위','출전시간 기준 그룹 · GPS 위험도 참고')}
 
     ${(()=>{
-      const t1 = recovList.filter(x=>x.tier==='Tier 1');
-      const t2 = recovList.filter(x=>x.tier==='Tier 2');
-      const t3 = recovList.filter(x=>x.tier==='Tier 3');
-      const needsRecov = [...t1, ...t2]; // 회복 필요 선수
+      const gA = recovList.filter(x=>x.group==='A');
+      const gB = recovList.filter(x=>x.group==='B');
+      const gC = recovList.filter(x=>x.group==='C');
       const noBLnames = recovList.filter(x=>!x.hasBL).map(x=>x.name);
 
-      // 트리거 요약 (가장 심각한 것 먼저, 최대 2개)
-      const mainTrigger = (x) => {
-        if(!x.triggers.length){
-          // 트리거 태그 없지만 Tier 분류된 경우 — 출전시간만
-          return `<span style="font-size:10px;color:var(--text3)">출전 ${x.dur}′</span>`;
-        }
-        return x.triggers.slice(0,2).map(t=>{
-          const c = x.tier==='Tier 1'?'#ef4444':'#f97316';
-          return `<span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:6px;background:${c}18;color:${c};border:1px solid ${c}40;white-space:nowrap">${t}</span>`;
-        }).join(' ');
+      // GPS 항목별 % 태그
+      const gpsTags = (x) => {
+        const items = [
+          {label:'HSR', pct:x.hsrPct},
+          {label:'Sprint', pct:x.sprPct},
+          {label:'Decel', pct:x.decelPct},
+          {label:'PL', pct:x.plPct},
+        ].filter(i=>i.pct!=null);
+        if(!items.length) return `<span style="font-size:10px;color:var(--text3)">BL 데이터 부족</span>`;
+        return items.map(i=>{
+          const c = i.pct>=130?'#ef4444':i.pct>=115?'#f59e0b':'#64748b';
+          const w = i.pct>=115?'700':'400';
+          return `<span style="font-size:10px;font-weight:${w};color:${c};white-space:nowrap">${i.label} <b>${i.pct}%</b></span>`;
+        }).join('<span style="color:var(--border2);margin:0 4px">·</span>');
       };
 
-      // 선수 한 줄
-      const playerRow = (x, rank) => {
-        const gc = x.tier==='Tier 1'?'#ef4444':'#f97316';
-        const tierLabel = x.tier==='Tier 1'?'즉시개입':'모니터링';
-        const durC = x.dur>=65?gc:'var(--text2)';
-        return `<div style="display:grid;grid-template-columns:24px 1fr auto auto;gap:0 12px;align-items:center;padding:9px 10px;border-bottom:1px solid var(--border)">
-          <div style="font-size:12px;font-weight:800;color:${gc};text-align:center">${rank}</div>
+      // 선수 행
+      const row = (x) => `
+        <div style="display:grid;grid-template-columns:auto 1fr auto;gap:0 10px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:13px;font-weight:800;color:${x.groupColor};background:${x.groupColor}18;border:1px solid ${x.groupColor}40;padding:2px 8px;border-radius:6px;min-width:22px;text-align:center">${x.group}</span>
+            <span style="font-size:22px;line-height:1">${x.gpsRisk}</span>
+          </div>
           <div>
             <span style="font-size:13px;font-weight:700;color:var(--text)">${x.name}</span>
-            <span style="font-size:10px;color:${durC};margin-left:6px">${x.dur}′</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:6px">${x.dur}′</span>
             ${!x.hasBL?`<span style="font-size:9px;color:#64748b;margin-left:4px">(BL${x.blCnt}G)</span>`:''}
-            <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px">${mainTrigger(x)}</div>
+            <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:6px">${gpsTags(x)}</div>
           </div>
-          <div style="text-align:right;font-size:10px;color:var(--text3)">${tierLabel}</div>
-          <div style="min-width:56px;text-align:center">
-            <span style="display:inline-block;background:${gc};color:#fff;font-weight:700;font-size:10px;padding:3px 9px;border-radius:6px">${x.tier}</span>
-          </div>
+          <div style="text-align:right;font-size:10px;color:var(--text3);white-space:nowrap">${x.groupLabel}</div>
         </div>`;
-      };
-
-      // Tier 3 선수 명단 (이름만, 간결하게)
-      const standardNames = t3.map(x=>
-        `<span style="font-size:11px;color:var(--text2)">${x.name} <span style="color:var(--text3);font-size:10px">${x.dur}′</span></span>`
-      ).join('<span style="color:var(--border2);margin:0 6px">·</span>');
 
       return `
-        <!-- 요약 카운트 -->
+        <!-- 그룹 요약 -->
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-          <div style="flex:1;min-width:80px;background:rgba(239,68,68,0.08);border:1px solid #ef444433;border-radius:8px;padding:8px 12px;text-align:center">
-            <div style="font-size:26px;font-weight:800;color:#ef4444;line-height:1.1">${t1.length}</div>
-            <div style="font-size:10px;font-weight:700;color:#ef4444">즉시 개입</div>
+          <div style="flex:1;min-width:70px;background:rgba(239,68,68,0.08);border:1px solid #ef444433;border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:26px;font-weight:800;color:#ef4444;line-height:1.1">${gA.length}</div>
+            <div style="font-size:10px;font-weight:700;color:#ef4444">A 그룹</div>
+            <div style="font-size:9px;color:#ef444499">70분↑ · 1순위</div>
           </div>
-          <div style="flex:1;min-width:80px;background:rgba(249,115,22,0.08);border:1px solid #f9731633;border-radius:8px;padding:8px 12px;text-align:center">
-            <div style="font-size:26px;font-weight:800;color:#f97316;line-height:1.1">${t2.length}</div>
-            <div style="font-size:10px;font-weight:700;color:#f97316">모니터링</div>
+          <div style="flex:1;min-width:70px;background:rgba(249,115,22,0.08);border:1px solid #f9731633;border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:26px;font-weight:800;color:#f97316;line-height:1.1">${gB.length}</div>
+            <div style="font-size:10px;font-weight:700;color:#f97316">B 그룹</div>
+            <div style="font-size:9px;color:#f9731699">45–69분 · 2순위</div>
           </div>
-          <div style="flex:1;min-width:80px;background:rgba(34,197,94,0.08);border:1px solid #22c55e33;border-radius:8px;padding:8px 12px;text-align:center">
-            <div style="font-size:26px;font-weight:800;color:#22c55e;line-height:1.1">${t3.length}</div>
-            <div style="font-size:10px;font-weight:700;color:#22c55e">표준</div>
+          <div style="flex:1;min-width:70px;background:rgba(34,197,94,0.08);border:1px solid #22c55e33;border-radius:8px;padding:8px 12px;text-align:center">
+            <div style="font-size:26px;font-weight:800;color:#22c55e;line-height:1.1">${gC.length}</div>
+            <div style="font-size:10px;font-weight:700;color:#22c55e">C 그룹</div>
+            <div style="font-size:9px;color:#22c55e99">44분↓ · 3순위</div>
           </div>
         </div>
 
         ${noBLnames.length?`<div style="font-size:10px;color:#64748b;margin-bottom:10px;padding:5px 10px;background:var(--surface2);border-radius:6px">
-          ⚠️ 베이스라인 부족 (${noBLnames.join(', ')}) — 출전시간 기준만 적용
+          ⚠️ 베이스라인 5경기 미만 (${noBLnames.join(', ')}) — GPS % 미표시
         </div>`:''}
 
-        <!-- 회복 필요 선수 명단 (Tier 1 + 2) -->
-        ${needsRecov.length ? `
-        <div style="border:1px solid var(--border2);border-radius:8px;overflow:hidden;margin-bottom:12px">
-          <!-- Tier 1 그룹 -->
-          ${t1.length?`
-          <div style="background:#ef444418;padding:6px 10px;border-bottom:2px solid #ef444455;display:flex;align-items:center;gap:8px">
-            <span style="font-size:11px;font-weight:700;color:#ef4444">🔴 Tier 1 — 즉시 개입 필요</span>
-            <span style="font-size:10px;color:var(--text3)">MD+1 능동회복 전용 · CWI 권장</span>
-          </div>
-          ${t1.map((x,i)=>playerRow(x,i+1)).join('')}
-          `:''}
-          <!-- Tier 2 그룹 -->
-          ${t2.length?`
-          <div style="background:#f9731618;padding:6px 10px;border-bottom:2px solid #f9731655;border-top:${t1.length?'1px solid var(--border)':'none'};display:flex;align-items:center;gap:8px">
-            <span style="font-size:11px;font-weight:700;color:#f97316">🟠 Tier 2 — 24–48h 모니터링</span>
-            <span style="font-size:10px;color:var(--text3)">MD+1 Wellness 재확인 · 저강도 참여 가능</span>
-          </div>
-          ${t2.map((x,i)=>playerRow(x,t1.length+i+1)).join('')}
-          `:''}
+        <!-- 전체 선수 목록 -->
+        <div style="border:1px solid var(--border2);border-radius:8px;overflow:hidden">
+          ${gA.length?`<div style="background:#ef444412;padding:5px 10px;border-bottom:1px solid #ef444430">
+            <span style="font-size:11px;font-weight:700;color:#ef4444">A 그룹 — 70분 이상 (1순위)</span>
+          </div>${gA.map(x=>row(x)).join('')}`:''}
+          ${gB.length?`<div style="background:#f9731612;padding:5px 10px;border-bottom:1px solid #f9731630;${gA.length?'border-top:1px solid var(--border)':''}">
+            <span style="font-size:11px;font-weight:700;color:#f97316">B 그룹 — 45~69분 (2순위)</span>
+          </div>${gB.map(x=>row(x)).join('')}`:''}
+          ${gC.length?`<div style="background:#22c55e0a;padding:5px 10px;border-bottom:1px solid #22c55e25;${(gA.length||gB.length)?'border-top:1px solid var(--border)':''}">
+            <span style="font-size:11px;font-weight:700;color:#22c55e">C 그룹 — 44분 이하 (3순위)</span>
+          </div>${gC.map(x=>row(x)).join('')}`:''}
         </div>
-        ` : `<div style="text-align:center;padding:14px;color:var(--text3);font-size:12px">회복 개입 필요 선수 없음 — 전원 표준 마이크로사이클 적용</div>`}
 
-        <!-- Tier 3 선수 (간결하게) -->
-        ${t3.length?`
-        <div style="padding:8px 10px;background:rgba(34,197,94,0.06);border:1px solid #22c55e30;border-radius:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:10px;font-weight:700;color:#22c55e;white-space:nowrap">🟢 표준 (Tier 3)</span>
-          <span style="font-size:10px;color:var(--text3)">—</span>
-          ${standardNames}
-        </div>`:''}
-
-        <!-- 기준 안내 (최소화) -->
-        <div style="margin-top:10px;font-size:9px;color:var(--text3);line-height:1.6">
-          분류 기준: 출전 ≥65′ · HSR/Sprint ≥평균115% · PL ≥평균125% → Tier 1 &nbsp;|&nbsp; 출전 45–64′ · HSR ≥평균100% · PL ≥평균110% → Tier 2 &nbsp;|&nbsp; 나머지 전원 → Tier 3
-          &nbsp;·&nbsp; <strong style="color:var(--text2)">MD+1 Wellness 후 반드시 재분류</strong>
+        <!-- GPS 기준 안내 -->
+        <div style="margin-top:10px;font-size:9px;color:var(--text3);line-height:1.7">
+          <strong style="color:var(--text2)">그룹</strong>: 출전 ≥70′ → A · 45–69′ → B · ≤44′ → C &nbsp;·&nbsp;
+          <strong style="color:var(--text2)">GPS 위험</strong>: 🔴 개인 평균 ≥130% &nbsp;·&nbsp; 🟡 115–129% &nbsp;·&nbsp; 🟢 정상 &nbsp;·&nbsp;
+          항목: HSR → Sprint → Decel → P.Load 순 체크
         </div>
       `;
     })()}
