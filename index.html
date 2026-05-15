@@ -8783,6 +8783,16 @@ async function saveGpsData(){
     btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
   } else {
     const savedCount = _gpsParseData.length;
+    // GPS duration → session_records.duration 백필 (선수가 duration null로 저장한 경우)
+    for(const r of toInsert){
+      if(r.duration && r.player_id && r.session_date){
+        await supa.from('session_records')
+          .update({ duration: r.duration })
+          .eq('player_id', r.player_id)
+          .eq('record_date', r.session_date)
+          .is('duration', null);
+      }
+    }
     // MSS 자동 갱신 + 부상위험 분석 실행
     await autoUpdateMSS(_gpsParseData);
     runInjuryRiskAnalysis();
