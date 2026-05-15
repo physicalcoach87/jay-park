@@ -6147,10 +6147,10 @@ async function loadMorningReport(){
       .eq('session_date', yesterdayStr)
       .order('td',{ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe,duration')
+      .select('player_id,record_date,rpe,duration,created_at')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
-      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
+      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', today),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
@@ -6339,9 +6339,8 @@ async function loadMorningReport(){
   const yRpeRespondedIds = new Set(yRpeRows.map(r=>r.player_id));
 
   // ── 오늘 RPE 미응답 선수 (rpe28에서 JS 필터링 — PostgREST .not() 버그 우회) ──
-  const todayRpeRespondedIds = new Set(
-    (rpe28||[]).filter(r => r.record_date === today && parseFloat(r.rpe) > 0).map(r => r.player_id)
-  );
+  const todayRpeRows = (rpe28||[]).filter(r => r.record_date === today && parseFloat(r.rpe) > 0);
+  const todayRpeRespondedIds = new Set(todayRpeRows.map(r => r.player_id));
   const noTodayRpeResp = _players.filter(p=>!todayRpeRespondedIds.has(p.id));
   window._noRpeRespPlayers = noTodayRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
@@ -6539,7 +6538,7 @@ async function loadMorningReport(){
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 RPE 입력 완료</div>`;
 
   // ── 최종 렌더링 ───────────────────────────────────────────────
-  const nowStr = `${now.getHours()}:${String(now.getMinutes()).padStart(2,'0')} 자동 생성`;
+  const nowStr = `${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,'0')} 자동 생성`;
   if(timeEl) timeEl.textContent = nowStr;
 
   const todayMD = (weekGps||[]).find(r=>r.session_date===today)?.session_topic||'—';
@@ -6662,11 +6661,21 @@ async function loadMorningReport(){
       <!-- 웰니스 콘텐츠 -->
       <div id="mr-panel-well">
         ${todayWellAll.length ? `
-          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:6px">
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:8px">
             ${wBar('피로도','🔋',wFat)}
             ${wBar('수면질','😴',wSleep)}
             ${wBar('스트레스','🧠',wStress)}
             ${wBar('근육통','💪',wMuscle)}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px">
+            ${todayWellAll.map(r=>{
+              const wp=_players.find(p=>p.id===r.player_id);
+              const wt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
+                <span style="color:var(--text);font-weight:500">${wp?.name||'-'} <span style="color:var(--text3);font-size:10px">${wp?.position||''}</span></span>
+                <span style="color:#4ade80;font-size:10px">✓ ${wt}</span>
+              </div>`;
+            }).join('')}
           </div>` : `<div style="font-size:12px;color:var(--text3);margin-bottom:8px">오늘 웰니스 응답 없음</div>`}
         ${noRespHtml}
       </div>
@@ -6677,6 +6686,17 @@ async function loadMorningReport(){
           응답 ${todayRpeRespondedIds.size}명 / 미입력 ${noTodayRpeResp.length}명
           <span style="margin-left:6px">(${today})</span>
         </div>
+        ${todayRpeRows.length ? `
+          <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
+            ${todayRpeRows.map(r=>{
+              const rp=_players.find(p=>p.id===r.player_id);
+              const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
+                <span style="color:var(--text);font-weight:500">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
+                <span style="color:#a78bfa;font-size:10px">RPE ${parseFloat(r.rpe)} · ✓ ${rt}</span>
+              </div>`;
+            }).join('')}
+          </div>` : ''}
         ${noRpeRespHtml}
       </div>
 
@@ -7289,10 +7309,12 @@ async function loadTeamWellness(){
           ${WELLNESS_ITEMS.map(i=>`<th style="padding:8px;text-align:center;color:var(--text3)">${i.icon} ${i.label}</th>`).join('')}
           <th style="padding:8px;text-align:center;color:var(--text3)">총점</th>
           <th style="padding:8px;text-align:center;color:var(--text3)">상태</th>
+          <th style="padding:8px;text-align:center;color:var(--text3)">체크 시간</th>
         </tr>
         ${records.map(r=>{
           const total = (r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
           const status = total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
+          const chkTime = r.created_at ? new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}) : '—';
           return `<tr style="border-bottom:1px solid var(--border)">
             <td style="padding:8px">
               <div style="font-weight:600">${r.player_profiles?.name||'-'}</div>
@@ -7306,6 +7328,7 @@ async function loadTeamWellness(){
               </td>`).join('')}
             <td style="padding:8px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
             <td style="padding:8px;text-align:center;font-size:12px">${status}</td>
+            <td style="padding:8px;text-align:center;font-size:11px;color:#4ade80">${chkTime}</td>
           </tr>`;
         }).join('')}
       </table>
@@ -9520,7 +9543,7 @@ async function loadNotifyHistory(){
   el.innerHTML = data.map(n=>{
     const target = n.target_type==='all'?'전체':n.target_type==='position'?`포지션: ${n.target_value}`:
       `${_players.find(p=>p.id===n.target_value)?.name||n.target_value}`;
-    const time = new Date(n.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const time = new Date(n.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
     return `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
@@ -9537,7 +9560,7 @@ async function loadNotifyHistory(){
         <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--accent-bg);color:var(--accent2)">→ ${target}</span>
         ${n.player_read_at
           ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(52,211,153,0.12);color:#34d399">
-              👁 읽음 · ${new Date(n.player_read_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}
+              👁 읽음 · ${new Date(n.player_read_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}
              </span>`
           : `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text3)">미확인</span>`
         }
@@ -9598,7 +9621,7 @@ async function renderMessageThread(playerId){
   const playerName = _players.find(p=>p.id===playerId)?.name||'선수';
   el.innerHTML = data.map(m=>{
     const isCoach = m.sender==='coach';
-    const time = new Date(m.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const time = new Date(m.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
     return `
     <div style="display:flex;justify-content:${isCoach?'flex-end':'flex-start'};margin-bottom:10px;position:relative" 
          class="msg-row" onmouseenter="this.querySelector('.msg-del-btn').style.display='block'"
