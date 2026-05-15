@@ -6651,9 +6651,13 @@ async function loadMorningReport(){
 
   // ── 부상자 현황 HTML ─────────────────────────────────────────────
   window._mrInjuries = injuredAll||[];
-  const _injuredCardHtml = window._mrInjuries.length ? `
+  const _injuredCardHtml = `
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
-      <div style="color:#fca5a5;font-size:11px;font-weight:500;margin-bottom:6px">🏥 부상자 현황 (${window._mrInjuries.length}명)</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="color:#fca5a5;font-size:11px;font-weight:500">🏥 부상자 현황 (${window._mrInjuries.length}명)</div>
+        <button onclick="openInjuryForm(null,null)" style="font-size:10px;padding:3px 9px;border-radius:5px;border:0.5px solid #fca5a5;background:rgba(252,165,165,0.1);color:#fca5a5;cursor:pointer;font-family:inherit;font-weight:600;line-height:1.4">+ 추가</button>
+      </div>
+      ${window._mrInjuries.length ? `
       <div style="display:flex;flex-direction:column;gap:3px">
         ${window._mrInjuries.map((inj,_mrIdx)=>{
           const player=_players.find(p=>p.id===inj.player_id);
@@ -6672,8 +6676,8 @@ async function loadMorningReport(){
             <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
           </div>`;
         }).join('')}
-      </div>
-    </div>` : '';
+      </div>` : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:8px 0">부상 선수 없음</div>`}
+    </div>`;
 
   out.innerHTML = `
     <!-- 헤더 -->
@@ -9439,6 +9443,15 @@ async function openInjuryForm(playerId, injuryId=null){
   const modal = document.createElement('div');
   modal.id = 'injury-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  // 선수 선택 드롭다운 (신규 추가 시에만 표시)
+  const playerSelectHtml = !playerId ? `
+    <div>
+      <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">선수 선택</label>
+      <select id="inj-player" style="width:100%;padding:8px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+        <option value="">-- 선수를 선택하세요 --</option>
+        ${(_players||[]).slice().sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>`<option value="${p.id}">${p.name}${p.position?' ('+p.position+')':''}</option>`).join('')}
+      </select>
+    </div>` : '';
   modal.innerHTML = `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -9446,6 +9459,7 @@ async function openInjuryForm(playerId, injuryId=null){
         <button onclick="document.getElementById('injury-modal').remove()" style="font-size:18px;background:none;border:none;color:var(--text3);cursor:pointer">×</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
+        ${playerSelectHtml}
         <div>
           <label style="font-size:12px;color:var(--text3);display:block;margin-bottom:4px">부상 부위</label>
           <input id="inj-body" value="${inj?.body_part||''}" placeholder="예: 왼쪽 햄스트링"
@@ -9509,6 +9523,12 @@ async function openInjuryForm(playerId, injuryId=null){
 
 async function saveInjuryForm(){
   const msg = document.getElementById('inj-msg');
+  // 신규 추가 시 선수 선택 드롭다운에서 player_id 획득
+  if(!_injPlayerId){
+    const playerSel = document.getElementById('inj-player');
+    if(!playerSel?.value){ msg.textContent='선수를 선택하세요'; msg.style.color='#ef4444'; return; }
+    _injPlayerId = playerSel.value;
+  }
   const body = document.getElementById('inj-body')?.value?.trim();
   const type = document.getElementById('inj-type')?.value?.trim();
   if(!body){ msg.textContent='부상 부위를 입력하세요'; msg.style.color='#ef4444'; return; }
