@@ -6539,6 +6539,74 @@ async function loadMorningReport(){
       </button>
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 RPE 입력 완료</div>`;
 
+  // ── Priority Alert 계산 ──────────────────────────────────────
+  const _paList = [];
+  const _injuredActiveIds = new Set(
+    (injuredAll||[]).filter(r=>['치료중','재활중','부분 참여'].includes(r.status)).map(r=>r.player_id)
+  );
+  for(const player of _players){
+    const pid = player.id;
+    let score = 0; const flags = [];
+    // 부상 중인 선수는 제외 (부상자 현황에서 이미 표시)
+    if(_injuredActiveIds.has(pid)) continue;
+    // CRI & ACWR (riskResults에서)
+    const rd = riskResults.find(r=>r.player.id===pid);
+    if(rd){
+      if(rd.risk.level==='red')   { score+=35; rd.risk.flags.forEach(f=>flags.push(f.msg)); }
+      else if(rd.risk.level==='amber')  { score+=20; rd.risk.flags.forEach(f=>flags.push(f.msg)); }
+      else if(rd.risk.level==='yellow') { score+=10; rd.risk.flags.forEach(f=>flags.push(f.msg)); }
+      const acwr = rd.acwrData?.acwr;
+      if(acwr!=null){ if(acwr>1.5) score+=25; else if(acwr>1.3) score+=15; else if(acwr<0.8){ score+=10; flags.push('과소부하 — 자극 부족'); } }
+    }
+    // 오늘 웰니스
+    const tw = todayWellAll.find(r=>r.player_id===pid);
+    if(!tw){ score+=5; flags.push('웰니스 미응답'); }
+    else {
+      const wt=(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0);
+      if(wt<8){ score+=20; flags.push(`웰니스 위험 ${wt}/20`); }
+      else if(wt<12){ score+=10; flags.push(`웰니스 주의 ${wt}/20`); }
+    }
+    // 웰니스 3일 트렌드
+    const pw7 = (well7||[]).filter(r=>r.player_id===pid).sort((a,b)=>b.record_date.localeCompare(a.record_date));
+    if(pw7.length>=3){
+      const t = pw7.slice(0,3).map(r=>(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0));
+      if(t[0]<t[1]&&t[1]<t[2]){ score+=10; flags.push('웰니스 3일 연속 하락'); }
+      else if(t[0]<t[1]){ score+=5; flags.push('웰니스 하락 추세'); }
+    }
+    if(score>0) _paList.push({player, score, flags:[...new Set(flags)], riskLevel: rd?.risk?.level||'yellow', acwr: rd?.acwrData?.acwr||null, wellTotal: tw?(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0):null});
+  }
+  _paList.sort((a,b)=>b.score-a.score);
+  const _paTop = _paList.slice(0,5);
+
+  const priorityAlertHtml = _paTop.length ? `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:500;color:var(--text3)">🎯 오늘 관리 우선순위</div>
+        <span style="font-size:10px;color:var(--text3)">${_paList.length}명 중 상위 ${_paTop.length}명</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px">
+        ${_paTop.map((item,idx)=>{
+          const cfg=levelCfg[item.riskLevel]||levelCfg.yellow;
+          const acwrStr=item.acwr!=null?`ACWR ${item.acwr.toFixed(2)}`:'ACWR —';
+          const wellStr=item.wellTotal!=null?`웰니스 ${item.wellTotal}/20`:'웰니스 미응답';
+          return `<div onclick="goToPlayerFromRisk('${item.player.id}')"
+            style="background:${cfg.bg};border:0.5px solid ${cfg.border};border-radius:8px;padding:10px 12px;cursor:pointer;transition:opacity .12s"
+            onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+              <div>
+                <span style="font-size:10px;color:${cfg.color};font-weight:600;margin-right:4px">${idx+1}</span>
+                <span style="font-size:13px;font-weight:600;color:var(--text)">${item.player.name}</span>
+                <span style="font-size:10px;color:var(--text3);margin-left:4px">${item.player.position}</span>
+              </div>
+              <span style="font-size:9px;padding:1px 6px;border-radius:5px;background:${cfg.border}33;color:${cfg.color};font-weight:600;white-space:nowrap">${cfg.label.split(' ')[0]}</span>
+            </div>
+            <div style="font-size:10px;color:${cfg.color};margin-bottom:4px">${item.flags.slice(0,2).map(f=>`• ${f}`).join('<br>')}</div>
+            <div style="font-size:10px;color:var(--text3)">${acwrStr} · ${wellStr}</div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   // ── 최종 렌더링 ───────────────────────────────────────────────
   const nowStr = `${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,'0')} 자동 생성`;
   if(timeEl) timeEl.textContent = nowStr;
@@ -6558,6 +6626,8 @@ async function loadMorningReport(){
         <span style="font-size:11px;padding:3px 10px;border-radius:10px;background:${teamACWR?teamACWR>1.3?'#2a1a00':'#052e16':'var(--surface2)'};color:${acwrColor(teamACWR)};border:0.5px solid ${acwrColor(teamACWR)}40">팀 ACWR ${teamACWR?teamACWR.toFixed(2):'—'} ${acwrLabel(teamACWR)}</span>
       </div>
     </div>
+
+    ${priorityAlertHtml}
 
     <!-- 섹션1: 주간 흐름 + 전날 상세 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
