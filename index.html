@@ -6415,8 +6415,10 @@ async function loadMorningReport(){
     yellow:{bg:'#1a1a00',border:'#eab308',color:'#fde047',label:'🟡 모니터링'},
   };
 
-  const riskHtml = riskResults.length
-    ? riskResults.map(({player,risk})=>{
+  const _riskLevelOrder = {red:0,amber:1,yellow:2};
+  const _sortedRisk = [...riskResults].sort((a,b)=>((_riskLevelOrder[a.risk.level]??3)-(_riskLevelOrder[b.risk.level]??3)));
+  const riskHtml = _sortedRisk.length
+    ? _sortedRisk.map(({player,risk})=>{
         const cfg=levelCfg[risk.level];
         const action = risk.level==='red'?'즉시 부하 감소 / 출전 재고':risk.level==='amber'?'훈련량 조절 / 모니터링 강화':'부하 점검 / 웰니스 확인';
         return `<div style="margin-bottom:6px">
@@ -6591,51 +6593,47 @@ async function loadMorningReport(){
       ${yesterdayDetailHtml}
     </div>
 
-    <!-- 섹션2: 부상자 현황 -->
-    ${(injuredAll||[]).length ? `
-    <div style="background:var(--surface);border:0.5px solid #ef4444;border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">
-        🏥 부상자 현황 (${(injuredAll||[]).length}명)
-      </div>
-      <div style="display:flex;flex-direction:column;gap:6px">
-        ${(()=>{ window._mrInjuries = injuredAll||[]; return window._mrInjuries; })().map((inj,_mrIdx) => {
-              const player = _players.find(p=>p.id===inj.player_id);
-          const statusColor = inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
-                            : inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
-                            : inj.status==='부분 참여'?{bg:'#134e4a',text:'#5eead4'}
-                            : {bg:'#78350f',text:'#fcd34d'};
-          const injDays = inj.injury_date
-            ? Math.floor((new Date(today) - new Date(inj.injury_date)) / 86400000)
-            : null;
-          return `<div onclick="openInjuryForm(window._mrInjuries[${_mrIdx}].player_id, window._mrInjuries[${_mrIdx}].id)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:8px;gap:8px;flex-wrap:wrap;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
-            <div>
-              <span style="font-size:13px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
-              <span style="font-size:11px;color:var(--text3);margin-left:6px">${player?.position||''}</span>
-              ${injDays!==null?`<span style="font-size:10px;padding:1px 7px;border-radius:8px;background:#3b1219;color:#fca5a5;margin-left:6px;font-weight:600">부상 ${injDays}일째</span>`:''}
-              <div style="font-size:11px;color:var(--text2);margin-top:2px">${inj.body_part} · ${inj.injury_type||'—'} · ${inj.severity||'—'}</div>
-              <div style="font-size:10px;color:var(--text3);margin-top:1px">${inj.injury_date}${inj.return_date?' ~ '+inj.return_date:' ~ 진행중'}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span style="font-size:10px;color:var(--text3)">✏️</span>
-              <span style="font-size:11px;padding:3px 10px;border-radius:8px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
-            </div>
-          </div>`;
-        }).join('')}
+    <!-- 권장 부하 슬림 바 -->
+    ${todayTarget ? `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:8px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <span style="font-size:10px;font-weight:500;color:var(--text3)">오늘 목표 · <strong style="color:var(--text)">${todayMD}</strong>${todayOpp2?' · vs '+todayOpp2:''}</span>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+        <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">TD ${todayTarget.td[0]}~${todayTarget.td[1]}km</span>
+        <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">HSR ${todayTarget.hsr[0].toLocaleString()}~${todayTarget.hsr[1].toLocaleString()}m</span>
+        <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">sRPE ${todayTarget.sRPE[0]}~${todayTarget.sRPE[1]} AU</span>
+        <span style="font-size:10px;color:${acwrColor(teamACWR)};margin-left:2px">ACWR ${teamACWR?teamACWR.toFixed(2):'—'} ${acwrLabel(teamACWR)}</span>
       </div>
     </div>` : ''}
 
-    <!-- 섹션5: 권장 부하 -->
-    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">오늘 권장 운동 부하</div>
-      ${loadHtml}
-    </div>
-
-    <!-- 3열 통합: 부상위험 / 웰니스 / RPE -->
+    <!-- 3열 통합: 부상자+부상위험 / 웰니스 / RPE -->
     <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:10px;align-items:start">
 
-      <!-- 부상 위험 -->
-      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <!-- 부상자 현황 + 부상위험 -->
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:480px">
+        ${(injuredAll||[]).length ? `
+          <div style="color:#fca5a5;font-size:11px;font-weight:500;margin-bottom:6px">🏥 부상자 현황 (${(injuredAll||[]).length}명)</div>
+          <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
+            ${(()=>{window._mrInjuries=injuredAll||[];return window._mrInjuries;})().map((inj,_mrIdx)=>{
+              const player=_players.find(p=>p.id===inj.player_id);
+              const statusColor=inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
+                              :inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
+                              :inj.status==='부분 참여'?{bg:'#134e4a',text:'#5eead4'}
+                              :{bg:'#78350f',text:'#fcd34d'};
+              const injDays=inj.injury_date?Math.floor((new Date(today)-new Date(inj.injury_date))/86400000):null;
+              return `<div onclick="openInjuryForm(window._mrInjuries[${_mrIdx}].player_id,window._mrInjuries[${_mrIdx}].id)" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
+                <div>
+                  <span style="font-size:12px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
+                  <span style="font-size:10px;color:var(--text3);margin-left:5px">${player?.position||''}</span>
+                  ${injDays!==null?`<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:#3b1219;color:#fca5a5;margin-left:5px">${injDays}일째</span>`:''}
+                  <div style="font-size:10px;color:var(--text2);margin-top:1px">${inj.body_part}${inj.injury_type?' · '+inj.injury_type:''}</div>
+                </div>
+                <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
+              </div>`;
+            }).join('')}
+          </div>
+          <div style="height:0.5px;background:var(--border2);margin-bottom:8px"></div>
+        ` : ''}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
           <div style="font-size:11px;font-weight:500;color:var(--text3)">⚠️ 부상위험 (${riskResults.length}명)</div>
           <div style="display:flex;gap:4px">
             ${['red','amber','yellow'].map(l=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:${levelCfg[l].bg};color:${levelCfg[l].color};border:0.5px solid ${levelCfg[l].border}">${levelCfg[l].label.split(' ')[0]} ${riskResults.filter(r=>r.risk.level===l).length}</span>`).join('')}
