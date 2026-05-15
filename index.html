@@ -8143,8 +8143,8 @@ async function loadTeamSummary(){
     const v = parseFloat(val), m = parseFloat(mx);
     if(!v || !m || isNaN(v) || isNaN(m)) return '';
     const pct = Math.round((v/m)*100);
-    const color = pct>=80?'#22c55e':pct>=60?'#f59e0b':'#ef4444';
-    return `<span style="font-size:11px;padding:1px 6px;border-radius:4px;border:1.5px solid ${color};color:${color};margin-left:3px;font-weight:600">${pct}%</span>`;
+    const color = pct>=80?'#4ade80':pct>=60?'#fbbf24':'#f87171';
+    return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${pct}%</span>`;
   };
 
   const renderTable = (arr) => arr.map(r=>{
