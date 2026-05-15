@@ -6137,7 +6137,6 @@ async function loadMorningReport(){
     {data:todayWell},
     {data:well7},
     {data:injuredAll},
-    {data:todayRpeData},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
@@ -6160,10 +6159,6 @@ async function loadMorningReport(){
       .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
       .in('status',['치료중','재활중','부분 참여'])
       .order('injury_date',{ascending:false}),
-    supa.from('session_records')
-      .select('player_id,rpe,duration')
-      .eq('record_date', today)
-      .not('rpe','is',null),
   ]);
 
   // ── 주간 날짜별 팀 평균 집계 ──────────────────────────────────
@@ -6343,8 +6338,10 @@ async function loadMorningReport(){
   // ── 어제 RPE 집계 (전날 세션 상세용) ───────────────────────────
   const yRpeRespondedIds = new Set(yRpeRows.map(r=>r.player_id));
 
-  // ── 오늘 RPE 미응답 선수 (서버 사이드 쿼리 기준) ──────────────────
-  const todayRpeRespondedIds = new Set((todayRpeData||[]).map(r=>r.player_id));
+  // ── 오늘 RPE 미응답 선수 (rpe28에서 JS 필터링 — PostgREST .not() 버그 우회) ──
+  const todayRpeRespondedIds = new Set(
+    (rpe28||[]).filter(r => r.record_date === today && parseFloat(r.rpe) > 0).map(r => r.player_id)
+  );
   const noTodayRpeResp = _players.filter(p=>!todayRpeRespondedIds.has(p.id));
   window._noRpeRespPlayers = noTodayRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
