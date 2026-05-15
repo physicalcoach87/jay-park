@@ -6117,6 +6117,8 @@ async function loadMorningReport(){
   const dow = weekStart.getDay();
   weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
   const weekStartStr = weekStart.toISOString().split('T')[0];
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
+  const weekEndStr = weekEnd.toISOString().split('T')[0];
 
   // 28일 ACWR용
   const since28 = new Date(now); since28.setDate(now.getDate()-28);
@@ -6137,6 +6139,7 @@ async function loadMorningReport(){
     {data:todayWell},
     {data:well7},
     {data:injuredAll},
+    {data:weekSched},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
@@ -6159,6 +6162,10 @@ async function loadMorningReport(){
       .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
       .in('status',['치료중','재활중','부분 참여'])
       .order('injury_date',{ascending:false}),
+    supa.from('weekly_schedule')
+      .select('event_date,event_type,md_stage,team,title,start_time')
+      .gte('event_date', weekStartStr).lte('event_date', weekEndStr)
+      .order('event_date',{ascending:true}).order('start_time',{ascending:true,nullsFirst:false}),
   ]);
 
   // ── 주간 날짜별 팀 평균 집계 ──────────────────────────────────
@@ -6614,6 +6621,60 @@ async function loadMorningReport(){
   const todayMD = (weekGps||[]).find(r=>r.session_date===today)?.session_topic||'—';
   const todayOpp2 = (weekGps||[]).find(r=>r.session_date===today)?.opponent||null;
 
+  // ── 팀 스케줄 compact strip ──────────────────────────────────────
+  const _wsByDate = {};
+  (weekSched||[]).forEach(e=>{ if(!_wsByDate[e.event_date]) _wsByDate[e.event_date]=[]; _wsByDate[e.event_date].push(e); });
+  const _dayKR = ['월','화','수','목','금','토','일'];
+  const _calStrip = Array.from({length:7},(_x,i)=>{
+    const d=new Date(weekStart); d.setDate(weekStart.getDate()+i);
+    const ds=d.toISOString().split('T')[0];
+    const isT=ds===today; const isSun=i===6; const isSat=i===5;
+    const dayEvts=(_wsByDate[ds]||[]).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||''));
+    const mdStage=dayEvts.find(e=>e.md_stage)?.md_stage||'';
+    const mdColor=mdStage?(MD_COLORS[mdStage]||'#888'):'#444';
+    const dayColor=isSun?'#f87171':isSat?'#93c5fd':'var(--text2)';
+    const evLines=dayEvts.slice(0,2).map(e=>{
+      const sc=SCHED_COLORS[e.event_type]||SCHED_COLORS.EVENT;
+      const t=e.start_time?e.start_time.slice(0,5):'';
+      const lbl=e.title||sc.label;
+      return '<div style="font-size:8px;color:'+sc.text+';margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 1px">'+(t?'<span style="opacity:.7">'+t+'</span> ':'')+lbl+'</div>';
+    }).join('');
+    return '<div style="background:'+(isT?'rgba(22,163,74,0.08)':'var(--surface2)')+';border-radius:6px;padding:5px 2px;text-align:center;border:0.5px solid '+(isT?'#16a34a':'var(--border)')+'">'+
+      '<div style="font-size:9px;color:'+dayColor+';font-weight:600">'+_dayKR[i]+'</div>'+
+      '<div style="font-size:12px;font-weight:700;color:'+(isT?'#4ade80':'var(--text)')+'">'+d.getDate()+'</div>'+
+      (mdStage?'<div style="font-size:9px;color:'+mdColor+';font-weight:700;margin-top:1px">'+mdStage+'</div>':'<div style="margin-top:1px;font-size:9px;color:var(--border2)">—</div>')+
+      evLines+'</div>';
+  }).join('');
+  const _todaySchedEvts=(_wsByDate[today]||[]).sort((a,b)=>(a.start_time||'').localeCompare(b.start_time||''));
+  const _todaySchedLine=_todaySchedEvts.length?'<div style="margin-top:7px;padding-top:7px;border-top:0.5px solid var(--border);display:flex;flex-wrap:wrap;gap:4px">'+
+    _todaySchedEvts.map(e=>{const sc=SCHED_COLORS[e.event_type]||SCHED_COLORS.EVENT;const t=e.start_time?e.start_time.slice(0,5):'';return '<span style="font-size:10px;background:'+sc.bg+';border:0.5px solid '+sc.border+';border-radius:5px;padding:2px 7px;color:'+sc.text+'">'+(t?t+' ':'')+(e.title||sc.label)+(e.md_stage?' · <strong>'+e.md_stage+'</strong>':'')+'</span>';}).join('')+'</div>':'';
+
+  // ── 부상자 현황 HTML ─────────────────────────────────────────────
+  window._mrInjuries = injuredAll||[];
+  const _injuredCardHtml = window._mrInjuries.length ? `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="color:#fca5a5;font-size:11px;font-weight:500;margin-bottom:6px">🏥 부상자 현황 (${window._mrInjuries.length}명)</div>
+      <div style="display:flex;flex-direction:column;gap:3px">
+        ${window._mrInjuries.map((inj,_mrIdx)=>{
+          const player=_players.find(p=>p.id===inj.player_id);
+          const statusColor=inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
+                          :inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
+                          :inj.status==='부분 참여'?{bg:'#134e4a',text:'#5eead4'}
+                          :{bg:'#78350f',text:'#fcd34d'};
+          const injDays=inj.injury_date?Math.floor((new Date(today)-new Date(inj.injury_date))/86400000):null;
+          return `<div onclick="openInjuryForm(window._mrInjuries[${_mrIdx}].player_id,window._mrInjuries[${_mrIdx}].id)" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
+            <div>
+              <span style="font-size:12px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
+              <span style="font-size:10px;color:var(--text3);margin-left:5px">${player?.position||''}</span>
+              ${injDays!==null?`<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:#3b1219;color:#fca5a5;margin-left:5px">${injDays}일째</span>`:''}
+              <div style="font-size:10px;color:var(--text2);margin-top:1px">${inj.body_part}${inj.injury_type?' · '+inj.injury_type:''}</div>
+            </div>
+            <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
   out.innerHTML = `
     <!-- 헤더 -->
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
@@ -6627,9 +6688,14 @@ async function loadMorningReport(){
       </div>
     </div>
 
-    ${priorityAlertHtml}
+    <!-- 섹션1: 팀 스케줄 -->
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📅 이번 주 팀 스케줄</div>
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px">${_calStrip}</div>
+      ${_todaySchedLine}
+    </div>
 
-    <!-- 섹션1: 주간 흐름 + 전날 상세 -->
+    <!-- 섹션2: 주간 부하 흐름 + 전날 상세 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
         <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">이번 주 팀 부하 흐름</div>
@@ -6665,7 +6731,7 @@ async function loadMorningReport(){
 
     <!-- 권장 부하 슬림 바 -->
     ${todayTarget ? `
-    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:8px 14px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:8px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
       <span style="font-size:10px;font-weight:500;color:var(--text3)">오늘 목표 · <strong style="color:var(--text)">${todayMD}</strong>${todayOpp2?' · vs '+todayOpp2:''}</span>
       <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">TD ${todayTarget.td[0]}~${todayTarget.td[1]}km</span>
@@ -6675,42 +6741,27 @@ async function loadMorningReport(){
       </div>
     </div>` : ''}
 
-    <!-- 3열 통합: 부상자+부상위험 / 웰니스 / RPE -->
-    <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;margin-bottom:10px;align-items:start">
+    <!-- 섹션3: 부상자 현황 -->
+    ${_injuredCardHtml}
 
-      <!-- 부상자 현황 + 부상위험 -->
-      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:480px">
-        ${(injuredAll||[]).length ? `
-          <div style="color:#fca5a5;font-size:11px;font-weight:500;margin-bottom:6px">🏥 부상자 현황 (${(injuredAll||[]).length}명)</div>
-          <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
-            ${(()=>{window._mrInjuries=injuredAll||[];return window._mrInjuries;})().map((inj,_mrIdx)=>{
-              const player=_players.find(p=>p.id===inj.player_id);
-              const statusColor=inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
-                              :inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}
-                              :inj.status==='부분 참여'?{bg:'#134e4a',text:'#5eead4'}
-                              :{bg:'#78350f',text:'#fcd34d'};
-              const injDays=inj.injury_date?Math.floor((new Date(today)-new Date(inj.injury_date))/86400000):null;
-              return `<div onclick="openInjuryForm(window._mrInjuries[${_mrIdx}].player_id,window._mrInjuries[${_mrIdx}].id)" style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;transition:opacity .15s" onmouseover="this.style.opacity='.75'" onmouseout="this.style.opacity='1'">
-                <div>
-                  <span style="font-size:12px;font-weight:600;color:var(--text)">${player?.name||'—'}</span>
-                  <span style="font-size:10px;color:var(--text3);margin-left:5px">${player?.position||''}</span>
-                  ${injDays!==null?`<span style="font-size:10px;padding:1px 5px;border-radius:5px;background:#3b1219;color:#fca5a5;margin-left:5px">${injDays}일째</span>`:''}
-                  <div style="font-size:10px;color:var(--text2);margin-top:1px">${inj.body_part}${inj.injury_type?' · '+inj.injury_type:''}</div>
-                </div>
-                <span style="font-size:10px;padding:2px 8px;border-radius:6px;background:${statusColor.bg};color:${statusColor.text};font-weight:600;white-space:nowrap">${inj.status}</span>
-              </div>`;
-            }).join('')}
-          </div>
-          <div style="height:0.5px;background:var(--border2);margin-bottom:8px"></div>
-        ` : ''}
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-          <div style="font-size:11px;font-weight:500;color:var(--text3)">⚠️ 부상위험 (${riskResults.length}명)</div>
-          <div style="display:flex;gap:4px">
-            ${['red','amber','yellow'].map(l=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:${levelCfg[l].bg};color:${levelCfg[l].color};border:0.5px solid ${levelCfg[l].border}">${levelCfg[l].label.split(' ')[0]} ${riskResults.filter(r=>r.risk.level===l).length}</span>`).join('')}
-          </div>
+    <!-- 섹션4: 오늘 관리 우선순위 -->
+    ${priorityAlertHtml}
+
+    <!-- 섹션5: 부상위험 선수 (5명 노출 + 스크롤) -->
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:500;color:var(--text3)">⚠️ 부상위험 선수 (${riskResults.length}명)</div>
+        <div style="display:flex;gap:4px">
+          ${['red','amber','yellow'].map(l=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:${levelCfg[l].bg};color:${levelCfg[l].color};border:0.5px solid ${levelCfg[l].border}">${levelCfg[l].label.split(' ')[0]} ${riskResults.filter(r=>r.risk.level===l).length}</span>`).join('')}
         </div>
+      </div>
+      <div style="max-height:440px;overflow-y:auto;padding-right:2px">
         ${riskHtml}
       </div>
+    </div>
+
+    <!-- 섹션6: 웰니스 + RPE 2열 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;align-items:start">
 
       <!-- 오늘 웰니스 -->
       <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
