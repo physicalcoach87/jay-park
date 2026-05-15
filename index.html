@@ -6692,7 +6692,6 @@ async function loadMorningReport(){
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📅 이번 주 팀 스케줄</div>
       <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px">${_calStrip}</div>
-      ${_todaySchedLine}
     </div>
 
     <!-- 섹션2: 주간 부하 흐름 + 전날 상세 -->
@@ -6755,7 +6754,7 @@ async function loadMorningReport(){
           ${['red','amber','yellow'].map(l=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:${levelCfg[l].bg};color:${levelCfg[l].color};border:0.5px solid ${levelCfg[l].border}">${levelCfg[l].label.split(' ')[0]} ${riskResults.filter(r=>r.risk.level===l).length}</span>`).join('')}
         </div>
       </div>
-      <div style="max-height:440px;overflow-y:auto;padding-right:2px">
+      <div style="max-height:270px;overflow-y:auto;padding-right:2px">
         ${riskHtml}
       </div>
     </div>
