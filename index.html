@@ -12519,7 +12519,7 @@ async function generateMatchReport(){
 
   // 최근 3경기 팀 합계용 (FT 전체)
   const {data:recentAll} = await supa.from('match_records')
-    .select('player_id,match_date,opponent,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
+    .select('player_id,match_date,opponent,duration,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
     .order('match_date',{ascending:false})
     .limit(300);
@@ -12615,11 +12615,21 @@ async function generateMatchReport(){
   const teamSum = rows => {
     const f = field => { const vs=rows.filter(r=>n(r[field])>0).map(r=>n(r[field])); return vs.length?vs.reduce((a,b)=>a+b,0):0; };
     const avg = field => { const vs=rows.filter(r=>n(r[field])>0).map(r=>n(r[field])); return vs.length?vs.reduce((a,b)=>a+b,0)/vs.length:0; };
+    // 팀 평균 = 지표 총합 / 출전시간 합 × 100 (선수수·출전시간 차이 보정)
+    const p100 = field => {
+      const vrs=rows.filter(r=>n(r[field])>0&&n(r.duration)>0);
+      const sm=vrs.reduce((a,r)=>a+n(r[field]),0);
+      const dur=vrs.reduce((a,r)=>a+n(r.duration),0);
+      return dur>0?sm/dur*100:0;
+    };
     return {
       td:f('td'), hir:f('hir_sprint'), b3:f('band3_td'), b4:f('band4_td'), b5:f('band5_td'),
       b4n:f('band4_n'), b5n:f('band5_n'), acc:f('accel'), dec:f('decel'),
       pl:f('player_load'), rhie:f('rhie'),
-      avgMpm:avg('mpm'), avgVmax:avg('max_speed'), cnt:rows.length
+      avgMpm:avg('mpm'), avgVmax:avg('max_speed'), cnt:rows.length,
+      tdP100:p100('td'), hirP100:p100('hir_sprint'), b5P100:p100('band5_td'),
+      accP100:p100('accel'), decP100:p100('decel'),
+      plP100:p100('player_load'), rhieP100:p100('rhie'),
     };
   };
 
@@ -12841,6 +12851,41 @@ async function generateMatchReport(){
       </table>
     </div>
     `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${last3.length}경기)</div>`}
+
+    ${last3.length>=2?`
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;margin-bottom:20px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:4px">▸ 팀 평균 비교 (/100분 출전)</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">공식: 팀 지표 총합 ÷ 출전선수 전체 출전시간 합 × 100 — 선수 수·출전시간 차이 보정</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표 (/100분)</th>
+              ${last3.map((m,i)=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
+              ${last3.length>=2?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 직전</th>`:''}
+              ${last3.length>=3?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 2경기전</th>`:''}
+            </tr>
+          </thead>
+          <tbody>
+            ${[
+              {k:'tdP100',   l:'TD /100min',         fmt:v=>Math.round(v)+' m'},
+              {k:'hirP100',  l:'HIR+Sprint /100min',  fmt:v=>Math.round(v)+' m'},
+              {k:'b5P100',   l:'Sprint(B5) /100min',  fmt:v=>Math.round(v)+' m'},
+              {k:'accP100',  l:'가속 /100min',        fmt:v=>v.toFixed(1)+'회'},
+              {k:'decP100',  l:'감속 /100min',        fmt:v=>v.toFixed(1)+'회'},
+              {k:'plP100',   l:'P.Load /100min',      fmt:v=>Math.round(v)+''},
+              {k:'rhieP100', l:'RHIE /100min',        fmt:v=>v.toFixed(1)+'회'},
+            ].map(f=>`
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px;color:var(--accent2);font-weight:600">${f.l}</td>
+              ${last3.map((m,i)=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.stats[f.k])}</td>`).join('')}
+              ${last3.length>=2?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[1].stats[f.k])}</td>`:''}
+              ${last3.length>=3?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[2].stats[f.k])}</td>`:''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`:''}
 
     ${hasHalf?`
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
