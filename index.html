@@ -6416,16 +6416,18 @@ async function loadMorningReport(){
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:5px">
       ${yMetricCard('운동시간',yDur,'min','var(--text)')}
-      ${yMetricCard('TD/100\'', yTD!=null ? parseFloat((yTD/1000).toFixed(1)) : null, 'km','#60a5fa')}
-      ${yMetricCard('HSR/100\'',yHSR!=null?Math.round(yHSR):null,'m','#f59e0b')}
-      ${yMetricCard('Spr/100\'',ySprint!=null?Math.round(ySprint):null,'m','#ef4444')}
-      ${yMetricCard('Acc/100\'',yAccel!=null?parseFloat(yAccel.toFixed(1)):null,'회','#fb923c')}
-      ${yMetricCard('RHIE/100\'',yRHIE!=null?parseFloat(yRHIE.toFixed(1)):null,'회','#34d399')}
+      ${yMetricCard('TD',   yTD!=null ? parseFloat((yTD/1000).toFixed(1)) : null, 'km','#60a5fa')}
+      ${yMetricCard('HSR',  yHSR!=null?Math.round(yHSR):null,'m','#f59e0b')}
+      ${yMetricCard('Sprint',ySprint!=null?Math.round(ySprint):null,'m','#ef4444')}
+      ${yMetricCard('가속', yAccel!=null?parseFloat(yAccel.toFixed(1)):null,'회','#fb923c')}
+      ${yMetricCard('RHIE', yRHIE!=null?parseFloat(yRHIE.toFixed(1)):null,'회','#34d399')}
       ${yMetricCard('최고속도',yMS,'km/h','#60a5fa')}
       ${yMetricCard('RPE',yRpeAvg!=null?parseFloat(yRpeAvg.toFixed(1)):null,'','#f87171')}
       ${yMetricCard('sRPE',ySRPE,'AU','#a78bfa')}
       ${yMetricCard('웰니스',yWellAvg!=null?parseFloat(yWellAvg.toFixed(1)):null,'/5','#eab308')}
-    </div>` : `<div style="margin-top:10px;font-size:12px;color:var(--text3);text-align:center">전날(${yesterdayStr}) GPS 데이터 없음</div>`;
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-top:6px">공식: 팀 지표 총합 ÷ M선수 전체 훈련시간 합 × 100 — 선수 수·훈련시간 차이 보정</div>
+    ` : `<div style="margin-top:10px;font-size:12px;color:var(--text3);text-align:center">전날(${yesterdayStr}) GPS 데이터 없음</div>`;
 
   // ── 부상 위험 분석 (기존 엔진 활용) ───────────────────────────
   const since21 = new Date(now); since21.setDate(now.getDate()-21);
@@ -6759,9 +6761,9 @@ async function loadMorningReport(){
               <th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">요일·날짜</th>
               <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">주기</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">시간</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">TD/100'</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">HSR/100'</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">Spr/100'</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">TD</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">HSR</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">Sprint</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">sRPE</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">ACWR</th>
               <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">상태</th>
@@ -6770,6 +6772,7 @@ async function loadMorningReport(){
           <tbody>${weekRowsHtml}</tbody>
         </table>
       </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">공식: 팀 지표 총합 ÷ M선수 전체 훈련시간 합 × 100 — 선수 수·훈련시간 차이 보정</div>
       ${yesterdayDetailHtml}
     </div>
 
@@ -7878,6 +7881,14 @@ async function loadTwoWeekCal(baseDate){
       const v = vals.reduce((s,r) => s + (parseFloat(r[field])||0), 0) / vals.length;
       return dec ? parseFloat(v.toFixed(dec)) : Math.round(v);
     };
+    // 팀 평균 /100분: 총합 / 훈련시간 총합 × 100
+    const p100 = (arr, field) => {
+      const vrs = arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+      if(!vrs.length) return null;
+      const sm  = vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+      const dur = vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+      return dur>0 ? Math.round(sm/dur*100) : null;
+    };
     const rpeAvg = dayRpe.length ? parseFloat((dayRpe.reduce((s,r)=>s+(parseFloat(r.rpe)||0),0)/dayRpe.length).toFixed(1)) : null;
     const durAvg = avg(dayBase, 'duration');
     const sRPE   = (durAvg && rpeAvg) ? Math.round(durAvg * rpeAvg) : null;
@@ -7901,11 +7912,11 @@ async function loadTwoWeekCal(baseDate){
       nAll: dayAll.length,
       nM: dayM.length,
       nS: dayS.length,
-      td:     avg(dayBase,'td'),
-      hsr:    avg(dayBase,'running_high'),
-      sprint: avg(dayBase,'sprint'),
-      accel:  avg(dayBase,'accel'),
-      rhie:   avg(dayBase,'rhie'),
+      td:     p100(dayBase,'td'),
+      hsr:    p100(dayBase,'running_high'),
+      sprint: p100(dayBase,'sprint'),
+      accel:  p100(dayBase,'accel'),
+      rhie:   p100(dayBase,'rhie'),
       dur: durAvg,
       rpe: rpeAvg, sRPE,
       opponent: opp, homeAway: ha,
@@ -8109,13 +8120,13 @@ async function renderTwoWeekDetail(idx){
   const mSRPE   = (durAvg && mRpeAvg) ? Math.round(durAvg * mRpeAvg) : null;
 
   const avgCards = [
-    {label:'운동시간',    val: durAvg  ? durAvg+'min'                       : '—'},
-    {label:"TD/100'",    val: mTD     ? (mTD/1000).toFixed(1)+'km'         : '—'},
-    {label:"HSR/100'",   val: mHSR    ? Math.round(mHSR)+'m'               : '—'},
-    {label:"Sprint/100'",val: mSprint ? Math.round(mSprint)+'m'            : '—'},
-    {label:"가속/100'",  val: mAccel  ? mAccel.toFixed(1)+'회'             : '—'},
-    {label:"RHIE/100'",  val: mRHIE   ? mRHIE.toFixed(1)+'회'             : '—'},
-    {label:'sRPE',       val: mSRPE   ? mSRPE+' AU'                        : '—'},
+    {label:'운동시간', val: durAvg  ? durAvg+'min'                  : '—'},
+    {label:'TD',      val: mTD     ? (mTD/1000).toFixed(1)+'km'    : '—'},
+    {label:'HSR',     val: mHSR    ? Math.round(mHSR)+'m'          : '—'},
+    {label:'Sprint',  val: mSprint ? Math.round(mSprint)+'m'       : '—'},
+    {label:'가속',    val: mAccel  ? mAccel.toFixed(1)+'회'        : '—'},
+    {label:'RHIE',    val: mRHIE   ? mRHIE.toFixed(1)+'회'        : '—'},
+    {label:'sRPE',    val: mSRPE   ? mSRPE+' AU'                   : '—'},
   ].map(m => `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 6px;text-align:center">
       <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${m.label}</div>
@@ -8156,7 +8167,7 @@ async function renderTwoWeekDetail(idx){
 
   const avgRow = `
     <tr style="background:var(--surface2)">
-      <td style="padding:8px;font-weight:600;color:var(--text3)">팀 평균/100분 <span style="font-size:10px;font-weight:400;color:var(--text3)">(M ${avgBase.length}명)</span></td>
+      <td style="padding:8px;font-weight:600;color:var(--text3)">팀 평균 <span style="font-size:10px;font-weight:400;color:var(--text3)">(M ${avgBase.length}명)</span></td>
       <td style="padding:8px;text-align:right;color:var(--text3)">${durAvg||'—'}</td>
       <td style="padding:8px;text-align:right;color:var(--accent2);font-weight:600">${mTD ? Math.round(mTD).toLocaleString() : '—'}</td>
       <td style="padding:8px;text-align:right;color:#f59e0b">${mHSR ? Math.round(mHSR).toLocaleString() : '—'}</td>
@@ -8198,6 +8209,7 @@ async function renderTwoWeekDetail(idx){
           </tbody>
         </table>
       </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">공식: 팀 지표 총합 ÷ M선수 전체 훈련시간 합 × 100 — 선수 수·훈련시간 차이 보정</div>
     </div>`;
 }
 
@@ -12878,13 +12890,13 @@ async function generateMatchReport(){
           </thead>
           <tbody>
             ${[
-              {k:'tdP100',   l:'TD /100min',         fmt:v=>Math.round(v)+' m'},
-              {k:'hirP100',  l:'HIR+Sprint /100min',  fmt:v=>Math.round(v)+' m'},
-              {k:'b5P100',   l:'Sprint(B5) /100min',  fmt:v=>Math.round(v)+' m'},
-              {k:'accP100',  l:'가속 /100min',        fmt:v=>v.toFixed(1)+'회'},
-              {k:'decP100',  l:'감속 /100min',        fmt:v=>v.toFixed(1)+'회'},
-              {k:'plP100',   l:'P.Load /100min',      fmt:v=>Math.round(v)+''},
-              {k:'rhieP100', l:'RHIE /100min',        fmt:v=>v.toFixed(1)+'회'},
+              {k:'tdP100',   l:'TD',         fmt:v=>Math.round(v)+' m'},
+              {k:'hirP100',  l:'HIR+Sprint', fmt:v=>Math.round(v)+' m'},
+              {k:'b5P100',   l:'Sprint(B5)', fmt:v=>Math.round(v)+' m'},
+              {k:'accP100',  l:'가속',      fmt:v=>v.toFixed(1)+'회'},
+              {k:'decP100',  l:'감속',      fmt:v=>v.toFixed(1)+'회'},
+              {k:'plP100',   l:'P.Load',    fmt:v=>Math.round(v)+''},
+              {k:'rhieP100', l:'RHIE',      fmt:v=>v.toFixed(1)+'회'},
             ].map(f=>`
             <tr style="border-bottom:1px solid var(--border)">
               <td style="padding:6px 8px;color:var(--accent2);font-weight:600">${f.l}</td>
