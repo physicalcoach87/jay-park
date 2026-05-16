@@ -12991,7 +12991,7 @@ async function generateMatchReport(){
     const _refTD=avg3.td, _refHSR=avg3.b4, _refSpr=avg3.b5, _refAcc=avg3.acc, _refRHIE=avg3.rhie;
     const _matchAvg=last3.find(m=>m.isTarget)?.avg||last3[0]?.avg;
     // % 색상: 고부하(≥80%)=빨강, 보통(60~79%)=노랑, 저부하(<60%)=초록
-    const _pb=(v,ref)=>{ if(!v||!ref) return ''; const p=Math.round(v/ref*100); const c=p>=80?'#ef4444':p>=60?'#fbbf24':'#4ade80'; const bg=p>=80?'#3b121960':p>=60?'#42200660':'#05301660'; return `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${bg};color:${c}">${p}%</span>`; };
+    const _pb=(v,ref)=>{ if(!v||!ref) return ''; const p=Math.round(v/ref*100); const c=p>=80?'#ef4444':p>=60?'#fbbf24':'#4ade80'; return `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:transparent;border:1px solid ${c};color:${c}">${p}%</span>`; };
 
     // ── 현재 경기 실제 데이터 (ftRows 직접 계산) ──
     const _curMatch = teamAvg(ftRows);
