@@ -12992,9 +12992,10 @@ async function generateMatchReport(){
     // % 색상: 고부하(≥80%)=빨강, 보통(60~79%)=노랑, 저부하(<60%)=초록
     const _pb=(v,ref)=>{ if(!v||!ref) return ''; const p=Math.round(v/ref*100); const c=p>=80?'#ef4444':p>=60?'#fbbf24':'#4ade80'; const bg=p>=80?'#3b121960':p>=60?'#42200660':'#05301660'; return `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${bg};color:${c}">${p}%</span>`; };
 
-    const _flowCard = !_trainingDays.length
-      ? `<div style="text-align:center;color:var(--text3);font-size:12px;padding:8px 0">경기 전 7일 내 팀 훈련(M) 데이터 없음</div>`
-      : (()=>{
+    // ── 현재 경기 실제 데이터 (ftRows 직접 계산) ──
+    const _curMatch = teamAvg(ftRows);
+
+    const _flowCard = (()=>{
         // ── 3경기 평균 기준치 바 (상단) ──
         const _refBar = `
           <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-bottom:12px">
@@ -13011,17 +13012,14 @@ async function generateMatchReport(){
             </div>
           </div>`;
 
-        // ── 주간 날짜 계산 (경기일 기준 Mon~Sun) ──
+        // ── 경기일 기준 -6일 ~ 당일 고정 7컬럼 ──
         const _mDate = new Date(date+'T00:00:00');
-        const _dow = _mDate.getDay();
-        const _monOff = _dow===0?-6:1-_dow;
-        const _mon = new Date(_mDate); _mon.setDate(_mDate.getDate()+_monOff);
-        const _dayNames = ['월','화','수','목','금','토','일'];
-        const _weekDates = Array.from({length:7},(_,i)=>{ const d=new Date(_mon); d.setDate(_mon.getDate()+i); return d.toISOString().split('T')[0]; });
+        const _allDN  = ['일','월','화','수','목','금','토'];
+        const _weekDates = Array.from({length:7},(_,i)=>{ const d=new Date(_mDate); d.setDate(_mDate.getDate()-6+i); return d.toISOString().split('T')[0]; });
 
-        // ── 날짜→훈련데이터 맵 ──
+        // ── 날짜→훈련데이터 맵 (MD '—' 제외) ──
         const _dgMap = {};
-        _trainingDays.forEach(t=>{ _dgMap[t.date]=t; });
+        _trainingDays.filter(t=>t.mdStage!=='—').forEach(t=>{ _dgMap[t.date]=t; });
 
         // ── 스탯 행 (label + value + % 인라인) ──
         const _statRow=(label,val,ref,color)=>`
@@ -13036,9 +13034,9 @@ async function generateMatchReport(){
         // ── 훈련 카드 내용 ──
         const _trainInner=(t)=>`
           <div style="margin-bottom:4px">
-            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${_mdBg(t.mdStage)};color:${_mdColor(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}50">${t.mdStage||'—'}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${_mdBg(t.mdStage)};color:${_mdColor(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}50">${t.mdStage}</span>
           </div>
-          <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:0">${t.topic||'—'}</div>
+          <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.topic||'—'}</div>
           <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${t.cnt}명 · ${t.dur?Math.round(t.dur)+"'":'—'}</div>
           <div style="border-top:1px solid var(--border);margin:4px 0"></div>
           ${_statRow('TD',t.td?Math.round(t.td).toLocaleString():null,_refTD,'#60a5fa')}
@@ -13051,34 +13049,45 @@ async function generateMatchReport(){
             <span style="color:#c084fc;font-weight:600">${t.srpe||'—'}</span>
           </div>`;
 
-        // ── 경기 카드 내용 ──
-        const _matchInner= _matchAvg ? `
+        // ── 경기 카드 내용 (ftRows 실제 데이터) ──
+        const _matchInner=`
           <div style="margin-bottom:4px">
             <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#7f1d1d60;color:#f87171;border:1px solid #f8717160">MATCH</span>
           </div>
           <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden">vs ${opponent||'—'}</div>
-          <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${ftRows.length}명 · ${_matchAvg.maxDur?Math.round(_matchAvg.maxDur)+"'":'—'}</div>
+          <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${ftRows.length}명 · ${_curMatch.maxDur?Math.round(_curMatch.maxDur)+"'":'—'}</div>
           <div style="border-top:1px solid #4ade8040;margin:4px 0"></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">TD</span><span style="color:#60a5fa;font-weight:600">${_matchAvg.td?Math.round(_matchAvg.td).toLocaleString():'—'}</span></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">HSR</span><span style="color:#f59e0b;font-weight:600">${_matchAvg.b4?Math.round(_matchAvg.b4).toLocaleString():'—'}</span></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">Spr</span><span style="color:#ef4444;font-weight:600">${_matchAvg.b5?Math.round(_matchAvg.b5):'—'}</span></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">Acc</span><span style="color:#fb923c;font-weight:600">${_matchAvg.acc?Math.round(_matchAvg.acc):'—'}</span></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">RHIE</span><span style="color:#34d399;font-weight:600">${_matchAvg.rhie?Math.round(_matchAvg.rhie):'—'}</span></div>
-          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">결과</span><span style="font-weight:700;color:${resultColor}">${resultLabel}</span></div>` : '';
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">TD</span><span style="color:#60a5fa;font-weight:600">${_curMatch.td?Math.round(_curMatch.td).toLocaleString():'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">HSR</span><span style="color:#f59e0b;font-weight:600">${_curMatch.b4?Math.round(_curMatch.b4).toLocaleString():'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">Spr</span><span style="color:#ef4444;font-weight:600">${_curMatch.b5?Math.round(_curMatch.b5):'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">Acc</span><span style="color:#fb923c;font-weight:600">${_curMatch.acc?Math.round(_curMatch.acc):'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">RHIE</span><span style="color:#34d399;font-weight:600">${_curMatch.rhie?Math.round(_curMatch.rhie):'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">결과</span><span style="font-weight:700;color:${resultColor}">${resultLabel}</span></div>`;
 
-        // ── 7컬럼 주간 달력 그리드 ──
-        const _cols = _weekDates.map((d,i)=>{
-          const dn  = _dayNames[i];
+        // ── 휴식 카드 내용 ──
+        const _restInner=`
+          <div style="height:30px;display:flex;align-items:center;margin-bottom:0">
+            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">휴식</span>
+          </div>
+          <div style="height:18px"></div>
+          <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+          <div style="height:108px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px">Rest Day</div>`;
+
+        // ── 7컬럼 렌더 ──
+        const _cols = _weekDates.map(d=>{
+          const dn  = _allDN[new Date(d+'T00:00:00').getDay()];
           const num = parseInt(d.slice(8),10);
           const isMatch = d===date;
           const t = _dgMap[d];
+          const hdrColor = isMatch?'#4ade80':t?'var(--text2)':'var(--text3)';
+          const numColor  = isMatch?'#4ade80':t?'var(--text)':'var(--text3)';
           const hdr = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;padding:0 2px">
-            <span style="font-size:11px;color:${isMatch?'#4ade80':t?'var(--text2)':'var(--text3)'};font-weight:600">${dn}</span>
-            <span style="font-size:17px;font-weight:700;color:${isMatch?'#4ade80':t?'var(--text)':'var(--text3)'}">${num}</span>
+            <span style="font-size:11px;color:${hdrColor};font-weight:600">${dn}</span>
+            <span style="font-size:17px;font-weight:700;color:${numColor}">${num}</span>
           </div>`;
-          if(isMatch && _matchAvg) return `<div style="flex:1;min-width:100px">${hdr}<div style="background:#14532d20;border:2px solid #4ade8070;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_matchInner}</div></div>`;
-          if(t) return `<div style="flex:1;min-width:100px">${hdr}<div style="background:${_mdBg(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}40;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_trainInner(t)}</div></div>`;
-          return `<div style="flex:0 0 48px;min-width:40px">${hdr}</div>`;
+          if(isMatch) return `<div style="flex:1;min-width:100px">${hdr}<div style="background:#14532d20;border:2px solid #4ade8070;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_matchInner}</div></div>`;
+          if(t)       return `<div style="flex:1;min-width:100px">${hdr}<div style="background:${_mdBg(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}40;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_trainInner(t)}</div></div>`;
+          return      `<div style="flex:1;min-width:80px">${hdr}<div style="background:var(--surface);border:1px dashed var(--border);border-radius:8px;padding:8px 10px;box-sizing:border-box">${_restInner}</div></div>`;
         }).join('');
 
         return _refBar +
