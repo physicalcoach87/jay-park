@@ -12610,7 +12610,7 @@ async function generateMatchReport(){
   const _preFromStr = _preFrom.toISOString().split('T')[0];
   const [{data:preGPS},{data:preRPE}] = await Promise.all([
     supa.from('gps_records')
-      .select('player_id,session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2')
+      .select('player_id,session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
       .gte('session_date',_preFromStr)
       .lt('session_date',date)
       .order('session_date',{ascending:true}),
@@ -12981,7 +12981,8 @@ async function generateMatchReport(){
     const _trainingDays = Object.entries(_dg).sort((a,b)=>a[0].localeCompare(b[0])).map(([d,rows])=>{
       const mdStage=_getMD(d,rows);
       const srpeVals=rows.map(r=>{ const rr=_rpeMap[d+'|'+r.player_id]; const rpe=parseFloat(rr?.rpe)||0; const dur=parseFloat(r.duration)||parseFloat(rr?.duration)||0; return rpe&&dur?rpe*dur:0; }).filter(v=>v>0);
-      return { date:d, mdStage, cnt:rows.length, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:_av(rows,'duration'), srpe:srpeVals.length?Math.round(srpeVals.reduce((a,b)=>a+b)/srpeVals.length):null };
+      const topic=(rows.find(r=>(r.session_topic||'').trim())?.session_topic||'').trim();
+      return { date:d, mdStage, topic, cnt:rows.length, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:_av(rows,'duration'), srpe:srpeVals.length?Math.round(srpeVals.reduce((a,b)=>a+b)/srpeVals.length):null };
     });
 
     const _mdColor=md=>({'MD-5':'#60a5fa','MD-4':'#60a5fa','MD-3':'#ef4444','MD-2':'#fbbf24','MD-1':'#4ade80','MD+1':'#94a3b8'})[md]||'#94a3b8';
@@ -12989,69 +12990,104 @@ async function generateMatchReport(){
     const _refTD=avg3.td, _refHSR=avg3.b4, _refSpr=avg3.b5, _refAcc=avg3.acc, _refRHIE=avg3.rhie;
     const _matchAvg=last3.find(m=>m.isTarget)?.avg||last3[0]?.avg;
     // % 색상: 고부하(≥80%)=빨강, 보통(60~79%)=노랑, 저부하(<60%)=초록
-    const _pb=(v,ref)=>{ if(!v||!ref) return '<span style="color:var(--text3)">—</span>'; const p=Math.round(v/ref*100); const c=p>=80?'#ef4444':p>=60?'#fbbf24':'#4ade80'; const bg=p>=80?'#3b121940':p>=60?'#42200640':'#05301640'; return `<span style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:4px;background:${bg};color:${c}">${p}%</span>`; };
+    const _pb=(v,ref)=>{ if(!v||!ref) return ''; const p=Math.round(v/ref*100); const c=p>=80?'#ef4444':p>=60?'#fbbf24':'#4ade80'; const bg=p>=80?'#3b121960':p>=60?'#42200660':'#05301660'; return `<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:${bg};color:${c}">${p}%</span>`; };
 
     const _flowCard = !_trainingDays.length
       ? `<div style="text-align:center;color:var(--text3);font-size:12px;padding:8px 0">경기 전 7일 내 팀 훈련(M) 데이터 없음</div>`
       : (()=>{
         // ── 3경기 평균 기준치 바 (상단) ──
-        const _refBar = `<div style="background:linear-gradient(135deg,#2d1b6940,#1a1a2e60);border:1px solid #7c3aed50;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-          <div style="font-size:10px;font-weight:700;color:#a78bfa;white-space:nowrap">📊 ${last3.length}경기 평균 기준치</div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:10px">
-            <span style="color:var(--text3)">TD&nbsp;<strong style="color:#60a5fa">${_refTD?Math.round(_refTD).toLocaleString():'—'}m</strong></span>
-            <span style="color:var(--text3)">HSR&nbsp;<strong style="color:#f59e0b">${_refHSR?Math.round(_refHSR).toLocaleString():'—'}m</strong></span>
-            <span style="color:var(--text3)">Sprint&nbsp;<strong style="color:#ef4444">${_refSpr?Math.round(_refSpr):'—'}m</strong></span>
-            <span style="color:var(--text3)">가속&nbsp;<strong style="color:#fb923c">${_refAcc?Math.round(_refAcc):'—'}</strong></span>
-            <span style="color:var(--text3)">RHIE&nbsp;<strong style="color:#34d399">${_refRHIE?Math.round(_refRHIE):'—'}</strong></span>
+        const _refBar = `
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 16px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;gap:6px;white-space:nowrap">
+              <span style="font-size:12px;color:#a78bfa">◎</span>
+              <span style="font-size:10px;font-weight:700;color:var(--text2)">${last3.length}경기 평균 기준</span>
+            </div>
+            <div style="display:flex;gap:20px;flex-wrap:wrap">
+              <div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">TD</div><div style="font-size:13px;font-weight:700;color:var(--text)">${_refTD?Math.round(_refTD).toLocaleString()+' m':'—'}</div></div>
+              <div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">HSR (B4)</div><div style="font-size:13px;font-weight:700;color:var(--text)">${_refHSR?Math.round(_refHSR).toLocaleString()+' m':'—'}</div></div>
+              <div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">Sprint (B5)</div><div style="font-size:13px;font-weight:700;color:var(--text)">${_refSpr?Math.round(_refSpr)+' m':'—'}</div></div>
+              <div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">가속</div><div style="font-size:13px;font-weight:700;color:var(--text)">${_refAcc?Math.round(_refAcc)+'회':'—'}</div></div>
+              <div style="text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">RHIE</div><div style="font-size:13px;font-weight:700;color:var(--text)">${_refRHIE?Math.round(_refRHIE)+'회':'—'}</div></div>
+            </div>
+          </div>`;
+
+        // ── 주간 날짜 계산 (경기일 기준 Mon~Sun) ──
+        const _mDate = new Date(date+'T00:00:00');
+        const _dow = _mDate.getDay();
+        const _monOff = _dow===0?-6:1-_dow;
+        const _mon = new Date(_mDate); _mon.setDate(_mDate.getDate()+_monOff);
+        const _dayNames = ['월','화','수','목','금','토','일'];
+        const _weekDates = Array.from({length:7},(_,i)=>{ const d=new Date(_mon); d.setDate(_mon.getDate()+i); return d.toISOString().split('T')[0]; });
+
+        // ── 날짜→훈련데이터 맵 ──
+        const _dgMap = {};
+        _trainingDays.forEach(t=>{ _dgMap[t.date]=t; });
+
+        // ── 스탯 행 (label + value + % 인라인) ──
+        const _statRow=(label,val,ref,color)=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px">
+            <span style="color:var(--text3)">${label}</span>
+            <span style="display:flex;align-items:center;gap:4px">
+              <span style="color:${color};font-weight:600">${val!=null?val:'—'}</span>
+              ${ref&&val!=null?_pb(parseFloat(String(val).replace(/,/g,''))||0,ref):''}
+            </span>
+          </div>`;
+
+        // ── 훈련 카드 내용 ──
+        const _trainInner=(t)=>`
+          <div style="margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${_mdBg(t.mdStage)};color:${_mdColor(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}50">${t.mdStage||'—'}</span>
           </div>
-          <div style="margin-left:auto;font-size:9px;color:var(--text3)">← % 비교 기준</div>
-        </div>`;
-        // ── 훈련일 카드 ──
-        const _dayCards = _trainingDays.map(t=>`
-          <div style="flex:1;min-width:105px;max-width:150px;background:${_mdBg(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}40;border-radius:8px;padding:8px 10px;box-sizing:border-box">
-            <div style="height:26px;display:flex;align-items:center;justify-content:center">
-              <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:4px;background:${_mdBg(t.mdStage)};color:${_mdColor(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}60">${t.mdStage||'—'}</span>
-            </div>
-            <div style="height:18px;text-align:center;font-size:10px;color:var(--text3);margin-top:2px">${t.date.slice(5)}</div>
-            <div style="height:18px;text-align:center;font-size:10px;color:var(--text2)">${t.cnt}명 · ${t.dur?Math.round(t.dur)+"'":'—'}</div>
-            <div style="border-top:1px solid var(--border);margin:5px 0 4px"></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">TD</span><strong style="color:#60a5fa">${t.td?Math.round(t.td).toLocaleString():'—'}</strong></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">HSR</span><span style="color:#f59e0b">${t.hsr?Math.round(t.hsr):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">Sprint</span><span style="color:#ef4444">${t.sprint?Math.round(t.sprint):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">가속</span><span style="color:#fb923c">${t.accel?Math.round(t.accel):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">RHIE</span><span style="color:#34d399">${t.rhie?Math.round(t.rhie):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">sRPE</span><span style="color:#c084fc">${t.srpe||'—'}</span></div>
-            <div style="border-top:1px solid var(--border);margin:5px 0 4px"></div>
-            <div style="height:20px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">TD%</span>${_pb(t.td,_refTD)}</div>
-            <div style="height:20px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">HSR%</span>${_pb(t.hsr,_refHSR)}</div>
-          </div>`).join('');
-        // ── 경기 카드 ──
-        const _matchCard = _matchAvg ? `
-          <div style="flex:1;min-width:105px;max-width:150px;background:#3b121940;border:2px solid #f8717170;border-radius:8px;padding:8px 10px;box-sizing:border-box">
-            <div style="height:26px;display:flex;align-items:center;justify-content:center">
-              <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:4px;background:#7f1d1d60;color:#f87171;border:1px solid #f8717160">MATCH</span>
-            </div>
-            <div style="height:18px;text-align:center;font-size:10px;color:#f87171;font-weight:600;margin-top:2px">${date.slice(5)}</div>
-            <div style="height:18px;text-align:center;font-size:10px;color:var(--text2)">${ftRows.length}명 · ${_matchAvg.maxDur?Math.round(_matchAvg.maxDur)+"'":'—'}</div>
-            <div style="border-top:1px solid #f8717130;margin:5px 0 4px"></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">TD</span><strong style="color:#60a5fa">${_matchAvg.td?Math.round(_matchAvg.td).toLocaleString():'—'}</strong></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">HSR</span><span style="color:#f59e0b">${_matchAvg.b4?Math.round(_matchAvg.b4):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">Sprint</span><span style="color:#ef4444">${_matchAvg.b5?Math.round(_matchAvg.b5):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">가속</span><span style="color:#fb923c">${_matchAvg.acc?Math.round(_matchAvg.acc):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">RHIE</span><span style="color:#34d399">${_matchAvg.rhie?Math.round(_matchAvg.rhie):'—'}</span></div>
-            <div style="height:16px;display:flex;justify-content:space-between;align-items:center;font-size:10px"><span style="color:var(--text3)">sRPE</span><span style="color:#c084fc">—</span></div>
-            <div style="border-top:1px solid #f8717130;margin:5px 0 4px"></div>
-            <div style="height:20px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text3)">기준값</div>
-            <div style="height:20px;display:flex;align-items:center;justify-content:center;font-size:9px;color:var(--text3)">기준값</div>
-          </div>` : '';
+          <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;margin-bottom:0">${t.topic||'—'}</div>
+          <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${t.cnt}명 · ${t.dur?Math.round(t.dur)+"'":'—'}</div>
+          <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+          ${_statRow('TD',t.td?Math.round(t.td).toLocaleString():null,_refTD,'#60a5fa')}
+          ${_statRow('HSR',t.hsr?Math.round(t.hsr).toLocaleString():null,_refHSR,'#f59e0b')}
+          ${_statRow('Spr',t.sprint?Math.round(t.sprint):null,_refSpr,'#ef4444')}
+          ${_statRow('Acc',t.accel?Math.round(t.accel):null,_refAcc,'#fb923c')}
+          ${_statRow('RHIE',t.rhie?Math.round(t.rhie):null,_refRHIE,'#34d399')}
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px">
+            <span style="color:var(--text3)">sRPE</span>
+            <span style="color:#c084fc;font-weight:600">${t.srpe||'—'}</span>
+          </div>`;
+
+        // ── 경기 카드 내용 ──
+        const _matchInner= _matchAvg ? `
+          <div style="margin-bottom:4px">
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:#7f1d1d60;color:#f87171;border:1px solid #f8717160">MATCH</span>
+          </div>
+          <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden">vs ${opponent||'—'}</div>
+          <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${ftRows.length}명 · ${_matchAvg.maxDur?Math.round(_matchAvg.maxDur)+"'":'—'}</div>
+          <div style="border-top:1px solid #4ade8040;margin:4px 0"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">TD</span><span style="color:#60a5fa;font-weight:600">${_matchAvg.td?Math.round(_matchAvg.td).toLocaleString():'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">HSR</span><span style="color:#f59e0b;font-weight:600">${_matchAvg.b4?Math.round(_matchAvg.b4).toLocaleString():'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">Spr</span><span style="color:#ef4444;font-weight:600">${_matchAvg.b5?Math.round(_matchAvg.b5):'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">Acc</span><span style="color:#fb923c;font-weight:600">${_matchAvg.acc?Math.round(_matchAvg.acc):'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">RHIE</span><span style="color:#34d399;font-weight:600">${_matchAvg.rhie?Math.round(_matchAvg.rhie):'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">결과</span><span style="font-weight:700;color:${resultColor}">${resultLabel}</span></div>` : '';
+
+        // ── 7컬럼 주간 달력 그리드 ──
+        const _cols = _weekDates.map((d,i)=>{
+          const dn  = _dayNames[i];
+          const num = parseInt(d.slice(8),10);
+          const isMatch = d===date;
+          const t = _dgMap[d];
+          const hdr = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;padding:0 2px">
+            <span style="font-size:11px;color:${isMatch?'#4ade80':t?'var(--text2)':'var(--text3)'};font-weight:600">${dn}</span>
+            <span style="font-size:17px;font-weight:700;color:${isMatch?'#4ade80':t?'var(--text)':'var(--text3)'}">${num}</span>
+          </div>`;
+          if(isMatch && _matchAvg) return `<div style="flex:1;min-width:100px">${hdr}<div style="background:#14532d20;border:2px solid #4ade8070;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_matchInner}</div></div>`;
+          if(t) return `<div style="flex:1;min-width:100px">${hdr}<div style="background:${_mdBg(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}40;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_trainInner(t)}</div></div>`;
+          return `<div style="flex:0 0 48px;min-width:40px">${hdr}</div>`;
+        }).join('');
+
         return _refBar +
-          `<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px">${_dayCards}${_matchCard}</div>
-          <div style="margin-top:8px;padding:6px 10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.7">
-            <strong style="color:var(--text2)">%기준</strong>: 최근 ${last3.length}경기 팀 평균 대비 훈련 부하 —
-            <span style="color:#ef4444;font-weight:700">🔴 ≥80%</span> 고부하 ·
-            <span style="color:#fbbf24;font-weight:700">🟡 60~79%</span> 보통 ·
-            <span style="color:#4ade80;font-weight:700">🟢 &lt;60%</span> 저부하 &nbsp;·&nbsp;
-            <strong style="color:var(--text2)">MD 판별</strong>: periodization 필드 우선 → 없으면 경기일 역산
+          `<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;align-items:flex-start">${_cols}</div>
+          <div style="margin-top:8px;padding:6px 10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
+            <strong style="color:var(--text2)">% 기준 (경기 대비)</strong>&nbsp;
+            <span style="color:#ef4444;font-weight:700">🔴 ≥80% 고부하</span> ·
+            <span style="color:#fbbf24;font-weight:700">🟡 60~79%</span> ·
+            <span style="color:#4ade80;font-weight:700">🟢 &lt;60% 저부하</span>
           </div>`;
       })();
 
