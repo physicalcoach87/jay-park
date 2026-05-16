@@ -12955,111 +12955,6 @@ async function generateMatchReport(){
     </div>
   `)}
 
-  ${card(`
-    ${secHead('📊','팀 합계 종합 분석','최근 3경기 비교 + 전·후반')}
-
-    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 최근 3경기 비교 (FT 출전 전원 합산)</div>
-    ${last3.length>=2?`
-    <div style="overflow-x:auto;margin-bottom:20px">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
-        <thead>
-          <tr style="background:var(--surface2)">
-            <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표</th>
-            ${last3.map((m,i)=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
-            ${last3.length>=2?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 직전</th>`:''}
-            ${last3.length>=3?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 2경기전</th>`:''}
-          </tr>
-        </thead>
-        <tbody>
-          ${sec2Fields.map(f=>`
-          <tr style="border-bottom:1px solid var(--border)">
-            <td style="padding:6px 8px;color:var(--text2);font-weight:500">${f.l}</td>
-            ${last3.map((m,i)=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.stats[f.k])}</td>`).join('')}
-            ${last3.length>=2?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[1].stats[f.k])}</td>`:''}
-            ${last3.length>=3?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[2].stats[f.k])}</td>`:''}
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-    `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${last3.length}경기)</div>`}
-
-    ${last3.length>=1?`
-    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;margin-bottom:20px">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:4px">▸ 팀 경기 평균 비교 (출전시간 정규화)</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">공식: (Σ지표 ÷ Σ출전시간) × max출전시간 — 최근 ${last3.length}경기 평균 자동 산출</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
-          <thead>
-            <tr style="background:var(--surface2)">
-              <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표</th>
-              ${last3.map(m=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
-              <th style="padding:7px 8px;text-align:right;color:#a78bfa;font-weight:700">최근 ${last3.length}경기 평균</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${[
-              {k:'td',   l:'TD',         fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'hir',  l:'HIR+Sprint', fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'b4',   l:'Band4 (m)',  fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'b5',   l:'Sprint(B5)', fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'acc',  l:'가속 (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
-              {k:'dec',  l:'감속 (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
-              {k:'pl',   l:'P.Load',     fmt:v=>v!=null?Math.round(v)+'':'—'},
-              {k:'rhie', l:'RHIE (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
-              {k:'mpm',  l:'평균 m/min', fmt:v=>v!=null?v.toFixed(1):'—'},
-              {k:'vmax', l:'평균 Vmax',  fmt:v=>v!=null?v.toFixed(1)+' km/h':'—'},
-            ].map(f=>`
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 8px;color:var(--accent2);font-weight:600">${f.l}</td>
-              ${last3.map(m=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.avg[f.k])}</td>`).join('')}
-              <td style="padding:6px 8px;text-align:right;color:#a78bfa;font-weight:600">${f.fmt(avg3[f.k])}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`:''}
-
-    ${hasHalf?`
-    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 전·후반 비교 (팀 합계)</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:380px">
-          <thead>
-            <tr style="background:var(--surface2)">
-              <th style="padding:6px 8px;text-align:left;color:var(--text3)">지표</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">1Q</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">2Q</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Δ</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${[
-              {l:'선수 수',    v1:q1Stats.cnt,    v2:q2Stats.cnt,    fmt:v=>v+'명',                  noPct:true},
-              {l:'TD (m)',    v1:q1Stats.td,     v2:q2Stats.td,     fmt:v=>Math.round(v).toLocaleString()},
-              {l:'평균 m/min',v1:q1Stats.avgMpm, v2:q2Stats.avgMpm, fmt:v=>v.toFixed(1)},
-              {l:'HIR+Sprint',v1:q1Stats.hir,    v2:q2Stats.hir,    fmt:v=>Math.round(v).toLocaleString()},
-              {l:'Band4 (m)', v1:q1Stats.b4,     v2:q2Stats.b4,     fmt:v=>Math.round(v)},
-              {l:'Sprint (m)',v1:q1Stats.b5,     v2:q2Stats.b5,     fmt:v=>Math.round(v)},
-              {l:'가속 (회)', v1:q1Stats.acc,    v2:q2Stats.acc,    fmt:v=>Math.round(v)},
-              {l:'감속 (회)', v1:q1Stats.dec,    v2:q2Stats.dec,    fmt:v=>Math.round(v)},
-              {l:'Player Load',v1:q1Stats.pl,    v2:q2Stats.pl,     fmt:v=>Math.round(v)},
-              {l:'RHIE',      v1:q1Stats.rhie,   v2:q2Stats.rhie,   fmt:v=>Math.round(v)},
-            ].map(row=>{
-              const delta = (!row.noPct&&row.v1>0)?(row.v2-row.v1)/row.v1*100:null;
-              const dc = delta==null?'var(--text3)':delta>0?'#4ade80':'#f87171';
-              return `<tr style="border-bottom:1px solid var(--border)">
-                <td style="padding:5px 8px;color:var(--text2)">${row.l}</td>
-                <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v1)}</td>
-                <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v2)}</td>
-                <td style="padding:5px 8px;text-align:right;color:${dc}">${delta!=null?(delta>0?'+':'')+delta.toFixed(1)+'%':'-'}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`:`<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;color:var(--text3);font-size:12px;text-align:center">전·후반 분리 데이터 없음 (1Q/2Q 미업로드)</div>`}
-  `)}
-
   ${(()=>{
     // ── 경기 준비 훈련 흐름 카드 (MD-5 → Match) ───────────────────
     const _mGPS = (preGPS||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
@@ -13174,6 +13069,111 @@ async function generateMatchReport(){
       ${_flowCard}
     `);
   })()}
+
+  ${card(`
+    ${secHead('📊','팀 합계 종합 분석','최근 3경기 비교 + 전·후반')}
+
+    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 최근 3경기 비교 (FT 출전 전원 합산)</div>
+    ${last3.length>=2?`
+    <div style="overflow-x:auto;margin-bottom:20px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
+        <thead>
+          <tr style="background:var(--surface2)">
+            <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표</th>
+            ${last3.map((m,i)=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
+            ${last3.length>=2?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 직전</th>`:''}
+            ${last3.length>=3?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 2경기전</th>`:''}
+          </tr>
+        </thead>
+        <tbody>
+          ${sec2Fields.map(f=>`
+          <tr style="border-bottom:1px solid var(--border)">
+            <td style="padding:6px 8px;color:var(--text2);font-weight:500">${f.l}</td>
+            ${last3.map((m,i)=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.stats[f.k])}</td>`).join('')}
+            ${last3.length>=2?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[1].stats[f.k])}</td>`:''}
+            ${last3.length>=3?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[2].stats[f.k])}</td>`:''}
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${last3.length}경기)</div>`}
+
+    ${last3.length>=1?`
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;margin-bottom:20px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:4px">▸ 팀 경기 평균 비교 (출전시간 정규화)</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">공식: (Σ지표 ÷ Σ출전시간) × max출전시간 — 최근 ${last3.length}경기 평균 자동 산출</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표</th>
+              ${last3.map(m=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
+              <th style="padding:7px 8px;text-align:right;color:#a78bfa;font-weight:700">최근 ${last3.length}경기 평균</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[
+              {k:'td',   l:'TD',         fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
+              {k:'hir',  l:'HIR+Sprint', fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
+              {k:'b4',   l:'Band4 (m)',  fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
+              {k:'b5',   l:'Sprint(B5)', fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
+              {k:'acc',  l:'가속 (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
+              {k:'dec',  l:'감속 (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
+              {k:'pl',   l:'P.Load',     fmt:v=>v!=null?Math.round(v)+'':'—'},
+              {k:'rhie', l:'RHIE (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
+              {k:'mpm',  l:'평균 m/min', fmt:v=>v!=null?v.toFixed(1):'—'},
+              {k:'vmax', l:'평균 Vmax',  fmt:v=>v!=null?v.toFixed(1)+' km/h':'—'},
+            ].map(f=>`
+            <tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px;color:var(--accent2);font-weight:600">${f.l}</td>
+              ${last3.map(m=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.avg[f.k])}</td>`).join('')}
+              <td style="padding:6px 8px;text-align:right;color:#a78bfa;font-weight:600">${f.fmt(avg3[f.k])}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`:''}
+
+    ${hasHalf?`
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 전·후반 비교 (팀 합계)</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:380px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">지표</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">1Q</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">2Q</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">Δ</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${[
+              {l:'선수 수',    v1:q1Stats.cnt,    v2:q2Stats.cnt,    fmt:v=>v+'명',                  noPct:true},
+              {l:'TD (m)',    v1:q1Stats.td,     v2:q2Stats.td,     fmt:v=>Math.round(v).toLocaleString()},
+              {l:'평균 m/min',v1:q1Stats.avgMpm, v2:q2Stats.avgMpm, fmt:v=>v.toFixed(1)},
+              {l:'HIR+Sprint',v1:q1Stats.hir,    v2:q2Stats.hir,    fmt:v=>Math.round(v).toLocaleString()},
+              {l:'Band4 (m)', v1:q1Stats.b4,     v2:q2Stats.b4,     fmt:v=>Math.round(v)},
+              {l:'Sprint (m)',v1:q1Stats.b5,     v2:q2Stats.b5,     fmt:v=>Math.round(v)},
+              {l:'가속 (회)', v1:q1Stats.acc,    v2:q2Stats.acc,    fmt:v=>Math.round(v)},
+              {l:'감속 (회)', v1:q1Stats.dec,    v2:q2Stats.dec,    fmt:v=>Math.round(v)},
+              {l:'Player Load',v1:q1Stats.pl,    v2:q2Stats.pl,     fmt:v=>Math.round(v)},
+              {l:'RHIE',      v1:q1Stats.rhie,   v2:q2Stats.rhie,   fmt:v=>Math.round(v)},
+            ].map(row=>{
+              const delta = (!row.noPct&&row.v1>0)?(row.v2-row.v1)/row.v1*100:null;
+              const dc = delta==null?'var(--text3)':delta>0?'#4ade80':'#f87171';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:5px 8px;color:var(--text2)">${row.l}</td>
+                <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v1)}</td>
+                <td style="padding:5px 8px;text-align:right;color:var(--text)">${row.fmt(row.v2)}</td>
+                <td style="padding:5px 8px;text-align:right;color:${dc}">${delta!=null?(delta>0?'+':'')+delta.toFixed(1)+'%':'-'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`:`<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;color:var(--text3);font-size:12px;text-align:center">전·후반 분리 데이터 없음 (1Q/2Q 미업로드)</div>`}
+  `)}
 
   ${(()=>{
     // 정렬 헬퍼 — null은 0 취급, 내림차순
