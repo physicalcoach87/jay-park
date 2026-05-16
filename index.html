@@ -733,6 +733,42 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">📋 업로드된 훈련 기록</div>
         <div id="gps-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
       </div>
+
+      <!-- ── 훈련 1분 롤링 mpm 업로드 ── -->
+      <div style="margin-top:1.6rem;padding-top:1.2rem;border-top:2px dashed var(--border)">
+        <div class="coaching-box" style="margin-bottom:1rem">
+          <p><strong style="color:var(--accent2)">📈 훈련 1분 롤링 분당이동거리 파일</strong><br>
+          파일명: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">YYYY-MM-DD_분당이동거리.xlsx</code><br>
+          시트 컬럼: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">Name / Jersey / Meterage Per Minute</code> (경기 롤링과 동일 형식)<br>
+          파일명에서 날짜·세션명을 자동 추출해 저장됩니다.</p>
+        </div>
+        <div id="train-minute-drop-zone" style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
+          onclick="document.getElementById('train-minute-file-input').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--accent2)'"
+          ondragleave="this.style.borderColor='var(--border2)'"
+          ondrop="event.preventDefault();handleTrainMinuteFileSelect({target:{files:event.dataTransfer.files}})">
+          <div style="font-size:32px;margin-bottom:8px">📈</div>
+          <div style="font-size:14px;font-weight:600;color:var(--text2)">훈련 1분 롤링 mpm 파일 클릭 또는 드래그</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
+        </div>
+        <input type="file" id="train-minute-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleTrainMinuteFileSelect(event)">
+        <!-- 미리보기 -->
+        <div id="train-minute-upload-preview" style="display:none">
+          <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="train-minute-preview-title"></div>
+          <div id="train-minute-preview-summary" style="font-size:12px;color:var(--text2);margin-bottom:10px"></div>
+          <div style="display:flex;gap:8px">
+            <button onclick="saveTrainMinuteData()" class="btn-exp pri" style="flex:2;padding:11px" id="train-minute-save-btn">💾 Supabase에 저장</button>
+            <button onclick="cancelTrainMinuteUpload()" class="btn-exp" style="flex:1;padding:11px">취소</button>
+          </div>
+          <div id="train-minute-upload-msg" style="font-size:12px;margin-top:8px;min-height:16px;color:var(--text3)"></div>
+        </div>
+        <div id="train-minute-upload-msg-top" style="font-size:12px;margin-top:4px;min-height:16px;color:var(--text3)"></div>
+        <!-- 업로드된 훈련 롤링 파일 목록 -->
+        <div style="margin-top:1.2rem">
+          <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">📈 업로드된 훈련 롤링 데이터</div>
+          <div id="train-minute-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
+        </div>
+      </div>
     </div>
 
     <!-- 경기 엑셀 업로드 섹션 -->
@@ -5246,6 +5282,7 @@ function doImportPreset(){
 let _gpsParseData = [];   // 파싱된 GPS 데이터 임시 저장
 let _matchParseData = []; // 파싱된 경기 데이터 임시 저장
 let _minuteParseData = null; // 파싱된 1분 롤링 데이터 (rows + meta)
+let _trainMinuteParseData = null; // 파싱된 훈련 1분 롤링 데이터 (rows + meta)
 
 async function loadPlayerManagement(){
   const today = getKSTDateStr();
@@ -5298,7 +5335,7 @@ function setPlayerView(view){
   }
   if(view==='roster') loadRosterList();
   if(view==='wellness') initWellnessView();
-  if(view==='upload'){ setUploadTab('gps'); loadGpsHistory(); loadMatchHistory(); loadMinuteHistory(); }
+  if(view==='upload'){ setUploadTab('gps'); loadGpsHistory(); loadMatchHistory(); loadMinuteHistory(); loadTrainMinuteHistory(); }
   if(view==='match'){
     setMatchTab('list');
     loadMatchList();
@@ -9028,6 +9065,7 @@ function setUploadTab(tab){
     }
   });
   if(tab==='match'){ loadMatchHistory(); loadMinuteHistory(); }
+  if(tab==='gps'){ loadTrainMinuteHistory(); }
 }
 
 
@@ -14466,6 +14504,257 @@ function cancelMinuteUpload(){
   document.getElementById('minute-file-input').value = '';
   const msg = document.getElementById('minute-upload-msg');
   if(msg) msg.innerHTML = '';
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 훈련 1분 롤링 mpm 파일 — 파싱 / 저장 / 이력 / 삭제
+// ══════════════════════════════════════════════════════════════════
+
+// 파일명에서 YYYY-MM-DD + 라벨 추출
+function parseTrainMinuteFilename(fname){
+  const base = fname.replace(/\.(xlsx|xls)$/i,'');
+  // YYYY-MM-DD_라벨 / YYYY.MM.DD_라벨 / YYYY-MM-DD (라벨 없음)
+  let m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})(?:[_\s-]+(.+))?/);
+  if(m){
+    const date = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+    const label = (m[4]||'').trim() || '훈련';
+    return {date, label};
+  }
+  return null;
+}
+
+function handleTrainMinuteFileSelect(e){
+  const file = e.target.files[0];
+  if(file) parseTrainMinuteFile(file);
+}
+
+async function parseTrainMinuteFile(file){
+  const msgEl = document.getElementById('train-minute-upload-msg-top');
+  if(msgEl) msgEl.innerHTML = '<span style="color:var(--accent2)">⏳ 파싱 중...</span>';
+
+  const meta = parseTrainMinuteFilename(file.name);
+  if(!meta){
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 파일명에서 날짜 추출 실패: <code>${file.name}</code><br>형식: YYYY-MM-DD_분당이동거리.xlsx</span>`;
+    return;
+  }
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
+  const buf  = await file.arrayBuffer();
+  const wb   = XLSX.read(buf,{type:'array',cellDates:false});
+  const ws   = wb.Sheets[wb.SheetNames[0]];
+  const raw  = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+
+  if(!raw.length || !raw[0]){
+    if(msgEl) msgEl.innerHTML = '<span style="color:#ef4444">⚠️ 빈 파일</span>';
+    return;
+  }
+
+  const header = raw[0].map(h => (h||'').toString().trim());
+  const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+  const COL = {
+    name:   ci('Name'),
+    jersey: ci('Jersey'),
+    time:   ci('Time'),
+    mpm:    ci('Meterage Per Minute'),
+  };
+  const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
+
+  if(COL.name<0 || COL.mpm<0 || !FORMAT){
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락 (Name + Meterage Per Minute + (Jersey 또는 Time) 필요).<br>발견: ${header.join(', ')}</span>`;
+    return;
+  }
+
+  if(!_players.length){
+    const {data} = await supa.from('player_profiles').select('id,name');
+    _players = data || [];
+  }
+  const nameMap = {};
+  _players.forEach(p => { nameMap[p.name] = p.id; });
+
+  const rows = [];
+  const unknownPlayers = new Set();
+  const playersFound = new Set();
+  let invalidTime = 0;
+
+  for(const row of raw.slice(1)){
+    if(!row[COL.name]) continue;
+    const mpm = parseFloat(row[COL.mpm]);
+    if(isNaN(mpm)) continue;
+
+    let jersey, timeStr, minute;
+    if(FORMAT==='B'){
+      jersey = String(row[COL.name]).trim();
+      const t = row[COL.time];
+      if(t == null){ invalidTime++; continue; }
+      else if(t instanceof Date){
+        const hh = String(t.getUTCHours()).padStart(2,'0');
+        const mm = String(t.getUTCMinutes()).padStart(2,'0');
+        const ss = String(t.getUTCSeconds()).padStart(2,'0');
+        timeStr = `${hh}:${mm}:${ss}`;
+      } else {
+        timeStr = String(t).trim();
+      }
+      minute = hmsToMin(timeStr);
+    } else {
+      if(!row[COL.jersey]) continue;
+      jersey = String(row[COL.jersey]).trim();
+      const fullName = String(row[COL.name]).trim();
+      const parts = fullName.split(' - ');
+      timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
+      minute = hmsToMin(timeStr);
+    }
+    if(minute==null){ invalidTime++; continue; }
+
+    const pid = nameMap[jersey] || null;
+    if(!pid) unknownPlayers.add(jersey);
+    else playersFound.add(jersey);
+    rows.push({
+      session_date:  meta.date,
+      session_label: meta.label,
+      player_id:     pid,
+      player_name:   jersey,
+      minute,
+      mpm:           Math.round(mpm*100)/100,
+      raw_time:      timeStr,
+    });
+  }
+
+  _trainMinuteParseData = {meta, rows, unknownPlayers:[...unknownPlayers], playersFound:[...playersFound], invalidTime};
+
+  if(msgEl) msgEl.innerHTML = '';
+
+  if(!rows.length){
+    if(msgEl) msgEl.innerHTML = '<span style="color:#ef4444">⚠️ 저장할 행이 없습니다</span>';
+    return;
+  }
+
+  const previewEl = document.getElementById('train-minute-upload-preview');
+  const titleEl   = document.getElementById('train-minute-preview-title');
+  const sumEl     = document.getElementById('train-minute-preview-summary');
+  const dz        = document.getElementById('train-minute-drop-zone');
+  if(!previewEl || !titleEl || !sumEl) return;
+
+  const minutes = rows.map(r=>r.minute);
+  const minMin = Math.min(...minutes), maxMin = Math.max(...minutes);
+
+  titleEl.textContent = `📋 미리보기 — ${meta.date} [${meta.label}]`;
+  sumEl.innerHTML = `
+    <div style="display:grid;gap:6px">
+      <div>📊 총 <strong style="color:var(--text)">${rows.length.toLocaleString()}</strong>개 분당 레코드 · 시간 범위 <strong>${minMin}~${maxMin}분</strong></div>
+      <div>👥 매칭된 선수 (${playersFound.size}명): <span style="color:var(--text)">${[...playersFound].join(', ')||'-'}</span></div>
+      ${unknownPlayers.size?`<div style="color:#f59e0b">⚠️ 미등록 선수 (${unknownPlayers.size}명, player_id=null로 저장): ${[...unknownPlayers].join(', ')}</div>`:''}
+      ${invalidTime?`<div style="color:#f59e0b">⚠️ 시간 파싱 실패 ${invalidTime}행 제외</div>`:''}
+    </div>`;
+
+  if(dz) dz.style.display = 'none';
+  previewEl.style.display = 'block';
+}
+
+async function saveTrainMinuteData(){
+  const btn = document.getElementById('train-minute-save-btn');
+  const msg = document.getElementById('train-minute-upload-msg');
+  if(!_trainMinuteParseData || !_trainMinuteParseData.rows?.length){
+    if(msg) msg.textContent = '저장할 데이터가 없습니다'; return;
+  }
+
+  btn.textContent='저장 중...'; btn.disabled=true;
+
+  const {meta, rows} = _trainMinuteParseData;
+
+  // 같은 날짜+라벨 기존 데이터 삭제 후 재삽입
+  await supa.from('session_minute_records')
+    .delete().eq('session_date', meta.date).eq('session_label', meta.label);
+
+  const CHUNK = 500;
+  for(let i=0; i<rows.length; i+=CHUNK){
+    const slice = rows.slice(i, i+CHUNK);
+    const {error} = await supa.from('session_minute_records').insert(slice);
+    if(error){
+      if(msg) msg.innerHTML = `<span style="color:#ef4444">❌ 오류: ${error.message}</span>`;
+      btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
+      return;
+    }
+  }
+
+  const savedCount = rows.length;
+  _trainMinuteParseData = null;
+  document.getElementById('train-minute-upload-preview').style.display = 'none';
+  document.getElementById('train-minute-drop-zone').style.display = 'block';
+  document.getElementById('train-minute-file-input').value = '';
+  btn.textContent='💾 Supabase에 저장'; btn.disabled=false;
+  if(msg) msg.innerHTML='';
+
+  loadTrainMinuteHistory();
+
+  const dz = document.getElementById('train-minute-drop-zone');
+  if(dz){
+    const toast = document.createElement('div');
+    toast.style.cssText='background:#0a1f10;border:1px solid #22c55e;border-radius:8px;padding:10px 14px;font-size:13px;color:#4ade80;font-weight:600;margin-bottom:10px;text-align:center';
+    toast.textContent=`✅ ${meta.date} [${meta.label}] — ${savedCount.toLocaleString()}개 분당 레코드 저장 완료!`;
+    dz.parentNode.insertBefore(toast, dz);
+    setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 3500);
+  }
+}
+
+function cancelTrainMinuteUpload(){
+  _trainMinuteParseData = null;
+  document.getElementById('train-minute-upload-preview').style.display = 'none';
+  document.getElementById('train-minute-drop-zone').style.display = 'block';
+  document.getElementById('train-minute-file-input').value = '';
+  const msg = document.getElementById('train-minute-upload-msg');
+  if(msg) msg.innerHTML = '';
+}
+
+async function loadTrainMinuteHistory(){
+  const listEl = document.getElementById('train-minute-history-list');
+  if(!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
+
+  const {data, error} = await supa.from('session_minute_records')
+    .select('session_date,session_label,player_id,player_name,minute')
+    .order('session_date',{ascending:false}).limit(20000);
+
+  if(error || !data?.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">업로드된 훈련 롤링 데이터가 없습니다.</div>';
+    return;
+  }
+
+  const bySession = {};
+  data.forEach(r => {
+    const k = r.session_date+'||'+r.session_label;
+    if(!bySession[k]) bySession[k] = {date:r.session_date, label:r.session_label, players:new Set(), minutes:new Set()};
+    bySession[k].players.add(r.player_id || r.player_name);
+    bySession[k].minutes.add(r.minute);
+  });
+
+  window._trainMinuteHistoryMap = {};
+  const entries = Object.entries(bySession).sort((a,b)=>b[1].date.localeCompare(a[1].date));
+  entries.forEach(([k, info], i) => { window._trainMinuteHistoryMap[i] = {date:info.date, label:info.label}; });
+
+  const rows = entries.map(([k, info], i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${info.date}</span>
+          <span style="font-size:12px;color:var(--accent2)">[${info.label}]</span>
+          <span style="font-size:11px;color:var(--text3)">${info.players.size}명 · ${Math.min(...info.minutes)}~${Math.max(...info.minutes)}분</span>
+        </div>
+        <button onclick="deleteTrainMinuteByIdx(${i})"
+          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
+          🗑 삭제
+        </button>
+      </div>`).join('');
+
+  listEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">${rows}</div>`;
+}
+
+async function deleteTrainMinuteByIdx(idx){
+  const info = (window._trainMinuteHistoryMap||{})[idx];
+  if(!info) return;
+  if(!confirm(`${info.date} [${info.label}] 훈련 롤링 데이터를 삭제할까요?`)) return;
+  const {error} = await supa.from('session_minute_records')
+    .delete().eq('session_date', info.date).eq('session_label', info.label);
+  if(error){ alert('삭제 오류: '+error.message); return; }
+  loadTrainMinuteHistory();
 }
 
 async function loadMinuteHistory(){
