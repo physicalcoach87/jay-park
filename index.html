@@ -7855,6 +7855,30 @@ async function loadTwoWeekCal(baseDate){
     .gte('record_date', startStr)
     .lte('record_date', endStr);
 
+  // 최근 3경기 기준선 (match_records FT, band4=HIR↔running_high, band5=Sprint↔sprint)
+  const {data: matchFT} = await supa
+    .from('match_records')
+    .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
+    .eq('time_type','FT')
+    .order('match_date',{ascending:false})
+    .limit(200);
+  const mKeys3 = [...new Set((matchFT||[]).map(r=>r.match_date+'||'+r.opponent))]
+    .sort((a,b)=>b.localeCompare(a)).slice(0,3);
+  const mRows3 = (matchFT||[]).filter(r=>mKeys3.some(k=>k===r.match_date+'||'+r.opponent));
+  const mP100 = field => {
+    const vrs=mRows3.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    if(!vrs.length) return null;
+    return vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0)/vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0)*100;
+  };
+  window._matchRef3 = {
+    td:     mP100('td'),
+    hsr:    mP100('band4_td'),    // Band4(HIR) ↔ training running_high
+    sprint: mP100('band5_td'),    // Band5(Sprint) ↔ training sprint
+    accel:  mP100('accel'),
+    rhie:   mP100('rhie'),
+    games:  mKeys3.length,
+  };
+
   // 날짜별 집계
   const DOW = ['일','월','화','수','목','금','토'];
   const sessions = [];
@@ -7982,30 +8006,53 @@ function renderTwoWeekCal(){
       ? `<div style="font-size:9px;font-weight:600;text-align:center;padding:1px 3px;border-radius:3px;${mdBadgeStyle(s.topic)};margin-bottom:1px">${s.topic}</div>`
       : `<div style="font-size:9px;color:var(--text3);text-align:center">—</div>`;
 
+    const ref = window._matchRef3 || {};
+    const rPct = (val, refVal) => (val && refVal) ? Math.round(val/refVal*100) : null;
+    const pBadge = p => {
+      if(p==null) return '';
+      const c = p>=80?'#22c55e':p>=60?'#fbbf24':'#ef4444';
+      return `<span style="font-size:8px;color:${c};font-weight:700">${p}%</span>`;
+    };
+
     const metricsHtml = s.hasData ? `
       <div style="border-top:1px solid var(--border);padding-top:4px;margin-top:2px;display:flex;flex-direction:column;gap:2px">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:9px;color:var(--text3)">TD</span>
-          <span style="font-size:10px;font-weight:600;color:var(--accent2)">${s.td ? (s.td/1000).toFixed(1)+'k' : '—'}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;font-weight:600;color:var(--accent2)">${s.td ? (s.td/1000).toFixed(1)+'k' : '—'}</span>
+            ${pBadge(rPct(s.td, ref.td))}
+          </div>
         </div>
         <div style="height:2px;background:var(--surface2);border-radius:1px">
           <div style="height:2px;border-radius:1px;background:${barColor};width:${barPct}%"></div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:9px;color:var(--text3)">HSR</span>
-          <span style="font-size:10px;font-weight:600;color:#f59e0b">${s.hsr ?? '—'}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;font-weight:600;color:#f59e0b">${s.hsr ?? '—'}</span>
+            ${pBadge(rPct(s.hsr, ref.hsr))}
+          </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:9px;color:var(--text3)">Spr</span>
-          <span style="font-size:10px;font-weight:600;color:#ef4444">${s.sprint ?? '—'}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;font-weight:600;color:#ef4444">${s.sprint ?? '—'}</span>
+            ${pBadge(rPct(s.sprint, ref.sprint))}
+          </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:9px;color:var(--text3)">Acc</span>
-          <span style="font-size:10px;font-weight:600;color:#fb923c">${s.accel ?? '—'}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;font-weight:600;color:#fb923c">${s.accel ?? '—'}</span>
+            ${pBadge(rPct(s.accel, ref.accel))}
+          </div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:9px;color:var(--text3)">RHIE</span>
-          <span style="font-size:10px;font-weight:600;color:#34d399">${s.rhie ?? '—'}</span>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;font-weight:600;color:#34d399">${s.rhie ?? '—'}</span>
+            ${pBadge(rPct(s.rhie, ref.rhie))}
+          </div>
         </div>
       </div>` : `<div style="font-size:10px;color:var(--text3);text-align:center;margin-top:auto">—</div>`;
 
