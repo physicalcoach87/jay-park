@@ -13012,14 +13012,8 @@ async function generateMatchReport(){
             </div>
           </div>`;
 
-        // ── 경기일 기준 -6일 ~ 당일 고정 7컬럼 ──
-        const _mDate = new Date(date+'T00:00:00');
-        const _allDN  = ['일','월','화','수','목','금','토'];
-        const _weekDates = Array.from({length:7},(_,i)=>{ const d=new Date(_mDate); d.setDate(_mDate.getDate()-6+i); return d.toISOString().split('T')[0]; });
-
-        // ── 날짜→훈련데이터 맵 (MD '—' 제외) ──
-        const _dgMap = {};
-        _trainingDays.filter(t=>t.mdStage!=='—').forEach(t=>{ _dgMap[t.date]=t; });
+        // ── 유효 훈련일 (MD '—' 제외, 날짜순) ──
+        const _validDays = _trainingDays.filter(t=>t.mdStage!=='—');
 
         // ── 스탯 행 (label + value + % 인라인) ──
         const _statRow=(label,val,ref,color)=>`
@@ -13064,34 +13058,16 @@ async function generateMatchReport(){
           <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">RHIE</span><span style="color:#34d399;font-weight:600">${_curMatch.rhie?Math.round(_curMatch.rhie):'—'}</span></div>
           <div style="display:flex;justify-content:space-between;align-items:center;height:18px;font-size:10px"><span style="color:var(--text3)">결과</span><span style="font-weight:700;color:${resultColor}">${resultLabel}</span></div>`;
 
-        // ── 휴식 카드 내용 ──
-        const _restInner=`
-          <div style="height:30px;display:flex;align-items:center;margin-bottom:0">
-            <span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">휴식</span>
-          </div>
-          <div style="height:18px"></div>
-          <div style="border-top:1px solid var(--border);margin:4px 0"></div>
-          <div style="height:108px;display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:11px">Rest Day</div>`;
-
-        // ── 7컬럼 렌더 ──
-        const _cols = _weekDates.map(d=>{
-          const dn  = _allDN[new Date(d+'T00:00:00').getDay()];
-          const num = parseInt(d.slice(8),10);
-          const isMatch = d===date;
-          const t = _dgMap[d];
-          const hdrColor = isMatch?'#4ade80':t?'var(--text2)':'var(--text3)';
-          const numColor  = isMatch?'#4ade80':t?'var(--text)':'var(--text3)';
-          const hdr = `<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;padding:0 2px">
-            <span style="font-size:11px;color:${hdrColor};font-weight:600">${dn}</span>
-            <span style="font-size:17px;font-weight:700;color:${numColor}">${num}</span>
-          </div>`;
-          if(isMatch) return `<div style="flex:1;min-width:100px">${hdr}<div style="background:#14532d20;border:2px solid #4ade8070;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_matchInner}</div></div>`;
-          if(t)       return `<div style="flex:1;min-width:100px">${hdr}<div style="background:${_mdBg(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}40;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_trainInner(t)}</div></div>`;
-          return      `<div style="flex:1;min-width:80px">${hdr}<div style="background:var(--surface);border:1px dashed var(--border);border-radius:8px;padding:8px 10px;box-sizing:border-box">${_restInner}</div></div>`;
-        }).join('');
+        // ── 카드 렌더 (훈련일 순서대로 → MATCH 맨 오른쪽) ──
+        const _arrow = `<div style="display:flex;align-items:center;color:#334155;font-size:13px;padding:0 2px;align-self:center;margin-top:20px">→</div>`;
+        const _trainCards = _validDays.map(t=>
+          `<div style="flex:0 0 140px;min-width:140px"><div style="background:${_mdBg(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}40;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_trainInner(t)}</div></div>`
+        );
+        const _matchCard = `<div style="flex:0 0 140px;min-width:140px"><div style="background:#14532d20;border:2px solid #4ade8070;border-radius:8px;padding:8px 10px;box-sizing:border-box">${_matchInner}</div></div>`;
+        const _allCards = [..._trainCards, _matchCard].join(_arrow);
 
         return _refBar +
-          `<div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;align-items:flex-start">${_cols}</div>
+          `<div style="display:flex;gap:4px;overflow-x:auto;padding-bottom:4px;align-items:flex-start">${_allCards}</div>
           <div style="margin-top:8px;padding:6px 10px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
             <strong style="color:var(--text2)">% 기준 (경기 대비)</strong>&nbsp;
             <span style="color:#ef4444;font-weight:700">🔴 ≥80% 고부하</span> ·
@@ -13101,7 +13077,7 @@ async function generateMatchReport(){
       })();
 
     return card(`
-      ${secHead('📈','경기 준비 훈련 흐름 (MD-5 → Match)','M 세션 팀 평균 · TD% · HSR%는 최근 '+last3.length+'경기 팀 평균 기준')}
+      ${secHead('📈','경기 준비 훈련 흐름','M 세션 팀 평균 · TD% · HSR%는 최근 '+last3.length+'경기 팀 평균 기준')}
       ${_flowCard}
     `);
   })()}
