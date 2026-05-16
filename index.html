@@ -14842,34 +14842,39 @@ async function updateMatchMax(playerIds){
       }
       continue;
     }
-    const maxF=field=>Math.max(...rows.map(r=>parseFloat(r[field])||0));
+    // Match Max 전략: 전체 경기 중 상위 3개 평균값 사용
+    const top3AvgF=field=>{
+      const vals=rows.map(r=>parseFloat(r[field])||0).filter(v=>v>0).sort((a,b)=>b-a);
+      const top=vals.slice(0,3);
+      return top.length?top.reduce((a,b)=>a+b,0)/top.length:0;
+    };
 
-    // 최고속도: 경기 vs 훈련 전체 → 더 높은 값 사용 (진짜 Vmax)
-    const matchMaxSpd = maxF('max_speed');
+    // 최고속도: 단일 최대값 유지 (Vmax 기준) — 경기 vs 훈련 전체 중 높은 값 사용
+    const matchMaxSpd = Math.max(...rows.map(r=>parseFloat(r.max_speed)||0));
     const trueMaxSpeed = parseFloat(Math.max(matchMaxSpd, gpsMaxSpd).toFixed(1));
 
     const payload={
-      match_max_td:       Math.round(maxF('td')),
-      match_max_mpm:      parseFloat(maxF('mpm').toFixed(1)),
-      match_max_hir:      Math.round(maxF('hir_sprint')),
-      match_max_hsr:      Math.round(maxF('band4_td')),    // HSR 단독 (Band4)
-      match_max_sprint:   Math.round(maxF('band5_td')),    // Sprint 단독 (Band5)
-      match_max_band5_td: Math.round(maxF('band5_td')),
-      match_max_accel:    Math.round(maxF('accel')),
-      match_max_rhie:     Math.round(maxF('rhie')),
-      match_max_speed:    trueMaxSpeed,                    // 경기 + 훈련 전체 최대값
-      match_max_pl:       parseFloat(maxF('player_load').toFixed(1)),
-      match_max_fmp_run_m:parseFloat(maxF('fmp_run_m').toFixed(1)),
-      match_max_fmp_run_h:parseFloat(maxF('fmp_run_h').toFixed(1)),
-      match_max_fmp_dyn_m:parseFloat(maxF('fmp_dyn_m').toFixed(1)),
-      match_max_fmp_dyn_h:parseFloat(maxF('fmp_dyn_h').toFixed(1)),
+      match_max_td:       Math.round(top3AvgF('td')),
+      match_max_mpm:      parseFloat(top3AvgF('mpm').toFixed(1)),
+      match_max_hir:      Math.round(top3AvgF('hir_sprint')),
+      match_max_hsr:      Math.round(top3AvgF('band4_td')),    // HSR 단독 (Band4)
+      match_max_sprint:   Math.round(top3AvgF('band5_td')),    // Sprint 단독 (Band5)
+      match_max_band5_td: Math.round(top3AvgF('band5_td')),
+      match_max_accel:    Math.round(top3AvgF('accel')),
+      match_max_rhie:     Math.round(top3AvgF('rhie')),
+      match_max_speed:    trueMaxSpeed,                         // 경기 + 훈련 전체 최대값
+      match_max_pl:       parseFloat(top3AvgF('player_load').toFixed(1)),
+      match_max_fmp_run_m:parseFloat(top3AvgF('fmp_run_m').toFixed(1)),
+      match_max_fmp_run_h:parseFloat(top3AvgF('fmp_run_h').toFixed(1)),
+      match_max_fmp_dyn_m:parseFloat(top3AvgF('fmp_dyn_m').toFixed(1)),
+      match_max_fmp_dyn_h:parseFloat(top3AvgF('fmp_dyn_h').toFixed(1)),
       match_max_updated:  getKSTDateStr(),
     };
     await supa.from('player_profiles').update(payload).eq('id',pid);
     const p=_players.find(pl=>pl.id===pid);
     if(p) Object.assign(p,payload);
   }
-  console.log('Match Max 갱신 완료 (최고속도=경기+훈련 전체):', pids.length+'명');
+  console.log('Match Max 갱신 완료 (상위3경기 평균, 최고속도=경기+훈련 전체):', pids.length+'명');
 }
 
 // ── Match Max 전체 재계산 (기존 경기 데이터 기반) ─────────────────
@@ -15224,7 +15229,7 @@ async function loadMatchMax(){
 
   out.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
-      <div style="font-size:11px;color:var(--text3)">FT(풀타임) 기준 선수별 경기 최대값 — 훈련 강도 비교 기준</div>
+      <div style="font-size:11px;color:var(--text3)">FT(풀타임) 기준 상위 3경기 평균값 — 훈련 강도 비교 기준</div>
       <button onclick="recalcAllMatchMax()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 전체 재계산</button>
     </div>
     <div style="overflow-x:auto">
