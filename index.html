@@ -6221,6 +6221,22 @@ async function loadMorningReport(){
     const v = arr.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));
     return v.length ? v.reduce((a,b)=>a+b,0)/v.length : null;
   };
+  // 훈련 팀 평균: (M 지표 총합) / (M 훈련시간 총합) × mode(M 훈련시간)
+  // mode = 가장 많은 선수가 공유하는 훈련시간 (다수의 높은 시간)
+  const trainAvg = (arr,field) => {
+    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    if(!vrs.length) return null;
+    // 최빈값(mode) 계산
+    const durCount={};
+    vrs.forEach(r=>{
+      const d=Math.round(parseFloat(r.duration));
+      durCount[d]=(durCount[d]||0)+1;
+    });
+    const modeDur=parseFloat(Object.entries(durCount).sort((a,b)=>b[1]-a[1]||parseFloat(b[0])-parseFloat(a[0]))[0][0]);
+    const sumVal=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+    const sumDur=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    return sumDur>0?sumVal/sumDur*modeDur:null;
+  };
   // 팀 평균 /100분: 총합 / 출전시간 총합 × 100
   const p100Fields = (arr,field) => {
     const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
@@ -6271,9 +6287,9 @@ async function loadMorningReport(){
       : isPast ? (weekGps||[]).filter(r=>r.session_date===date&&(r.session_type2||'').trim().toUpperCase()==='S') : [];
     const topic = (weekGps||[]).find(r=>r.session_date===date&&['M','S'].includes((r.session_type2||'').trim().toUpperCase()))?.session_topic || null;
     const opp   = (weekGps||[]).find(r=>r.session_date===date)?.opponent || null;
-    const td   = dayGpsForRow.length ? p100Fields(dayGpsForRow,'td') : null;
-    const hsr  = dayGpsForRow.length ? p100Fields(dayGpsForRow,'running_high') : null;
-    const sp   = dayGpsForRow.length ? p100Fields(dayGpsForRow,'sprint') : null;
+    const td   = dayGpsForRow.length ? trainAvg(dayGpsForRow,'td') : null;
+    const hsr  = dayGpsForRow.length ? trainAvg(dayGpsForRow,'running_high') : null;
+    const sp   = dayGpsForRow.length ? trainAvg(dayGpsForRow,'sprint') : null;
     // sRPE from session_records (M 날만)
     const dayRpe28 = (rpe28||[]).filter(r=>r.record_date===date);
     const avgRpe = isTeamDay2&&dayRpe28.length ? dayRpe28.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/dayRpe28.length : 0;
@@ -6343,21 +6359,17 @@ async function loadMorningReport(){
   const weekAllGps = (weekGps||[]).filter(r=>r.session_date<=today&&(r.session_type2||'').trim().toUpperCase()==='M');
   const weekTeamDates = new Set(weekAllGps.map(r=>r.session_date));
 
-  // 날짜별 팀 평균 계산 후 합산 (전체 합산 X)
+  // 날짜별 팀 평균 계산 후 합산 (전체 합산 X) — (M 총합 / M 훈련시간 합) × max(M 훈련시간)
   const weekAvgByDate = {};
   weekTeamDates.forEach(date => {
     const dayGps = weekAllGps.filter(r=>r.session_date===date);
     if(!dayGps.length) return;
-    const avgF = field => {
-      const vals = dayGps.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));
-      return vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : 0;
-    };
     weekAvgByDate[date] = {
-      td:     avgF('td'),
-      hsr:    avgF('running_high'),
-      sprint: avgF('sprint'),
-      accel:  avgF('accel'),
-      rhie:   avgF('rhie'),
+      td:     trainAvg(dayGps,'td')           ||0,
+      hsr:    trainAvg(dayGps,'running_high') ||0,
+      sprint: trainAvg(dayGps,'sprint')       ||0,
+      accel:  trainAvg(dayGps,'accel')        ||0,
+      rhie:   trainAvg(dayGps,'rhie')         ||0,
     };
   });
   const weekDatesArr = [...weekTeamDates].sort();
@@ -6377,13 +6389,12 @@ async function loadMorningReport(){
   const yGpsS   = yGpsAll.filter(r => (r.session_type2||'').trim().toUpperCase() === 'S');
   const yGps    = yGpsM.length > 0 ? yGpsM : (yGpsS.length > 0 ? yGpsS : yGpsAll);
   const yAvg = field => yGps.length ? avgFields(yGps,field) : null;
-  const yP100 = field => p100Fields(yGps, field);
   const yDur    = yAvg('duration');
-  const yTD     = yP100('td');
-  const yHSR    = yP100('running_high');
-  const ySprint = yP100('sprint');
-  const yAccel  = yP100('accel');
-  const yRHIE   = yP100('rhie');
+  const yTD     = yGps.length ? trainAvg(yGps,'td')           : null;
+  const yHSR    = yGps.length ? trainAvg(yGps,'running_high') : null;
+  const ySprint = yGps.length ? trainAvg(yGps,'sprint')       : null;
+  const yAccel  = yGps.length ? trainAvg(yGps,'accel')        : null;
+  const yRHIE   = yGps.length ? trainAvg(yGps,'rhie')         : null;
   const yMS     = yAvg('max_speed');
   const yRpeRows = (rpe28||[]).filter(r=>r.record_date===yesterdayStr);
   const yRpeAvg = yRpeRows.length ? yRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/yRpeRows.length : null;
