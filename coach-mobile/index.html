@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="코치 앱">
+<title>부산아이파크 코치</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0f;
+  --surface: #13131a;
+  --surface2: #1c1c26;
+  --border: #2a2a3a;
+  --text: #f0f0f5;
+  --text2: #a0a0b8;
+  --text3: #606078;
+  --blue: #3b82f6;
+  --blue-dim: #1e3a5f;
+  --green: #22c55e;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --yellow: #eab308;
+  --accent: #6366f1;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  padding-bottom: 80px;
+}
+
+/* ── 로그인 ── */
+#login-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px;
+}
+#login-screen h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+#login-screen p { font-size: 13px; color: var(--text3); margin-bottom: 32px; }
+.login-form { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
+.login-form input {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 12px; padding: 14px 16px; font-size: 15px; outline: none; width: 100%;
+}
+.login-form input:focus { border-color: var(--blue); }
+.btn-primary {
+  background: var(--blue); color: #fff; border: none;
+  border-radius: 12px; padding: 14px 16px; font-size: 15px; font-weight: 600;
+  cursor: pointer; width: 100%; font-family: inherit;
+}
+.btn-primary:active { opacity: 0.8; }
+#login-error { font-size: 12px; color: var(--red); text-align: center; }
+
+/* ── 앱 ── */
+#app { display: none; }
+
+/* ── 헤더 ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,15,0.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px 10px;
+}
+.header-top { display: flex; justify-content: space-between; align-items: center; }
+.header-title { font-size: 16px; font-weight: 700; }
+.header-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
+.btn-logout {
+  font-size: 11px; color: var(--text3); background: var(--surface2);
+  border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px;
+  cursor: pointer; font-family: inherit;
+}
+
+/* ── 바텀 탭 ── */
+.bottom-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: rgba(19,19,26,0.96); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--border);
+  display: flex; padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: pointer; padding: 4px 0;
+}
+.nav-icon { font-size: 20px; line-height: 1; }
+.nav-label { font-size: 9px; color: var(--text3); }
+.nav-item.active .nav-label { color: var(--blue); }
+.nav-item.active .nav-icon { filter: brightness(1.3); }
+
+/* ── 콘텐츠 ── */
+.page { display: none; padding: 0; }
+.page.active { display: block; }
+
+/* ── 카드 ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 16px; padding: 16px; margin: 12px 16px;
+}
+.card-title {
+  font-size: 12px; font-weight: 600; color: var(--text3);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 6px;
+}
+.section-header {
+  font-size: 13px; font-weight: 600; color: var(--text2);
+  padding: 16px 16px 6px; display: flex; align-items: center; gap: 6px;
+}
+
+/* ── 지표 배지 ── */
+.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.stat-item {
+  background: var(--surface2); border-radius: 12px;
+  padding: 10px 8px; text-align: center;
+}
+.stat-label { font-size: 10px; color: var(--text3); margin-bottom: 3px; }
+.stat-value { font-size: 15px; font-weight: 600; }
+
+/* ── 선수 행 ── */
+.player-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 0; border-bottom: 1px solid var(--border);
+}
+.player-row:last-child { border-bottom: none; }
+.player-name { font-size: 14px; font-weight: 500; }
+.player-pos { font-size: 11px; color: var(--text3); margin-top: 1px; }
+
+/* ── 배지 ── */
+.badge {
+  font-size: 10px; padding: 3px 8px; border-radius: 20px;
+  font-weight: 600; white-space: nowrap;
+}
+.badge-red    { background: #3b121933; color: #f87171; border: 1px solid #ef444440; }
+.badge-amber  { background: #2a1a0033; color: #fbbf24; border: 1px solid #f59e0b40; }
+.badge-yellow { background: #1a1a0033; color: #fde047; border: 1px solid #eab30840; }
+.badge-green  { background: #05301633; color: #4ade80; border: 1px solid #22c55e40; }
+.badge-blue   { background: #1e3a5f33; color: #60a5fa; border: 1px solid #3b82f640; }
+.badge-gray   { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+
+/* ── Well 바 ── */
+.well-bar-wrap { margin-bottom: 10px; }
+.well-bar-header { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
+.well-bar-track { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.well-bar-fill { height: 100%; border-radius: 3px; }
+
+/* ── 알림 폼 ── */
+.notify-form { display: flex; flex-direction: column; gap: 10px; }
+.notify-form select, .notify-form textarea, .notify-form input[type=text] {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  border-radius: 12px; padding: 12px 14px; font-size: 14px;
+  font-family: inherit; outline: none; width: 100%; resize: none;
+}
+.notify-form select:focus,
+.notify-form textarea:focus,
+.notify-form input[type=text]:focus { border-color: var(--blue); }
+.notify-form textarea { min-height: 80px; }
+
+/* ── 버튼 ── */
+.btn-send {
+  background: var(--blue); color: #fff; border: none;
+  border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: inherit; width: 100%;
+}
+.btn-send:active { opacity: 0.8; }
+.btn-send:disabled { opacity: 0.4; cursor: default; }
+.btn-secondary {
+  background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 12px 14px; font-size: 13px; font-weight: 500;
+  cursor: pointer; font-family: inherit; width: 100%;
+}
+.btn-secondary:active { opacity: 0.8; }
+
+/* ── 새로고침 버튼 ── */
+.refresh-btn {
+  background: none; border: none; color: var(--text3); cursor: pointer;
+  font-size: 16px; padding: 4px;
+}
+
+/* ── 로딩 ── */
+.loading {
+  text-align: center; padding: 40px 20px;
+  font-size: 13px; color: var(--text3);
+}
+.spinner { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* ── 빈 상태 ── */
+.empty-state {
+  text-align: center; padding: 32px 16px;
+  background: var(--surface2); border-radius: 16px;
+  margin: 8px 0;
+}
+.empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+.empty-state p { font-size: 13px; color: var(--text3); }
+
+/* ── 부상 위험 카드 ── */
+.risk-card {
+  border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
+  border: 1px solid;
+}
+.risk-card-red    { background: #3b121920; border-color: #ef444450; }
+.risk-card-amber  { background: #2a1a0020; border-color: #f59e0b50; }
+.risk-card-yellow { background: #1a1a0020; border-color: #eab30850; }
+
+/* ── 선수 컨디션 상세 ── */
+.player-detail-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
+  display: flex; align-items: flex-end;
+}
+.player-detail-sheet {
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  width: 100%; max-height: 85vh; overflow-y: auto;
+}
+.sheet-handle {
+  width: 40px; height: 4px; background: var(--border);
+  border-radius: 2px; margin: 0 auto 16px;
+}
+
+/* ── 훈련 세션 행 ── */
+.session-row {
+  background: var(--surface2); border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.session-player { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.session-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+.session-stat { font-size: 11px; color: var(--text3); }
+.session-stat span { color: var(--text2); font-weight: 500; }
+
+/* ── 토스트 ── */
+.toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+  background: #1c2a1c; border: 1px solid #22c55e60; color: #4ade80;
+  border-radius: 12px; padding: 10px 20px; font-size: 13px; font-weight: 500;
+  z-index: 300; white-space: nowrap; opacity: 0;
+  transition: opacity 0.2s;
+}
+.toast.error { background: #2a1212; border-color: #ef444460; color: #f87171; }
+.toast.show { opacity: 1; }
+
+/* ── 구분선 ── */
+hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+</style>
+</head>
+<body>
+
+<!-- 로그인 -->
+<div id="login-screen">
+  <div style="font-size:36px;margin-bottom:12px">⚽</div>
+  <h1>부산아이파크</h1>
+  <p>코치 전용 모바일 앱</p>
+  <div class="login-form">
+    <input type="email" id="login-email" placeholder="이메일" autocomplete="email">
+    <input type="password" id="login-pw" placeholder="비밀번호" autocomplete="current-password">
+    <button class="btn-primary" onclick="doLogin()">로그인</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- 앱 -->
+<div id="app">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="header-title">⚽ 부산아이파크</div>
+        <div class="header-sub" id="header-sub">코치 모바일</div>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">로그아웃</button>
+    </div>
+  </div>
+
+  <!-- 페이지들 -->
+
+  <!-- 1. Morning Report -->
+  <div class="page active" id="page-morning">
+    <div id="morning-content">
+      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- 2. 웰니스 -->
+  <div class="page" id="page-wellness">
+    <div id="wellness-content">
+      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- 3. 부상 현황 -->
+  <div class="page" id="page-injury">
+    <div id="injury-content">
+      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- 4. 알림 발송 -->
+  <div class="page" id="page-notify">
+    <div class="card">
+      <div class="card-title">📢 알림 발송</div>
+      <div class="notify-form">
+        <select id="notify-target-type" onchange="onTargetTypeChange()">
+          <option value="all">전체 선수</option>
+          <option value="player">개인 선수</option>
+        </select>
+        <select id="notify-player" style="display:none">
+          <option value="">선수 선택...</option>
+        </select>
+        <input type="text" id="notify-title" placeholder="알림 제목">
+        <textarea id="notify-body" placeholder="알림 내용을 입력하세요"></textarea>
+        <button class="btn-send" onclick="sendNotification()">📨 발송하기</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔔 웰니스 리마인더</div>
+      <div id="reminder-list">
+        <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+      </div>
+      <button class="btn-secondary" style="margin-top:10px" onclick="sendAllReminders()">미응답 전체 리마인더 발송</button>
+    </div>
+  </div>
+
+  <!-- 5. 훈련 세션 -->
+  <div class="page" id="page-session">
+    <div id="session-content">
+      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- 바텀 탭 -->
+  <nav class="bottom-nav">
+    <div class="nav-item active" onclick="switchPage('morning',this)">
+      <div class="nav-icon">📋</div>
+      <div class="nav-label">리포트</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('wellness',this)">
+      <div class="nav-icon">💚</div>
+      <div class="nav-label">웰니스</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('injury',this)">
+      <div class="nav-icon">🩹</div>
+      <div class="nav-label">부상</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('notify',this)">
+      <div class="nav-icon">📢</div>
+      <div class="nav-label">알림</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('session',this)">
+      <div class="nav-icon">🏃</div>
+      <div class="nav-label">훈련</div>
+    </div>
+  </nav>
+</div>
+
+<!-- 선수 상세 시트 -->
+<div class="player-detail-overlay" id="player-overlay" style="display:none" onclick="closePlayerOverlay(event)">
+  <div class="player-detail-sheet" id="player-detail-sheet">
+    <div class="sheet-handle"></div>
+    <div id="player-detail-content"></div>
+  </div>
+</div>
+
+<!-- 토스트 -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Supabase ──────────────────────────────────────────────
+const SUPA_URL = 'https://gmrhkbddhzpfqzkhuvgf.supabase.co';
+const SUPA_KEY = 'sb_publishable_sj1Pro0Pwv3i-RzQdHsEPw_WLJUsa9V';
+const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
+
+let currentUser = null;
+let _players = [];
+let _loadedPages = {};
+
+// ── KST 날짜 ─────────────────────────────────────────────
+function getKSTDateStr(d) {
+  const dt = d ? new Date(d) : new Date();
+  const kst = new Date(dt.getTime() + 9 * 60 * 60 * 1000);
+  return kst.toISOString().split('T')[0];
+}
+
+// ── 토스트 ───────────────────────────────────────────────
+function showToast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '') + ' show';
+  setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 2500);
+}
+
+// ── 로그인 ───────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pw = document.getElementById('login-pw').value;
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!email || !pw) { errEl.textContent = '이메일과 비밀번호를 입력하세요'; return; }
+
+  const { data, error } = await supa.auth.signInWithPassword({ email, password: pw });
+  if (error) { errEl.textContent = '로그인 실패: ' + error.message; return; }
+  currentUser = data.user;
+  initApp();
+}
+
+async function doLogout() {
+  await supa.auth.signOut();
+  currentUser = null;
+  _players = [];
+  _loadedPages = {};
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+// ── 인증 상태 체크 ────────────────────────────────────────
+supa.auth.onAuthStateChange((event, session) => {
+  if (session?.user && !currentUser) {
+    currentUser = session.user;
+    initApp();
+  }
+});
+
+async function initApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+  document.getElementById('header-sub').textContent = currentUser.email;
+
+  // 선수 목록 로드
+  const { data } = await supa.from('player_profiles').select('*').order('name');
+  _players = data || [];
+
+  // 알림 탭 선수 셀렉트 채우기
+  const sel = document.getElementById('notify-player');
+  _players.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.name} (${p.position || '—'})`;
+    sel.appendChild(opt);
+  });
+
+  // 첫 페이지 로드
+  loadMorningReport();
+  loadReminderList();
+}
+
+// ── 탭 전환 ──────────────────────────────────────────────
+function switchPage(page, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  el.classList.add('active');
+
+  if (!_loadedPages[page]) {
+    _loadedPages[page] = true;
+    if (page === 'wellness') loadWellness();
+    if (page === 'injury') loadInjury();
+    if (page === 'session') loadSession();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// 1. MORNING REPORT
+// ═══════════════════════════════════════════════════════
+async function loadMorningReport() {
+  const el = document.getElementById('morning-content');
+  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+
+  const today = getKSTDateStr();
+  const now = new Date();
+  const since7 = new Date(now); since7.setDate(now.getDate() - 7);
+  const since7Str = since7.toISOString().split('T')[0];
+  const since28 = new Date(now); since28.setDate(now.getDate() - 28);
+  const since28Str = since28.toISOString().split('T')[0];
+
+  const [
+    { data: todayWell },
+    { data: rpe28 },
+    { data: gps28 },
+    { data: well7 },
+    { data: injuredNow },
+  ] = await Promise.all([
+    supa.from('wellness_records')
+      .select('player_id,fatigue,sleep_quality,stress,muscle_soreness')
+      .eq('record_date', today),
+    supa.from('session_records')
+      .select('player_id,record_date,rpe,duration')
+      .gte('record_date', since28Str),
+    supa.from('gps_records')
+      .select('player_id,session_date,max_speed,duration,td,sprint,session_type2')
+      .gte('session_date', since28Str),
+    supa.from('wellness_records')
+      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
+      .gte('record_date', since7Str),
+    supa.from('injury_records')
+      .select('player_id,status')
+      .in('status', ['치료중', '재활중', '부분 참여']),
+  ]);
+
+  const injuredIds = new Set((injuredNow || []).map(r => r.player_id));
+
+  // 팀 웰니스 평균
+  const twArr = todayWell || [];
+  const wAvg = f => twArr.length ? (twArr.reduce((a, r) => a + (r[f] || 0), 0) / twArr.length) : null;
+  const wFat = wAvg('fatigue'), wSleep = wAvg('sleep_quality');
+  const wStress = wAvg('stress'), wMuscle = wAvg('muscle_soreness');
+  const respCount = twArr.length;
+  const noRespCount = _players.length - respCount;
+
+  const wColor = v => !v ? 'var(--text3)' : v >= 4 ? '#22c55e' : v >= 3 ? '#eab308' : v >= 2 ? '#f97316' : '#ef4444';
+
+  // 부상 위험 분석 (CRI)
+  const rpeMap = {};
+  (rpe28 || []).forEach(r => {
+    if (!rpeMap[r.player_id]) rpeMap[r.player_id] = [];
+    rpeMap[r.player_id].push({ date: r.record_date, rpe: parseFloat(r.rpe) || 0, dur: parseFloat(r.duration) || 0 });
+  });
+
+  const riskList = [];
+  for (const p of _players) {
+    if (injuredIds.has(p.id)) continue;
+    const prpe = rpeMap[p.id] || [];
+    const pgps = (gps28 || []).filter(r => r.player_id === p.id);
+    if (!prpe.length && !pgps.length) continue;
+
+    const rpeMap2 = {};
+    prpe.forEach(r => { rpeMap2[r.date] = { rpe: r.rpe, dur: r.dur }; });
+    pgps.forEach(r => { if (!rpeMap2[r.session_date]) rpeMap2[r.session_date] = { rpe: 0, dur: parseFloat(r.duration) || 0 }; });
+    const sessions = Object.entries(rpeMap2).map(([d, v]) => ({ date: d, rpe: v.rpe, dur: v.dur }));
+    const gpsSess = pgps.map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed) || 0 }));
+
+    const acwrData = calcACWR(sessions, today);
+    const mss = parseFloat(p.mss) || 0;
+    const mvExp = mss > 0 ? calcMVExposure(gpsSess, mss, today) : null;
+    const todayW = (well7 || []).find(r => r.player_id === p.id && r.record_date === today) || null;
+    const p7well = (well7 || []).filter(r => r.player_id === p.id);
+    const wellData = (todayW && p7well.length > 1) ? calcWellnessRisk(p7well.slice(1), todayW) : null;
+    const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
+    if (risk.level !== 'green') riskList.push({ player: p, risk, acwr: acwrData.acwr });
+  }
+  riskList.sort((a, b) => ({ red: 0, amber: 1, yellow: 2 }[a.risk.level] - { red: 0, amber: 1, yellow: 2 }[b.risk.level]));
+
+  const levelCfg = {
+    red:    { cls: 'risk-card-red',    badge: 'badge-red',    label: '🔴 고위험' },
+    amber:  { cls: 'risk-card-amber',  badge: 'badge-amber',  label: '🟠 주의' },
+    yellow: { cls: 'risk-card-yellow', badge: 'badge-yellow', label: '🟡 모니터링' },
+  };
+
+  const riskHtml = riskList.length
+    ? riskList.map(({ player, risk, acwr }) => {
+        const cfg = levelCfg[risk.level];
+        return `<div class="risk-card ${cfg.cls}" onclick="showPlayerDetail('${player.id}')">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <div>
+              <span style="font-size:14px;font-weight:600">${player.name}</span>
+              <span style="font-size:11px;color:var(--text3);margin-left:6px">${player.position || '—'} · CRI ${risk.score}</span>
+            </div>
+            <span class="badge ${cfg.badge}">${cfg.label}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3)">${risk.flags.slice(0, 2).map(f => '• ' + f.msg).join('<br>')}</div>
+        </div>`;
+      }).join('')
+    : `<div class="empty-state"><div class="icon">🟢</div><p>전 선수 정상 — 위험 선수 없음</p></div>`;
+
+  // 웰니스 바
+  const wBarHtml = (label, icon, val) => `
+    <div class="well-bar-wrap">
+      <div class="well-bar-header">
+        <span style="color:var(--text3)">${icon} ${label}</span>
+        <span style="color:${wColor(val)};font-weight:500">${val ? val.toFixed(1) : '—'} / 5</span>
+      </div>
+      <div class="well-bar-track">
+        <div class="well-bar-fill" style="width:${val ? (val / 5 * 100).toFixed(0) : 0}%;background:${wColor(val)}"></div>
+      </div>
+    </div>`;
+
+  el.innerHTML = `
+    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;color:var(--text3)">${today} 기준</div>
+      <button class="refresh-btn" onclick="loadMorningReport()">🔄</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">💚 팀 웰니스 <span style="font-size:11px;font-weight:400;color:var(--text3)">${respCount}명 응답 · 미응답 ${noRespCount}명</span></div>
+      ${wBarHtml('피로도', '😴', wFat)}
+      ${wBarHtml('수면', '🌙', wSleep)}
+      ${wBarHtml('스트레스', '🧠', wStress)}
+      ${wBarHtml('근육통', '💪', wMuscle)}
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚠️ 부상 위험 선수 <span style="font-size:11px;font-weight:400;color:var(--text3)">${riskList.length}명</span></div>
+      ${riskHtml}
+    </div>
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// 2. 웰니스 현황
+// ═══════════════════════════════════════════════════════
+async function loadWellness() {
+  const el = document.getElementById('wellness-content');
+  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+
+  const today = getKSTDateStr();
+  const { data: todayWell } = await supa.from('wellness_records')
+    .select('player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
+    .eq('record_date', today);
+
+  const wellMap = {};
+  (todayWell || []).forEach(r => { wellMap[r.player_id] = r; });
+
+  const responded = _players.filter(p => wellMap[p.id]);
+  const noResp = _players.filter(p => !wellMap[p.id]);
+
+  const wColor = v => !v ? 'var(--text3)' : v >= 4 ? '#22c55e' : v >= 3 ? '#eab308' : v >= 2 ? '#f97316' : '#ef4444';
+  const scoreColor = v => !v ? 'var(--text3)' : v >= 16 ? '#22c55e' : v >= 12 ? '#eab308' : '#ef4444';
+
+  const playerRow = p => {
+    const w = wellMap[p.id];
+    const total = w ? (w.fatigue || 0) + (w.sleep_quality || 0) + (w.stress || 0) + (w.muscle_soreness || 0) : 0;
+    const worstField = w ? ['fatigue', 'sleep_quality', 'stress', 'muscle_soreness']
+      .reduce((a, b) => (w[a] || 5) < (w[b] || 5) ? a : b) : null;
+    const worstLabel = { fatigue: '피로', sleep_quality: '수면', stress: '스트레스', muscle_soreness: '근육통' };
+
+    return `<div class="player-row" onclick="showPlayerDetail('${p.id}')">
+      <div>
+        <div class="player-name">${p.name}</div>
+        <div class="player-pos">${p.position || '—'}${worstField && w[worstField] <= 2 ? ` · ${worstLabel[worstField]} ⚠️` : ''}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:16px;font-weight:600;color:${scoreColor(total)}">${total}</div>
+        <div style="font-size:10px;color:var(--text3)">/ 20</div>
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;color:var(--text3)">${today} 웰니스</div>
+      <button class="refresh-btn" onclick="_loadedPages['wellness']=false;loadWellness()">🔄</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">${responded.length}명</span></div>
+      ${responded.length
+        ? responded.sort((a, b) => {
+            const wa = wellMap[a.id]; const wb = wellMap[b.id];
+            const ta = wa ? (wa.fatigue||0)+(wa.sleep_quality||0)+(wa.stress||0)+(wa.muscle_soreness||0) : 20;
+            const tb = wb ? (wb.fatigue||0)+(wb.sleep_quality||0)+(wb.stress||0)+(wb.muscle_soreness||0) : 20;
+            return ta - tb;
+          }).map(playerRow).join('')
+        : '<div class="empty-state"><p>오늘 응답한 선수가 없어요</p></div>'}
+    </div>
+
+    ${noResp.length ? `
+    <div class="card">
+      <div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">${noResp.length}명</span></div>
+      ${noResp.map(p => `<div class="player-row">
+        <div>
+          <div class="player-name">${p.name}</div>
+          <div class="player-pos">${p.position || '—'}</div>
+        </div>
+        <span class="badge badge-gray">미응답</span>
+      </div>`).join('')}
+    </div>` : ''}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// 3. 부상 현황
+// ═══════════════════════════════════════════════════════
+async function loadInjury() {
+  const el = document.getElementById('injury-content');
+  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+
+  const { data: injuries } = await supa.from('injury_records')
+    .select('*, player_profiles(name, position)')
+    .in('status', ['치료중', '재활중', '부분 참여', '복귀'])
+    .order('injury_date', { ascending: false });
+
+  const statusCfg = {
+    '치료중':   { badge: 'badge-red',    emoji: '🔴' },
+    '재활중':   { badge: 'badge-amber',  emoji: '🟠' },
+    '부분 참여': { badge: 'badge-yellow', emoji: '🟡' },
+    '복귀':     { badge: 'badge-green',  emoji: '🟢' },
+  };
+
+  const daysSince = d => {
+    if (!d) return null;
+    return Math.floor((new Date() - new Date(d)) / 86400000);
+  };
+
+  const activeInjuries = (injuries || []).filter(r => r.status !== '복귀');
+  const recovered = (injuries || []).filter(r => r.status === '복귀').slice(0, 5);
+
+  const injuryCard = r => {
+    const cfg = statusCfg[r.status] || { badge: 'badge-gray', emoji: '—' };
+    const days = daysSince(r.injury_date);
+    const player = r.player_profiles;
+    return `<div class="player-row">
+      <div>
+        <div class="player-name">${player?.name || '—'}</div>
+        <div class="player-pos">${player?.position || '—'} · ${r.body_part || '—'} · ${r.injury_type || '—'}</div>
+        ${r.return_date ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">복귀 예정: ${r.return_date}</div>` : ''}
+      </div>
+      <div style="text-align:right">
+        <span class="badge ${cfg.badge}">${cfg.emoji} ${r.status}</span>
+        ${days !== null ? `<div style="font-size:10px;color:var(--text3);margin-top:4px">${days}일째</div>` : ''}
+      </div>
+    </div>`;
+  };
+
+  el.innerHTML = `
+    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;color:var(--text3)">부상 선수 현황</div>
+      <button class="refresh-btn" onclick="_loadedPages['injury']=false;loadInjury()">🔄</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🩹 현재 부상 <span style="font-size:11px;font-weight:400;color:var(--text3)">${activeInjuries.length}명</span></div>
+      ${activeInjuries.length
+        ? activeInjuries.map(injuryCard).join('')
+        : '<div class="empty-state"><div class="icon">✅</div><p>현재 부상 선수 없음</p></div>'}
+    </div>
+
+    ${recovered.length ? `
+    <div class="card">
+      <div class="card-title">✅ 최근 복귀</div>
+      ${recovered.map(injuryCard).join('')}
+    </div>` : ''}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// 4. 알림 발송
+// ═══════════════════════════════════════════════════════
+function onTargetTypeChange() {
+  const type = document.getElementById('notify-target-type').value;
+  document.getElementById('notify-player').style.display = type === 'player' ? 'block' : 'none';
+}
+
+async function sendNotification() {
+  const targetType = document.getElementById('notify-target-type').value;
+  const playerId = document.getElementById('notify-player').value;
+  const title = document.getElementById('notify-title').value.trim();
+  const body = document.getElementById('notify-body').value.trim();
+
+  if (!title || !body) { showToast('제목과 내용을 입력하세요', true); return; }
+  if (targetType === 'player' && !playerId) { showToast('선수를 선택하세요', true); return; }
+
+  const btn = document.querySelector('#page-notify .btn-send');
+  btn.disabled = true; btn.textContent = '발송 중...';
+
+  try {
+    if (targetType === 'all') {
+      const inserts = _players.map(p => ({
+        title, body,
+        target_type: 'player',
+        target_value: p.id,
+        created_by: currentUser?.email || 'coach',
+      }));
+      await supa.from('notifications').insert(inserts);
+      showToast(`✅ 전체 ${_players.length}명에게 발송 완료`);
+    } else {
+      await supa.from('notifications').insert({
+        title, body,
+        target_type: 'player',
+        target_value: playerId,
+        created_by: currentUser?.email || 'coach',
+      });
+      const pName = _players.find(p => p.id === playerId)?.name || '';
+      showToast(`✅ ${pName}에게 발송 완료`);
+    }
+    document.getElementById('notify-title').value = '';
+    document.getElementById('notify-body').value = '';
+  } catch (e) {
+    showToast('발송 실패: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '📨 발송하기';
+  }
+}
+
+// ── 웰니스 리마인더 ────────────────────────────────────
+async function loadReminderList() {
+  const el = document.getElementById('reminder-list');
+  const today = getKSTDateStr();
+  const { data: todayWell } = await supa.from('wellness_records')
+    .select('player_id').eq('record_date', today);
+
+  const respondedIds = new Set((todayWell || []).map(r => r.player_id));
+  const noResp = _players.filter(p => !respondedIds.has(p.id));
+
+  if (!noResp.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>전원 웰니스 입력 완료</p></div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">미응답 ${noResp.length}명</div>
+    ${noResp.map(p => `<div class="player-row">
+      <div>
+        <div class="player-name">${p.name}</div>
+        <div class="player-pos">${p.position || '—'}</div>
+      </div>
+      <button onclick="sendOneReminder('${p.id}','${p.name}')"
+        style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);
+        color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit">
+        📨 발송
+      </button>
+    </div>`).join('')}
+  `;
+}
+
+async function sendOneReminder(playerId, playerName) {
+  await supa.from('notifications').insert({
+    title: '웰니스 입력 요청',
+    body: '오늘 컨디션을 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💚',
+    target_type: 'player',
+    target_value: playerId,
+    created_by: currentUser?.email || 'coach',
+  });
+  showToast(`✅ ${playerName}에게 리마인더 발송`);
+}
+
+async function sendAllReminders() {
+  const today = getKSTDateStr();
+  const { data: todayWell } = await supa.from('wellness_records')
+    .select('player_id').eq('record_date', today);
+  const respondedIds = new Set((todayWell || []).map(r => r.player_id));
+  const noResp = _players.filter(p => !respondedIds.has(p.id));
+
+  if (!noResp.length) { showToast('전원 이미 입력 완료!'); return; }
+
+  const inserts = noResp.map(p => ({
+    title: '웰니스 입력 요청',
+    body: '오늘 컨디션을 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💚',
+    target_type: 'player',
+    target_value: p.id,
+    created_by: currentUser?.email || 'coach',
+  }));
+  await supa.from('notifications').insert(inserts);
+  showToast(`✅ ${noResp.length}명에게 리마인더 발송 완료`);
+  loadReminderList();
+}
+
+// ═══════════════════════════════════════════════════════
+// 5. 오늘 훈련 세션
+// ═══════════════════════════════════════════════════════
+async function loadSession() {
+  const el = document.getElementById('session-content');
+  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+
+  const today = getKSTDateStr();
+  const yesterday = (() => {
+    const d = new Date(); d.setDate(d.getDate() - 1);
+    return getKSTDateStr(d);
+  })();
+
+  const [{ data: todayGps }, { data: todayRpe }] = await Promise.all([
+    supa.from('gps_records')
+      .select('*, player_profiles(name,position)')
+      .eq('session_date', today)
+      .order('td', { ascending: false }),
+    supa.from('session_records')
+      .select('player_id,rpe,duration')
+      .eq('record_date', today),
+  ]);
+
+  const targetDate = (todayGps && todayGps.length) ? today : yesterday;
+  let displayGps = todayGps || [];
+  let displayRpe = todayRpe || [];
+
+  // 오늘 데이터 없으면 전날 조회
+  if (!displayGps.length) {
+    const [{ data: yGps }, { data: yRpe }] = await Promise.all([
+      supa.from('gps_records')
+        .select('*, player_profiles(name,position)')
+        .eq('session_date', yesterday)
+        .order('td', { ascending: false }),
+      supa.from('session_records')
+        .select('player_id,rpe,duration')
+        .eq('record_date', yesterday),
+    ]);
+    displayGps = yGps || [];
+    displayRpe = yRpe || [];
+  }
+
+  const rpeMap = {};
+  displayRpe.forEach(r => { rpeMap[r.player_id] = r; });
+
+  // 팀 평균 (M 기준)
+  const mGps = displayGps.filter(r => (r.session_type2 || '').trim().toUpperCase() === 'M');
+  const useGps = mGps.length ? mGps : displayGps;
+  const avg = f => {
+    const vals = useGps.map(r => parseFloat(r[f]) || 0).filter(v => v > 0);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+
+  const fmt = (v, dec = 1) => v !== null ? v.toFixed(dec) : '—';
+  const sessionTopic = displayGps[0]?.session_topic || '—';
+
+  el.innerHTML = `
+    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
+      <div style="font-size:13px;color:var(--text3)">${targetDate} · ${sessionTopic}</div>
+      <button class="refresh-btn" onclick="_loadedPages['session']=false;loadSession()">🔄</button>
+    </div>
+
+    ${displayGps.length ? `
+    <div class="card">
+      <div class="card-title">📊 팀 평균 ${mGps.length ? '(M기준)' : ''}</div>
+      <div class="stat-grid">
+        <div class="stat-item">
+          <div class="stat-label">TD</div>
+          <div class="stat-value" style="color:#60a5fa">${fmt(avg('td'))} <span style="font-size:10px;color:var(--text3)">km</span></div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">HSR</div>
+          <div class="stat-value" style="color:#a78bfa">${avg('running_high') !== null ? Math.round(avg('running_high')) : '—'} <span style="font-size:10px;color:var(--text3)">m</span></div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-label">Sprint</div>
+          <div class="stat-value" style="color:#f472b6">${avg('sprint') !== null ? Math.round(avg('sprint')) : '—'} <span style="font-size:10px;color:var(--text3)">m</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">👥 선수별 데이터 <span style="font-size:11px;font-weight:400;color:var(--text3)">${displayGps.length}명</span></div>
+      ${displayGps.map(r => {
+        const rpe = rpeMap[r.player_id];
+        const sRPE = rpe ? (parseFloat(rpe.rpe) * parseFloat(rpe.duration)).toFixed(0) : null;
+        const isM = (r.session_type2 || '').trim().toUpperCase() === 'M';
+        return `<div class="player-row" onclick="showPlayerDetail('${r.player_id}')">
+          <div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span class="player-name">${r.player_profiles?.name || '—'}</span>
+              <span class="badge ${isM ? 'badge-blue' : 'badge-gray'}" style="font-size:9px;padding:1px 5px">${isM ? 'M' : 'S'}</span>
+            </div>
+            <div class="session-stats" style="margin-top:4px">
+              <span class="session-stat">TD <span>${fmt(r.td)} km</span></span>
+              <span class="session-stat">HSR <span>${r.running_high ? Math.round(r.running_high) : '—'} m</span></span>
+              ${sRPE ? `<span class="session-stat">sRPE <span>${sRPE}</span></span>` : ''}
+            </div>
+          </div>
+          <div style="text-align:right;font-size:12px;color:var(--text3)">${r.duration ? Math.round(r.duration) + 'min' : '—'}</div>
+        </div>`;
+      }).join('')}
+    </div>` : `
+    <div class="card">
+      <div class="empty-state"><div class="icon">🏃</div><p>오늘 훈련 데이터 없음<br><span style="font-size:11px">GPS 업로드 후 표시됩니다</span></p></div>
+    </div>`}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+// 선수 상세 시트
+// ═══════════════════════════════════════════════════════
+async function showPlayerDetail(playerId) {
+  const overlay = document.getElementById('player-overlay');
+  const content = document.getElementById('player-detail-content');
+  overlay.style.display = 'flex';
+  content.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+
+  const player = _players.find(p => p.id === playerId);
+  if (!player) return;
+
+  const today = getKSTDateStr();
+  const since28 = new Date(); since28.setDate(since28.getDate() - 28);
+  const since28Str = since28.toISOString().split('T')[0];
+  const since7 = new Date(); since7.setDate(since7.getDate() - 7);
+  const since7Str = since7.toISOString().split('T')[0];
+
+  const [{ data: rpe28 }, { data: gps14 }, { data: well7 }] = await Promise.all([
+    supa.from('session_records').select('record_date,rpe,duration').eq('player_id', playerId).gte('record_date', since28Str),
+    supa.from('gps_records').select('session_date,td,sprint,max_speed,duration,session_type2').eq('player_id', playerId).gte('session_date', since7Str).order('session_date', { ascending: false }),
+    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness').eq('player_id', playerId).gte('record_date', since7Str).order('record_date', { ascending: false }),
+  ]);
+
+  const sessions = (rpe28 || []).map(r => ({ date: r.record_date, rpe: parseFloat(r.rpe) || 0, dur: parseFloat(r.duration) || 0 }));
+  const acwrData = calcACWR(sessions, today);
+  const mss = parseFloat(player.mss) || 0;
+  const gpsSess = (gps14 || []).map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed) || 0 }));
+  const mvExp = mss > 0 ? calcMVExposure(gpsSess, mss, today) : null;
+  const todayW = (well7 || []).find(r => r.record_date === today);
+
+  const acwrColor = v => !v ? 'var(--text3)' : v > 1.5 ? '#ef4444' : v > 1.3 ? '#f59e0b' : v < 0.8 ? '#eab308' : '#22c55e';
+  const acwrLabel = v => !v ? '—' : v > 1.5 ? '고위험' : v > 1.3 ? '주의' : v < 0.8 ? '과소부하' : '안전';
+  const wColor = v => !v ? 'var(--text3)' : v >= 4 ? '#22c55e' : v >= 3 ? '#eab308' : v >= 2 ? '#f97316' : '#ef4444';
+
+  const recentGps = (gps14 || []).slice(0, 5);
+
+  content.innerHTML = `
+    <div style="margin-bottom:16px">
+      <div style="font-size:18px;font-weight:700">${player.name}</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:2px">${player.position || '—'} · MSS ${mss || '—'} km/h</div>
+    </div>
+
+    <div class="stat-grid" style="margin-bottom:16px">
+      <div class="stat-item">
+        <div class="stat-label">ACWR</div>
+        <div class="stat-value" style="color:${acwrColor(acwrData.acwr)}">${acwrData.acwr ? acwrData.acwr.toFixed(2) : '—'}</div>
+        <div style="font-size:10px;color:${acwrColor(acwrData.acwr)};margin-top:2px">${acwrLabel(acwrData.acwr)}</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">MSS 노출</div>
+        <div class="stat-value" style="color:${mvExp && mvExp.daysSinceExposed >= 14 ? '#ef4444' : mvExp && mvExp.daysSinceExposed >= 7 ? '#f59e0b' : '#22c55e'}">${mvExp ? mvExp.daysSinceExposed + 'd' : '—'}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">미노출 일수</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-label">오늘 웰니스</div>
+        ${todayW
+          ? `<div class="stat-value" style="color:${wColor(((todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0))/4)}">${((todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0))}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">/ 20</div>`
+          : '<div class="stat-value" style="color:var(--text3)">미입력</div>'}
+      </div>
+    </div>
+
+    ${recentGps.length ? `
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:8px">최근 훈련 데이터</div>
+      ${recentGps.map(r => `
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+          <span style="color:var(--text3)">${r.session_date}</span>
+          <span>TD <b>${parseFloat(r.td).toFixed(1)}</b>km · Sprint <b>${r.sprint ? Math.round(r.sprint) : '—'}m</b></span>
+        </div>`).join('')}
+    </div>` : ''}
+
+    <button class="btn-secondary" onclick="closePlayerOverlay()">닫기</button>
+  `;
+}
+
+function closePlayerOverlay(e) {
+  if (!e || e.target === document.getElementById('player-overlay')) {
+    document.getElementById('player-overlay').style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// CRI 계산 함수 (기존 코치앱 동일)
+// ═══════════════════════════════════════════════════════
+function calcACWR(sessions, today) {
+  const todayD = new Date(today);
+  const diff = d => Math.floor((todayD - new Date(d)) / 86400000);
+  let acute = 0, chronicSum = 0, chronicDays = 0;
+  sessions.forEach(s => {
+    const sRPE = (parseFloat(s.rpe) || 0) * (parseFloat(s.dur) || 0);
+    if (!sRPE) return;
+    const d = diff(s.date);
+    if (d >= 0 && d < 7) acute += sRPE;
+    if (d >= 0 && d < 28) { chronicSum += sRPE; chronicDays++; }
+  });
+  const chronic = chronicDays > 0 ? (chronicSum / chronicDays) * 7 : 0;
+  const acwr = chronic > 0 ? acute / chronic : null;
+  return { acute: Math.round(acute), chronic: Math.round(chronic), acwr };
+}
+
+function calcMVExposure(sessions, mss, today) {
+  if (!mss || mss <= 0) return null;
+  const zone5 = mss * 0.9;
+  const todayD = new Date(today);
+  const diff = d => Math.floor((todayD - new Date(d)) / 86400000);
+  const sorted = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
+  let zone5Days = 0, totalDays = 0, lastExposed = null, maxSpeedWeek = 0;
+  sorted.forEach(s => {
+    const d = diff(s.date);
+    if (d < 0 || d >= 21) return;
+    totalDays++;
+    const spd = parseFloat(s.maxSpeed) || 0;
+    if (spd >= zone5) { zone5Days++; if (lastExposed === null || d < lastExposed) lastExposed = d; }
+    if (d < 7 && spd > maxSpeedWeek) maxSpeedWeek = spd;
+  });
+  const daysSinceExposed = lastExposed !== null ? lastExposed : 99;
+  const pctMSS = mss > 0 ? (maxSpeedWeek / mss) * 100 : 0;
+  return { exposureRatio: totalDays > 0 ? zone5Days / totalDays : 0, daysSinceExposed, maxSpeedWeek, pctMSS, zone5Threshold: zone5 };
+}
+
+function calcWellnessRisk(wellness7, todayW) {
+  if (!todayW || !wellness7.length) return null;
+  const avg = f => wellness7.reduce((a, r) => a + (r[f] || 0), 0) / wellness7.length;
+  const baseTotal = avg('fatigue') + avg('sleep_quality') + avg('stress') + avg('muscle_soreness');
+  const todayTotal = (todayW.fatigue || 0) + (todayW.sleep_quality || 0) + (todayW.stress || 0) + (todayW.muscle_soreness || 0);
+  const dropPct = baseTotal > 0 ? (baseTotal - todayTotal) / baseTotal : 0;
+  return { baseline: (baseTotal / 4).toFixed(1), todayAvg: (todayTotal / 4).toFixed(1), dropPct, absScore: todayTotal };
+}
+
+function calcRiskLevel(acwr, mvExp, wellnessRisk) {
+  let score = 0;
+  const flags = [];
+  if (acwr !== null) {
+    if (acwr > 1.5)           { score += 3; flags.push({ type: 'ACWR', msg: `ACWR ${acwr.toFixed(2)} — 급성 과부하` }); }
+    else if (acwr > 1.3)      { score += 2; flags.push({ type: 'ACWR', msg: `ACWR ${acwr.toFixed(2)} — 부하 주의` }); }
+    else if (acwr < 0.8 && acwr > 0) { score += 1; flags.push({ type: 'ACWR', msg: `ACWR ${acwr.toFixed(2)} — 과소부하` }); }
+  }
+  if (mvExp !== null) {
+    if (mvExp.daysSinceExposed >= 14)    { score += 3; flags.push({ type: 'MV', msg: `최고속도 ${mvExp.daysSinceExposed}일 미노출 — 햄스트링 고위험` }); }
+    else if (mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type: 'MV', msg: `최고속도 ${mvExp.daysSinceExposed}일 미노출 — 주의` }); }
+    else if (mvExp.pctMSS < 80)          { score += 1; flags.push({ type: 'MV', msg: `최고속도 MSS ${mvExp.pctMSS.toFixed(0)}% — 노출 부족` }); }
+  }
+  if (wellnessRisk !== null) {
+    if (wellnessRisk.absScore <= 8)        { score += 2; flags.push({ type: 'W', msg: `웰니스 총점 ${wellnessRisk.absScore}/20 — 과훈련 위험` }); }
+    else if (wellnessRisk.dropPct >= 0.25) { score += 2; flags.push({ type: 'W', msg: `웰니스 ${(wellnessRisk.dropPct * 100).toFixed(0)}% 급락` }); }
+    else if (wellnessRisk.dropPct >= 0.15) { score += 1; flags.push({ type: 'W', msg: `웰니스 ${(wellnessRisk.dropPct * 100).toFixed(0)}% 하락` }); }
+  }
+  const level = score >= 4 ? 'red' : score >= 2 ? 'amber' : score >= 1 ? 'yellow' : 'green';
+  return { score, level, flags };
+}
+</script>
+</body>
+</html>
