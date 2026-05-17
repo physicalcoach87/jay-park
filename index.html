@@ -6077,7 +6077,7 @@ async function parseSchedulePhoto(){
 - start_time 없으면 null
 - JSON 배열만 출력, 다른 텍스트 없이`;
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
       {
         method:'POST',
         headers:{'Content-Type':'application/json'},
