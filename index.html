@@ -6067,20 +6067,37 @@ async function parseSchedulePhoto(){
   const btn = document.getElementById('photo-parse-btn');
   btn.textContent='분석 중...'; btn.disabled=true;
   try{
-    const ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI';
-    const res = await fetch(SUPA_URL+'/functions/v1/parse-schedule',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
-      body:JSON.stringify({imageBase64:_photoBase64, imageType:_photoType})
-    });
+    const GEMINI_KEY = 'AIzaSyBGAOMcx_K2UhMRQ32zWDAHDxG8VHAFr1w';
+    const prompt = `이 이미지는 축구팀 주간 일정표입니다. 이미지에 있는 모든 일정을 빠짐없이 JSON 배열로 파싱해주세요.
+각 항목 형식: {"event_date":"YYYY-MM-DD","start_time":"HH:MM","event_type":"TRAINING|MATCH|GYM|REST|MEAL|SNACK|EVENT","title":"일정 제목","team":"ALL|A|B"}
+규칙:
+- event_type: 훈련/연습→TRAINING, 경기→MATCH, 웨이트/GYM→GYM, 휴식/휴일→REST, 식사→MEAL, 간식/보충→SNACK, 기타→EVENT
+- team: A팀만→A, B팀만→B, 전체/미표기→ALL
+- 날짜 불명확하면 문맥으로 추론, 연도는 2026
+- start_time 없으면 null
+- JSON 배열만 출력, 다른 텍스트 없이`;
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+      {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({contents:[{parts:[
+          {inline_data:{mime_type:_photoType||'image/jpeg',data:_photoBase64}},
+          {text:prompt}
+        ]}]})
+      }
+    );
     const json = await res.json();
-    if(!res.ok) throw new Error(json.error||'파싱 실패');
-    _parsedEvents = json.events||[];
+    if(!res.ok) throw new Error(json.error?.message||'Gemini 호출 실패');
+    const raw = json.candidates?.[0]?.content?.parts?.[0]?.text||'[]';
+    const match = raw.match(/\[[\s\S]*\]/);
+    _parsedEvents = match ? JSON.parse(match[0]) : [];
+    if(!_parsedEvents.length) throw new Error('파싱된 일정이 없습니다. 사진을 확인해주세요.');
     renderParsedTable();
     document.getElementById('photo-parse-result').style.display='block';
     document.getElementById('photo-save-btn').style.display='inline-block';
   }catch(err){
-    alert('분석 실패: '+err.message+'\n\n※ Supabase Edge Function(parse-schedule) 배포가 필요합니다.');
+    alert('분석 실패: '+err.message);
   }finally{
     btn.textContent='🔍 분석하기'; btn.disabled=false;
   }
