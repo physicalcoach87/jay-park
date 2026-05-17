@@ -8928,7 +8928,7 @@ async function parseGpsFile(file){
       // 컬럼 인덱스 매핑
       const ci = (name) => headers.findIndex(h=>h===name);
       const colMap = {
-        date: ci('날짜'), name: ci('Name'), type: ci('타입'), type2: ci('타입 2'),
+        date: ci('날짜'), label: ci('세션구분'), name: ci('Name'), type: ci('타입'), type2: ci('타입 2'),
         form: ci('훈련형태'), duration: ci('운동시간'),
         td: ci('총이동거리 (m)'), tdPerMin: ci('분당이동거리'),
         hsrTotal: ci('고강도+스프린트거리'), runMed: ci('중강도 러닝 (m)'),
@@ -8981,6 +8981,7 @@ async function parseGpsFile(file){
         _gpsParseData.push({
           player_id: pid, player_name: name,
           session_date: dateStr,
+          session_label: getVal('label') ? getVal('label').trim().toUpperCase() : 'AM',
           session_type: getVal('type'),
           session_type2: getVal('type2') ? getVal('type2').trim().toUpperCase() : null,  // M = 팀 전체훈련(주전/엔트리), S = 서브/미엔트리
           training_form: getVal('form'),
@@ -9005,8 +9006,8 @@ async function parseGpsFile(file){
 
       // 미리보기 테이블
       const table = document.getElementById('upload-preview-table');
-      const cols = ['player_name','session_date','session_type2','td','running_high','sprint','max_speed','player_load','rhie','accel','duration'];
-      const colLabels = ['선수','날짜','타입2','TD(m)','HSR(m)','Sprint(m)','최고속도','P.Load','RHIE','가속','운동시간'];
+      const cols = ['player_name','session_date','session_label','session_type2','td','running_high','sprint','max_speed','player_load','rhie','accel','duration'];
+      const colLabels = ['선수','날짜','AM/PM','타입2','TD(m)','HSR(m)','Sprint(m)','최고속도','P.Load','RHIE','가속','운동시간'];
       table.innerHTML = `
         <tr style="background:var(--surface2)">${colLabels.map(l=>`<th style="padding:6px 8px;font-size:11px;color:var(--text3);white-space:nowrap">${l}</th>`).join('')}</tr>
         ${_gpsParseData.map(r=>`<tr style="border-bottom:1px solid var(--border)">${cols.map(c=>`<td style="padding:6px 8px;font-size:11px;color:var(--text2);white-space:nowrap">${r[c]??'-'}</td>`).join('')}</tr>`).join('')}`;
@@ -9028,13 +9029,14 @@ async function saveGpsData(){
 
   btn.textContent='저장 중...'; btn.disabled=true;
 
-  // 선수+날짜 단위로 해당 선수만 삭제 후 재삽입 (기존 다른 선수 데이터 유지)
+  // 선수+날짜+세션구분 단위로 삭제 후 재삽입 (AM/PM 각각 독립 저장)
   const toInsert = _gpsParseData.map(({player_name,...rest})=>rest);
 
   for(const r of toInsert){
     await supa.from('gps_records').delete()
       .eq('session_date', r.session_date)
-      .eq('player_id', r.player_id);
+      .eq('player_id', r.player_id)
+      .eq('session_label', r.session_label || 'AM');
   }
 
   const {error} = await supa.from('gps_records').insert(toInsert);
