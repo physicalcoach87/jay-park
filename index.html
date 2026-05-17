@@ -6067,7 +6067,7 @@ async function parseSchedulePhoto(){
   const btn = document.getElementById('photo-parse-btn');
   btn.textContent='분석 중...'; btn.disabled=true;
   try{
-    const GEMINI_KEY = 'AIzaSyBGAOMcx_K2UhMRQ32zWDAHDxG8VHAFr1w';
+    const GEMINI_KEY = 'AIzaSyDKHShvqDp93H9XuEpr7-F5eEKbs2J82xQ';
     const prompt = `이 이미지는 축구팀 주간 일정표입니다. 이미지에 있는 모든 일정을 빠짐없이 JSON 배열로 파싱해주세요.
 각 항목 형식: {"event_date":"YYYY-MM-DD","start_time":"HH:MM","event_type":"TRAINING|MATCH|GYM|REST|MEAL|SNACK|EVENT","title":"일정 제목","team":"ALL|A|B"}
 규칙:
