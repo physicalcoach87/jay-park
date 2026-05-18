@@ -12897,19 +12897,29 @@ async function generateMatchReport(){
     b.hasBL=b.cnt>=5; // 최소 5경기 이상이어야 개인 베이스라인 신뢰
   });
 
-  const recovList = ftRows.map(r=>{
+  // Top-up 데이터를 player_id 기준으로 맵핑
+  const topMap={};
+  topRows.forEach(r=>{ topMap[r.player_id]=r; });
+
+  // FT 선수 + Top-up만 한 선수(미출전) 통합
+  const recovBase = [...ftRows];
+  topRows.forEach(r=>{ if(!ftRows.find(f=>f.player_id===r.player_id)) recovBase.push({...r, _topOnly:true}); });
+
+  const recovList = recovBase.map(r=>{
     const pid=r.player_id;
     const bl=playerBaselines[pid]||{avgHsr:null,avgSpr:null,avgPl:null,avgDecel:null,hasBL:false,cnt:0};
+    const top=topMap[pid]; // 동일 선수의 Top-up 데이터
 
-    const dur   = n(r.duration)||0;
-    const hsr   = n(r.hir_sprint)||0;
-    const spr   = n(r.band5_td)||0;
-    const pl    = n(r.player_load)||0;
-    const decel = n(r.decel)||0;
+    const dur   = (n(r.duration)||0) + (top&&!r._topOnly ? n(top.duration)||0 : 0);
+    const hsr   = (n(r.hir_sprint)||0) + (top&&!r._topOnly ? n(top.hir_sprint)||0 : 0);
+    const spr   = (n(r.band5_td)||0) + (top&&!r._topOnly ? n(top.band5_td)||0 : 0);
+    const pl    = (n(r.player_load)||0) + (top&&!r._topOnly ? n(top.player_load)||0 : 0);
+    const decel = (n(r.decel)||0) + (top&&!r._topOnly ? n(top.decel)||0 : 0);
 
-    // 기본 그룹 (출전시간 기준)
+    // 기본 그룹 (출전시간 기준, Top-up 합산 포함)
     let group,groupColor,groupPri,groupLabel;
-    if(dur>=70)      {group='A';groupColor='#ef4444';groupPri=1;groupLabel='적극 회복';}
+    if(r._topOnly)   {group='D';groupColor='#64748b';groupPri=4;groupLabel='Top-up만';}
+    else if(dur>=70) {group='A';groupColor='#ef4444';groupPri=1;groupLabel='적극 회복';}
     else if(dur>=45) {group='B';groupColor='#f97316';groupPri=2;groupLabel='회복 권장';}
     else             {group='C';groupColor='#22c55e';groupPri=3;groupLabel='정상 훈련';}
 
