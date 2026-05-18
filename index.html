@@ -12718,6 +12718,14 @@ async function generateMatchReport(){
     }
   }
 
+  // ── mpm FT 필터: Top-up 전용 선수 제외 ────────────────
+  // 롤링 mpm 분석은 경기 중 체력 저하 분석이므로 FT 출전 선수만 포함
+  // Top-up 전용 선수(FT 기록 없음)는 경기 후 추가훈련이므로 제외
+  if(minuteRows.length && ftRows.length){
+    const ftPids = new Set(ftRows.map(r=>r.player_id).filter(Boolean));
+    minuteRows = minuteRows.filter(r => r.player_id && ftPids.has(r.player_id));
+  }
+
   // ── 2. 헬퍼 ───────────────────────────────────────────
   const n = v => (v!=null && !isNaN(v)) ? parseFloat(v) : null;
   const pct = (v,mx) => (v&&mx) ? Math.round(v/mx*100) : null;
