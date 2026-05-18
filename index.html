@@ -822,9 +822,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           ondrop="event.preventDefault();handleMinuteFileSelect({target:{files:event.dataTransfer.files}})">
           <div style="font-size:32px;margin-bottom:8px">📈</div>
           <div style="font-size:14px;font-weight:600;color:var(--text2)">1분 롤링 mpm 파일 클릭 또는 드래그</div>
-          <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls / .csv 지원</div>
         </div>
-        <input type="file" id="minute-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleMinuteFileSelect(event)">
+        <input type="file" id="minute-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleMinuteFileSelect(event)">
         <!-- 미리보기 -->
         <div id="minute-upload-preview" style="display:none">
           <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="minute-preview-title"></div>
@@ -14603,13 +14603,15 @@ async function deleteMatchDate(date){
 
 // 파일명에서 (YYYY-MM-DD | YYYY.MM.DD | YYMMDD)_상대팀 추출
 function parseMinuteFilename(fname){
-  // 확장자 제거
-  const base = fname.replace(/\.(xlsx|xls)$/i,'');
+  // 확장자 제거 (xlsx / xls / csv)
+  const base = fname.replace(/\.(xlsx|xls|csv)$/i,'');
   // 1) YYYY-MM-DD_상대 / YYYY.MM.DD_상대 / YYYY/MM/DD_상대
+  //    gps_process.py 패턴: YYYY-MM-DD_mpm_상대팀 → mpm_ 접두사 제거
   let m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[_\s-]+(.+)/);
   if(m){
     const date = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-    return {date, opponent: m[4].trim()};
+    const opp = m[4].trim().replace(/^mpm[_\s-]+/i,'');  // 'mpm_천안시티' → '천안시티'
+    return {date, opponent: opp};
   }
   // 2) YYMMDD_상대
   m = base.match(/^(\d{2})(\d{2})(\d{2})[_\s-]+(.+)/);
@@ -14652,15 +14654,24 @@ async function parseMinuteFile(file){
   // 파일명에서 매칭 정보 추출
   const meta = parseMinuteFilename(file.name);
   if(!meta){
-    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 파일명에서 날짜/상대 추출 실패: <code>${file.name}</code><br>형식: YYYY-MM-DD_상대팀.xlsx</span>`;
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 파일명에서 날짜/상대 추출 실패: <code>${file.name}</code><br>형식: YYYY-MM-DD_mpm_상대팀.csv 또는 YYYY-MM-DD_상대팀.xlsx</span>`;
     return;
   }
 
   const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
-  const buf  = await file.arrayBuffer();
-  const wb   = XLSX.read(buf,{type:'array',cellDates:false});
-  const ws   = wb.Sheets[wb.SheetNames[0]];
-  const raw  = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  const isCsv = file.name.toLowerCase().endsWith('.csv');
+  let raw;
+  if(isCsv){
+    const text = await file.text();
+    const wb = XLSX.read(text,{type:'string',cellDates:false});
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    raw = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  } else {
+    const buf = await file.arrayBuffer();
+    const wb  = XLSX.read(buf,{type:'array',cellDates:false});
+    const ws  = wb.Sheets[wb.SheetNames[0]];
+    raw = XLSX.utils.sheet_to_json(ws,{header:1,defval:null});
+  }
 
   if(!raw.length || !raw[0]){
     if(msgEl) msgEl.innerHTML = '<span style="color:#ef4444">⚠️ 빈 파일</span>';
@@ -14669,13 +14680,15 @@ async function parseMinuteFile(file){
 
   const header = raw[0].map(h => (h||'').toString().trim());
   const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+  // 영문 컬럼 (Catapult xlsx/csv 원본)
+  // 한글 컬럼 (gps_process.py 가공 CSV: 이름 / 시간 / 분당이동거리)
   const COL = {
-    name:   ci('Name'),
+    name:   ci('Name')   >= 0 ? ci('Name')   : ci('이름'),
     jersey: ci('Jersey'),    // 형식 A: 'Name=Gabriel - 00:01:00' + 'Jersey=Gabriel'
-    time:   ci('Time'),      // 형식 B: 'Name=Gabriel'             + 'Time=00:01:00'
-    mpm:    ci('Meterage Per Minute'),
+    time:   ci('Time')   >= 0 ? ci('Time')   : ci('시간'),  // 형식 B or 한글 CSV
+    mpm:    ci('Meterage Per Minute') >= 0 ? ci('Meterage Per Minute') : ci('분당이동거리'),
   };
-  // 형식 결정
+  // 형식 결정 (한글 CSV는 이름+시간 → 형식 B와 동일하게 처리)
   const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
 
   if(COL.name<0 || COL.mpm<0 || !FORMAT){
