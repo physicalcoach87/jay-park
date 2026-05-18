@@ -12683,20 +12683,41 @@ async function generateMatchReport(){
     const _mins = Object.keys(_byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
     let _foundHT = false;
 
-    // 방법1: 가장 큰 데이터 갭 → 하프타임 (데이터 전체 범위의 20~80% 구간만 탐색)
-    // 이전 방식의 _mins[i]<80 고정 조건 제거 — 절대 타임스탬프 대응
+    // 방법1-A: match_records 1Q 출전시간을 힌트로 — 예상 halfBreak 근처 ±15분에서 갭 탐색
+    // 가장 신뢰도 높음 (경기마다 다른 절대 타임스탬프에도 대응)
     {
+      const _q1Hint = q1Rows.length ? Math.max(...q1Rows.map(r=>parseFloat(r.duration)||0)) : 0;
+      if(_q1Hint > 0){
+        const _expectedBreak = _mins[0] + _q1Hint; // mpm 시작분 + 1Q 출전시간
+        const _candidates = [];
+        for(let i=1;i<_mins.length;i++){
+          const gap = _mins[i] - _mins[i-1];
+          if(gap >= 3 && Math.abs(_mins[i-1] - _expectedBreak) <= 15){
+            _candidates.push({gap, brk:_mins[i-1], start:_mins[i]});
+          }
+        }
+        if(_candidates.length){
+          _candidates.sort((a,b)=>b.gap-a.gap);
+          halfBreakShared = _candidates[0].brk;
+          halfStartShared = _candidates[0].start;
+          _foundHT = true;
+        }
+      }
+    }
+
+    // 방법1-B: 폴백 — 전체 범위 20~80% 구간 내 가장 큰 갭 (1Q 데이터 없을 때)
+    if(!_foundHT){
       const _total = _mins[_mins.length-1] - _mins[0];
       const _candidates = [];
       for(let i=1;i<_mins.length;i++){
         const gap = _mins[i] - _mins[i-1];
-        const pos  = (_mins[i-1] - _mins[0]) / _total; // 0~1 상대 위치
+        const pos  = (_mins[i-1] - _mins[0]) / _total;
         if(gap >= 3 && pos >= 0.2 && pos <= 0.8){
           _candidates.push({gap, brk:_mins[i-1], start:_mins[i]});
         }
       }
       if(_candidates.length){
-        _candidates.sort((a,b)=>b.gap-a.gap); // 가장 큰 갭이 하프타임
+        _candidates.sort((a,b)=>b.gap-a.gap);
         halfBreakShared = _candidates[0].brk;
         halfStartShared = _candidates[0].start;
         _foundHT = true;
