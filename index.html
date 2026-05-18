@@ -13769,6 +13769,52 @@ async function generateMatchReport(){
     `);
   })()}
 
+  ${(()=>{
+    // ── Top-up 섹션 (해당 경기에 Top-up 데이터 있을 때만 표시) ──
+    if(!topRows.length) return '';
+    const topSorted = [...topRows].sort((a,b)=>(n(b.td)||0)-(n(a.td)||0));
+    return card(`
+      ${secHead('🔄','Top-up (추가훈련)','경기 후 추가훈련 참여 선수 · 미출전/교체 선수 운동량')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:480px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">시간(분)</th>
+              <th style="padding:6px 8px;text-align:right;color:#60a5fa">TD (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:#f97316">HIR+Sprint</th>
+              <th style="padding:6px 8px;text-align:right;color:#a78bfa">Sprint (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:#4ade80">P.Load</th>
+              <th style="padding:6px 8px;text-align:right;color:#94a3b8">Vmax</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${topSorted.map(r=>{
+              const nm = r.player_profiles?.name || r.player_id || '?';
+              const pos = r.player_profiles?.position || '';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px">
+                  <span style="font-weight:600;color:var(--text)">${nm}</span>
+                  ${pos?`<span style="font-size:9px;color:var(--text3);margin-left:4px">${pos}</span>`:''}
+                </td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${n(r.duration)!=null?Math.round(n(r.duration)):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:600">${n(r.td)!=null?Math.round(n(r.td)).toLocaleString():'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#f97316">${n(r.hir_sprint)!=null?Math.round(n(r.hir_sprint)):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#a78bfa">${n(r.band5_td)!=null?Math.round(n(r.band5_td)):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#4ade80">${n(r.player_load)!=null?n(r.player_load).toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#94a3b8">${n(r.max_speed)!=null?n(r.max_speed).toFixed(1):'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
+        Top-up 운동량은 회복 우선순위에서 출전시간에 합산 반영됩니다.
+        미출전 선수(FT 기록 없음)는 회복 우선순위 <strong style="color:#64748b">D그룹</strong>으로 분류됩니다.
+      </div>
+    `);
+  })()}
+
   ${card(`
     ${secHead('🏥','회복 우선순위','출전시간 기준 그룹 · GPS 위험도 참고')}
 
