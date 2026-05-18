@@ -12683,33 +12683,48 @@ async function generateMatchReport(){
     const _mins = Object.keys(_byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
     let _foundHT = false;
 
-    // 방법1: 데이터 갭 ≥3분 (GPS가 하프타임에 멈추는 경우 — 가장 명확한 신호)
-    for(let i=1;i<_mins.length;i++){
-      if(_mins[i]-_mins[i-1]>=3 && _mins[i-1]>30 && _mins[i]<80){
-        halfBreakShared = _mins[i-1];
-        halfStartShared = _mins[i];
-        _foundHT = true; break;
+    // 방법1: 가장 큰 데이터 갭 → 하프타임 (데이터 전체 범위의 20~80% 구간만 탐색)
+    // 이전 방식의 _mins[i]<80 고정 조건 제거 — 절대 타임스탬프 대응
+    {
+      const _total = _mins[_mins.length-1] - _mins[0];
+      const _candidates = [];
+      for(let i=1;i<_mins.length;i++){
+        const gap = _mins[i] - _mins[i-1];
+        const pos  = (_mins[i-1] - _mins[0]) / _total; // 0~1 상대 위치
+        if(gap >= 3 && pos >= 0.2 && pos <= 0.8){
+          _candidates.push({gap, brk:_mins[i-1], start:_mins[i]});
+        }
+      }
+      if(_candidates.length){
+        _candidates.sort((a,b)=>b.gap-a.gap); // 가장 큰 갭이 하프타임
+        halfBreakShared = _candidates[0].brk;
+        halfStartShared = _candidates[0].start;
+        _foundHT = true;
       }
     }
 
     // 방법2: 팀 평균 mpm < 50 구간 ≥5분 (GPS가 하프타임에도 계속 기록되는 경우)
     if(!_foundHT){
+      const _total = _mins[_mins.length-1] - _mins[0];
       const _tAvg = _mins.map(_m=>({m:_m, avg:_byMin[_m].reduce((a,b)=>a+b,0)/_byMin[_m].length}));
       let _s=null, _l=0;
       for(const t of _tAvg){
-        if(t.m>30 && t.m<80 && t.avg<50){ if(_s==null) _s=t.m; _l++; }
+        const pos = (t.m - _mins[0]) / _total;
+        if(pos>=0.2 && pos<=0.8 && t.avg<50){ if(_s==null) _s=t.m; _l++; }
         else { if(_l>=5 && _s!=null){ halfBreakShared=_s-1; halfStartShared=t.m; _foundHT=true; break; } _s=null; _l=0; }
       }
     }
 
     // 방법3 (폴백): 활동 선수 ≤2 구간 ≥3분
     if(!_foundHT){
+      const _total = _mins[_mins.length-1] - _mins[0];
       const _team = _mins.map(_m=>({m:_m, n:_byMin[_m].length}));
       let _start=null, _len=0;
       for(const t of _team){
+        const pos = (t.m - _mins[0]) / _total;
         if(t.n<=2){ if(_start==null) _start=t.m; _len++; }
         else {
-          if(_len>=3 && t.m>30 && t.m<70){
+          if(_len>=3 && pos>=0.2 && pos<=0.75){
             halfBreakShared = _start - 1;
             halfStartShared = t.m;
             break;
