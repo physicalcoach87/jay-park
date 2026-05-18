@@ -12669,91 +12669,52 @@ async function generateMatchReport(){
   }
 
   // 하프타임 자동 감지 (§ 7 + § 8 공유)
-  // halfBreakShared  : 1Q 마지막 분 (갭 직전)
-  // halfStartShared  : 2Q 첫 번째 분 (갭 직후 데이터 재개)
-  // 감지 우선순위: ①데이터 갭 ≥3분 → ②팀평균 mpm<50 구간 ≥5분 → ③활동선수 ≤2 구간 ≥3분
-  let halfBreakShared = 47;  // 1Q 끝
-  let halfStartShared = 48;  // 2Q 시작
+  // halfBreakShared : 1Q 마지막 분 / halfStartShared : 2Q 첫 번째 분
+  // q2EndMinShared  : 2Q 마지막 유효 분 (캡핑용)
+  // ── FT 선수 mpm 기반 자동 감지 (코치님 제안) ──────────────
+  // FT 출전 선수 mpm만 사용 → 갭 = 하프타임, 마지막 활동분 = 2Q 종료
+  let halfBreakShared = 47;
+  let halfStartShared = 48;
+  let q2EndMinShared  = null; // null이면 캡 없음
+
   if(minuteRows.length){
+    // FT 선수 ID 집합 (이미 ftRows에서 로드됨)
+    const _ftPids = new Set(ftRows.map(r=>r.player_id).filter(Boolean));
+
+    // FT 선수만 분별 평균 집계
     const _byMin = {};
     minuteRows.forEach(r=>{
+      if(_ftPids.size && !_ftPids.has(r.player_id)) return; // FT 선수만
       const _m=parseInt(r.minute,10); const _v=parseFloat(r.mpm);
       if(!isNaN(_m)&&!isNaN(_v)) (_byMin[_m]=_byMin[_m]||[]).push(_v);
     });
     const _mins = Object.keys(_byMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
-    let _foundHT = false;
-
-    // 방법1-A: match_records 1Q 출전시간을 힌트로 — 예상 halfBreak 근처 ±15분에서 갭 탐색
-    // 가장 신뢰도 높음 (경기마다 다른 절대 타임스탬프에도 대응)
-    {
-      const _q1Hint = q1Rows.length ? Math.max(...q1Rows.map(r=>parseFloat(r.duration)||0)) : 0;
-      if(_q1Hint > 0){
-        const _expectedBreak = _mins[0] + _q1Hint; // mpm 시작분 + 1Q 출전시간
-        const _candidates = [];
-        for(let i=1;i<_mins.length;i++){
-          const gap = _mins[i] - _mins[i-1];
-          if(gap >= 3 && Math.abs(_mins[i-1] - _expectedBreak) <= 15){
-            _candidates.push({gap, brk:_mins[i-1], start:_mins[i]});
-          }
-        }
-        if(_candidates.length){
-          _candidates.sort((a,b)=>b.gap-a.gap);
-          halfBreakShared = _candidates[0].brk;
-          halfStartShared = _candidates[0].start;
-          _foundHT = true;
-        }
-      }
+    if(_mins.length < 10) { // FT 데이터 부족 시 전체 사용
+      minuteRows.forEach(r=>{
+        const _m=parseInt(r.minute,10); const _v=parseFloat(r.mpm);
+        if(!isNaN(_m)&&!isNaN(_v)) (_byMin[_m]=_byMin[_m]||[]).push(_v);
+      });
     }
 
-    // 방법1-B: 폴백 — 전체 범위 20~80% 구간 내 가장 큰 갭 (1Q 데이터 없을 때)
-    if(!_foundHT){
-      const _total = _mins[_mins.length-1] - _mins[0];
-      const _candidates = [];
-      for(let i=1;i<_mins.length;i++){
-        const gap = _mins[i] - _mins[i-1];
-        const pos  = (_mins[i-1] - _mins[0]) / _total;
-        if(gap >= 3 && pos >= 0.2 && pos <= 0.8){
-          _candidates.push({gap, brk:_mins[i-1], start:_mins[i]});
-        }
-      }
-      if(_candidates.length){
-        _candidates.sort((a,b)=>b.gap-a.gap);
-        halfBreakShared = _candidates[0].brk;
-        halfStartShared = _candidates[0].start;
-        _foundHT = true;
-      }
+    // ── 1. 하프타임 감지: 전체 범위 20~80% 내 가장 큰 갭 ──
+    const _total = _mins[_mins.length-1] - _mins[0];
+    const _gaps = [];
+    for(let i=1;i<_mins.length;i++){
+      const gap = _mins[i]-_mins[i-1];
+      const pos = (_mins[i-1]-_mins[0])/_total;
+      if(gap>=3 && pos>=0.2 && pos<=0.8) _gaps.push({gap, brk:_mins[i-1], start:_mins[i]});
+    }
+    if(_gaps.length){
+      _gaps.sort((a,b)=>b.gap-a.gap);
+      halfBreakShared = _gaps[0].brk;
+      halfStartShared = _gaps[0].start;
     }
 
-    // 방법2: 팀 평균 mpm < 50 구간 ≥5분 (GPS가 하프타임에도 계속 기록되는 경우)
-    if(!_foundHT){
-      const _total = _mins[_mins.length-1] - _mins[0];
-      const _tAvg = _mins.map(_m=>({m:_m, avg:_byMin[_m].reduce((a,b)=>a+b,0)/_byMin[_m].length}));
-      let _s=null, _l=0;
-      for(const t of _tAvg){
-        const pos = (t.m - _mins[0]) / _total;
-        if(pos>=0.2 && pos<=0.8 && t.avg<50){ if(_s==null) _s=t.m; _l++; }
-        else { if(_l>=5 && _s!=null){ halfBreakShared=_s-1; halfStartShared=t.m; _foundHT=true; break; } _s=null; _l=0; }
-      }
-    }
-
-    // 방법3 (폴백): 활동 선수 ≤2 구간 ≥3분
-    if(!_foundHT){
-      const _total = _mins[_mins.length-1] - _mins[0];
-      const _team = _mins.map(_m=>({m:_m, n:_byMin[_m].length}));
-      let _start=null, _len=0;
-      for(const t of _team){
-        const pos = (t.m - _mins[0]) / _total;
-        if(t.n<=2){ if(_start==null) _start=t.m; _len++; }
-        else {
-          if(_len>=3 && pos>=0.2 && pos<=0.75){
-            halfBreakShared = _start - 1;
-            halfStartShared = t.m;
-            break;
-          }
-          _start=null; _len=0;
-        }
-      }
-    }
+    // ── 2. 2Q 종료 감지: halfStart 이후 FT 선수 팀 평균 mpm ≥ 30인 마지막 분 ──
+    // GPS가 휘슬 후에도 기록되지만 경기 중에는 mpm ≥ 30 유지
+    const _tAvg = _mins.map(_m=>({m:_m, v:_byMin[_m].reduce((a,b)=>a+b,0)/_byMin[_m].length}));
+    const _q2Active = _tAvg.filter(t=>t.m>=halfStartShared && t.v>=30);
+    if(_q2Active.length) q2EndMinShared = _q2Active[_q2Active.length-1].m;
   }
 
   // ── mpm FT 필터: Top-up 전용 선수 제외 ────────────────
@@ -13502,25 +13463,9 @@ async function generateMatchReport(){
     const halfBreak = halfBreakShared;   // 1Q 마지막 분
     const halfStart = halfStartShared;   // 2Q 첫 번째 분
 
-    // 2Q mpm 캡핑 — GPS가 휘슬 후에도 계속 기록하는 문제 대응
-    // 우선순위: ① q2Rows 출전시간 → ② FT 총 출전시간 - 1Q 추정시간 → ③ 캡 없음
-    const _q2DurMax = q2Rows.length
-      ? Math.max(...q2Rows.map(r=>parseFloat(r.duration)||0))
-      : 0;
-    const _q1DurMax = q1Rows.length
-      ? Math.max(...q1Rows.map(r=>parseFloat(r.duration)||0))
-      : 0;
-    // FT 기반 추정 (1Q/2Q 레코드 없을 때)
-    const _ftDurMax = ftRows.length
-      ? Math.max(...ftRows.map(r=>parseFloat(r.duration)||0))
-      : 0;
-    const _q1Est = halfBreak - (teamAvg[0]?.m||1); // mpm 데이터 기준 1Q 추정
-    const _q2Cap = _q2DurMax > 0 ? _q2DurMax
-                 : _ftDurMax > 0 ? Math.max(40, _ftDurMax - _q1Est)
-                 : 0;
-    const _q1Cap = _q1DurMax > 0 ? _q1DurMax : 0;
-    const half1 = teamAvg.filter(t=>t.m<=halfBreak && (_q1Cap<=0 || t.m>=halfBreak-_q1Cap+1));
-    const half2 = teamAvg.filter(t=>t.m>=halfStart && (_q2Cap<=0 || t.m<=halfStart+_q2Cap-1));
+    // FT 선수 mpm 기반으로 감지된 2Q 종료 분으로 캡핑
+    const half1 = teamAvg.filter(t=>t.m<=halfBreak);
+    const half2 = teamAvg.filter(t=>t.m>=halfStart && (q2EndMinShared==null || t.m<=q2EndMinShared));
     const avg = arr => arr.length?arr.reduce((s,t)=>s+t.v,0)/arr.length:0;
     const h1Avg = avg(half1), h2Avg = avg(half2);
     const drop = h1Avg>0 ? (h2Avg-h1Avg)/h1Avg*100 : 0;
@@ -13712,8 +13657,8 @@ async function generateMatchReport(){
         const w = sorted.slice(Math.max(0,i-2), i+3);
         return {m:t.m, v:w.reduce((s,x)=>s+x.v,0)/w.length};
       });
-      const h1 = sorted.filter(t=>t.m<=halfBreak && (_q1Cap<=0||t.m>=halfBreak-_q1Cap+1));
-      const h2 = sorted.filter(t=>t.m>=halfStart && (_q2Cap<=0||t.m<=halfStart+_q2Cap-1));
+      const h1 = sorted.filter(t=>t.m<=halfBreak);
+      const h2 = sorted.filter(t=>t.m>=halfStart && (q2EndMinShared==null||t.m<=q2EndMinShared));
       const avg = a => a.length?a.reduce((s,t)=>s+t.v,0)/a.length:0;
       const overallAvg = avg(sorted);
       const h1Avg = avg(h1), h2Avg = avg(h2);
