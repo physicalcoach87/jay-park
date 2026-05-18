@@ -878,6 +878,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
             <option value="FT">FT (풀타임)</option>
             <option value="1Q">1Q (전반)</option>
             <option value="2Q">2Q (후반)</option>
+            <option value="Top-up">Top-up (추가훈련)</option>
           </select>
         </div>
       </div>
@@ -12444,7 +12445,7 @@ function setProgTab(name){
 // ══════════════════════════════════════════════════════════════════
 
 // TIME → 분 변환
-function timeToMin(t){ return t==='FT'?90:t==='1Q'?45:t==='2Q'?45:90; }
+function timeToMin(t){ return t==='FT'?90:t==='1Q'?45:t==='2Q'?45:t==='Top-up'?null:90; }
 
 // 서브탭 전환
 function setMatchTab(tab){
@@ -15365,10 +15366,11 @@ async function loadMatchDetail(date, opponent){
     return `${m}:${s.toString().padStart(2,'0')}`;
   };
 
-  // FT / 1Q / 2Q 분리
+  // FT / 1Q / 2Q / Top-up 분리
   const ftRows=rows.filter(r=>r.time_type==='FT');
   const q1Rows=rows.filter(r=>r.time_type==='1Q');
   const q2Rows=rows.filter(r=>r.time_type==='2Q');
+  const topRows=rows.filter(r=>r.time_type==='Top-up');
 
   const makeTable=(data,title)=>`
     <div style="margin-bottom:16px">
@@ -15430,7 +15432,47 @@ async function loadMatchDetail(date, opponent){
     </div>
     ${ftRows.length?makeTable(ftRows,'FT (풀타임) — Match Max 대비 %'):''}
     ${q1Rows.length?makeTable(q1Rows,'1Q (전반)'):''}
-    ${q2Rows.length?makeTable(q2Rows,'2Q (후반)'):''}`;
+    ${q2Rows.length?makeTable(q2Rows,'2Q (후반)'):''}
+    ${topRows.length?`
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">🏃 Top-up (추가훈련)</div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:800px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">시간(분)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">TD(m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">HIR+Spr(m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">P.Load</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${topRows.map(r=>{
+              const mx=r.player_profiles;
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px">
+                  <div style="font-weight:600;color:var(--text)">${mx?.name||'—'}</div>
+                  <div style="font-size:10px;color:var(--text3)">${mx?.position||''}</div>
+                </td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.td?Math.round(r.td):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.mpm?parseFloat(r.mpm).toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.hir_sprint?Math.round(r.hir_sprint):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.accel||'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.rhie||'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#c084fc">${r.player_load?Math.round(r.player_load):'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`:''}`;
 }
 
 // ── 선수별 경기 이력 분석 (MAX 기준) ─────────────────────────────
