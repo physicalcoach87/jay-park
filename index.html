@@ -13466,8 +13466,15 @@ async function generateMatchReport(){
     const halfBreak = halfBreakShared;   // 1Q 마지막 분
     const halfStart = halfStartShared;   // 2Q 첫 번째 분
 
-    const half1 = teamAvg.filter(t=>t.m<=halfBreak);
-    const half2 = teamAvg.filter(t=>t.m>=halfStart);
+    // q2Rows 출전시간으로 2Q mpm 캡핑 (GPS가 휘슬 후에도 계속 기록하는 문제 대응)
+    const _q2DurMax = q2Rows.length
+      ? Math.max(...q2Rows.map(r=>parseFloat(r.duration)||0))
+      : 0;
+    const _q1DurMax = q1Rows.length
+      ? Math.max(...q1Rows.map(r=>parseFloat(r.duration)||0))
+      : 0;
+    const half1 = teamAvg.filter(t=>t.m<=halfBreak && (_q1DurMax<=0 || t.m>=halfBreak-_q1DurMax+1));
+    const half2 = teamAvg.filter(t=>t.m>=halfStart && (_q2DurMax<=0 || t.m<=halfStart+_q2DurMax-1));
     const avg = arr => arr.length?arr.reduce((s,t)=>s+t.v,0)/arr.length:0;
     const h1Avg = avg(half1), h2Avg = avg(half2);
     const drop = h1Avg>0 ? (h2Avg-h1Avg)/h1Avg*100 : 0;
@@ -13659,8 +13666,8 @@ async function generateMatchReport(){
         const w = sorted.slice(Math.max(0,i-2), i+3);
         return {m:t.m, v:w.reduce((s,x)=>s+x.v,0)/w.length};
       });
-      const h1 = sorted.filter(t=>t.m<=halfBreak);
-      const h2 = sorted.filter(t=>t.m>=halfStart);
+      const h1 = sorted.filter(t=>t.m<=halfBreak && (_q1DurMax<=0||t.m>=halfBreak-_q1DurMax+1));
+      const h2 = sorted.filter(t=>t.m>=halfStart && (_q2DurMax<=0||t.m<=halfStart+_q2DurMax-1));
       const avg = a => a.length?a.reduce((s,t)=>s+t.v,0)/a.length:0;
       const overallAvg = avg(sorted);
       const h1Avg = avg(h1), h2Avg = avg(h2);
