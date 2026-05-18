@@ -12642,7 +12642,8 @@ async function generateMatchReport(){
   const {data:minuteAll} = await supa.from('match_minute_records')
     .select('player_id,player_name,minute,mpm,opponent')
     .eq('match_date',date)
-    .order('minute',{ascending:true});
+    .order('minute',{ascending:true})
+    .limit(5000);
   const oppNorm = s => (s||'').toString().normalize('NFC').toLowerCase().replace(/[^a-z0-9\uac00-\ud7a3]/g,'').replace(/^vs/,'').replace(/^\d+r/,'').replace(/^vs/,'');
   const tgtOpp = oppNorm(opponent);
   // 1) 정확 일치 우선
