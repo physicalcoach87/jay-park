@@ -12607,9 +12607,10 @@ async function generateMatchReport(){
 
   if(!allRows?.length){ out.innerHTML='<div style="color:var(--text3);padding:1rem">FT 데이터 없음</div>'; return; }
 
-  const ftRows = allRows.filter(r=>r.time_type==='FT');
-  const q1Rows = allRows.filter(r=>r.time_type==='1Q');
-  const q2Rows = allRows.filter(r=>r.time_type==='2Q');
+  const ftRows  = allRows.filter(r=>r.time_type==='FT');
+  const q1Rows  = allRows.filter(r=>r.time_type==='1Q');
+  const q2Rows  = allRows.filter(r=>r.time_type==='2Q');
+  const topRows = allRows.filter(r=>r.time_type==='Top-up');
   const hasHalf = q1Rows.length>0 && q2Rows.length>0;
 
   // 최근 3경기 팀 합계용 (FT 전체)
