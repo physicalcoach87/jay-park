@@ -8114,8 +8114,8 @@ function renderTwoWeekCal(){
       ? 'border:1.5px solid var(--accent2);background:var(--accent-bg)'
       : 'border:1px solid var(--border)';
 
-    // M/S 배지 (SS는 캘린더에서 제외)
-    const typeBadge = !s.hasData ? '' : s.isTeamDay
+    // M/S 배지 — 경기날(🏟️ 배지 있음)은 표시 안 함
+    const typeBadge = !s.hasData || (s.matchRows && s.matchRows.length > 0) ? '' : s.isTeamDay
       ? `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:3px">M</span>`
       : `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:3px">S</span>`;
 
