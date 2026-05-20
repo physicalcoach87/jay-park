@@ -6196,6 +6196,7 @@ async function loadMorningReport(){
     {data:well7},
     {data:injuredAll},
     {data:weekSched},
+    {data:weekMatchRaw},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
@@ -6222,7 +6223,57 @@ async function loadMorningReport(){
       .select('event_date,event_type,md_stage,team,title,start_time')
       .gte('event_date', weekStartStr).lte('event_date', weekEndStr)
       .order('event_date',{ascending:true}).order('start_time',{ascending:true,nullsFirst:false}),
+    supa.from('match_records')
+      .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
+      .eq('time_type','FT')
+      .order('match_date',{ascending:false})
+      .limit(300),
   ]);
+
+  // ── 경기 팀 평균: (합계) / (출전시간 합) × max(출전시간) ──────
+  const matchAvg = (arr, field) => {
+    const vrs = arr.filter(r => parseFloat(r[field]) > 0 && parseFloat(r.duration) > 0);
+    if (!vrs.length) return null;
+    const maxDur = Math.max(...vrs.map(r => parseFloat(r.duration)));
+    const sumVal = vrs.reduce((a,r) => a + (parseFloat(r[field])||0), 0);
+    const sumDur = vrs.reduce((a,r) => a + (parseFloat(r.duration)||0), 0);
+    return sumDur > 0 ? sumVal / sumDur * maxDur : null;
+  };
+  // 최근 3경기 기준 (FT, 날짜+상대팀 기준)
+  const _allMKeys = [...new Set((weekMatchRaw||[]).map(r => r.match_date+'__'+r.opponent))]
+    .sort((a,b) => b.localeCompare(a));
+  const _ref3Keys = _allMKeys.slice(0,3);
+  const _ref3Rows = (weekMatchRaw||[]).filter(r => _ref3Keys.includes(r.match_date+'__'+r.opponent));
+  const ref3Avg = field => matchAvg(_ref3Rows, field);
+  const matchRef3 = {
+    td:     ref3Avg('td'),
+    hsr:    ref3Avg('band4_td'),
+    sprint: ref3Avg('band5_td'),
+    accel:  ref3Avg('accel'),
+    rhie:   ref3Avg('rhie'),
+  };
+  // 최근 3경기 정보
+  const ref3Info = _ref3Keys.map(k => {
+    const [mDate, mOpp] = k.split('__');
+    const rows = (weekMatchRaw||[]).filter(r => r.match_date===mDate && r.opponent===mOpp);
+    const r0 = rows[0]||{};
+    const d = new Date(mDate);
+    return { date:mDate, opp:mOpp, result:r0.result||'', score:r0.score||'', ha:r0.home_away||'',
+             dayLabel:`${(d.getMonth()+1)}/${d.getDate()}(${WEEK_DAYS[d.getDay()]})` };
+  });
+  // 이번 주 경기 날짜별 데이터
+  const weekMatchByDate = {};
+  (weekMatchRaw||[]).forEach(r => {
+    if (!weekMatchByDate[r.match_date]) weekMatchByDate[r.match_date] = [];
+    weekMatchByDate[r.match_date].push(r);
+  });
+  // % 뱃지 헬퍼 (훈련/경기값 ÷ 최근3경기 기준)
+  const matchPctBadge = (val, ref) => {
+    if (!val || !ref) return '';
+    const pct = Math.round(val / ref * 100);
+    const col = pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';
+    return `<span style="font-size:9px;color:${col};margin-left:2px">${pct}%</span>`;
+  };
 
   // ── 주간 날짜별 팀 평균 집계 ──────────────────────────────────
   const weekDates = [];
@@ -6349,16 +6400,60 @@ async function loadMorningReport(){
     const dayLabel = isYesterday ? `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:var(--accent);color:white;margin-left:4px">어제</span>`
                    : isToday2   ? `<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#15803d;color:white;margin-left:4px">오늘</span>` : '';
 
-    const tdCell  = td   ? `<span style="color:var(--accent2);font-weight:${isYesterday?'600':'400'}">${(td/1000).toFixed(1)}k</span>` : '<span style="color:var(--text3)">—</span>';
-    const hsrCell = hsr  ? `<span style="color:#f59e0b">${Math.round(hsr)}</span>` : '<span style="color:var(--text3)">—</span>';
-    const spCell  = sp   ? `<span style="color:#ef4444">${Math.round(sp)}</span>` : '<span style="color:var(--text3)">—</span>';
+    const tdCell  = td   ? `<span style="color:var(--accent2);font-weight:${isYesterday?'600':'400'}">${(td/1000).toFixed(1)}k</span>${matchPctBadge(td,matchRef3.td)}` : '<span style="color:var(--text3)">—</span>';
+    const hsrCell = hsr  ? `<span style="color:#f59e0b">${Math.round(hsr)}</span>${matchPctBadge(hsr,matchRef3.hsr)}` : '<span style="color:var(--text3)">—</span>';
+    const spCell  = sp   ? `<span style="color:#ef4444">${Math.round(sp)}</span>${matchPctBadge(sp,matchRef3.sprint)}` : '<span style="color:var(--text3)">—</span>';
     const sRPECell= sRPE ? `<span style="color:#c084fc">${sRPE}</span>` : '<span style="color:var(--text3)">—</span>';
     const acwrCell= dayACWR ? `<span style="color:${acwrColor(dayACWR)};font-weight:500">${dayACWR.toFixed(2)}</span>` : '<span style="color:var(--text3)">—</span>';
     const statusCell = !isPast
       ? `<span style="font-size:10px;color:var(--text3);font-style:italic">${opp||'예정'}</span>`
       : dayACWR ? `<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${dayACWR>1.5?'#3b1219':dayACWR>1.3?'#2a1a00':dayACWR<0.8?'#1a1a00':'#052e16'};color:${acwrColor(dayACWR)}">${acwrLabel(dayACWR)}</span>` : '—';
 
-    return `<tr style="border-bottom:0.5px solid var(--border);${rowBg};${!isPast?'opacity:0.45':''}">
+    // 경기 행 (match_records FT 데이터가 있는 날)
+    const dayMatchRows = weekMatchByDate[date]||[];
+    const matchRowHtml = (dayMatchRows.length && isPast) ? (()=>{
+      const mTD     = matchAvg(dayMatchRows,'td');
+      const mHSR    = matchAvg(dayMatchRows,'band4_td');
+      const mSP     = matchAvg(dayMatchRows,'band5_td');
+      const mAccel  = matchAvg(dayMatchRows,'accel');
+      const mRHIE   = matchAvg(dayMatchRows,'rhie');
+      const mMaxDur = Math.round(Math.max(...dayMatchRows.map(r=>parseFloat(r.duration)||0)));
+      const mOpp    = dayMatchRows[0]?.opponent||'';
+      const _haRaw  = (dayMatchRows[0]?.home_away||'').trim().toUpperCase();
+      const mHA     = _haRaw==='HOME'?'홈':_haRaw==='AWAY'?'원정':'';
+      const mResult = dayMatchRows[0]?.result||'';
+      const mScore  = dayMatchRows[0]?.score||'';
+      const resultColor = mResult==='W'?'#22c55e':mResult==='L'?'#ef4444':'#9ca3af';
+      const resultLabel = mResult==='W'?'승':mResult==='L'?'패':mResult==='D'?'무':'';
+      return `<tr style="border-bottom:0.5px solid var(--border);background:#1a0a0a">
+        <td style="padding:6px 10px;white-space:nowrap">
+          <span style="color:#f87171;font-weight:600">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>
+          <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700;margin-left:4px">🏟️</span>
+        </td>
+        <td style="padding:6px 8px;text-align:center">
+          <span style="font-size:10px;color:#f87171;font-weight:600">vs ${mOpp}</span>
+          <span style="font-size:9px;color:var(--text3);margin-left:3px">${mHA}</span>
+        </td>
+        <td style="padding:6px 8px;text-align:right;color:var(--text2)">${mMaxDur}min</td>
+        <td style="padding:6px 8px;text-align:right">
+          ${mTD?`<span style="color:#60a5fa;font-weight:500">${(mTD/1000).toFixed(1)}k</span>${matchPctBadge(mTD,matchRef3.td)}`:'<span style="color:var(--text3)">—</span>'}
+        </td>
+        <td style="padding:6px 8px;text-align:right">
+          ${mHSR?`<span style="color:#f59e0b">${Math.round(mHSR)}</span>${matchPctBadge(mHSR,matchRef3.hsr)}`:'<span style="color:var(--text3)">—</span>'}
+        </td>
+        <td style="padding:6px 8px;text-align:right">
+          ${mSP?`<span style="color:#ef4444">${Math.round(mSP)}</span>${matchPctBadge(mSP,matchRef3.sprint)}`:'<span style="color:var(--text3)">—</span>'}
+        </td>
+        <td style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3)">${mAccel?Math.round(mAccel)+'회':'—'}</td>
+        <td style="padding:6px 8px;text-align:right;font-size:10px;color:var(--text3)">${mRHIE?parseFloat(mRHIE.toFixed(1))+'회':'—'}</td>
+        <td style="padding:6px 8px;text-align:center">
+          ${resultLabel?`<span style="font-size:11px;font-weight:700;color:${resultColor}">${resultLabel}</span>`:''}
+          ${mScore?`<span style="font-size:10px;color:var(--text3);margin-left:3px">${mScore}</span>`:''}
+        </td>
+      </tr>`;
+    })() : '';
+
+    const trainRowHtml = `<tr style="border-bottom:0.5px solid var(--border);${rowBg};${!isPast?'opacity:0.45':''}">
       <td style="padding:7px 10px;white-space:nowrap">
         <span style="color:${isYesterday?'var(--accent2)':isToday2?'#4ade80':'var(--text2)'};font-weight:${isYesterday||isToday2?'600':'400'}">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>
         ${typeTag}${dayLabel}
@@ -6372,6 +6467,8 @@ async function loadMorningReport(){
       <td style="padding:7px 8px;text-align:right">${acwrCell}</td>
       <td style="padding:7px 8px;text-align:center">${statusCell}</td>
     </tr>`;
+
+    return matchRowHtml + (dayGpsForRow.length||!isPast ? trainRowHtml : '');
   }).join('');
 
   // 주간 누적 — M 있는 날(isTeamDay)만 합산, S 날(경기 등) 제외
@@ -6803,6 +6900,24 @@ async function loadMorningReport(){
         </table>
       </div>
       <div style="font-size:10px;color:var(--text3);margin-top:6px">공식: (M선수 전체 팀 지표 총합) ÷ (M선수 전체 훈련시간 합) × M선수 다수의 높은 시간 — 선수 수·훈련시간 차이 보정</div>
+      <!-- 최근 3경기 기준선 -->
+      ${ref3Info.length ? `
+      <div style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;border:0.5px solid var(--border)">
+        <div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📊 % 기준: 최근 ${ref3Info.length}경기 팀 평균</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          ${ref3Info.map((m,i)=>`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#3b1219;color:#f87171;border:0.5px solid #7f1d1d">
+            ${i+1}. ${m.dayLabel} vs ${m.opp}${m.ha?' ('+m.ha+')':''}${m.resultLabel||(m.result==='W'?'  승':m.result==='L'?' 패':m.result==='D'?' 무':'')}${m.score?' '+m.score:''}
+          </span>`).join('')}
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          ${matchRef3.td?`<span style="font-size:10px;color:var(--text3)">TD <strong style="color:#60a5fa">${(matchRef3.td/1000).toFixed(1)}km</strong></span>`:''}
+          ${matchRef3.hsr?`<span style="font-size:10px;color:var(--text3)">HSR <strong style="color:#f59e0b">${Math.round(matchRef3.hsr)}m</strong></span>`:''}
+          ${matchRef3.sprint?`<span style="font-size:10px;color:var(--text3)">Sprint <strong style="color:#ef4444">${Math.round(matchRef3.sprint)}m</strong></span>`:''}
+          ${matchRef3.accel?`<span style="font-size:10px;color:var(--text3)">가속 <strong style="color:#fb923c">${Math.round(matchRef3.accel)}회</strong></span>`:''}
+          ${matchRef3.rhie?`<span style="font-size:10px;color:var(--text3)">RHIE <strong style="color:#34d399">${parseFloat(matchRef3.rhie.toFixed(1))}회</strong></span>`:''}
+        </div>
+        <div style="font-size:9px;color:var(--text3);margin-top:4px">🟢 ≥80% &nbsp; 🟡 60~79% &nbsp; 🔴 &lt;60% — 경기대비 훈련 부하 비율</div>
+      </div>` : ''}
       ${yesterdayDetailHtml}
     </div>
 
