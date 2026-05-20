@@ -14934,30 +14934,27 @@ async function deleteMatchDate(date){
 
 // 파일명에서 (YYYY-MM-DD | YYYY.MM.DD | YYMMDD)_상대팀 추출
 function parseMinuteFilename(fname){
-  // 확장자 제거 (xlsx / xls / csv)
   const base = fname.replace(/\.(xlsx|xls|csv)$/i,'');
-  // 1) YYYY-MM-DD_상대 / YYYY.MM.DD_상대 / YYYY/MM/DD_상대
-  //    gps_process.py 패턴: YYYY-MM-DD_mpm_상대팀 → mpm_ 접두사 제거
-  let m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[_\s-]+(.+)/);
+  // 새 형식: YYYY-MM-DD-M_mpm → 상대팀은 DB에서 자동 조회
+  let m = base.match(/^(\d{4}-\d{2}-\d{2})-M_mpm$/i);
+  if(m) return {date: m[1], opponent: null};
+  // YYYY-MM-DD_상대 / YYYY-MM-DD_mpm_상대
+  m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[_\s-]+(.+)/);
   if(m){
     const date = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-    const opp = m[4].trim().replace(/^mpm[_\s-]+/i,'');  // 'mpm_천안시티' → '천안시티'
+    const opp = m[4].trim().replace(/^mpm[_\s-]+/i,'');
     return {date, opponent: opp};
   }
-  // 2) YYMMDD_상대
+  // YYMMDD_상대
   m = base.match(/^(\d{2})(\d{2})(\d{2})[_\s-]+(.+)/);
   if(m){
     const yy = parseInt(m[1],10);
     const yyyy = yy >= 50 ? 1900+yy : 2000+yy;
-    const date = `${yyyy}-${m[2]}-${m[3]}`;
-    return {date, opponent: m[4].trim()};
+    return {date: `${yyyy}-${m[2]}-${m[3]}`, opponent: m[4].trim()};
   }
-  // 3) vs_상대_YYYYMMDD
+  // vs_상대_YYYYMMDD
   m = base.match(/vs[_\s-]+(.+?)[_\s-]+(\d{4})(\d{2})(\d{2})/i);
-  if(m){
-    const date = `${m[2]}-${m[3]}-${m[4]}`;
-    return {date, opponent: m[1].trim()};
-  }
+  if(m) return {date: `${m[2]}-${m[3]}-${m[4]}`, opponent: m[1].trim()};
   return null;
 }
 
@@ -14985,8 +14982,18 @@ async function parseMinuteFile(file){
   // 파일명에서 매칭 정보 추출
   const meta = parseMinuteFilename(file.name);
   if(!meta){
-    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 파일명에서 날짜/상대 추출 실패: <code>${file.name}</code><br>형식: YYYY-MM-DD_mpm_상대팀.csv 또는 YYYY-MM-DD_상대팀.xlsx</span>`;
+    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 파일명에서 날짜 추출 실패: <code>${file.name}</code><br>형식: YYYY-MM-DD-M_mpm.csv</span>`;
     return;
+  }
+  // 상대팀이 파일명에 없으면 match_records에서 자동 조회
+  if(!meta.opponent){
+    const {data:matchRows} = await supa.from('match_records')
+      .select('opponent').eq('match_date', meta.date).limit(1);
+    if(matchRows && matchRows.length) meta.opponent = matchRows[0].opponent;
+    else {
+      if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ ${meta.date} 경기 데이터가 없습니다. GPS 파일을 먼저 업로드하세요.</span>`;
+      return;
+    }
   }
 
   const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.1/package/xlsx.mjs');
