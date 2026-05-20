@@ -9315,7 +9315,7 @@ async function saveGpsData(){
 
   // _isMatch 플래그로 훈련/경기 분리
   const allRecords = _gpsParseData.map(({player_name, _isMatch, time_type, ...rest})=>({...rest, _isMatch, time_type}));
-  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, ...r})=>r);
+  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, ...r})=>r);
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
