@@ -15194,9 +15194,12 @@ function cancelMinuteUpload(){
 
 // 파일명에서 YYYY-MM-DD + 라벨 추출
 function parseTrainMinuteFilename(fname){
-  const base = fname.replace(/\.(xlsx|xls)$/i,'');
-  // YYYY-MM-DD_라벨 / YYYY.MM.DD_라벨 / YYYY-MM-DD (라벨 없음)
-  let m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})(?:[_\s-]+(.+))?/);
+  const base = fname.replace(/\.(xlsx|xls|csv)$/i,'');
+  // 새 형식: YYYY-MM-DD-AM_mpm / YYYY-MM-DD-PM_mpm
+  let m = base.match(/(\d{4}-\d{2}-\d{2})-(AM|PM)_mpm/i);
+  if(m) return {date: m[1], label: m[2].toUpperCase()};
+  // 기존 형식: YYYY-MM-DD_라벨
+  m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})(?:[_\s-]+(.+))?/);
   if(m){
     const date = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
     const label = (m[4]||'').trim() || '훈련';
@@ -15233,17 +15236,22 @@ async function parseTrainMinuteFile(file){
 
   const header = raw[0].map(h => (h||'').toString().trim());
   const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
-  const COL = {
-    name:   ci('Name'),
-    jersey: ci('Jersey'),
-    time:   ci('Time'),
-    mpm:    ci('Meterage Per Minute'),
-  };
-  const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
 
-  if(COL.name<0 || COL.mpm<0 || !FORMAT){
-    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락 (Name + Meterage Per Minute + (Jersey 또는 Time) 필요).<br>발견: ${header.join(', ')}</span>`;
-    return;
+  // 새 형식 감지: 이름 / 분 / 분당이동거리
+  const isNewFormat = ci('이름')>=0 && ci('분')>=0 && ci('분당이동거리')>=0;
+
+  if(!isNewFormat){
+    const COL = {
+      name:   ci('Name'),
+      jersey: ci('Jersey'),
+      time:   ci('Time'),
+      mpm:    ci('Meterage Per Minute'),
+    };
+    const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
+    if(COL.name<0 || COL.mpm<0 || !FORMAT){
+      if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락.<br>발견: ${header.join(', ')}</span>`;
+      return;
+    }
   }
 
   if(!_players.length){
@@ -15258,47 +15266,58 @@ async function parseTrainMinuteFile(file){
   const playersFound = new Set();
   let invalidTime = 0;
 
-  for(const row of raw.slice(1)){
-    if(!row[COL.name]) continue;
-    const mpm = parseFloat(row[COL.mpm]);
-    if(isNaN(mpm)) continue;
-
-    let jersey, timeStr, minute;
-    if(FORMAT==='B'){
-      jersey = String(row[COL.name]).trim();
-      const t = row[COL.time];
-      if(t == null){ invalidTime++; continue; }
-      else if(t instanceof Date){
-        const hh = String(t.getUTCHours()).padStart(2,'0');
-        const mm = String(t.getUTCMinutes()).padStart(2,'0');
-        const ss = String(t.getUTCSeconds()).padStart(2,'0');
-        timeStr = `${hh}:${mm}:${ss}`;
-      } else {
-        timeStr = String(t).trim();
-      }
-      minute = hmsToMin(timeStr);
-    } else {
-      if(!row[COL.jersey]) continue;
-      jersey = String(row[COL.jersey]).trim();
-      const fullName = String(row[COL.name]).trim();
-      const parts = fullName.split(' - ');
-      timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
-      minute = hmsToMin(timeStr);
+  if(isNewFormat){
+    // 새 형식: 이름(한국어) / 분(정수) / 분당이동거리
+    const colName = ci('이름'), colMin = ci('분'), colMpm = ci('분당이동거리');
+    for(const row of raw.slice(1)){
+      const name = row[colName] ? String(row[colName]).trim() : null;
+      if(!name) continue;
+      const minute = parseInt(row[colMin]);
+      const mpm = parseFloat(row[colMpm]);
+      if(isNaN(minute) || isNaN(mpm)) continue;
+      const pid = nameMap[name] || null;
+      if(!pid) unknownPlayers.add(name);
+      else playersFound.add(name);
+      rows.push({
+        session_date: meta.date, session_label: meta.label,
+        player_id: pid, player_name: name,
+        minute, mpm: Math.round(mpm*100)/100, raw_time: String(minute),
+      });
     }
-    if(minute==null){ invalidTime++; continue; }
-
-    const pid = nameMap[jersey] || null;
-    if(!pid) unknownPlayers.add(jersey);
-    else playersFound.add(jersey);
-    rows.push({
-      session_date:  meta.date,
-      session_label: meta.label,
-      player_id:     pid,
-      player_name:   jersey,
-      minute,
-      mpm:           Math.round(mpm*100)/100,
-      raw_time:      timeStr,
-    });
+  } else {
+    // 구형식: Name / Jersey or Time / Meterage Per Minute
+    const COL = { name: ci('Name'), jersey: ci('Jersey'), time: ci('Time'), mpm: ci('Meterage Per Minute') };
+    const FORMAT = COL.time>=0 ? 'B' : 'A';
+    for(const row of raw.slice(1)){
+      if(!row[COL.name]) continue;
+      const mpm = parseFloat(row[COL.mpm]);
+      if(isNaN(mpm)) continue;
+      let jersey, timeStr, minute;
+      if(FORMAT==='B'){
+        jersey = String(row[COL.name]).trim();
+        const t = row[COL.time];
+        if(t==null){ invalidTime++; continue; }
+        else if(t instanceof Date){
+          timeStr = `${String(t.getUTCHours()).padStart(2,'0')}:${String(t.getUTCMinutes()).padStart(2,'0')}:${String(t.getUTCSeconds()).padStart(2,'0')}`;
+        } else { timeStr = String(t).trim(); }
+        minute = hmsToMin(timeStr);
+      } else {
+        if(!row[COL.jersey]) continue;
+        jersey = String(row[COL.jersey]).trim();
+        const parts = String(row[COL.name]).trim().split(' - ');
+        timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
+        minute = hmsToMin(timeStr);
+      }
+      if(minute==null){ invalidTime++; continue; }
+      const pid = nameMap[jersey] || null;
+      if(!pid) unknownPlayers.add(jersey);
+      else playersFound.add(jersey);
+      rows.push({
+        session_date: meta.date, session_label: meta.label,
+        player_id: pid, player_name: jersey,
+        minute, mpm: Math.round(mpm*100)/100, raw_time: timeStr,
+      });
+    }
   }
 
   _trainMinuteParseData = {meta, rows, unknownPlayers:[...unknownPlayers], playersFound:[...playersFound], invalidTime};
