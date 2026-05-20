@@ -8266,7 +8266,7 @@ function renderTwoWeekCal(){
                min-height:${s.hasData?'175px':'60px'};${cardBg}
                transition:border-color .12s;${cardBorder}">
         <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px">
-          <span style="font-size:10px;color:${isActive?(isMatchDay?'#f87171':'var(--accent2)'):'var(--text3)'}">${s.dow}${isMatchDay?matchBadge:typeBadge}</span>
+          <span style="font-size:10px;color:${isActive?(isMatchDay?'#f87171':'var(--accent2)'):'var(--text3)'}">${s.dow}${matchBadge}${typeBadge}</span>
           <div style="text-align:right">
             <div style="font-size:9px;color:${isActive?(isMatchDay?'#f87171':'var(--accent2)'):'var(--text3)'};line-height:1">${s.mon}월</div>
             <div style="font-size:14px;font-weight:600;color:${isActive?(isMatchDay?'#f87171':'var(--accent2)'):(isMatchDay?'#f87171':'var(--text)')};line-height:1.2">${s.day}</div>
