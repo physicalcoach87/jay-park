@@ -14938,11 +14938,11 @@ function parseMinuteFilename(fname){
   // 새 형식: YYYY-MM-DD-M_mpm → 상대팀은 DB에서 자동 조회
   let m = base.match(/^(\d{4}-\d{2}-\d{2})-M_mpm$/i);
   if(m) return {date: m[1], opponent: null};
-  // YYYY-MM-DD_상대 / YYYY-MM-DD_mpm_상대
+  // YYYY-MM-DD_상대_mpm / YYYY-MM-DD_상대 / YYYY-MM-DD_mpm_상대
   m = base.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[_\s-]+(.+)/);
   if(m){
     const date = `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
-    const opp = m[4].trim().replace(/^mpm[_\s-]+/i,'');
+    const opp = m[4].trim().replace(/^mpm[_\s-]+/i,'').replace(/_mpm$/i,'');
     return {date, opponent: opp};
   }
   // YYMMDD_상대
