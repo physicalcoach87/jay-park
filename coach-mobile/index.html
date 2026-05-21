@@ -877,30 +877,49 @@ async function loadRpe(){
   const el=document.getElementById('rpe-content');
   el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
   const today=getKSTDateStr();
-  const {data:todayRpe}=await supa.from('session_records').select('id,player_id,rpe,duration,session_type,created_at').eq('record_date',today).order('created_at');
-  // 선수별 세션 배열로 그룹핑 (오전+오후 모두 표시)
+  const [{data:todayRpe},{data:todayGps}]=await Promise.all([
+    supa.from('session_records').select('id,player_id,rpe,duration,session_type,created_at').eq('record_date',today).order('created_at'),
+    supa.from('gps_records').select('session_label').eq('session_date',today)
+  ]);
+  // 예상 세션 (GPS에서 AM/PM 구분)
+  const expectedSessions=[...new Set((todayGps||[]).map(r=>(r.session_label||'').trim().toUpperCase()).filter(s=>s==='AM'||s==='PM'))].sort();
+  const hasGps=expectedSessions.length>0;
+  // 선수별 세션 배열로 그룹핑
   const rpeMap={};
   (todayRpe||[]).forEach(r=>{
     if(!rpeMap[r.player_id]) rpeMap[r.player_id]=[];
     rpeMap[r.player_id].push(r);
   });
+  const getSubmitted=pid=>(rpeMap[pid]||[]).filter(r=>parseFloat(r.rpe)>0).map(r=>(r.session_type||'AM').trim().toUpperCase());
   const responded=_players.filter(p=>rpeMap[p.id]?.some(r=>parseFloat(r.rpe)>0));
   const noResp=_players.filter(p=>!rpeMap[p.id]?.some(r=>parseFloat(r.rpe)>0));
   const rpeColor=v=>!v?'var(--text3)':v>=8?'#ef4444':v>=6?'#f97316':v>=4?'#eab308':'#22c55e';
   const typeOpts=t=>['AM','PM','추가','개인훈련'].map(v=>`<option value="${v}"${(t||'AM')===v?' selected':''}>${v}</option>`).join('');
-  // 팀 평균: 선수별 일일 sRPE 합산 후 평균
-  const plSRPEs=responded.map(p=>(rpeMap[p.id]||[]).reduce((s,r)=>{
-    const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;
-    return s+(rv*dur);
-  },0)).filter(v=>v>0);
+  // 세션별 통계 (GPS 기준)
+  const sessionStats=hasGps?expectedSessions.map(sess=>{
+    const cnt=_players.filter(p=>getSubmitted(p.id).includes(sess)).length;
+    return {sess,cnt,missing:_players.length-cnt};
+  }):[];
+  // 응답했지만 일부 세션 누락된 선수
+  const partialMissing=hasGps?responded.filter(p=>expectedSessions.some(s=>!getSubmitted(p.id).includes(s))):[];
+  // 팀 평균
+  const plSRPEs=responded.map(p=>(rpeMap[p.id]||[]).reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+(rv*dur);},0)).filter(v=>v>0);
   const avgSRPE=plSRPEs.length?Math.round(plSRPEs.reduce((a,b)=>a+b,0)/plSRPEs.length):null;
+  const validRpe=(todayRpe||[]).filter(r=>parseFloat(r.rpe)>0);
+  const avgRpe=validRpe.length?validRpe.reduce((s,r)=>s+parseFloat(r.rpe),0)/validRpe.length:null;
+  const validDur=(todayRpe||[]).filter(r=>parseFloat(r.duration)>0);
+  const avgDur=validDur.length?validDur.reduce((s,r)=>s+parseFloat(r.duration),0)/validDur.length:null;
+  // 테이블 rows (응답 완료 선수)
   const tableRows=responded.map(p=>{
     const sessions=rpeMap[p.id]||[];
     const totalSRPE=sessions.reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+rv*dur;},0);
-    const rows=sessions.map(r=>{
+    const subs=getSubmitted(p.id);
+    const missing=hasGps?expectedSessions.filter(s=>!subs.includes(s)):[];
+    const missingBadge=missing.length?'<div style="font-size:10px;color:#ef4444;font-weight:600;margin-top:1px">⚠️ '+missing.join('/')+'미입력</div>':'';
+    const rows=sessions.map((r,i)=>{
       const rv=parseFloat(r.rpe),dur=parseFloat(r.duration)||0,sRPE=rv&&dur?Math.round(rv*dur):null;
       return '<tr>'
-        +'<td style="padding:4px 8px"><div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div></td>'
+        +'<td style="padding:4px 8px">'+(i===0?'<div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div>'+missingBadge:'')+'</td>'
         +'<td style="padding:4px 8px"><select onchange="mobileUpdateRpeType(this,\''+r.id+'\')" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:1px 3px;font-family:inherit">'+typeOpts(r.session_type)+'</select></td>'
         +'<td style="padding:4px 8px"><span style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+'">'+rv+'</span></td>'
         +'<td style="padding:4px 8px;color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
@@ -914,6 +933,33 @@ async function loadRpe(){
     '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
     +'<div style="font-size:13px;color:var(--text3)">'+today+' RPE ('+responded.length+'/'+_players.length+'명)</div>'
     +'<button class="refresh-btn" onclick="_loadedPages[\'rpe\']=false;loadRpe()">🔄</button></div>'
+
+    // GPS 기준 세션 현황 카드
+    +(hasGps
+      ?'<div class="card" style="padding:12px 16px">'
+        +'<div class="card-title" style="margin-bottom:8px">📋 오늘 세션 현황 <span style="font-size:10px;font-weight:400;color:var(--text3)">(GPS 기준)</span></div>'
+        +'<div style="display:flex;gap:8px;margin-bottom:'+(partialMissing.length?'10':'0')+'px">'
+        +sessionStats.map(s=>{
+          const clr=s.missing===0?'#22c55e':s.missing<=3?'#f97316':'#ef4444';
+          const bdr=s.missing===0?'rgba(34,197,94,0.4)':'var(--border)';
+          return '<div style="flex:1;background:var(--surface2);border-radius:10px;padding:10px;text-align:center;border:1px solid '+bdr+'">'
+            +'<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">'+s.sess+'</div>'
+            +'<div style="font-size:22px;font-weight:700;color:'+clr+'">'+s.cnt+'<span style="font-size:12px;font-weight:400;color:var(--text3)">/'+(s.cnt+s.missing)+'</span></div>'
+            +(s.missing>0?'<div style="font-size:10px;color:#ef4444;margin-top:1px">'+s.missing+'명 미입력</div>':'<div style="font-size:10px;color:#22c55e;margin-top:1px">전원 완료 ✓</div>')
+            +'</div>';
+        }).join('')
+        +'</div>'
+        +(partialMissing.length>0
+          ?'<div style="padding:8px;background:rgba(239,68,68,0.08);border-radius:8px;border:1px solid rgba(239,68,68,0.2)">'
+            +'<div style="font-size:11px;font-weight:600;color:#ef4444;margin-bottom:4px">⚠️ 세션 누락 선수 ('+partialMissing.length+'명)</div>'
+            +'<div style="display:flex;flex-wrap:wrap;gap:4px">'+partialMissing.map(p=>{
+              const miss=expectedSessions.filter(s=>!getSubmitted(p.id).includes(s));
+              return '<span style="font-size:11px;background:rgba(239,68,68,0.1);border-radius:4px;padding:2px 7px;color:var(--text)">'+p.name+' <span style="color:#ef4444">'+miss.join('/')+'↓</span></span>';
+            }).join('')+'</div>'
+          +'</div>'
+          :'')
+        +'</div>'
+      :'')
 
     +(responded.length?'<div class="card"><div class="card-title">📊 팀 평균</div>'
       +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
@@ -929,8 +975,12 @@ async function loadRpe(){
     +'</div>'
 
     +(noResp.length?'<div class="card"><div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+noResp.length+'명</span></div>'
-      +noResp.map(p=>'<div class="player-row"><div><div class="player-name">'+p.name+'</div><div class="player-pos">'+(p.position||'—')+'</div></div>'
-        +'<button onclick="sendRpeReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button></div>').join('')
+      +noResp.map(p=>{
+        const missingStr=hasGps?expectedSessions.join('+')+' 미입력':'미입력';
+        return '<div class="player-row"><div><div class="player-name">'+p.name+'</div>'
+          +(hasGps?'<div style="font-size:10px;color:#ef4444">'+missingStr+'</div>':'<div class="player-pos">'+(p.position||'—')+'</div>')+'</div>'
+          +'<button onclick="sendRpeReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button></div>';
+      }).join('')
       +'</div>':'');
 }
 async function mobileUpdateRpeType(sel, recordId){
