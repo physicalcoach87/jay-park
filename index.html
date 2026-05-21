@@ -6183,7 +6183,7 @@ async function loadMorningReport(){
       .eq('session_date', yesterdayStr)
       .order('td',{ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe,duration,created_at')
+      .select('player_id,record_date,rpe,duration,session_type,created_at')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
@@ -6974,9 +6974,16 @@ async function loadMorningReport(){
             ${todayRpeRows.map(r=>{
               const rp=_players.find(p=>p.id===r.player_id);
               const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
-                <span style="color:var(--text);font-weight:500">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
-                <span style="color:#a78bfa;font-size:10px">RPE ${parseFloat(r.rpe)} · ✓ ${rt}</span>
+              const cur=r.session_type||'AM';
+              const typeOpts=['AM','PM','추가','개인훈련'].map(t=>`<option value="${t}"${cur===t?' selected':''}>${t}</option>`).join('');
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px;gap:6px">
+                <span style="color:var(--text);font-weight:500;min-width:55px;flex-shrink:0">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
+                <select data-pid="${r.player_id}" data-date="${r.record_date}" data-orig="${cur}"
+                  onchange="updateRpeSessionType(this)"
+                  style="font-size:10px;background:var(--surface);border:1px solid var(--border2);color:var(--text2);border-radius:4px;padding:1px 4px;cursor:pointer;font-family:inherit">
+                  ${typeOpts}
+                </select>
+                <span style="color:#a78bfa;font-size:10px;white-space:nowrap;flex:1;text-align:right">RPE ${parseFloat(r.rpe)} · ${rt}</span>
               </div>`;
             }).join('')}
           </div>` : ''}
@@ -6984,6 +6991,27 @@ async function loadMorningReport(){
       </div>
 
     </div>`;
+}
+
+// ── RPE session_type 수정 ──────────────────────────────────────
+async function updateRpeSessionType(sel){
+  const pid=sel.dataset.pid, date=sel.dataset.date, orig=sel.dataset.orig, newType=sel.value;
+  if(newType===orig) return;
+  sel.disabled=true;
+  const {error}=await supa.from('session_records')
+    .update({session_type:newType})
+    .eq('player_id',pid)
+    .eq('record_date',date)
+    .eq('session_type',orig);
+  sel.disabled=false;
+  if(error){
+    alert('수정 실패: '+error.message);
+    sel.value=orig;
+  } else {
+    sel.dataset.orig=newType;
+    sel.style.color='var(--accent2)';
+    setTimeout(()=>sel.style.color='var(--text2)',1500);
+  }
 }
 
 // ── Morning Report 웰니스/RPE 서브탭 전환 ──────────────────────
@@ -9332,6 +9360,7 @@ async function saveGpsData(){
             .update({duration: r.duration})
             .eq('player_id', r.player_id)
             .eq('record_date', r.session_date)
+            .eq('session_type', r.session_label)
             .is('duration', null);
         }
       }
@@ -9515,22 +9544,21 @@ async function autoUpdateMSS(gpsData){
 
 // ACWR 계산: 최근 7일 acute / 28일 chronic
 function calcACWR(sessions, today){
+  // 같은 날 오전+오후 세션은 날짜별로 합산 후 unique 날짜로 chronic 계산
+  const byDate = {};
+  sessions.forEach(s => {
+    const sRPE = (parseFloat(s.rpe)||0) * (parseFloat(s.dur)||0);
+    if(!sRPE) return;
+    byDate[s.date] = (byDate[s.date]||0) + sRPE;
+  });
   const toDate = d => new Date(d);
   const todayD = toDate(today);
-
-  const daysDiff = (a, b) => Math.floor((b - a) / 86400000);
-
   let acute = 0, chronicSum = 0, chronicDays = 0;
-  sessions.forEach(s => {
-    const rpe  = parseFloat(s.rpe)  || 0;
-    const dur  = parseFloat(s.dur)  || 0;
-    const sRPE = rpe * dur;
-    if(!sRPE) return;
-    const diff = daysDiff(toDate(s.date), todayD);
+  Object.entries(byDate).forEach(([date, sRPE]) => {
+    const diff = Math.floor((todayD - toDate(date)) / 86400000);
     if(diff >= 0 && diff < 7)  acute += sRPE;
     if(diff >= 0 && diff < 28){ chronicSum += sRPE; chronicDays++; }
   });
-
   const chronic = chronicDays > 0 ? (chronicSum / chronicDays) * 7 : 0;
   const acwr = chronic > 0 ? acute / chronic : null;
   return { acute: Math.round(acute), chronic: Math.round(chronic), acwr };

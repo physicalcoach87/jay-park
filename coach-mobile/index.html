@@ -877,23 +877,37 @@ async function loadRpe(){
   const el=document.getElementById('rpe-content');
   el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
   const today=getKSTDateStr();
-  const {data:todayRpe}=await supa.from('session_records').select('player_id,rpe,duration,created_at').eq('record_date',today);
-  const rpeMap={};(todayRpe||[]).forEach(r=>{rpeMap[r.player_id]=r;});
-  const responded=_players.filter(p=>rpeMap[p.id]&&parseFloat(rpeMap[p.id].rpe)>0)
-    .sort((a,b)=>parseFloat(rpeMap[b.id].rpe)-parseFloat(rpeMap[a.id].rpe));
-  const noResp=_players.filter(p=>!rpeMap[p.id]||!parseFloat(rpeMap[p.id].rpe));
+  const {data:todayRpe}=await supa.from('session_records').select('id,player_id,rpe,duration,session_type,created_at').eq('record_date',today).order('created_at');
+  // 선수별 세션 배열로 그룹핑 (오전+오후 모두 표시)
+  const rpeMap={};
+  (todayRpe||[]).forEach(r=>{
+    if(!rpeMap[r.player_id]) rpeMap[r.player_id]=[];
+    rpeMap[r.player_id].push(r);
+  });
+  const responded=_players.filter(p=>rpeMap[p.id]?.some(r=>parseFloat(r.rpe)>0));
+  const noResp=_players.filter(p=>!rpeMap[p.id]?.some(r=>parseFloat(r.rpe)>0));
   const rpeColor=v=>!v?'var(--text3)':v>=8?'#ef4444':v>=6?'#f97316':v>=4?'#eab308':'#22c55e';
-  const avgRpe=responded.length?responded.reduce((a,p)=>a+parseFloat(rpeMap[p.id].rpe),0)/responded.length:null;
-  const avgDur=responded.length?responded.reduce((a,p)=>a+(parseFloat(rpeMap[p.id].duration)||0),0)/responded.length:null;
-  const avgSRPE=avgRpe&&avgDur?Math.round(avgRpe*avgDur):null;
+  const typeOpts=t=>['AM','PM','추가','개인훈련'].map(v=>`<option value="${v}"${(t||'AM')===v?' selected':''}>${v}</option>`).join('');
+  // 팀 평균: 선수별 일일 sRPE 합산 후 평균
+  const plSRPEs=responded.map(p=>(rpeMap[p.id]||[]).reduce((s,r)=>{
+    const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;
+    return s+(rv*dur);
+  },0)).filter(v=>v>0);
+  const avgSRPE=plSRPEs.length?Math.round(plSRPEs.reduce((a,b)=>a+b,0)/plSRPEs.length):null;
   const tableRows=responded.map(p=>{
-    const r=rpeMap[p.id];
-    const rv=parseFloat(r.rpe),dur=parseFloat(r.duration)||0;
-    const sRPE=rv&&dur?Math.round(rv*dur):null;
-    return '<tr><td><div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div></td>'
-      +'<td><span style="font-size:16px;font-weight:700;color:'+rpeColor(rv)+'">'+rv+'</span></td>'
-      +'<td style="color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
-      +'<td style="color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td></tr>';
+    const sessions=rpeMap[p.id]||[];
+    const totalSRPE=sessions.reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+rv*dur;},0);
+    const rows=sessions.map(r=>{
+      const rv=parseFloat(r.rpe),dur=parseFloat(r.duration)||0,sRPE=rv&&dur?Math.round(rv*dur):null;
+      return '<tr>'
+        +'<td style="padding:4px 8px"><div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div></td>'
+        +'<td style="padding:4px 8px"><select onchange="mobileUpdateRpeType(this,\''+r.id+'\')" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:1px 3px;font-family:inherit">'+typeOpts(r.session_type)+'</select></td>'
+        +'<td style="padding:4px 8px"><span style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+'">'+rv+'</span></td>'
+        +'<td style="padding:4px 8px;color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
+        +'<td style="padding:4px 8px;color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td></tr>';
+    }).join('');
+    const totalRow=sessions.length>1?'<tr style="background:rgba(167,139,250,.08)"><td colspan="2" style="padding:2px 8px;font-size:10px;color:var(--text3)">합산</td><td></td><td></td><td style="padding:2px 8px;color:#a78bfa;font-weight:700;font-size:12px">'+Math.round(totalSRPE)+'</td></tr>':'';
+    return rows+totalRow;
   }).join('');
 
   el.innerHTML=
@@ -905,12 +919,12 @@ async function loadRpe(){
       +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
       +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 RPE</div><div style="font-size:20px;font-weight:700;color:'+rpeColor(avgRpe)+'">'+(avgRpe?avgRpe.toFixed(1):'—')+'</div></div>'
       +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 시간</div><div style="font-size:20px;font-weight:700;color:var(--text)">'+(avgDur?Math.round(avgDur):'—')+'<span style="font-size:11px;color:var(--text3)">min</span></div></div>'
-      +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 sRPE</div><div style="font-size:20px;font-weight:700;color:#a78bfa">'+(avgSRPE||'—')+'</div></div>'
+      +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 sRPE</div><div style="font-size:20px;font-weight:700;color:#a78bfa">'+(avgSRPE!=null?avgSRPE:'—')+'</div></div>'
       +'</div></div>':'')
 
     +'<div class="card" style="padding:12px 0"><div class="card-title" style="padding:0 16px 8px">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+responded.length+'명</span></div>'
     +(responded.length
-      ?'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>RPE</th><th>시간</th><th>sRPE</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>'
+      ?'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>구분</th><th>RPE</th><th>시간</th><th>sRPE</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>'
       :'<div style="padding:0 16px"><div class="empty-state"><p>오늘 RPE 입력 없음</p></div></div>')
     +'</div>'
 
@@ -919,6 +933,15 @@ async function loadRpe(){
         +'<button onclick="sendRpeReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button></div>').join('')
       +'</div>':'');
 }
+async function mobileUpdateRpeType(sel, recordId){
+  const newType=sel.value;
+  sel.disabled=true;
+  const {error}=await supa.from('session_records').update({session_type:newType}).eq('id',recordId);
+  sel.disabled=false;
+  if(error){showToast('수정 실패',true);sel.value=sel.dataset.orig||'AM';}
+  else{showToast('✅ '+newType+'으로 변경');sel.style.color='var(--accent2)';setTimeout(()=>sel.style.color='',1500);}
+}
+
 async function sendRpeReminder(id,name){
   await supa.from('notifications').insert({title:'RPE 입력 요청',body:'오늘 훈련 강도(RPE)를 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💪',target_type:'player',target_value:id,created_by:currentUser?.email||'coach'});
   showToast('✅ '+name+'에게 RPE 알림 발송');
@@ -1191,13 +1214,17 @@ function closePlayerOverlay(e){
 // CRI 계산
 // ══════════════════════════════════════════════════════
 function calcACWR(sessions,today){
-  const tD=new Date(today);
-  const diff=d=>Math.floor((tD-new Date(d))/86400000);
-  let acute=0,cSum=0,cDays=0;
+  // 날짜별 합산 (오전+오후 세션은 하루치로 계산)
+  const byDate={};
   sessions.forEach(s=>{
     const sRPE=(parseFloat(s.rpe)||0)*(parseFloat(s.dur)||0);
     if(!sRPE) return;
-    const d=diff(s.date);
+    byDate[s.date]=(byDate[s.date]||0)+sRPE;
+  });
+  const tD=new Date(today);
+  let acute=0,cSum=0,cDays=0;
+  Object.entries(byDate).forEach(([date,sRPE])=>{
+    const d=Math.floor((tD-new Date(date))/86400000);
     if(d>=0&&d<7) acute+=sRPE;
     if(d>=0&&d<28){cSum+=sRPE;cDays++;}
   });
