@@ -1837,9 +1837,19 @@ async function showApp(user, preloadedRole){
   }
   await loadUserPermissions(user.id, role);
   applyTabPermissions();
-  // 로그인 직후 첫 화면
+  // 로그인 직후 첫 화면 (마지막 위치 복원, 없으면 기본값)
   setTimeout(()=>{
-    if(userPermissions['report']){
+    const savedTab = localStorage.getItem('lastTab');
+    const savedView = localStorage.getItem('lastPlayerView');
+    if(savedTab && userPermissions[savedTab]){
+      const btn = document.querySelector(`.tab[onclick*="switchTab('${savedTab}'"]`);
+      if(btn){
+        switchTab(savedTab, btn);
+        if(savedTab === 'players' && savedView){
+          setTimeout(()=>setPlayerView(savedView), 300);
+        }
+      }
+    } else if(userPermissions['report']){
       const btn = document.querySelector(".tab[onclick*=\"switchTab('report'\"]");
       if(btn) switchTab('report', btn);
     } else if(userPermissions['players']){
@@ -1854,6 +1864,8 @@ function showLogin(){
   isAdmin = false;
   currentRole = 'coach';
   userPermissions = {};
+  localStorage.removeItem('lastTab');
+  localStorage.removeItem('lastPlayerView');
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('main-app').style.display='none';
 }
@@ -5276,6 +5288,7 @@ async function loadPlayerManagement(){
 }
 
 function setPlayerView(view){
+  localStorage.setItem('lastPlayerView', view);
   ['team','wellness','roster','dashboard','upload','match'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
     if(el) el.style.display = v===view ? 'block' : 'none';
@@ -16061,6 +16074,7 @@ function switchTab(tab,el){
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
+  localStorage.setItem('lastTab', tab);
   if(tab==='players'){loadPlayerManagement();}
   if(tab==='notify')loadNotifyTab();
   if(tab==='report'){ loadMorningReport(); loadScheduleCalendar(); }
