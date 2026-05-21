@@ -1045,7 +1045,7 @@ async function loadChatList(){
   const withMsg=_players.filter(p=>lastMsg[p.id]).sort((a,b)=>new Date(lastMsg[b.id].created_at)-new Date(lastMsg[a.id].created_at));
   const noMsg=_players.filter(p=>!lastMsg[p.id]);
   const sorted=[...withMsg,...noMsg];
-  const tStr=iso=>{const d=new Date(new Date(iso).getTime()+9*3600000);const td=getKSTDateStr();const md=d.toISOString().split('T')[0];return md===td?d.toTimeString().slice(0,5):md.slice(5).replace('-','/');};
+  const tStr=iso=>{const d=new Date(iso);const td=getKSTDateStr();const md=new Date(d.getTime()+9*3600000).toISOString().split('T')[0];return md===td?d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}):md.slice(5).replace('-','/');};
   el.innerHTML=sorted.map(p=>{
     const last=lastMsg[p.id];const uc=unread[p.id]||0;
     return '<div class="chat-list-item" onclick="openChatThread(\''+p.id+'\',\''+p.name+'\',\''+( p.position||'')+'\')">'
@@ -1078,7 +1078,7 @@ async function loadChatMessages(playerId){
     el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;margin-top:60px">아직 대화가 없어요<br><span style="font-size:11px">메시지를 먼저 보내보세요</span></div>';
     return;
   }
-  const tStr=iso=>{const d=new Date(new Date(iso).getTime()+9*3600000);return d.toTimeString().slice(0,5);};
+  const tStr=iso=>{const d=new Date(iso);return d.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});};
   el.innerHTML=msgs.map(m=>{
     const isC=m.sender==='coach';
     return '<div class="msg-wrap-'+(isC?'coach':'player')+'">'
