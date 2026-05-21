@@ -297,28 +297,27 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 
   <!-- 4. 알림 발송 -->
   <div class="page" id="page-notify">
+    <!-- 공지사항 -->
     <div class="card">
-      <div class="card-title">📢 알림 발송</div>
+      <div class="card-title">📢 공지사항 <span style="font-size:11px;font-weight:400;color:var(--text3)">전체 선수</span></div>
       <div class="notify-form">
-        <select id="notify-target-type" onchange="onTargetTypeChange()">
-          <option value="all">전체 선수</option>
-          <option value="player">개인 선수</option>
-        </select>
-        <select id="notify-player" style="display:none">
-          <option value="">선수 선택...</option>
-        </select>
-        <input type="text" id="notify-title" placeholder="알림 제목">
-        <textarea id="notify-body" placeholder="알림 내용을 입력하세요"></textarea>
-        <button class="btn-send" onclick="sendNotification()">📨 발송하기</button>
+        <input type="text" id="announce-title" placeholder="공지 제목">
+        <textarea id="announce-body" placeholder="공지 내용을 입력하세요"></textarea>
+        <button class="btn-send" id="announce-btn" onclick="sendAnnouncement()">📢 전체 발송</button>
       </div>
     </div>
 
+    <!-- 1:1 메시지 -->
     <div class="card">
-      <div class="card-title">🔔 웰니스 리마인더</div>
-      <div id="reminder-list">
-        <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+      <div class="card-title">💬 1:1 메시지</div>
+      <div class="notify-form">
+        <select id="msg-player">
+          <option value="">선수 선택...</option>
+        </select>
+        <input type="text" id="msg-title" placeholder="메시지 제목">
+        <textarea id="msg-body" placeholder="메시지 내용을 입력하세요"></textarea>
+        <button class="btn-send" id="msg-btn" onclick="sendMessage()">📨 발송하기</button>
       </div>
-      <button class="btn-secondary" style="margin-top:10px" onclick="sendAllReminders()">미응답 전체 리마인더 발송</button>
     </div>
   </div>
 
@@ -441,8 +440,8 @@ async function initApp() {
   const { data } = await supa.from('player_profiles').select('*').order('name');
   _players = data || [];
 
-  // 알림 탭 선수 셀렉트 채우기
-  const sel = document.getElementById('notify-player');
+  // 1:1 메시지 선수 셀렉트 채우기
+  const sel = document.getElementById('msg-player');
   _players.forEach(p => {
     const opt = document.createElement('option');
     opt.value = p.id;
@@ -452,7 +451,6 @@ async function initApp() {
 
   // 첫 페이지 로드
   loadMorningReport();
-  loadReminderList();
 }
 
 // ── 탭 전환 ──────────────────────────────────────────────
@@ -842,113 +840,57 @@ async function loadInjury() {
 // ═══════════════════════════════════════════════════════
 // 4. 알림 발송
 // ═══════════════════════════════════════════════════════
-function onTargetTypeChange() {
-  const type = document.getElementById('notify-target-type').value;
-  document.getElementById('notify-player').style.display = type === 'player' ? 'block' : 'none';
+async function sendAnnouncement() {
+  const title = document.getElementById('announce-title').value.trim();
+  const body  = document.getElementById('announce-body').value.trim();
+  if (!title || !body) { showToast('제목과 내용을 입력하세요', true); return; }
+
+  const btn = document.getElementById('announce-btn');
+  btn.disabled = true; btn.textContent = '발송 중...';
+  try {
+    const inserts = _players.map(p => ({
+      title, body,
+      target_type: 'player',
+      target_value: p.id,
+      created_by: currentUser?.email || 'coach',
+    }));
+    await supa.from('notifications').insert(inserts);
+    showToast(`✅ 전체 ${_players.length}명에게 공지 발송 완료`);
+    document.getElementById('announce-title').value = '';
+    document.getElementById('announce-body').value = '';
+  } catch (e) {
+    showToast('발송 실패: ' + e.message, true);
+  } finally {
+    btn.disabled = false; btn.textContent = '📢 전체 발송';
+  }
 }
 
-async function sendNotification() {
-  const targetType = document.getElementById('notify-target-type').value;
-  const playerId = document.getElementById('notify-player').value;
-  const title = document.getElementById('notify-title').value.trim();
-  const body = document.getElementById('notify-body').value.trim();
-
+async function sendMessage() {
+  const playerId = document.getElementById('msg-player').value;
+  const title    = document.getElementById('msg-title').value.trim();
+  const body     = document.getElementById('msg-body').value.trim();
+  if (!playerId) { showToast('선수를 선택하세요', true); return; }
   if (!title || !body) { showToast('제목과 내용을 입력하세요', true); return; }
-  if (targetType === 'player' && !playerId) { showToast('선수를 선택하세요', true); return; }
 
-  const btn = document.querySelector('#page-notify .btn-send');
+  const btn = document.getElementById('msg-btn');
   btn.disabled = true; btn.textContent = '발송 중...';
-
   try {
-    if (targetType === 'all') {
-      const inserts = _players.map(p => ({
-        title, body,
-        target_type: 'player',
-        target_value: p.id,
-        created_by: currentUser?.email || 'coach',
-      }));
-      await supa.from('notifications').insert(inserts);
-      showToast(`✅ 전체 ${_players.length}명에게 발송 완료`);
-    } else {
-      await supa.from('notifications').insert({
-        title, body,
-        target_type: 'player',
-        target_value: playerId,
-        created_by: currentUser?.email || 'coach',
-      });
-      const pName = _players.find(p => p.id === playerId)?.name || '';
-      showToast(`✅ ${pName}에게 발송 완료`);
-    }
-    document.getElementById('notify-title').value = '';
-    document.getElementById('notify-body').value = '';
+    await supa.from('notifications').insert({
+      title, body,
+      target_type: 'player',
+      target_value: playerId,
+      created_by: currentUser?.email || 'coach',
+    });
+    const pName = _players.find(p => p.id === playerId)?.name || '';
+    showToast(`✅ ${pName}에게 메시지 발송 완료`);
+    document.getElementById('msg-player').value = '';
+    document.getElementById('msg-title').value = '';
+    document.getElementById('msg-body').value = '';
   } catch (e) {
     showToast('발송 실패: ' + e.message, true);
   } finally {
     btn.disabled = false; btn.textContent = '📨 발송하기';
   }
-}
-
-// ── 웰니스 리마인더 ────────────────────────────────────
-async function loadReminderList() {
-  const el = document.getElementById('reminder-list');
-  const today = getKSTDateStr();
-  const { data: todayWell } = await supa.from('wellness_records')
-    .select('player_id').eq('record_date', today);
-
-  const respondedIds = new Set((todayWell || []).map(r => r.player_id));
-  const noResp = _players.filter(p => !respondedIds.has(p.id));
-
-  if (!noResp.length) {
-    el.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>전원 웰니스 입력 완료</p></div>';
-    return;
-  }
-
-  el.innerHTML = `
-    <div style="font-size:12px;color:var(--text3);margin-bottom:8px">미응답 ${noResp.length}명</div>
-    ${noResp.map(p => `<div class="player-row">
-      <div>
-        <div class="player-name">${p.name}</div>
-        <div class="player-pos">${p.position || '—'}</div>
-      </div>
-      <button onclick="sendOneReminder('${p.id}','${p.name}')"
-        style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);
-        color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit">
-        📨 발송
-      </button>
-    </div>`).join('')}
-  `;
-}
-
-async function sendOneReminder(playerId, playerName) {
-  await supa.from('notifications').insert({
-    title: '웰니스 입력 요청',
-    body: '오늘 컨디션을 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💚',
-    target_type: 'player',
-    target_value: playerId,
-    created_by: currentUser?.email || 'coach',
-  });
-  showToast(`✅ ${playerName}에게 리마인더 발송`);
-}
-
-async function sendAllReminders() {
-  const today = getKSTDateStr();
-  const { data: todayWell } = await supa.from('wellness_records')
-    .select('player_id').eq('record_date', today);
-  const respondedIds = new Set((todayWell || []).map(r => r.player_id));
-  const noResp = _players.filter(p => !respondedIds.has(p.id));
-
-  if (!noResp.length) { showToast('전원 이미 입력 완료!'); return; }
-
-  const inserts = noResp.map(p => ({
-    title: '웰니스 입력 요청',
-    body: '오늘 컨디션을 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💚',
-    target_type: 'player',
-    target_value: p.id,
-    created_by: currentUser?.email || 'coach',
-  }));
-  await supa.from('notifications').insert(inserts);
-  showToast(`✅ ${noResp.length}명에게 리마인더 발송 완료`);
-  loadReminderList();
 }
 
 // ═══════════════════════════════════════════════════════
