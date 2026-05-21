@@ -879,8 +879,20 @@ async function loadRpe(){
   const today=getKSTDateStr();
   const [{data:todayRpe},{data:todayGps}]=await Promise.all([
     supa.from('session_records').select('id,player_id,rpe,duration,session_type,created_at').eq('record_date',today).order('created_at'),
-    supa.from('gps_records').select('session_label').eq('session_date',today)
+    supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',today)
   ]);
+  // GPS duration 자동 동기화 (선수는 GPS 업로드 전에 RPE 입력 → 로드 시 자동 보정)
+  const rpeNullDur=(todayRpe||[]).filter(r=>parseFloat(r.rpe)>0&&!r.duration);
+  if(rpeNullDur.length&&(todayGps||[]).length){
+    for(const rec of rpeNullDur){
+      let g=(todayGps||[]).find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
+      if(!g){const pg=(todayGps||[]).filter(g=>g.player_id===rec.player_id);if(pg.length===1)g=pg[0];}
+      if(g?.duration){
+        await supa.from('session_records').update({duration:g.duration,session_type:g.session_label||rec.session_type}).eq('id',rec.id);
+        rec.duration=g.duration; rec.session_type=g.session_label||rec.session_type;
+      }
+    }
+  }
   // 예상 세션 (GPS에서 AM/PM 구분)
   const expectedSessions=[...new Set((todayGps||[]).map(r=>(r.session_label||'').trim().toUpperCase()).filter(s=>s==='AM'||s==='PM'))].sort();
   const hasGps=expectedSessions.length>0;
@@ -902,8 +914,6 @@ async function loadRpe(){
   }):[];
   // 응답했지만 일부 세션 누락된 선수
   const partialMissing=hasGps?responded.filter(p=>expectedSessions.some(s=>!getSubmitted(p.id).includes(s))):[];
-  // duration 없는 선수 (GPS 업로드 후 RPE 입력한 경우)
-  const nullDurPlayers=responded.filter(p=>rpeMap[p.id]?.some(r=>parseFloat(r.rpe)>0&&!r.duration));
   // 팀 평균
   const plSRPEs=responded.map(p=>(rpeMap[p.id]||[]).reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+(rv*dur);},0)).filter(v=>v>0);
   const avgSRPE=plSRPEs.length?Math.round(plSRPEs.reduce((a,b)=>a+b,0)/plSRPEs.length):null;
@@ -934,10 +944,7 @@ async function loadRpe(){
   el.innerHTML=
     '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
     +'<div style="font-size:13px;color:var(--text3)">'+today+' RPE ('+responded.length+'/'+_players.length+'명)</div>'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +(hasGps&&nullDurPlayers.length?'<button onclick="backfillDurFromGps()" style="font-size:11px;padding:4px 10px;background:rgba(234,179,8,0.15);border:1px solid #eab308;color:#eab308;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">⚡ GPS 시간 동기화 ('+nullDurPlayers.length+'명)</button>':'')
-    +'<button class="refresh-btn" onclick="_loadedPages[\'rpe\']=false;loadRpe()">🔄</button>'
-    +'</div></div>'
+    +'<button class="refresh-btn" onclick="_loadedPages[\'rpe\']=false;loadRpe()">🔄</button></div>'
 
     // GPS 기준 세션 현황 카드
     +(hasGps
@@ -995,33 +1002,6 @@ async function mobileUpdateRpeType(sel, recordId){
   sel.disabled=false;
   if(error){showToast('수정 실패',true);sel.value=sel.dataset.orig||'AM';}
   else{showToast('✅ '+newType+'으로 변경');sel.style.color='var(--accent2)';setTimeout(()=>sel.style.color='',1500);}
-}
-async function backfillDurFromGps(){
-  const today=getKSTDateStr();
-  showToast('⏳ GPS 시간 동기화 중...');
-  const [{data:gpsRecs},{data:nullRecs}]=await Promise.all([
-    supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',today),
-    supa.from('session_records').select('id,player_id,session_type').eq('record_date',today).is('duration',null)
-  ]);
-  if(!gpsRecs?.length){showToast('오늘 GPS 데이터 없음',true);return;}
-  if(!nullRecs?.length){showToast('✅ 모든 기록에 시간 있음');return;}
-  let filled=0;
-  for(const rec of nullRecs){
-    // 1차: session_type 정확히 일치하는 GPS
-    let gps=gpsRecs.find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
-    // 2차 폴백: 해당 선수 GPS가 1개뿐이면 타입 무관하게 매칭 (선수가 기본값 AM으로 입력한 경우)
-    if(!gps){
-      const pg=gpsRecs.filter(g=>g.player_id===rec.player_id);
-      if(pg.length===1) gps=pg[0];
-    }
-    if(gps?.duration){
-      await supa.from('session_records').update({duration:gps.duration,session_type:gps.session_label||rec.session_type}).eq('id',rec.id);
-      filled++;
-    }
-  }
-  showToast('✅ '+filled+'명 GPS 시간 동기화 완료');
-  _loadedPages['rpe']=false;
-  loadRpe();
 }
 
 async function sendRpeReminder(id,name){

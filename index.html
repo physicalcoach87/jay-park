@@ -6163,6 +6163,9 @@ async function loadMorningReport(){
     _players = data || [];
   }
 
+  // GPS duration 자동 동기화 (선수는 GPS 업로드 전에 RPE 입력 → 새로고침 시 자동 보정)
+  await autoSyncGpsDuration(today);
+
   // 병렬 데이터 조회
   const [
     {data:weekGps},
@@ -6498,7 +6501,6 @@ async function loadMorningReport(){
   const todayRpeRows = (rpe28||[]).filter(r => r.record_date === today && parseFloat(r.rpe) > 0);
   const todayRpeRespondedIds = new Set(todayRpeRows.map(r => r.player_id));
   const noTodayRpeResp = _players.filter(p=>!todayRpeRespondedIds.has(p.id));
-  const rpeNullDurCount = todayRpeRows.filter(r => !r.duration).length;
   window._noRpeRespPlayers = noTodayRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
   const yWell   = (well7||[]).filter(r=>r.record_date===yesterdayStr);
@@ -6969,10 +6971,7 @@ async function loadMorningReport(){
 
       <!-- 오늘 RPE -->
       <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-          <div style="font-size:11px;font-weight:500;color:var(--text3)">📋 오늘 RPE (${todayRpeRespondedIds.size}/${_players.length}명)</div>
-          ${rpeNullDurCount ? `<button onclick="webBackfillDurFromGps()" style="font-size:10px;padding:3px 10px;border-radius:6px;border:1px solid #eab308;background:rgba(234,179,8,0.1);color:#eab308;cursor:pointer;font-family:inherit;white-space:nowrap">⚡ GPS 시간 동기화 (${rpeNullDurCount}명)</button>` : ''}
-        </div>
+        <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📋 오늘 RPE (${todayRpeRespondedIds.size}/${_players.length}명)</div>
         ${todayRpeRows.length ? `
           <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
             ${todayRpeRows.map(r=>{
@@ -7018,31 +7017,21 @@ async function updateRpeSessionType(sel){
   }
 }
 
-// ── GPS duration 재백필 (웹앱) ──────────────────────────────────
-async function webBackfillDurFromGps(){
-  const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
-  const btn = event.target;
-  btn.disabled = true; btn.textContent = '⏳ 동기화 중...';
+// ── GPS duration 자동 동기화 (새로고침 시 자동 실행) ───────────
+async function autoSyncGpsDuration(today){
   const [{data:gpsRecs},{data:nullRecs}] = await Promise.all([
     supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',today),
-    supa.from('session_records').select('id,player_id,session_type').eq('record_date',today).is('duration',null)
+    supa.from('session_records').select('id,player_id,session_type,rpe').eq('record_date',today).is('duration',null)
   ]);
-  if(!gpsRecs?.length){ alert('오늘 GPS 데이터 없음'); btn.disabled=false; btn.textContent='⚡ GPS 시간 동기화'; return; }
-  if(!nullRecs?.length){ alert('모든 기록에 시간 있음 ✓'); btn.disabled=false; return; }
-  let filled = 0;
-  for(const rec of nullRecs){
+  if(!gpsRecs?.length || !nullRecs?.length) return;
+  const toFill = nullRecs.filter(r=>parseFloat(r.rpe)>0);
+  for(const rec of toFill){
     // 1차: session_type 일치
-    let gps = gpsRecs.find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
-    // 2차 폴백: 해당 선수 GPS 1개뿐이면 타입 무관 매칭 (+ session_type 보정)
-    if(!gps){ const pg=gpsRecs.filter(g=>g.player_id===rec.player_id); if(pg.length===1) gps=pg[0]; }
-    if(gps?.duration){
-      await supa.from('session_records').update({duration:gps.duration,session_type:gps.session_label||rec.session_type}).eq('id',rec.id);
-      filled++;
-    }
+    let g = gpsRecs.find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
+    // 2차 폴백: 해당 선수 GPS 1개뿐이면 타입 무관 매칭
+    if(!g){ const pg=gpsRecs.filter(g=>g.player_id===rec.player_id); if(pg.length===1) g=pg[0]; }
+    if(g?.duration) await supa.from('session_records').update({duration:g.duration,session_type:g.session_label||rec.session_type}).eq('id',rec.id);
   }
-  btn.disabled = false;
-  alert(`✅ ${filled}명 GPS 시간 동기화 완료`);
-  loadMorningReport();
 }
 
 // ── Morning Report 웰니스/RPE 서브탭 전환 ──────────────────────
