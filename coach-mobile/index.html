@@ -126,11 +126,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .sched-btn-week{font-size:11px;padding:5px 11px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit}
 .sched-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .sched-col{display:flex;flex-direction:column}
-.sched-col-hdr{text-align:center;padding:6px 2px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
-.sched-col-hdr-day{font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text3)}
-.sched-col-hdr-num{font-size:22px;font-weight:800;line-height:1;color:var(--text)}
-.sched-today-circle{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:#22c55e;color:#fff;font-size:20px;font-weight:800;line-height:1}
-.sched-col-hdr.today{background:rgba(34,197,94,.06);border-radius:8px 8px 0 0;border-bottom-color:rgba(34,197,94,.4)}
+.sched-col-hdr{text-align:center;padding:8px 2px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
+.sched-col-hdr-day{font-size:11px;font-weight:600;margin-bottom:6px;color:var(--text3)}
+.sched-col-hdr-numwrap{display:flex;align-items:center;justify-content:center;height:40px}
+.sched-col-hdr-num{font-size:24px;font-weight:800;line-height:1;color:var(--text)}
+.sched-today-circle{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:50%;background:#22c55e;color:#fff;font-size:22px;font-weight:800;line-height:1}
+.sched-col-hdr.today{background:rgba(34,197,94,.07);border-radius:8px 8px 0 0;border-bottom-color:rgba(34,197,94,.5)}
 .sched-col-body{display:flex;flex-direction:column;gap:5px}
 .sched-pill{display:flex;align-items:baseline;gap:5px;border-radius:7px;padding:7px 9px;cursor:pointer;border-left:4px solid;transition:opacity .12s;user-select:none}
 .sched-pill:active{opacity:.6}
@@ -368,15 +369,16 @@ let _schedTouchX = 0;
 const DOW = ['일','월','화','수','목','금','토'];
 const MD_COLORS = {'MD-5':'#60a5fa','MD-4':'#34d399','MD-3':'#fbbf24','MD-2':'#f87171','MD-1':'#e879f9','MD':'#4ade80','MD+1':'#94a3b8','MD+2':'#94a3b8'};
 const EVENT_TYPE_COLORS = {
-  '훈련': {bg:'rgba(34,197,94,.18)',  border:'#22c55e',text:'#86efac'},
-  '경기': {bg:'rgba(239,68,68,.22)',  border:'#ef4444',text:'#fca5a5'},
-  '식사': {bg:'rgba(217,119,6,.25)',  border:'#d97706',text:'#fcd34d'},
-  '미팅': {bg:'rgba(124,58,237,.22)', border:'#7c3aed',text:'#c4b5fd'},
-  '이동': {bg:'rgba(37,99,235,.22)',  border:'#2563eb',text:'#93c5fd'},
-  '재활': {bg:'rgba(6,182,212,.20)',  border:'#06b6d4',text:'#67e8f9'},
-  '체크인':{bg:'rgba(16,185,129,.20)', border:'#10b981',text:'#6ee7b7'},
-  '휴식': {bg:'rgba(71,85,105,.20)',  border:'#475569',text:'#94a3b8'},
-  '기타': {bg:'rgba(100,116,139,.20)',border:'#64748b',text:'#cbd5e1'},
+  '훈련': {bg:'rgba(22,163,74,.30)',   border:'#16a34a',text:'#86efac'},
+  'GYM':  {bg:'rgba(37,99,235,.30)',   border:'#2563eb',text:'#93c5fd'},
+  '경기': {bg:'rgba(220,38,38,.30)',   border:'#dc2626',text:'#fca5a5'},
+  '식사': {bg:'rgba(180,83,9,.35)',    border:'#b45309',text:'#fcd34d'},
+  '미팅': {bg:'rgba(109,40,217,.30)',  border:'#6d28d9',text:'#c4b5fd'},
+  '이동': {bg:'rgba(29,78,216,.30)',   border:'#1d4ed8',text:'#bfdbfe'},
+  '재활': {bg:'rgba(6,182,212,.28)',   border:'#06b6d4',text:'#67e8f9'},
+  '체크인':{bg:'rgba(5,150,105,.28)',  border:'#059669',text:'#6ee7b7'},
+  '휴식': {bg:'rgba(71,85,105,.28)',   border:'#475569',text:'#cbd5e1'},
+  '기타': {bg:'rgba(100,116,139,.25)', border:'#64748b',text:'#e2e8f0'},
 };
 
 function kst(d){ const dt=d?new Date(d):new Date(); return new Date(dt.getTime()+9*3600000); }
@@ -585,9 +587,11 @@ async function loadScheduleCard(){
         +timeSpan+'<span class="sched-pill-title">'+escHtml(e.title||e.event_type||'')+'</span></div>';
     }).join('');
 
-    const numHtml=isT
-      ?'<div class="sched-today-circle">'+d.getDate()+'</div>'
-      :'<div class="sched-col-hdr-num" style="color:'+dc+'">'+d.getDate()+'</div>';
+    const numHtml='<div class="sched-col-hdr-numwrap">'
+      +(isT
+        ?'<div class="sched-today-circle">'+d.getDate()+'</div>'
+        :'<div class="sched-col-hdr-num" style="color:'+dc+'">'+d.getDate()+'</div>')
+      +'</div>';
 
     return '<div class="sched-col">'
       +'<div class="sched-col-hdr'+(isT?' today':'')+'">'
@@ -623,15 +627,16 @@ function changeSchedWindow(delta){
 }
 
 function guessEventType(title, eventType){
-  if(eventType) return eventType;
-  const t=(title||'').replace(/\s/g,'');
-  if(/훈련|train|gym|GYM/.test(t)) return '훈련';
-  if(/경기|match/.test(t)) return '경기';
-  if(/조식|중식|석식|식사|체식|뷔페/.test(t)) return '식사';
-  if(/미팅|회의|meeting/.test(t)) return '미팅';
-  if(/이동|출발|도착|버스|항공|기차/.test(t)) return '이동';
-  if(/재활|치료|의무|마사지/.test(t)) return '재활';
-  if(/휴식|rest|off/.test(t)) return '휴식';
+  if(eventType&&eventType.trim()) return eventType.trim();
+  const t=(title||'').replace(/\s/g,'').toUpperCase();
+  if(/GYM|웨이트|근력|피지컬세션|PT/.test(t)) return 'GYM';
+  if(/훈련|TRAIN|TRAINING|전술|기술|팀훈련/.test(t)) return '훈련';
+  if(/경기|MATCH|GAME/.test(t)) return '경기';
+  if(/조식|중식|석식|식사|체식|뷔페|MEAL|밥|단체식/.test(t)) return '식사';
+  if(/미팅|회의|MEETING|MTG|자산관리|팀미팅/.test(t)) return '미팅';
+  if(/이동|출발|도착|버스|항공|기차|이동|TRAVEL|이동버스/.test(t)) return '이동';
+  if(/재활|치료|의무|마사지|회복|REHAB/.test(t)) return '재활';
+  if(/휴식|REST|OFF|자유/.test(t)) return '휴식';
   return '기타';
 }
 
