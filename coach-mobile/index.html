@@ -1099,7 +1099,6 @@ async function sendChatMsg(){
     const {error}=await supa.from('messages').insert({
       player_id:_currentChatPlayerId,
       sender:'coach',
-      sender_name:currentUser?.email||'coach',
       content,
       is_read:false
     });
