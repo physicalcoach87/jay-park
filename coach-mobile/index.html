@@ -627,15 +627,22 @@ function changeSchedWindow(delta){
 }
 
 function guessEventType(title, eventType){
-  if(eventType&&eventType.trim()) return eventType.trim();
+  // 웹앱 DB 영문값 → 컬러 키 변환 (TRAINING→'훈련', MEAL→'식사' 등)
+  const DB_MAP={'TRAINING':'훈련','MATCH':'경기','GYM':'GYM','MEAL':'식사','SNACK':'식사','REST':'휴식','EVENT':'미팅'};
+  if(eventType&&eventType.trim()){
+    const up=eventType.trim().toUpperCase();
+    if(DB_MAP[up]) return DB_MAP[up];
+    if(EVENT_TYPE_COLORS[eventType.trim()]) return eventType.trim();
+  }
+  // event_type 없으면 제목 키워드 감지
   const t=(title||'').replace(/\s/g,'').toUpperCase();
   if(/GYM|웨이트|근력|피지컬세션|PT/.test(t)) return 'GYM';
-  if(/훈련|TRAIN|TRAINING|전술|기술|팀훈련/.test(t)) return '훈련';
+  if(/훈련|TRAINING|전술|기술/.test(t)) return '훈련';
   if(/경기|MATCH|GAME/.test(t)) return '경기';
-  if(/조식|중식|석식|식사|체식|뷔페|MEAL|밥|단체식/.test(t)) return '식사';
-  if(/미팅|회의|MEETING|MTG|자산관리|팀미팅/.test(t)) return '미팅';
-  if(/이동|출발|도착|버스|항공|기차|이동|TRAVEL|이동버스/.test(t)) return '이동';
-  if(/재활|치료|의무|마사지|회복|REHAB/.test(t)) return '재활';
+  if(/조식|중식|석식|식사|체식|뷔페|MEAL|단체식/.test(t)) return '식사';
+  if(/미팅|회의|MEETING|자산관리|EVENT/.test(t)) return '미팅';
+  if(/이동|출발|도착|버스|항공|기차|TRAVEL/.test(t)) return '이동';
+  if(/재활|치료|의무|마사지|REHAB/.test(t)) return '재활';
   if(/휴식|REST|OFF|자유/.test(t)) return '휴식';
   return '기타';
 }
