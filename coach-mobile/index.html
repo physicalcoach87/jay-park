@@ -368,17 +368,16 @@ let _schedTouchX = 0;
 
 const DOW = ['일','월','화','수','목','금','토'];
 const MD_COLORS = {'MD-5':'#60a5fa','MD-4':'#34d399','MD-3':'#fbbf24','MD-2':'#f87171','MD-1':'#e879f9','MD':'#4ade80','MD+1':'#94a3b8','MD+2':'#94a3b8'};
+// 웹앱(index.html)과 동일한 색상 + 동일한 영문 키 사용
 const EVENT_TYPE_COLORS = {
-  '훈련': {bg:'#1a6b3c', border:'#22c55e', text:'#bbf7d0'},
-  'GYM':  {bg:'#1e3a8a', border:'#60a5fa', text:'#bfdbfe'},
-  '경기': {bg:'#8b1a1a', border:'#f87171', text:'#fecaca'},
-  '식사': {bg:'#8a5510', border:'#fbbf24', text:'#fef08a'},
-  '미팅': {bg:'#5b1a8a', border:'#c084fc', text:'#e9d5ff'},
-  '이동': {bg:'#1a3d8a', border:'#93c5fd', text:'#dbeafe'},
-  '재활': {bg:'#0e5f73', border:'#22d3ee', text:'#cffafe'},
-  '체크인':{bg:'#0a5940', border:'#34d399', text:'#d1fae5'},
-  '휴식': {bg:'#2a3040', border:'#94a3b8', text:'#e2e8f0'},
-  '기타': {bg:'#252535', border:'#64748b', text:'#cbd5e1'},
+  'TRAINING':{bg:'rgba(22,163,74,0.20)',   border:'#16a34a', text:'#4ade80'},
+  'MATCH':   {bg:'rgba(239,68,68,0.20)',   border:'#ef4444', text:'#fca5a5'},
+  'GYM':     {bg:'rgba(59,130,246,0.20)',  border:'#3b82f6', text:'#93c5fd'},
+  'MEAL':    {bg:'rgba(234,179,8,0.20)',   border:'#eab308', text:'#fde047'},
+  'SNACK':   {bg:'rgba(249,115,22,0.20)',  border:'#f97316', text:'#fdba74'},
+  'EVENT':   {bg:'rgba(139,92,246,0.20)',  border:'#8b5cf6', text:'#c4b5fd'},
+  'REST':    {bg:'rgba(113,113,122,0.20)', border:'#71717a', text:'#a1a1aa'},
+  'DEFAULT': {bg:'rgba(100,116,139,0.15)', border:'#64748b', text:'#cbd5e1'},
 };
 
 function kst(d){ const dt=d?new Date(d):new Date(); return new Date(dt.getTime()+9*3600000); }
@@ -580,7 +579,7 @@ async function loadScheduleCard(){
 
     const pills=evts.map(e=>{
       const type=guessEventType(e.title,e.event_type);
-      const c=EVENT_TYPE_COLORS[type]||EVENT_TYPE_COLORS['기타'];
+      const c=EVENT_TYPE_COLORS[type]||EVENT_TYPE_COLORS['DEFAULT'];
       const timeSpan=e.start_time?'<span class="sched-pill-time">'+e.start_time.slice(0,5)+'</span>':'';
       return '<div class="sched-pill" style="background:'+c.bg+';border-left-color:'+c.border+';color:'+c.text
         +'" onclick="openSchedEdit(\''+e.id+'\')">'
@@ -627,24 +626,21 @@ function changeSchedWindow(delta){
 }
 
 function guessEventType(title, eventType){
-  // 웹앱 DB 영문값 → 컬러 키 변환 (TRAINING→'훈련', MEAL→'식사' 등)
-  const DB_MAP={'TRAINING':'훈련','MATCH':'경기','GYM':'GYM','MEAL':'식사','SNACK':'식사','REST':'휴식','EVENT':'미팅'};
+  // DB 값이 영문이면 그대로 사용 (웹앱과 동일한 키)
   if(eventType&&eventType.trim()){
     const up=eventType.trim().toUpperCase();
-    if(DB_MAP[up]) return DB_MAP[up];
-    if(EVENT_TYPE_COLORS[eventType.trim()]) return eventType.trim();
+    if(EVENT_TYPE_COLORS[up]) return up;
   }
-  // event_type 없으면 제목 키워드 감지
+  // event_type 없으면 제목 키워드로 감지
   const t=(title||'').replace(/\s/g,'').toUpperCase();
-  if(/GYM|웨이트|근력|피지컬세션|PT/.test(t)) return 'GYM';
-  if(/훈련|TRAINING|전술|기술/.test(t)) return '훈련';
-  if(/경기|MATCH|GAME/.test(t)) return '경기';
-  if(/조식|중식|석식|식사|체식|뷔페|MEAL|단체식/.test(t)) return '식사';
-  if(/미팅|회의|MEETING|자산관리|EVENT/.test(t)) return '미팅';
-  if(/이동|출발|도착|버스|항공|기차|TRAVEL/.test(t)) return '이동';
-  if(/재활|치료|의무|마사지|REHAB/.test(t)) return '재활';
-  if(/휴식|REST|OFF|자유/.test(t)) return '휴식';
-  return '기타';
+  if(/GYM|웨이트|근력/.test(t)) return 'GYM';
+  if(/훈련|TRAINING|전술/.test(t)) return 'TRAINING';
+  if(/경기|MATCH/.test(t)) return 'MATCH';
+  if(/조식|중식|석식|식사|단체식|MEAL/.test(t)) return 'MEAL';
+  if(/간식|SNACK/.test(t)) return 'SNACK';
+  if(/미팅|회의|이벤트|EVENT|자산관리/.test(t)) return 'EVENT';
+  if(/휴식|REST|자유/.test(t)) return 'REST';
+  return 'DEFAULT';
 }
 
 function initSchedSwipe(){
@@ -779,7 +775,7 @@ async function loadWeekInputContent(){
     const dc=dw===0?'#f87171':dw===6?'#93c5fd':'var(--text2)';
     const evts=schedByDate[ds]||[];
     const chips=evts.map(e=>{
-      const c=EVENT_TYPE_COLORS[e.event_type]||EVENT_TYPE_COLORS['기타'];
+      const c=EVENT_TYPE_COLORS[e.event_type]||EVENT_TYPE_COLORS['DEFAULT'];
       return '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:4px 8px 4px 10px;border-radius:20px;background:'+c.bg+';border:1px solid '+c.border+';color:'+c.text+';cursor:pointer;margin:2px" onclick="openSchedEdit(\''+e.id+'\')">'
         +(e.start_time?e.start_time.slice(0,5)+' ':'')+escHtml(e.title||'')+' '
         +'<span style="font-size:10px;opacity:.6;padding:0 2px" onclick="event.stopPropagation();quickDeleteSched(\''+e.id+'\')">✕</span></span>';
