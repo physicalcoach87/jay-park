@@ -1007,9 +1007,15 @@ async function backfillDurFromGps(){
   if(!nullRecs?.length){showToast('✅ 모든 기록에 시간 있음');return;}
   let filled=0;
   for(const rec of nullRecs){
-    const gps=gpsRecs.find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
+    // 1차: session_type 정확히 일치하는 GPS
+    let gps=gpsRecs.find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
+    // 2차 폴백: 해당 선수 GPS가 1개뿐이면 타입 무관하게 매칭 (선수가 기본값 AM으로 입력한 경우)
+    if(!gps){
+      const pg=gpsRecs.filter(g=>g.player_id===rec.player_id);
+      if(pg.length===1) gps=pg[0];
+    }
     if(gps?.duration){
-      await supa.from('session_records').update({duration:gps.duration}).eq('id',rec.id);
+      await supa.from('session_records').update({duration:gps.duration,session_type:gps.session_label||rec.session_type}).eq('id',rec.id);
       filled++;
     }
   }
