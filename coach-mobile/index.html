@@ -485,6 +485,8 @@ function switchPage(page,el){
     ICON.style.transform='rotate(0deg)';
     if(doRefresh){
       TEXT.textContent='새로고침 중...';
+      // 모든 탭 데이터 초기화 후 현재 탭만 즉시 로드, 나머지는 탭 전환 시 새로 로드
+      Object.keys(_loadedPages).forEach(k=>_loadedPages[k]=false);
       const page=document.querySelector('.page.active')?.id?.replace('page-','');
       if(page&&refreshFns[page]) refreshFns[page]();
     }
