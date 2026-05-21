@@ -212,6 +212,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
   </div>
 
+  <!-- Pull to Refresh 인디케이터 -->
+  <div id="ptr-bar" style="position:fixed;top:0;left:0;right:0;height:52px;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--surface);border-bottom:1px solid var(--border);z-index:999;transform:translateY(-52px);opacity:0;pointer-events:none;will-change:transform">
+    <span id="ptr-icon" style="font-size:20px;display:inline-block;transition:transform 0.2s">↓</span>
+    <span id="ptr-text" style="font-size:12px;color:var(--text3)">당겨서 새로고침</span>
+  </div>
+
   <!-- 1. 홈 -->
   <div class="page active" id="page-home">
     <div id="home-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
@@ -435,6 +441,77 @@ function switchPage(page,el){
     if(page==='notify') loadChatList();
   }
 }
+
+// ══════════════════════════════════════════════════════
+// Pull to Refresh
+// ══════════════════════════════════════════════════════
+(function(){
+  const BAR=document.getElementById('ptr-bar');
+  const ICON=document.getElementById('ptr-icon');
+  const TEXT=document.getElementById('ptr-text');
+  const THRESHOLD=70, HEIGHT=52;
+  let startY=0, curDY=0, active=false, triggered=false;
+
+  const refreshFns={
+    home:    ()=>{_loadedPages['home']=false;    loadHome();},
+    wellness:()=>{_loadedPages['wellness']=false; loadWellness();},
+    rpe:     ()=>{_loadedPages['rpe']=false;      loadRpe();},
+    training:()=>{_loadedPages['training']=false; loadTraining();},
+    notify:  ()=>loadChatList(),
+  };
+
+  function setBar(dy){
+    const clamped=Math.min(dy,THRESHOLD*1.2);
+    const translateY=Math.round(clamped*0.5-HEIGHT); // 감쇠
+    const opacity=Math.min(clamped/THRESHOLD,1);
+    BAR.style.transition='none';
+    BAR.style.transform=`translateY(${translateY}px)`;
+    BAR.style.opacity=opacity;
+    if(clamped>=THRESHOLD){
+      TEXT.textContent='놓으면 새로고침';
+      ICON.style.transform='rotate(180deg)';
+      triggered=true;
+    } else {
+      TEXT.textContent='당겨서 새로고침';
+      ICON.style.transform='rotate(0deg)';
+      triggered=false;
+    }
+  }
+
+  function hideBar(doRefresh){
+    BAR.style.transition='transform 0.25s ease, opacity 0.25s ease';
+    BAR.style.transform=`translateY(${-HEIGHT}px)`;
+    BAR.style.opacity='0';
+    ICON.style.transform='rotate(0deg)';
+    if(doRefresh){
+      TEXT.textContent='새로고침 중...';
+      const page=document.querySelector('.page.active')?.id?.replace('page-','');
+      if(page&&refreshFns[page]) refreshFns[page]();
+    }
+  }
+
+  document.addEventListener('touchstart',e=>{
+    const page=document.querySelector('.page.active');
+    if(!page||page.scrollTop>2) return;
+    startY=e.touches[0].clientY;
+    curDY=0; active=true; triggered=false;
+  },{passive:true});
+
+  document.addEventListener('touchmove',e=>{
+    if(!active) return;
+    const page=document.querySelector('.page.active');
+    if(!page||page.scrollTop>2){active=false;hideBar(false);return;}
+    curDY=e.touches[0].clientY-startY;
+    if(curDY<0){active=false;hideBar(false);return;}
+    setBar(curDY);
+  },{passive:true});
+
+  document.addEventListener('touchend',()=>{
+    if(!active) return;
+    active=false;
+    hideBar(triggered);
+  },{passive:true});
+})();
 
 // ══════════════════════════════════════════════════════
 // 1. 홈 — 팀일정 / 부상자 현황 / 관리 우선순위
