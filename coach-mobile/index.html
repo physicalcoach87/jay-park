@@ -1093,10 +1093,31 @@ async function sendChatMsg(){
   const content=input.value.trim();
   if(!content||!_currentChatPlayerId) return;
   input.value='';
+  const btn=document.querySelector('.chat-send-btn');
+  if(btn) btn.disabled=true;
   try{
-    await supa.from('messages').insert({player_id:_currentChatPlayerId,sender:'coach',sender_name:currentUser?.email||'coach',content,is_read:false});
-    await supa.from('notifications').insert({title:'코치 메시지',body:content,target_type:'player',target_value:_currentChatPlayerId,created_by:currentUser?.email||'coach'});
-  }catch(e){showToast('전송 실패',true);}
+    const {error}=await supa.from('messages').insert({
+      player_id:_currentChatPlayerId,
+      sender:'coach',
+      sender_name:currentUser?.email||'coach',
+      content,
+      is_read:false
+    });
+    if(error) throw error;
+    // 전송 후 즉시 화면 갱신 (realtime 미지원 환경 대비)
+    await loadChatMessages(_currentChatPlayerId);
+  }catch(e){
+    input.value=content; // 실패 시 텍스트 복원
+    showToast('전송 실패: '+e.message,true);
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+  // notifications는 별도로 (실패해도 채팅에 영향 없음)
+  supa.from('notifications').insert({
+    title:'코치 메시지',body:content,
+    target_type:'player',target_value:_currentChatPlayerId,
+    created_by:currentUser?.email||'coach'
+  }).then(()=>{}).catch(()=>{});
 }
 
 function closeChatThread(){
