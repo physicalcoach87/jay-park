@@ -10,239 +10,153 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
 <style>
 :root {
-  --bg: #0a0a0f;
-  --surface: #13131a;
-  --surface2: #1c1c26;
-  --border: #2a2a3a;
-  --text: #f0f0f5;
-  --text2: #a0a0b8;
-  --text3: #606078;
-  --blue: #3b82f6;
-  --blue-dim: #1e3a5f;
-  --green: #22c55e;
-  --red: #ef4444;
-  --amber: #f59e0b;
-  --yellow: #eab308;
-  --accent: #6366f1;
+  --bg:#0a0a0f; --surface:#13131a; --surface2:#1c1c26;
+  --border:#2a2a3a; --text:#f0f0f5; --text2:#a0a0b8; --text3:#606078;
+  --blue:#3b82f6; --green:#22c55e; --red:#ef4444; --amber:#f59e0b;
+  --yellow:#eab308; --accent:#6366f1;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
-  padding-bottom: 80px;
-}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:80px}
 
-/* ── 로그인 ── */
-#login-screen {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  min-height: 100vh; padding: 24px;
-}
-#login-screen h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-#login-screen p { font-size: 13px; color: var(--text3); margin-bottom: 32px; }
-.login-form { width: 100%; max-width: 360px; display: flex; flex-direction: column; gap: 12px; }
-.login-form input {
-  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-  border-radius: 12px; padding: 14px 16px; font-size: 15px; outline: none; width: 100%;
-}
-.login-form input:focus { border-color: var(--blue); }
-.btn-primary {
-  background: var(--blue); color: #fff; border: none;
-  border-radius: 12px; padding: 14px 16px; font-size: 15px; font-weight: 600;
-  cursor: pointer; width: 100%; font-family: inherit;
-}
-.btn-primary:active { opacity: 0.8; }
-#login-error { font-size: 12px; color: var(--red); text-align: center; }
+/* Login */
+#login-screen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:24px}
+#login-screen h1{font-size:20px;font-weight:700;margin-bottom:4px}
+#login-screen p{font-size:13px;color:var(--text3);margin-bottom:32px}
+.login-form{width:100%;max-width:360px;display:flex;flex-direction:column;gap:12px}
+.login-form input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:14px 16px;font-size:15px;outline:none;width:100%}
+.login-form input:focus{border-color:var(--blue)}
+.btn-primary{background:var(--blue);color:#fff;border:none;border-radius:12px;padding:14px 16px;font-size:15px;font-weight:600;cursor:pointer;width:100%;font-family:inherit}
+.btn-primary:active{opacity:.8}
+#login-error{font-size:12px;color:var(--red);text-align:center}
 
-/* ── 앱 ── */
-#app { display: none; }
+/* App */
+#app{display:none}
+.header{position:sticky;top:0;z-index:100;background:rgba(10,10,15,.92);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:12px 16px 10px}
+.header-top{display:flex;justify-content:space-between;align-items:center}
+.header-title{font-size:16px;font-weight:700}
+.header-sub{font-size:11px;color:var(--text3);margin-top:1px}
+.btn-logout{font-size:11px;color:var(--text3);background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 10px;cursor:pointer;font-family:inherit}
 
-/* ── 헤더 ── */
-.header {
-  position: sticky; top: 0; z-index: 100;
-  background: rgba(10,10,15,0.92); backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  padding: 12px 16px 10px;
-}
-.header-top { display: flex; justify-content: space-between; align-items: center; }
-.header-title { font-size: 16px; font-weight: 700; }
-.header-sub { font-size: 11px; color: var(--text3); margin-top: 1px; }
-.btn-logout {
-  font-size: 11px; color: var(--text3); background: var(--surface2);
-  border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px;
-  cursor: pointer; font-family: inherit;
-}
+/* Bottom nav */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:100;background:rgba(19,19,26,.96);backdrop-filter:blur(12px);border-top:1px solid var(--border);display:flex;padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 0}
+.nav-icon{font-size:20px;line-height:1}
+.nav-label{font-size:9px;color:var(--text3)}
+.nav-item.active .nav-label{color:var(--blue)}
+.nav-item.active .nav-icon{filter:brightness(1.3)}
 
-/* ── 바텀 탭 ── */
-.bottom-nav {
-  position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(19,19,26,0.96); backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  display: flex; padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
-}
-.nav-item {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  cursor: pointer; padding: 4px 0;
-}
-.nav-icon { font-size: 20px; line-height: 1; }
-.nav-label { font-size: 9px; color: var(--text3); }
-.nav-item.active .nav-label { color: var(--blue); }
-.nav-item.active .nav-icon { filter: brightness(1.3); }
+/* Pages */
+.page{display:none}
+.page.active{display:block}
 
-/* ── 콘텐츠 ── */
-.page { display: none; padding: 0; }
-.page.active { display: block; }
+/* Card */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin:12px 16px}
+.card-title{font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:6px}
 
-/* ── 카드 ── */
-.card {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 16px; padding: 16px; margin: 12px 16px;
-}
-.card-title {
-  font-size: 12px; font-weight: 600; color: var(--text3);
-  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
-  display: flex; align-items: center; gap: 6px;
-}
-.section-header {
-  font-size: 13px; font-weight: 600; color: var(--text2);
-  padding: 16px 16px 6px; display: flex; align-items: center; gap: 6px;
-}
+/* Player row */
+.player-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:.5px solid var(--border)}
+.player-row:last-child{border-bottom:none}
+.player-name{font-size:14px;font-weight:500}
+.player-pos{font-size:11px;color:var(--text3);margin-top:1px}
 
-/* ── 지표 배지 ── */
-.stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.stat-item {
-  background: var(--surface2); border-radius: 12px;
-  padding: 10px 8px; text-align: center;
-}
-.stat-label { font-size: 10px; color: var(--text3); margin-bottom: 3px; }
-.stat-value { font-size: 15px; font-weight: 600; }
+/* Badges */
+.badge{font-size:10px;padding:3px 8px;border-radius:20px;font-weight:600;white-space:nowrap}
+.badge-red{background:#3b121933;color:#f87171;border:1px solid #ef444440}
+.badge-amber{background:#2a1a0033;color:#fbbf24;border:1px solid #f59e0b40}
+.badge-yellow{background:#1a1a0033;color:#fde047;border:1px solid #eab30840}
+.badge-green{background:#05301633;color:#4ade80;border:1px solid #22c55e40}
+.badge-gray{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}
 
-/* ── 선수 행 ── */
-.player-row {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 11px 0; border-bottom: 1px solid var(--border);
-}
-.player-row:last-child { border-bottom: none; }
-.player-name { font-size: 14px; font-weight: 500; }
-.player-pos { font-size: 11px; color: var(--text3); margin-top: 1px; }
+/* Well bars */
+.well-bar-wrap{margin-bottom:10px}
+.well-bar-header{display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px}
+.well-bar-track{height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.well-bar-fill{height:100%;border-radius:3px}
 
-/* ── 배지 ── */
-.badge {
-  font-size: 10px; padding: 3px 8px; border-radius: 20px;
-  font-weight: 600; white-space: nowrap;
-}
-.badge-red    { background: #3b121933; color: #f87171; border: 1px solid #ef444440; }
-.badge-amber  { background: #2a1a0033; color: #fbbf24; border: 1px solid #f59e0b40; }
-.badge-yellow { background: #1a1a0033; color: #fde047; border: 1px solid #eab30840; }
-.badge-green  { background: #05301633; color: #4ade80; border: 1px solid #22c55e40; }
-.badge-blue   { background: #1e3a5f33; color: #60a5fa; border: 1px solid #3b82f640; }
-.badge-gray   { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
+/* Table */
+.data-table{width:100%;border-collapse:collapse;font-size:11px}
+.data-table th{padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:.5px solid var(--border);background:var(--surface2);white-space:nowrap}
+.data-table th:first-child{text-align:left}
+.data-table td{padding:7px 8px;text-align:center;border-bottom:.5px solid var(--border)}
+.data-table td:first-child{text-align:left}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr.today-row td{background:rgba(22,163,74,.06)}
 
-/* ── Well 바 ── */
-.well-bar-wrap { margin-bottom: 10px; }
-.well-bar-header { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 4px; }
-.well-bar-track { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.well-bar-fill { height: 100%; border-radius: 3px; }
+/* Forms */
+.notify-form{display:flex;flex-direction:column;gap:10px}
+.notify-form input,.notify-form textarea,.notify-form select{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 14px;font-size:14px;font-family:inherit;outline:none;width:100%;resize:none}
+.notify-form input:focus,.notify-form textarea:focus,.notify-form select:focus{border-color:var(--blue)}
+.notify-form textarea{min-height:80px}
 
-/* ── 알림 폼 ── */
-.notify-form { display: flex; flex-direction: column; gap: 10px; }
-.notify-form select, .notify-form textarea, .notify-form input[type=text] {
-  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
-  border-radius: 12px; padding: 12px 14px; font-size: 14px;
-  font-family: inherit; outline: none; width: 100%; resize: none;
-}
-.notify-form select:focus,
-.notify-form textarea:focus,
-.notify-form input[type=text]:focus { border-color: var(--blue); }
-.notify-form textarea { min-height: 80px; }
+/* Buttons */
+.btn-send{background:var(--blue);color:#fff;border:none;border-radius:12px;padding:14px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;width:100%}
+.btn-send:active{opacity:.8}
+.btn-send:disabled{opacity:.4;cursor:default}
+.btn-secondary{background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:12px;padding:12px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;width:100%}
+.btn-secondary:active{opacity:.8}
+.refresh-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:4px}
 
-/* ── 버튼 ── */
-.btn-send {
-  background: var(--blue); color: #fff; border: none;
-  border-radius: 12px; padding: 14px; font-size: 14px; font-weight: 600;
-  cursor: pointer; font-family: inherit; width: 100%;
-}
-.btn-send:active { opacity: 0.8; }
-.btn-send:disabled { opacity: 0.4; cursor: default; }
-.btn-secondary {
-  background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
-  border-radius: 12px; padding: 12px 14px; font-size: 13px; font-weight: 500;
-  cursor: pointer; font-family: inherit; width: 100%;
-}
-.btn-secondary:active { opacity: 0.8; }
+/* Loading / Empty */
+.loading{text-align:center;padding:40px 20px;font-size:13px;color:var(--text3)}
+.spinner{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:24px 16px;background:var(--surface2);border-radius:12px;margin:8px 0}
+.empty-state p{font-size:13px;color:var(--text3)}
 
-/* ── 새로고침 버튼 ── */
-.refresh-btn {
-  background: none; border: none; color: var(--text3); cursor: pointer;
-  font-size: 16px; padding: 4px;
-}
+/* Overlay / Sheet */
+.overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:flex;align-items:flex-end}
+.sheet{background:var(--surface);border-radius:20px 20px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));width:100%;max-height:85vh;overflow-y:auto}
+.sheet-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px}
 
-/* ── 로딩 ── */
-.loading {
-  text-align: center; padding: 40px 20px;
-  font-size: 13px; color: var(--text3);
-}
-.spinner { animation: spin 1s linear infinite; display: inline-block; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+/* Risk cards */
+.risk-card{border-radius:12px;padding:12px 14px;margin-bottom:8px;border:1px solid}
+.risk-card-red{background:#3b121920;border-color:#ef444450}
+.risk-card-amber{background:#2a1a0020;border-color:#f59e0b50}
+.risk-card-yellow{background:#1a1a0020;border-color:#eab30850}
 
-/* ── 빈 상태 ── */
-.empty-state {
-  text-align: center; padding: 32px 16px;
-  background: var(--surface2); border-radius: 16px;
-  margin: 8px 0;
-}
-.empty-state .icon { font-size: 32px; margin-bottom: 8px; }
-.empty-state p { font-size: 13px; color: var(--text3); }
+/* Schedule strip */
+.sched-strip{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.sched-day{background:var(--surface2);border-radius:8px;padding:6px 2px;text-align:center;border:.5px solid var(--border)}
+.sched-day.today{background:rgba(22,163,74,.1);border-color:#16a34a}
 
-/* ── 부상 위험 카드 ── */
-.risk-card {
-  border-radius: 12px; padding: 12px 14px; margin-bottom: 8px;
-  border: 1px solid;
-}
-.risk-card-red    { background: #3b121920; border-color: #ef444450; }
-.risk-card-amber  { background: #2a1a0020; border-color: #f59e0b50; }
-.risk-card-yellow { background: #1a1a0020; border-color: #eab30850; }
+/* Sub-tabs */
+.sub-tabs{display:flex;gap:8px;margin-bottom:12px}
+.sub-tab{flex:1;padding:9px 0;text-align:center;font-size:13px;font-weight:500;border-radius:10px;cursor:pointer;border:1px solid var(--border);background:var(--surface2);color:var(--text2)}
+.sub-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 
-/* ── 선수 컨디션 상세 ── */
-.player-detail-overlay {
-  position: fixed; inset: 0; z-index: 200;
-  background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);
-  display: flex; align-items: flex-end;
-}
-.player-detail-sheet {
-  background: var(--surface); border-radius: 20px 20px 0 0;
-  padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
-  width: 100%; max-height: 85vh; overflow-y: auto;
-}
-.sheet-handle {
-  width: 40px; height: 4px; background: var(--border);
-  border-radius: 2px; margin: 0 auto 16px;
-}
+/* Chat list */
+.chat-list-item{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:.5px solid var(--border);cursor:pointer}
+.chat-list-item:last-child{border-bottom:none}
+.chat-avatar{width:40px;height:40px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0}
+.chat-info{flex:1;min-width:0}
+.chat-name{font-size:14px;font-weight:500}
+.chat-preview{font-size:12px;color:var(--text3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chat-meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0}
+.chat-time{font-size:10px;color:var(--text3)}
+.unread-badge{background:var(--blue);color:#fff;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;min-width:18px;text-align:center}
 
-/* ── 훈련 세션 행 ── */
-.session-row {
-  background: var(--surface2); border-radius: 12px;
-  padding: 12px 14px; margin-bottom: 8px;
-}
-.session-player { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-.session-stats { display: flex; gap: 8px; flex-wrap: wrap; }
-.session-stat { font-size: 11px; color: var(--text3); }
-.session-stat span { color: var(--text2); font-weight: 500; }
+/* Chat thread overlay */
+.chat-thread-overlay{position:fixed;inset:0;z-index:300;background:var(--bg);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .25s ease}
+.chat-thread-overlay.open{transform:translateX(0)}
+.chat-thread-header{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:.5px solid var(--border);background:var(--surface)}
+.chat-thread-back{background:none;border:none;color:var(--text2);font-size:24px;cursor:pointer;padding:0;line-height:1}
+.chat-thread-name{font-size:16px;font-weight:600;flex:1}
+.chat-thread-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.msg-bubble{max-width:75%;padding:10px 14px;border-radius:16px;font-size:13px;line-height:1.5;word-break:break-word}
+.msg-coach{background:var(--blue);color:#fff;border-radius:16px 16px 4px 16px;align-self:flex-end}
+.msg-player{background:var(--surface2);color:var(--text);border-radius:16px 16px 16px 4px;align-self:flex-start}
+.msg-time{font-size:10px;color:var(--text3);margin-top:3px}
+.msg-wrap-coach{display:flex;flex-direction:column;align-items:flex-end}
+.msg-wrap-player{display:flex;flex-direction:column;align-items:flex-start}
+.chat-thread-input{display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:.5px solid var(--border);background:var(--surface)}
+.chat-input-field{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:20px;padding:10px 14px;font-size:14px;font-family:inherit;outline:none}
+.chat-input-field:focus{border-color:var(--blue)}
+.chat-send-btn{background:var(--blue);color:#fff;border:none;border-radius:50%;width:40px;height:40px;font-size:20px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 
-/* ── 토스트 ── */
-.toast {
-  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
-  background: #1c2a1c; border: 1px solid #22c55e60; color: #4ade80;
-  border-radius: 12px; padding: 10px 20px; font-size: 13px; font-weight: 500;
-  z-index: 300; white-space: nowrap; opacity: 0;
-  transition: opacity 0.2s;
-}
-.toast.error { background: #2a1212; border-color: #ef444460; color: #f87171; }
-.toast.show { opacity: 1; }
-
-/* ── 구분선 ── */
-hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+/* Toast */
+.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1c2a1c;border:1px solid #22c55e60;color:#4ade80;border-radius:12px;padding:10px 20px;font-size:13px;font-weight:500;z-index:400;white-space:nowrap;opacity:0;transition:opacity .2s}
+.toast.error{background:#2a1212;border-color:#ef444460;color:#f87171}
+.toast.show{opacity:1}
 </style>
 </head>
 <body>
@@ -272,74 +186,59 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
     </div>
   </div>
 
-  <!-- 페이지들 -->
-
-  <!-- 1. Morning Report -->
-  <div class="page active" id="page-morning">
-    <div id="morning-content">
-      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
-    </div>
+  <!-- 1. 홈 -->
+  <div class="page active" id="page-home">
+    <div id="home-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
   </div>
 
   <!-- 2. 웰니스 -->
   <div class="page" id="page-wellness">
-    <div id="wellness-content">
-      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
-    </div>
+    <div id="wellness-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
   </div>
 
-  <!-- 3. 부상 현황 -->
-  <div class="page" id="page-injury">
-    <div id="injury-content">
-      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
-    </div>
-  </div>
-
-  <!-- 4. 알림 발송 -->
-  <div class="page" id="page-notify">
-    <!-- 공지사항 -->
-    <div class="card">
-      <div class="card-title">📢 공지사항 <span style="font-size:11px;font-weight:400;color:var(--text3)">전체 선수</span></div>
-      <div class="notify-form">
-        <input type="text" id="announce-title" placeholder="공지 제목">
-        <textarea id="announce-body" placeholder="공지 내용을 입력하세요"></textarea>
-        <button class="btn-send" id="announce-btn" onclick="sendAnnouncement()">📢 전체 발송</button>
-      </div>
-    </div>
-
-    <!-- 1:1 메시지 -->
-    <div class="card">
-      <div class="card-title">💬 1:1 메시지</div>
-      <div class="notify-form">
-        <select id="msg-player">
-          <option value="">선수 선택...</option>
-        </select>
-        <input type="text" id="msg-title" placeholder="메시지 제목">
-        <textarea id="msg-body" placeholder="메시지 내용을 입력하세요"></textarea>
-        <button class="btn-send" id="msg-btn" onclick="sendMessage()">📨 발송하기</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- 5. 훈련 세션 -->
-  <div class="page" id="page-session">
-    <div id="session-content">
-      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
-    </div>
-  </div>
-
-  <!-- 6. RPE -->
+  <!-- 3. RPE -->
   <div class="page" id="page-rpe">
-    <div id="rpe-content">
-      <div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>
+    <div id="rpe-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
+  </div>
+
+  <!-- 4. 훈련 -->
+  <div class="page" id="page-training">
+    <div id="training-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
+  </div>
+
+  <!-- 5. 알림 -->
+  <div class="page" id="page-notify">
+    <div style="padding:12px 16px 0">
+      <div class="sub-tabs">
+        <div class="sub-tab active" id="stab-announce" onclick="switchNotifyTab('announce')">📢 공지사항</div>
+        <div class="sub-tab" id="stab-chat" onclick="switchNotifyTab('chat')">💬 채팅</div>
+      </div>
+    </div>
+    <!-- 공지사항 -->
+    <div id="notify-announce">
+      <div class="card">
+        <div class="card-title">📢 전체 공지</div>
+        <div class="notify-form">
+          <input type="text" id="announce-title" placeholder="공지 제목">
+          <textarea id="announce-body" placeholder="공지 내용을 입력하세요"></textarea>
+          <button class="btn-send" id="announce-btn" onclick="sendAnnouncement()">📢 전체 발송</button>
+        </div>
+      </div>
+    </div>
+    <!-- 채팅 목록 -->
+    <div id="notify-chat" style="display:none">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:4px">💬 1:1 채팅 <span style="font-size:11px;font-weight:400;color:var(--text3)">선수를 탭해서 대화</span></div>
+        <div id="chat-list-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
+      </div>
     </div>
   </div>
 
   <!-- 바텀 탭 -->
   <nav class="bottom-nav">
-    <div class="nav-item active" onclick="switchPage('morning',this)">
-      <div class="nav-icon">📋</div>
-      <div class="nav-label">리포트</div>
+    <div class="nav-item active" onclick="switchPage('home',this)">
+      <div class="nav-icon">🏠</div>
+      <div class="nav-label">홈</div>
     </div>
     <div class="nav-item" onclick="switchPage('wellness',this)">
       <div class="nav-icon">💚</div>
@@ -349,26 +248,37 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
       <div class="nav-icon">💢</div>
       <div class="nav-label">RPE</div>
     </div>
-    <div class="nav-item" onclick="switchPage('injury',this)">
-      <div class="nav-icon">🩹</div>
-      <div class="nav-label">부상</div>
-    </div>
-    <div class="nav-item" onclick="switchPage('notify',this)">
-      <div class="nav-icon">📢</div>
-      <div class="nav-label">알림</div>
-    </div>
-    <div class="nav-item" onclick="switchPage('session',this)">
+    <div class="nav-item" onclick="switchPage('training',this)">
       <div class="nav-icon">🏃</div>
       <div class="nav-label">훈련</div>
+    </div>
+    <div class="nav-item" onclick="switchPage('notify',this)">
+      <div class="nav-icon">💬</div>
+      <div class="nav-label">알림</div>
     </div>
   </nav>
 </div>
 
 <!-- 선수 상세 시트 -->
-<div class="player-detail-overlay" id="player-overlay" style="display:none" onclick="closePlayerOverlay(event)">
-  <div class="player-detail-sheet" id="player-detail-sheet">
+<div class="overlay" id="player-overlay" style="display:none" onclick="closePlayerOverlay(event)">
+  <div class="sheet">
     <div class="sheet-handle"></div>
     <div id="player-detail-content"></div>
+  </div>
+</div>
+
+<!-- 채팅 스레드 -->
+<div class="chat-thread-overlay" id="chat-thread-overlay">
+  <div class="chat-thread-header">
+    <button class="chat-thread-back" onclick="closeChatThread()">←</button>
+    <div class="chat-thread-name" id="chat-thread-name"></div>
+    <div id="chat-thread-pos" style="font-size:11px;color:var(--text3)"></div>
+  </div>
+  <div class="chat-thread-messages" id="chat-thread-messages"></div>
+  <div class="chat-thread-input">
+    <input class="chat-input-field" id="chat-input" placeholder="메시지 입력..."
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMsg()}">
+    <button class="chat-send-btn" onclick="sendChatMsg()">↑</button>
   </div>
 </div>
 
@@ -376,7 +286,6 @@ hr.divider { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Supabase ──────────────────────────────────────────────
 const SUPA_URL = 'https://gmrhkbddhzpfqzkhuvgf.supabase.co';
 const SUPA_KEY = 'sb_publishable_sj1Pro0Pwv3i-RzQdHsEPw_WLJUsa9V';
 const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
@@ -384,774 +293,616 @@ const supa = supabase.createClient(SUPA_URL, SUPA_KEY);
 let currentUser = null;
 let _players = [];
 let _loadedPages = {};
+let _currentChatPlayerId = null;
+let _chatSub = null;
 
-// ── KST 날짜 ─────────────────────────────────────────────
-function getKSTDateStr(d) {
-  const dt = d ? new Date(d) : new Date();
-  const kst = new Date(dt.getTime() + 9 * 60 * 60 * 1000);
-  return kst.toISOString().split('T')[0];
+const DOW = ['일','월','화','수','목','금','토'];
+const MD_COLORS = {'MD-5':'#60a5fa','MD-4':'#34d399','MD-3':'#fbbf24','MD-2':'#f87171','MD-1':'#e879f9','MD':'#4ade80','MD+1':'#94a3b8','MD+2':'#94a3b8'};
+
+function kst(d){ const dt=d?new Date(d):new Date(); return new Date(dt.getTime()+9*3600000); }
+function getKSTDateStr(d){ return kst(d).toISOString().split('T')[0]; }
+function showToast(msg,isError=false){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.className='toast'+(isError?' error':'')+' show';
+  setTimeout(()=>t.className='toast'+(isError?' error':''),2500);
 }
 
-// ── 토스트 ───────────────────────────────────────────────
-function showToast(msg, isError = false) {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast' + (isError ? ' error' : '') + ' show';
-  setTimeout(() => t.className = 'toast' + (isError ? ' error' : ''), 2500);
+// ── Auth ──────────────────────────────────────────────
+async function doLogin(){
+  const email=document.getElementById('login-email').value.trim();
+  const pw=document.getElementById('login-pw').value;
+  const errEl=document.getElementById('login-error');
+  errEl.textContent='';
+  if(!email||!pw){errEl.textContent='이메일과 비밀번호를 입력하세요';return;}
+  const {data,error}=await supa.auth.signInWithPassword({email,password:pw});
+  if(error){errEl.textContent='로그인 실패: '+error.message;return;}
+  currentUser=data.user; initApp();
 }
-
-// ── 로그인 ───────────────────────────────────────────────
-async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const pw = document.getElementById('login-pw').value;
-  const errEl = document.getElementById('login-error');
-  errEl.textContent = '';
-  if (!email || !pw) { errEl.textContent = '이메일과 비밀번호를 입력하세요'; return; }
-
-  const { data, error } = await supa.auth.signInWithPassword({ email, password: pw });
-  if (error) { errEl.textContent = '로그인 실패: ' + error.message; return; }
-  currentUser = data.user;
-  initApp();
-}
-
-async function doLogout() {
+async function doLogout(){
+  if(_chatSub) supa.removeChannel(_chatSub);
   await supa.auth.signOut();
-  currentUser = null;
-  _players = [];
-  _loadedPages = {};
-  document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('app').style.display = 'none';
+  currentUser=null; _players=[]; _loadedPages={};
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
 }
-
-// ── 인증 상태 체크 ────────────────────────────────────────
-supa.auth.onAuthStateChange((event, session) => {
-  if (session?.user && !currentUser) {
-    currentUser = session.user;
-    initApp();
-  }
+supa.auth.onAuthStateChange((event,session)=>{
+  if(session?.user&&!currentUser){currentUser=session.user;initApp();}
 });
-
-async function initApp() {
-  document.getElementById('login-screen').style.display = 'none';
-  document.getElementById('app').style.display = 'block';
-  document.getElementById('header-sub').textContent = currentUser.email;
-
-  // 선수 목록 로드
-  const { data } = await supa.from('player_profiles').select('*').order('name');
-  _players = data || [];
-
-  // 1:1 메시지 선수 셀렉트 채우기
-  const sel = document.getElementById('msg-player');
-  _players.forEach(p => {
-    const opt = document.createElement('option');
-    opt.value = p.id;
-    opt.textContent = `${p.name} (${p.position || '—'})`;
-    sel.appendChild(opt);
-  });
-
-  // 첫 페이지 로드
-  loadMorningReport();
+async function initApp(){
+  document.getElementById('login-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('header-sub').textContent=currentUser.email;
+  const {data}=await supa.from('player_profiles').select('*').order('name');
+  _players=data||[];
+  loadHome();
 }
 
-// ── 탭 전환 ──────────────────────────────────────────────
-function switchPage(page, el) {
-  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('page-' + page).classList.add('active');
+// ── 탭 전환 ──────────────────────────────────────────
+function switchPage(page,el){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('page-'+page).classList.add('active');
   el.classList.add('active');
-
-  if (!_loadedPages[page]) {
-    _loadedPages[page] = true;
-    if (page === 'wellness') loadWellness();
-    if (page === 'injury') loadInjury();
-    if (page === 'session') loadSession();
-    if (page === 'rpe') loadRpe();
+  if(!_loadedPages[page]){
+    _loadedPages[page]=true;
+    if(page==='wellness') loadWellness();
+    if(page==='rpe') loadRpe();
+    if(page==='training') loadTraining();
+    if(page==='notify') loadChatList();
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// 1. MORNING REPORT
-// ═══════════════════════════════════════════════════════
-async function loadMorningReport() {
-  const el = document.getElementById('morning-content');
-  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+// ══════════════════════════════════════════════════════
+// 1. 홈 — 팀일정 / 부상자 현황 / 관리 우선순위
+// ══════════════════════════════════════════════════════
+async function loadHome(){
+  const el=document.getElementById('home-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
 
-  const today = getKSTDateStr();
-  const now = new Date();
-  const since7 = new Date(now); since7.setDate(now.getDate() - 7);
-  const since7Str = since7.toISOString().split('T')[0];
-  const since28 = new Date(now); since28.setDate(now.getDate() - 28);
-  const since28Str = since28.toISOString().split('T')[0];
+  const today=getKSTDateStr();
+  const now=kst();
+  const dow=now.getDay();
+  const wStart=new Date(now); wStart.setDate(now.getDate()-(dow===0?6:dow-1));
+  const wStartStr=wStart.toISOString().split('T')[0];
+  const wEnd=new Date(wStart); wEnd.setDate(wStart.getDate()+6);
+  const wEndStr=wEnd.toISOString().split('T')[0];
+  const since28=new Date(now); since28.setDate(now.getDate()-28);
+  const since28Str=since28.toISOString().split('T')[0];
+  const since7=new Date(now); since7.setDate(now.getDate()-7);
+  const since7Str=since7.toISOString().split('T')[0];
 
-  const [
-    { data: todayWell },
-    { data: rpe28 },
-    { data: gps28 },
-    { data: well7 },
-    { data: injuredNow },
-  ] = await Promise.all([
-    supa.from('wellness_records')
-      .select('player_id,fatigue,sleep_quality,stress,muscle_soreness')
-      .eq('record_date', today),
-    supa.from('session_records')
-      .select('player_id,record_date,rpe,duration')
-      .gte('record_date', since28Str),
-    supa.from('gps_records')
-      .select('player_id,session_date,max_speed,duration,td,sprint,session_type2')
-      .gte('session_date', since28Str),
-    supa.from('wellness_records')
-      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
-      .gte('record_date', since7Str),
-    supa.from('injury_records')
-      .select('player_id,status')
-      .in('status', ['치료중', '재활중', '부분 참여']),
+  const [{data:weekSched},{data:injuries},{data:todayWell},{data:well7},{data:rpe28},{data:gps28}]=await Promise.all([
+    supa.from('weekly_schedule').select('event_date,event_type,md_stage,title,start_time')
+      .gte('event_date',wStartStr).lte('event_date',wEndStr).order('event_date').order('start_time',{nullsFirst:false}),
+    supa.from('injury_records').select('player_id,body_part,injury_type,status,return_date,injury_date')
+      .in('status',['치료중','재활중','부분 참여']).order('injury_date',{ascending:false}),
+    supa.from('wellness_records').select('player_id,fatigue,sleep_quality,stress,muscle_soreness').eq('record_date',today),
+    supa.from('wellness_records').select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
+      .gte('record_date',since7Str).order('record_date',{ascending:false}),
+    supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',since28Str),
+    supa.from('gps_records').select('player_id,session_date,max_speed,duration,session_type2').gte('session_date',since28Str),
   ]);
 
-  const injuredIds = new Set((injuredNow || []).map(r => r.player_id));
+  // 이번주 일정 strip
+  const schedByDate={};
+  (weekSched||[]).forEach(e=>{if(!schedByDate[e.event_date])schedByDate[e.event_date]=[];schedByDate[e.event_date].push(e);});
+  const stripHtml=Array.from({length:7},(_,i)=>{
+    const d=new Date(wStart); d.setDate(wStart.getDate()+i);
+    const ds=d.toISOString().split('T')[0];
+    const isT=ds===today;
+    const evts=schedByDate[ds]||[];
+    const md=evts.find(e=>e.md_stage)?.md_stage||'';
+    const mdColor=md?(MD_COLORS[md]||'#888'):'#333';
+    const dc=i===6?'#f87171':i===5?'#93c5fd':'var(--text2)';
+    return '<div class="sched-day'+(isT?' today':'')+'">'
+      +'<div style="font-size:9px;color:'+dc+';font-weight:600">'+DOW[d.getDay()]+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+(isT?'#4ade80':'var(--text)')+'">'+d.getDate()+'</div>'
+      +(md?'<div style="font-size:8px;color:'+mdColor+';font-weight:700;margin-top:1px">'+md+'</div>':'<div style="font-size:8px;color:var(--border);margin-top:1px">—</div>')
+      +(evts[0]?'<div style="font-size:7px;color:var(--text3);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 2px">'+(evts[0].title||'')+'</div>':'')
+      +'</div>';
+  }).join('');
+  const todayEvts=(schedByDate[today]||[]);
+  const todayMD=todayEvts.find(e=>e.md_stage)?.md_stage||'';
 
-  // 팀 웰니스 평균
-  const twArr = todayWell || [];
-  const wAvg = f => twArr.length ? (twArr.reduce((a, r) => a + (r[f] || 0), 0) / twArr.length) : null;
-  const wFat = wAvg('fatigue'), wSleep = wAvg('sleep_quality');
-  const wStress = wAvg('stress'), wMuscle = wAvg('muscle_soreness');
-  const respCount = twArr.length;
-  const noRespCount = _players.length - respCount;
-
-  const wColor = v => !v ? 'var(--text3)' : v >= 4 ? '#22c55e' : v >= 3 ? '#eab308' : v >= 2 ? '#f97316' : '#ef4444';
-
-  // 부상 위험 분석 (CRI)
-  const rpeMap = {};
-  (rpe28 || []).forEach(r => {
-    if (!rpeMap[r.player_id]) rpeMap[r.player_id] = [];
-    rpeMap[r.player_id].push({ date: r.record_date, rpe: parseFloat(r.rpe) || 0, dur: parseFloat(r.duration) || 0 });
-  });
-
-  const riskList = [];
-  for (const p of _players) {
-    if (injuredIds.has(p.id)) continue;
-    const prpe = rpeMap[p.id] || [];
-    const pgps = (gps28 || []).filter(r => r.player_id === p.id);
-    if (!prpe.length && !pgps.length) continue;
-
-    const rpeMap2 = {};
-    prpe.forEach(r => { rpeMap2[r.date] = { rpe: r.rpe, dur: r.dur }; });
-    pgps.forEach(r => { if (!rpeMap2[r.session_date]) rpeMap2[r.session_date] = { rpe: 0, dur: parseFloat(r.duration) || 0 }; });
-    const sessions = Object.entries(rpeMap2).map(([d, v]) => ({ date: d, rpe: v.rpe, dur: v.dur }));
-    const gpsSess = pgps.map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed) || 0 }));
-
-    const acwrData = calcACWR(sessions, today);
-    const mss = parseFloat(p.mss) || 0;
-    const mvExp = mss > 0 ? calcMVExposure(gpsSess, mss, today) : null;
-    const todayW = (well7 || []).find(r => r.player_id === p.id && r.record_date === today) || null;
-    const p7well = (well7 || []).filter(r => r.player_id === p.id);
-    const wellData = (todayW && p7well.length > 1) ? calcWellnessRisk(p7well.slice(1), todayW) : null;
-    const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
-    if (risk.level !== 'green') riskList.push({ player: p, risk, acwr: acwrData.acwr });
-  }
-  riskList.sort((a, b) => ({ red: 0, amber: 1, yellow: 2 }[a.risk.level] - { red: 0, amber: 1, yellow: 2 }[b.risk.level]));
-
-  const levelCfg = {
-    red:    { cls: 'risk-card-red',    badge: 'badge-red',    label: '🔴 고위험' },
-    amber:  { cls: 'risk-card-amber',  badge: 'badge-amber',  label: '🟠 주의' },
-    yellow: { cls: 'risk-card-yellow', badge: 'badge-yellow', label: '🟡 모니터링' },
-  };
-
-  const riskHtml = riskList.length
-    ? riskList.map(({ player, risk, acwr }) => {
-        const cfg = levelCfg[risk.level];
-        return `<div class="risk-card ${cfg.cls}" onclick="showPlayerDetail('${player.id}')">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-            <div>
-              <span style="font-size:14px;font-weight:600">${player.name}</span>
-              <span style="font-size:11px;color:var(--text3);margin-left:6px">${player.position || '—'} · CRI ${risk.score}</span>
-            </div>
-            <span class="badge ${cfg.badge}">${cfg.label}</span>
-          </div>
-          <div style="font-size:11px;color:var(--text3)">${risk.flags.slice(0, 2).map(f => '• ' + f.msg).join('<br>')}</div>
-        </div>`;
+  // 부상자
+  const injHtml=(injuries||[]).length
+    ?(injuries||[]).map(inj=>{
+        const p=_players.find(pl=>pl.id===inj.player_id);
+        const sc=inj.status==='치료중'?{bg:'#7f1d1d',text:'#fca5a5'}
+          :inj.status==='재활중'?{bg:'#312e81',text:'#a5b4fc'}:{bg:'#134e4a',text:'#5eead4'};
+        const days=inj.injury_date?Math.floor((new Date()-new Date(inj.injury_date))/86400000):null;
+        return '<div class="player-row">'
+          +'<div><div class="player-name">'+(p?.name||'—')+'</div>'
+          +'<div class="player-pos">'+(p?.position||'—')+' · '+(inj.body_part||'—')+(inj.return_date?' · 복귀 예정 '+inj.return_date:'')+'</div></div>'
+          +'<div style="text-align:right"><span style="font-size:10px;padding:2px 8px;border-radius:6px;background:'+sc.bg+';color:'+sc.text+';font-weight:600">'+inj.status+'</span>'
+          +(days!==null?'<div style="font-size:10px;color:var(--text3);margin-top:3px">'+days+'일째</div>':'')+'</div></div>';
       }).join('')
-    : `<div class="empty-state"><div class="icon">🟢</div><p>전 선수 정상 — 위험 선수 없음</p></div>`;
+    :'<div class="empty-state"><p>✅ 부상 선수 없음</p></div>';
 
-  // 웰니스 바
-  const wBarHtml = (label, icon, val) => `
-    <div class="well-bar-wrap">
-      <div class="well-bar-header">
-        <span style="color:var(--text3)">${icon} ${label}</span>
-        <span style="color:${wColor(val)};font-weight:500">${val ? val.toFixed(1) : '—'} / 5</span>
-      </div>
-      <div class="well-bar-track">
-        <div class="well-bar-fill" style="width:${val ? (val / 5 * 100).toFixed(0) : 0}%;background:${wColor(val)}"></div>
-      </div>
-    </div>`;
-
-  el.innerHTML = `
-    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:13px;color:var(--text3)">${today} 기준</div>
-      <button class="refresh-btn" onclick="loadMorningReport()">🔄</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">💚 팀 웰니스 <span style="font-size:11px;font-weight:400;color:var(--text3)">${respCount}명 응답 · 미응답 ${noRespCount}명</span></div>
-      ${wBarHtml('피로도', '😴', wFat)}
-      ${wBarHtml('수면', '🌙', wSleep)}
-      ${wBarHtml('스트레스', '🧠', wStress)}
-      ${wBarHtml('근육통', '💪', wMuscle)}
-    </div>
-
-    <div class="card">
-      <div class="card-title">⚠️ 부상 위험 선수 <span style="font-size:11px;font-weight:400;color:var(--text3)">${riskList.length}명</span></div>
-      ${riskHtml}
-    </div>
-  `;
-}
-
-// ═══════════════════════════════════════════════════════
-// 2. 웰니스 현황
-// ═══════════════════════════════════════════════════════
-async function loadWellness() {
-  const el = document.getElementById('wellness-content');
-  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
-
-  const today = getKSTDateStr();
-  const { data: todayWell } = await supa.from('wellness_records')
-    .select('player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
-    .eq('record_date', today);
-
-  const wellMap = {};
-  (todayWell || []).forEach(r => { wellMap[r.player_id] = r; });
-
-  const responded = _players.filter(p => wellMap[p.id]);
-  const noResp = _players.filter(p => !wellMap[p.id]);
-
-  const wColor = v => !v ? 'var(--text3)' : v >= 4 ? '#22c55e' : v >= 3 ? '#eab308' : v >= 2 ? '#f97316' : '#ef4444';
-  const scoreColor = v => !v ? 'var(--text3)' : v >= 16 ? '#22c55e' : v >= 12 ? '#eab308' : '#ef4444';
-
-  const playerRow = p => {
-    const w = wellMap[p.id];
-    const total = w ? (w.fatigue || 0) + (w.sleep_quality || 0) + (w.stress || 0) + (w.muscle_soreness || 0) : 0;
-    const worstField = w ? ['fatigue', 'sleep_quality', 'stress', 'muscle_soreness']
-      .reduce((a, b) => (w[a] || 5) < (w[b] || 5) ? a : b) : null;
-    const worstLabel = { fatigue: '피로', sleep_quality: '수면', stress: '스트레스', muscle_soreness: '근육통' };
-
-    return `<div class="player-row" onclick="showPlayerDetail('${p.id}')">
-      <div>
-        <div class="player-name">${p.name}</div>
-        <div class="player-pos">${p.position || '—'}${worstField && w[worstField] <= 2 ? ` · ${worstLabel[worstField]} ⚠️` : ''}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:16px;font-weight:600;color:${scoreColor(total)}">${total}</div>
-        <div style="font-size:10px;color:var(--text3)">/ 20</div>
-      </div>
-    </div>`;
-  };
-
-  el.innerHTML = `
-    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:13px;color:var(--text3)">${today} 웰니스</div>
-      <button class="refresh-btn" onclick="_loadedPages['wellness']=false;loadWellness()">🔄</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">${responded.length}명</span></div>
-      ${responded.length
-        ? responded.sort((a, b) => {
-            const wa = wellMap[a.id]; const wb = wellMap[b.id];
-            const ta = wa ? (wa.fatigue||0)+(wa.sleep_quality||0)+(wa.stress||0)+(wa.muscle_soreness||0) : 20;
-            const tb = wb ? (wb.fatigue||0)+(wb.sleep_quality||0)+(wb.stress||0)+(wb.muscle_soreness||0) : 20;
-            return ta - tb;
-          }).map(playerRow).join('')
-        : '<div class="empty-state"><p>오늘 응답한 선수가 없어요</p></div>'}
-    </div>
-
-    ${noResp.length ? `
-    <div class="card">
-      <div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">${noResp.length}명</span></div>
-      ${noResp.map(p => `<div class="player-row">
-        <div>
-          <div class="player-name">${p.name}</div>
-          <div class="player-pos">${p.position || '—'}</div>
-        </div>
-        <button onclick="sendWellnessReminder('${p.id}','${p.name}')"
-          style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);
-          color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">
-          📨 알림
-        </button>
-      </div>`).join('')}
-    </div>` : ''}
-  `;
-}
-
-async function sendWellnessReminder(playerId, playerName) {
-  await supa.from('notifications').insert({
-    title: '웰니스 입력 요청',
-    body: '오늘 컨디션을 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💚',
-    target_type: 'player',
-    target_value: playerId,
-    created_by: currentUser?.email || 'coach',
-  });
-  showToast(`✅ ${playerName}에게 웰니스 알림 발송`);
-}
-
-// ═══════════════════════════════════════════════════════
-// 3. RPE 현황
-// ═══════════════════════════════════════════════════════
-async function loadRpe() {
-  const el = document.getElementById('rpe-content');
-  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
-
-  const today = getKSTDateStr();
-  const { data: todayRpe } = await supa.from('session_records')
-    .select('player_id,rpe,duration')
-    .eq('record_date', today);
-
-  const rpeMap = {};
-  (todayRpe || []).forEach(r => { rpeMap[r.player_id] = r; });
-
-  const responded = _players.filter(p => rpeMap[p.id]);
-  const noResp    = _players.filter(p => !rpeMap[p.id]);
-
-  const rpeColor = v => !v ? 'var(--text3)' : v >= 8 ? '#ef4444' : v >= 6 ? '#f97316' : v >= 4 ? '#eab308' : '#22c55e';
-
-  const playerRow = p => {
-    const r = rpeMap[p.id];
-    const rpeVal = parseFloat(r.rpe) || 0;
-    const dur    = parseFloat(r.duration) || 0;
-    const sRPE   = rpeVal && dur ? Math.round(rpeVal * dur) : null;
-    return `<div class="player-row">
-      <div>
-        <div class="player-name">${p.name}</div>
-        <div class="player-pos">${p.position || '—'}${dur ? ' · ' + Math.round(dur) + 'min' : ''}</div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:18px;font-weight:700;color:${rpeColor(rpeVal)}">${r.rpe}</div>
-        <div style="font-size:10px;color:var(--text3)">${sRPE ? 'sRPE ' + sRPE : '—'}</div>
-      </div>
-    </div>`;
-  };
-
-  el.innerHTML = `
-    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:13px;color:var(--text3)">${today} RPE</div>
-      <button class="refresh-btn" onclick="_loadedPages['rpe']=false;loadRpe()">🔄</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">${responded.length}명</span></div>
-      ${responded.length
-        ? responded.sort((a, b) => parseFloat(rpeMap[b.id].rpe) - parseFloat(rpeMap[a.id].rpe))
-            .map(playerRow).join('')
-        : '<div class="empty-state"><p>오늘 RPE를 입력한 선수가 없어요</p></div>'}
-    </div>
-
-    ${noResp.length ? `
-    <div class="card">
-      <div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">${noResp.length}명</span></div>
-      ${noResp.map(p => `<div class="player-row">
-        <div>
-          <div class="player-name">${p.name}</div>
-          <div class="player-pos">${p.position || '—'}</div>
-        </div>
-        <button onclick="sendRpeReminder('${p.id}','${p.name}')"
-          style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);
-          color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">
-          📨 알림
-        </button>
-      </div>`).join('')}
-    </div>` : ''}
-  `;
-}
-
-async function sendRpeReminder(playerId, playerName) {
-  await supa.from('notifications').insert({
-    title: 'RPE 입력 요청',
-    body: '오늘 훈련 강도(RPE)를 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💪',
-    target_type: 'player',
-    target_value: playerId,
-    created_by: currentUser?.email || 'coach',
-  });
-  showToast(`✅ ${playerName}에게 RPE 알림 발송`);
-}
-
-// ═══════════════════════════════════════════════════════
-// 4. 부상 현황
-// ═══════════════════════════════════════════════════════
-async function loadInjury() {
-  const el = document.getElementById('injury-content');
-  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
-
-  const { data: injuries } = await supa.from('injury_records')
-    .select('*, player_profiles(name, position)')
-    .in('status', ['치료중', '재활중', '부분 참여', '복귀'])
-    .order('injury_date', { ascending: false });
-
-  const statusCfg = {
-    '치료중':   { badge: 'badge-red',    emoji: '🔴' },
-    '재활중':   { badge: 'badge-amber',  emoji: '🟠' },
-    '부분 참여': { badge: 'badge-yellow', emoji: '🟡' },
-    '복귀':     { badge: 'badge-green',  emoji: '🟢' },
-  };
-
-  const daysSince = d => {
-    if (!d) return null;
-    return Math.floor((new Date() - new Date(d)) / 86400000);
-  };
-
-  const activeInjuries = (injuries || []).filter(r => r.status !== '복귀');
-  const recovered = (injuries || []).filter(r => r.status === '복귀').slice(0, 5);
-
-  const injuryCard = r => {
-    const cfg = statusCfg[r.status] || { badge: 'badge-gray', emoji: '—' };
-    const days = daysSince(r.injury_date);
-    const player = r.player_profiles;
-    return `<div class="player-row">
-      <div>
-        <div class="player-name">${player?.name || '—'}</div>
-        <div class="player-pos">${player?.position || '—'} · ${r.body_part || '—'} · ${r.injury_type || '—'}</div>
-        ${r.return_date ? `<div style="font-size:11px;color:var(--text3);margin-top:2px">복귀 예정: ${r.return_date}</div>` : ''}
-      </div>
-      <div style="text-align:right">
-        <span class="badge ${cfg.badge}">${cfg.emoji} ${r.status}</span>
-        ${days !== null ? `<div style="font-size:10px;color:var(--text3);margin-top:4px">${days}일째</div>` : ''}
-      </div>
-    </div>`;
-  };
-
-  el.innerHTML = `
-    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:13px;color:var(--text3)">부상 선수 현황</div>
-      <button class="refresh-btn" onclick="_loadedPages['injury']=false;loadInjury()">🔄</button>
-    </div>
-
-    <div class="card">
-      <div class="card-title">🩹 현재 부상 <span style="font-size:11px;font-weight:400;color:var(--text3)">${activeInjuries.length}명</span></div>
-      ${activeInjuries.length
-        ? activeInjuries.map(injuryCard).join('')
-        : '<div class="empty-state"><div class="icon">✅</div><p>현재 부상 선수 없음</p></div>'}
-    </div>
-
-    ${recovered.length ? `
-    <div class="card">
-      <div class="card-title">✅ 최근 복귀</div>
-      ${recovered.map(injuryCard).join('')}
-    </div>` : ''}
-  `;
-}
-
-// ═══════════════════════════════════════════════════════
-// 4. 알림 발송
-// ═══════════════════════════════════════════════════════
-async function sendAnnouncement() {
-  const title = document.getElementById('announce-title').value.trim();
-  const body  = document.getElementById('announce-body').value.trim();
-  if (!title || !body) { showToast('제목과 내용을 입력하세요', true); return; }
-
-  const btn = document.getElementById('announce-btn');
-  btn.disabled = true; btn.textContent = '발송 중...';
-  try {
-    const inserts = _players.map(p => ({
-      title, body,
-      target_type: 'player',
-      target_value: p.id,
-      created_by: currentUser?.email || 'coach',
-    }));
-    await supa.from('notifications').insert(inserts);
-    showToast(`✅ 전체 ${_players.length}명에게 공지 발송 완료`);
-    document.getElementById('announce-title').value = '';
-    document.getElementById('announce-body').value = '';
-  } catch (e) {
-    showToast('발송 실패: ' + e.message, true);
-  } finally {
-    btn.disabled = false; btn.textContent = '📢 전체 발송';
+  // 관리 우선순위
+  const injuredIds=new Set((injuries||[]).map(r=>r.player_id));
+  const rpeMap={};
+  (rpe28||[]).forEach(r=>{if(!rpeMap[r.player_id])rpeMap[r.player_id]=[];rpeMap[r.player_id].push({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0});});
+  const todayWMap={};(todayWell||[]).forEach(r=>{todayWMap[r.player_id]=r;});
+  const paList=[];
+  for(const pl of _players){
+    if(injuredIds.has(pl.id)) continue;
+    const acwrData=calcACWR(rpeMap[pl.id]||[],today);
+    const pgps=(gps28||[]).filter(r=>r.player_id===pl.id);
+    const mss=parseFloat(pl.mss)||0;
+    const mvExp=mss>0?calcMVExposure(pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),mss,today):null;
+    const p7w=(well7||[]).filter(r=>r.player_id===pl.id);
+    const tw=todayWMap[pl.id]||null;
+    const wellData=(tw&&p7w.length>1)?calcWellnessRisk(p7w.slice(1),tw):null;
+    const risk=calcRiskLevel(acwrData.acwr,mvExp,wellData);
+    let score=0;const flags=[];
+    if(risk.level==='red'){score+=35;risk.flags.forEach(f=>flags.push(f.msg));}
+    else if(risk.level==='amber'){score+=20;risk.flags.forEach(f=>flags.push(f.msg));}
+    else if(risk.level==='yellow'){score+=10;risk.flags.forEach(f=>flags.push(f.msg));}
+    if(!tw){score+=5;flags.push('웰니스 미응답');}
+    else{const wt=(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0);
+      if(wt<8){score+=20;flags.push('웰니스 위험 '+wt+'/20');}
+      else if(wt<12){score+=10;flags.push('웰니스 주의 '+wt+'/20');}}
+    if(score>0) paList.push({player:pl,score,flags:[...new Set(flags)],riskLevel:risk.level,acwr:acwrData.acwr});
   }
+  paList.sort((a,b)=>b.score-a.score);
+  const levelCfg={red:{bg:'#3b121920',border:'#ef4444',color:'#f87171',label:'🔴 고위험'},amber:{bg:'#2a1a0020',border:'#f59e0b',color:'#fbbf24',label:'🟠 주의'},yellow:{bg:'#1a1a0020',border:'#eab308',color:'#fde047',label:'🟡 모니터링'}};
+  const priorityHtml=paList.slice(0,5).length
+    ?paList.slice(0,5).map((item,idx)=>{
+        const cfg=levelCfg[item.riskLevel]||levelCfg.yellow;
+        return '<div class="risk-card risk-card-'+item.riskLevel+'" onclick="showPlayerDetail(\''+item.player.id+'\')">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+          +'<div><span style="font-size:10px;color:'+cfg.color+';font-weight:600">'+(idx+1)+'</span>'
+          +' <span style="font-size:14px;font-weight:600">'+item.player.name+'</span>'
+          +' <span style="font-size:11px;color:var(--text3)">'+(item.player.position||'—')+'</span></div>'
+          +'<span class="badge badge-'+(item.riskLevel==='red'?'red':item.riskLevel==='amber'?'amber':'yellow')+'">'+cfg.label+'</span></div>'
+          +(item.flags.length?'<div style="font-size:11px;color:'+cfg.color+';margin-top:5px">'+item.flags.slice(0,2).map(f=>'• '+f).join('<br>')+'</div>':'')
+          +(item.acwr?'<div style="font-size:10px;color:var(--text3);margin-top:3px">ACWR '+item.acwr.toFixed(2)+'</div>':'')
+          +'</div>';
+      }).join('')
+    :'<div class="empty-state"><div style="font-size:24px;margin-bottom:6px">🟢</div><p>전 선수 정상</p></div>';
+
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">'+today+' ('+DOW[new Date(today+'T12:00:00').getDay()]+')'+(todayMD?' · '+todayMD:'')+'</div>'
+    +'<button class="refresh-btn" onclick="_loadedPages[\'home\']=false;loadHome()">🔄</button></div>'
+
+    +'<div class="card"><div class="card-title">📅 이번 주 일정</div>'
+    +'<div class="sched-strip">'+stripHtml+'</div>'
+    +(todayEvts.length?'<div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border);display:flex;flex-wrap:wrap;gap:4px">'
+      +todayEvts.map(e=>'<span style="font-size:11px;background:var(--surface2);border:.5px solid var(--border);border-radius:6px;padding:3px 8px">'+(e.start_time?e.start_time.slice(0,5)+' ':'')+( e.title||'')+'</span>').join('')+'</div>':'')
+    +'</div>'
+
+    +'<div class="card"><div class="card-title">🏥 부상자 현황 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+(injuries||[]).length+'명</span></div>'
+    +injHtml+'</div>'
+
+    +'<div class="card"><div class="card-title">🎯 오늘 관리 우선순위 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+paList.length+'명 중 상위</span></div>'
+    +priorityHtml+'</div>';
 }
 
-async function sendMessage() {
-  const playerId = document.getElementById('msg-player').value;
-  const title    = document.getElementById('msg-title').value.trim();
-  const body     = document.getElementById('msg-body').value.trim();
-  if (!playerId) { showToast('선수를 선택하세요', true); return; }
-  if (!title || !body) { showToast('제목과 내용을 입력하세요', true); return; }
+// ══════════════════════════════════════════════════════
+// 2. 웰니스
+// ══════════════════════════════════════════════════════
+async function loadWellness(){
+  const el=document.getElementById('wellness-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const today=getKSTDateStr();
+  const {data:todayWell}=await supa.from('wellness_records')
+    .select('player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
+    .eq('record_date',today);
+  const wMap={};(todayWell||[]).forEach(r=>{wMap[r.player_id]=r;});
+  const responded=_players.filter(p=>wMap[p.id]).sort((a,b)=>{
+    const ta=(wMap[a.id].fatigue||0)+(wMap[a.id].sleep_quality||0)+(wMap[a.id].stress||0)+(wMap[a.id].muscle_soreness||0);
+    const tb=(wMap[b.id].fatigue||0)+(wMap[b.id].sleep_quality||0)+(wMap[b.id].stress||0)+(wMap[b.id].muscle_soreness||0);
+    return ta-tb;
+  });
+  const noResp=_players.filter(p=>!wMap[p.id]);
+  const wColor=v=>!v?'var(--text3)':v>=4?'#22c55e':v>=3?'#eab308':v>=2?'#f97316':'#ef4444';
+  const scoreColor=v=>v>=16?'#22c55e':v>=12?'#eab308':'#ef4444';
+  const wAvg=f=>responded.length?responded.reduce((a,p)=>a+(wMap[p.id][f]||0),0)/responded.length:null;
+  const avgFat=wAvg('fatigue'),avgSleep=wAvg('sleep_quality'),avgStress=wAvg('stress'),avgMuscle=wAvg('muscle_soreness');
+  const wBar=(label,icon,val)=>'<div class="well-bar-wrap"><div class="well-bar-header"><span style="color:var(--text3)">'+icon+' '+label+'</span><span style="color:'+wColor(val)+';font-weight:500">'+(val?val.toFixed(1):'—')+' / 5</span></div><div class="well-bar-track"><div class="well-bar-fill" style="width:'+(val?(val/5*100).toFixed(0):0)+'%;background:'+wColor(val)+'"></div></div></div>';
+  const timeStr=iso=>{if(!iso)return '';const d=new Date(new Date(iso).getTime()+9*3600000);return d.toTimeString().slice(0,5);};
+  const tableRows=responded.map(p=>{
+    const w=wMap[p.id];
+    const total=(w.fatigue||0)+(w.sleep_quality||0)+(w.stress||0)+(w.muscle_soreness||0);
+    return '<tr onclick="showPlayerDetail(\''+p.id+'\')">'
+      +'<td><div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div></td>'
+      +'<td><span style="font-size:14px;font-weight:700;color:'+scoreColor(total)+'">'+total+'</span><span style="font-size:9px;color:var(--text3)">/20</span></td>'
+      +'<td style="color:'+wColor(w.fatigue)+'">'+(w.fatigue||'—')+'</td>'
+      +'<td style="color:'+wColor(w.sleep_quality)+'">'+(w.sleep_quality||'—')+'</td>'
+      +'<td style="color:'+wColor(w.stress)+'">'+(w.stress||'—')+'</td>'
+      +'<td style="color:'+wColor(w.muscle_soreness)+'">'+(w.muscle_soreness||'—')+'</td>'
+      +'<td style="color:var(--text3)">'+(w.morning_weight?w.morning_weight+'kg':'—')+'</td>'
+      +'</tr>';
+  }).join('');
 
-  const btn = document.getElementById('msg-btn');
-  btn.disabled = true; btn.textContent = '발송 중...';
-  try {
-    await supa.from('notifications').insert({
-      title, body,
-      target_type: 'player',
-      target_value: playerId,
-      created_by: currentUser?.email || 'coach',
-    });
-    const pName = _players.find(p => p.id === playerId)?.name || '';
-    showToast(`✅ ${pName}에게 메시지 발송 완료`);
-    document.getElementById('msg-player').value = '';
-    document.getElementById('msg-title').value = '';
-    document.getElementById('msg-body').value = '';
-  } catch (e) {
-    showToast('발송 실패: ' + e.message, true);
-  } finally {
-    btn.disabled = false; btn.textContent = '📨 발송하기';
-  }
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">'+today+' 웰니스 ('+responded.length+'/'+_players.length+'명)</div>'
+    +'<button class="refresh-btn" onclick="_loadedPages[\'wellness\']=false;loadWellness()">🔄</button></div>'
+
+    +(responded.length?'<div class="card"><div class="card-title">💚 팀 평균</div>'
+      +wBar('피로도','😴',avgFat)+wBar('수면','🌙',avgSleep)+wBar('스트레스','🧠',avgStress)+wBar('근육통','💪',avgMuscle)+'</div>':'')
+
+    +'<div class="card" style="padding:12px 0"><div class="card-title" style="padding:0 16px 8px">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+responded.length+'명</span></div>'
+    +(responded.length
+      ?'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>총점</th><th>피로</th><th>수면</th><th>스트레스</th><th>근육통</th><th>체중</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>'
+      :'<div style="padding:0 16px"><div class="empty-state"><p>오늘 응답 없음</p></div></div>')
+    +'</div>'
+
+    +(noResp.length?'<div class="card"><div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+noResp.length+'명</span></div>'
+      +noResp.map(p=>'<div class="player-row"><div><div class="player-name">'+p.name+'</div><div class="player-pos">'+(p.position||'—')+'</div></div>'
+        +'<button onclick="sendWellnessReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button></div>').join('')
+      +'</div>':'');
+}
+async function sendWellnessReminder(id,name){
+  await supa.from('notifications').insert({title:'웰니스 입력 요청',body:'오늘 컨디션을 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💚',target_type:'player',target_value:id,created_by:currentUser?.email||'coach'});
+  showToast('✅ '+name+'에게 웰니스 알림 발송');
 }
 
-// ═══════════════════════════════════════════════════════
-// 5. 오늘 훈련 세션
-// ═══════════════════════════════════════════════════════
-async function loadSession() {
-  const el = document.getElementById('session-content');
-  el.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+// ══════════════════════════════════════════════════════
+// 3. RPE
+// ══════════════════════════════════════════════════════
+async function loadRpe(){
+  const el=document.getElementById('rpe-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const today=getKSTDateStr();
+  const {data:todayRpe}=await supa.from('session_records').select('player_id,rpe,duration,created_at').eq('record_date',today);
+  const rpeMap={};(todayRpe||[]).forEach(r=>{rpeMap[r.player_id]=r;});
+  const responded=_players.filter(p=>rpeMap[p.id]&&parseFloat(rpeMap[p.id].rpe)>0)
+    .sort((a,b)=>parseFloat(rpeMap[b.id].rpe)-parseFloat(rpeMap[a.id].rpe));
+  const noResp=_players.filter(p=>!rpeMap[p.id]||!parseFloat(rpeMap[p.id].rpe));
+  const rpeColor=v=>!v?'var(--text3)':v>=8?'#ef4444':v>=6?'#f97316':v>=4?'#eab308':'#22c55e';
+  const avgRpe=responded.length?responded.reduce((a,p)=>a+parseFloat(rpeMap[p.id].rpe),0)/responded.length:null;
+  const avgDur=responded.length?responded.reduce((a,p)=>a+(parseFloat(rpeMap[p.id].duration)||0),0)/responded.length:null;
+  const avgSRPE=avgRpe&&avgDur?Math.round(avgRpe*avgDur):null;
+  const tableRows=responded.map(p=>{
+    const r=rpeMap[p.id];
+    const rv=parseFloat(r.rpe),dur=parseFloat(r.duration)||0;
+    const sRPE=rv&&dur?Math.round(rv*dur):null;
+    return '<tr><td><div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div></td>'
+      +'<td><span style="font-size:16px;font-weight:700;color:'+rpeColor(rv)+'">'+rv+'</span></td>'
+      +'<td style="color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
+      +'<td style="color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td></tr>';
+  }).join('');
 
-  const today = getKSTDateStr();
-  const yesterday = (() => {
-    const d = new Date(); d.setDate(d.getDate() - 1);
-    return getKSTDateStr(d);
-  })();
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">'+today+' RPE ('+responded.length+'/'+_players.length+'명)</div>'
+    +'<button class="refresh-btn" onclick="_loadedPages[\'rpe\']=false;loadRpe()">🔄</button></div>'
 
-  const [{ data: todayGps }, { data: todayRpe }] = await Promise.all([
-    supa.from('gps_records')
-      .select('*, player_profiles(name,position)')
-      .eq('session_date', today)
-      .order('td', { ascending: false }),
-    supa.from('session_records')
-      .select('player_id,rpe,duration')
-      .eq('record_date', today),
+    +(responded.length?'<div class="card"><div class="card-title">📊 팀 평균</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+      +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 RPE</div><div style="font-size:20px;font-weight:700;color:'+rpeColor(avgRpe)+'">'+(avgRpe?avgRpe.toFixed(1):'—')+'</div></div>'
+      +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 시간</div><div style="font-size:20px;font-weight:700;color:var(--text)">'+(avgDur?Math.round(avgDur):'—')+'<span style="font-size:11px;color:var(--text3)">min</span></div></div>'
+      +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">평균 sRPE</div><div style="font-size:20px;font-weight:700;color:#a78bfa">'+(avgSRPE||'—')+'</div></div>'
+      +'</div></div>':'')
+
+    +'<div class="card" style="padding:12px 0"><div class="card-title" style="padding:0 16px 8px">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+responded.length+'명</span></div>'
+    +(responded.length
+      ?'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>RPE</th><th>시간</th><th>sRPE</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>'
+      :'<div style="padding:0 16px"><div class="empty-state"><p>오늘 RPE 입력 없음</p></div></div>')
+    +'</div>'
+
+    +(noResp.length?'<div class="card"><div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+noResp.length+'명</span></div>'
+      +noResp.map(p=>'<div class="player-row"><div><div class="player-name">'+p.name+'</div><div class="player-pos">'+(p.position||'—')+'</div></div>'
+        +'<button onclick="sendRpeReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button></div>').join('')
+      +'</div>':'');
+}
+async function sendRpeReminder(id,name){
+  await supa.from('notifications').insert({title:'RPE 입력 요청',body:'오늘 훈련 강도(RPE)를 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💪',target_type:'player',target_value:id,created_by:currentUser?.email||'coach'});
+  showToast('✅ '+name+'에게 RPE 알림 발송');
+}
+
+// ══════════════════════════════════════════════════════
+// 4. 훈련 — 2주 팀 부하 흐름
+// ══════════════════════════════════════════════════════
+async function loadTraining(){
+  const el=document.getElementById('training-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const today=getKSTDateStr();
+  const now=kst();
+  const since14=new Date(now); since14.setDate(now.getDate()-13);
+  const since28=new Date(now); since28.setDate(now.getDate()-28);
+  const since14Str=since14.toISOString().split('T')[0];
+  const since28Str=since28.toISOString().split('T')[0];
+  const [{data:gps14},{data:rpe28}]=await Promise.all([
+    supa.from('gps_records').select('session_date,player_id,td,running_high,sprint,duration,session_type2,session_topic')
+      .gte('session_date',since14Str).lte('session_date',today).order('session_date',{ascending:true}),
+    supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',since28Str),
   ]);
 
-  const targetDate = (todayGps && todayGps.length) ? today : yesterday;
-  let displayGps = todayGps || [];
-  let displayRpe = todayRpe || [];
+  // per-player RPE sessions for ACWR
+  const plRpe={};
+  (rpe28||[]).forEach(r=>{if(!plRpe[r.player_id])plRpe[r.player_id]=[];plRpe[r.player_id].push({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0});});
 
-  // 오늘 데이터 없으면 전날 조회
-  if (!displayGps.length) {
-    const [{ data: yGps }, { data: yRpe }] = await Promise.all([
-      supa.from('gps_records')
-        .select('*, player_profiles(name,position)')
-        .eq('session_date', yesterday)
-        .order('td', { ascending: false }),
-      supa.from('session_records')
-        .select('player_id,rpe,duration')
-        .eq('record_date', yesterday),
-    ]);
-    displayGps = yGps || [];
-    displayRpe = yRpe || [];
-  }
-
-  const rpeMap = {};
-  displayRpe.forEach(r => { rpeMap[r.player_id] = r; });
-
-  // 팀 평균 (M 기준)
-  const mGps = displayGps.filter(r => (r.session_type2 || '').trim().toUpperCase() === 'M');
-  const useGps = mGps.length ? mGps : displayGps;
-  const avg = f => {
-    const vals = useGps.map(r => parseFloat(r[f]) || 0).filter(v => v > 0);
-    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  const calcTeamACWR=targetDate=>{
+    const acwrs=Object.values(plRpe).map(sess=>calcACWR(sess,targetDate).acwr).filter(v=>v!==null);
+    return acwrs.length?acwrs.reduce((a,b)=>a+b,0)/acwrs.length:null;
   };
+  const acwrColor=v=>!v?'var(--text3)':v>1.5?'#ef4444':v>1.3?'#f59e0b':v<0.8?'#eab308':'#22c55e';
 
-  const fmt = (v, dec = 1) => v !== null ? v.toFixed(dec) : '—';
-  const sessionTopic = displayGps[0]?.session_topic || '—';
+  const days=[];
+  for(let i=13;i>=0;i--){const d=new Date(now);d.setDate(now.getDate()-i);days.push(d.toISOString().split('T')[0]);}
 
-  el.innerHTML = `
-    <div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">
-      <div style="font-size:13px;color:var(--text3)">${targetDate} · ${sessionTopic}</div>
-      <button class="refresh-btn" onclick="_loadedPages['session']=false;loadSession()">🔄</button>
-    </div>
+  let tTD=0,tHSR=0,tSprint=0,tSRPE=0,dayCnt=0;
+  const rows=days.map(ds=>{
+    const d=new Date(ds+'T12:00:00');
+    const isT=ds===today;
+    const dc=d.getDay()===0?'#f87171':d.getDay()===6?'#93c5fd':'var(--text2)';
+    const dayGps=(gps14||[]).filter(r=>r.session_date===ds);
+    const mGps=dayGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    const useGps=mGps.length?mGps:dayGps;
+    if(!useGps.length){
+      return '<tr'+(isT?' class="today-row"':'')+'>'
+        +'<td><span style="color:'+dc+'">'+DOW[d.getDay()]+' '+d.getDate()+'</span>'+(isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':'')+'</td>'
+        +'<td colspan="5" style="color:var(--text3);font-style:italic;text-align:center">—</td></tr>';
+    }
+    const sumDur=useGps.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    const maxDur=Math.max(...useGps.map(r=>parseFloat(r.duration)||0));
+    const wavg=f=>sumDur>0?useGps.reduce((a,r)=>a+(parseFloat(r[f])||0),0)/sumDur*maxDur:null;
+    const tdV=wavg('td'),hsrV=wavg('running_high'),sprintV=wavg('sprint');
+    const dayRpe=(rpe28||[]).filter(r=>r.record_date===ds&&parseFloat(r.rpe)>0);
+    const rpeAvg=dayRpe.length?dayRpe.reduce((a,r)=>a+parseFloat(r.rpe),0)/dayRpe.length:null;
+    const durAvg=dayRpe.length?dayRpe.reduce((a,r)=>a+parseFloat(r.duration),0)/dayRpe.length:null;
+    const sRPE=rpeAvg&&durAvg?Math.round(rpeAvg*durAvg):null;
+    const teamACWR=calcTeamACWR(ds);
+    const topic=useGps[0]?.session_topic||'';
+    if(tdV){tTD+=tdV;dayCnt++;}
+    if(hsrV) tHSR+=hsrV;
+    if(sprintV) tSprint+=sprintV;
+    if(sRPE) tSRPE+=sRPE;
+    return '<tr'+(isT?' class="today-row"':'')+'>'
+      +'<td><span style="color:'+dc+'">'+DOW[d.getDay()]+' '+d.getDate()+'</span>'+(isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':'')+(topic?'<div style="font-size:9px;color:var(--text3)">'+topic+'</div>':'')+'</td>'
+      +'<td style="color:#60a5fa">'+(tdV?tdV.toFixed(1):'—')+'</td>'
+      +'<td style="color:#f59e0b">'+(hsrV?Math.round(hsrV):'—')+'</td>'
+      +'<td style="color:#ef4444">'+(sprintV?Math.round(sprintV):'—')+'</td>'
+      +'<td style="color:#a78bfa">'+(sRPE||'—')+'</td>'
+      +'<td style="color:'+acwrColor(teamACWR)+';font-weight:500">'+(teamACWR?teamACWR.toFixed(2):'—')+'</td>'
+      +'</tr>';
+  }).join('');
 
-    ${displayGps.length ? `
-    <div class="card">
-      <div class="card-title">📊 팀 평균 ${mGps.length ? '(M기준)' : ''}</div>
-      <div class="stat-grid">
-        <div class="stat-item">
-          <div class="stat-label">TD</div>
-          <div class="stat-value" style="color:#60a5fa">${fmt(avg('td'))} <span style="font-size:10px;color:var(--text3)">km</span></div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">HSR</div>
-          <div class="stat-value" style="color:#a78bfa">${avg('running_high') !== null ? Math.round(avg('running_high')) : '—'} <span style="font-size:10px;color:var(--text3)">m</span></div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">Sprint</div>
-          <div class="stat-value" style="color:#f472b6">${avg('sprint') !== null ? Math.round(avg('sprint')) : '—'} <span style="font-size:10px;color:var(--text3)">m</span></div>
-        </div>
-      </div>
-    </div>
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">최근 2주 팀 부하 흐름</div>'
+    +'<button class="refresh-btn" onclick="_loadedPages[\'training\']=false;loadTraining()">🔄</button></div>'
 
-    <div class="card">
-      <div class="card-title">👥 선수별 데이터 <span style="font-size:11px;font-weight:400;color:var(--text3)">${displayGps.length}명</span></div>
-      ${displayGps.map(r => {
-        const rpe = rpeMap[r.player_id];
-        const sRPE = rpe ? (parseFloat(rpe.rpe) * parseFloat(rpe.duration)).toFixed(0) : null;
-        const isM = (r.session_type2 || '').trim().toUpperCase() === 'M';
-        return `<div class="player-row" onclick="showPlayerDetail('${r.player_id}')">
-          <div>
-            <div style="display:flex;align-items:center;gap:6px">
-              <span class="player-name">${r.player_profiles?.name || '—'}</span>
-              <span class="badge ${isM ? 'badge-blue' : 'badge-gray'}" style="font-size:9px;padding:1px 5px">${isM ? 'M' : 'S'}</span>
-            </div>
-            <div class="session-stats" style="margin-top:4px">
-              <span class="session-stat">TD <span>${fmt(r.td)} km</span></span>
-              <span class="session-stat">HSR <span>${r.running_high ? Math.round(r.running_high) : '—'} m</span></span>
-              ${sRPE ? `<span class="session-stat">sRPE <span>${sRPE}</span></span>` : ''}
-            </div>
-          </div>
-          <div style="text-align:right;font-size:12px;color:var(--text3)">${r.duration ? Math.round(r.duration) + 'min' : '—'}</div>
-        </div>`;
-      }).join('')}
-    </div>` : `
-    <div class="card">
-      <div class="empty-state"><div class="icon">🏃</div><p>오늘 훈련 데이터 없음<br><span style="font-size:11px">GPS 업로드 후 표시됩니다</span></p></div>
-    </div>`}
-  `;
+    +'<div class="card"><div class="card-title">📊 2주 합계</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">TD</div><div style="font-size:14px;font-weight:600;color:#60a5fa">'+tTD.toFixed(1)+'<span style="font-size:9px;color:var(--text3)">km</span></div></div>'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">HSR</div><div style="font-size:14px;font-weight:600;color:#f59e0b">'+Math.round(tHSR).toLocaleString()+'<span style="font-size:9px;color:var(--text3)">m</span></div></div>'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">Sprint</div><div style="font-size:14px;font-weight:600;color:#ef4444">'+Math.round(tSprint).toLocaleString()+'<span style="font-size:9px;color:var(--text3)">m</span></div></div>'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">sRPE</div><div style="font-size:14px;font-weight:600;color:#a78bfa">'+Math.round(tSRPE).toLocaleString()+'</div></div>'
+    +'</div></div>'
+
+    +'<div class="card" style="padding:12px 0"><div style="overflow-x:auto;padding:0 8px">'
+    +'<table class="data-table"><thead><tr>'
+    +'<th>날짜</th>'
+    +'<th style="color:#60a5fa">TD<br><span style="font-size:9px">(km)</span></th>'
+    +'<th style="color:#f59e0b">HSR<br><span style="font-size:9px">(m)</span></th>'
+    +'<th style="color:#ef4444">Sprint<br><span style="font-size:9px">(m)</span></th>'
+    +'<th style="color:#a78bfa">sRPE</th>'
+    +'<th>ACWR</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 
-// ═══════════════════════════════════════════════════════
-// 선수 상세 시트
-// ═══════════════════════════════════════════════════════
-async function showPlayerDetail(playerId) {
-  const overlay = document.getElementById('player-overlay');
-  const content = document.getElementById('player-detail-content');
-  overlay.style.display = 'flex';
-  content.innerHTML = '<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
-
-  const player = _players.find(p => p.id === playerId);
-  if (!player) return;
-
-  const today = getKSTDateStr();
-  const since28 = new Date(); since28.setDate(since28.getDate() - 28);
-  const since28Str = since28.toISOString().split('T')[0];
-  const since7 = new Date(); since7.setDate(since7.getDate() - 7);
-  const since7Str = since7.toISOString().split('T')[0];
-
-  const [{ data: rpe28 }, { data: gps14 }, { data: well7 }] = await Promise.all([
-    supa.from('session_records').select('record_date,rpe,duration').eq('player_id', playerId).gte('record_date', since28Str),
-    supa.from('gps_records').select('session_date,td,sprint,max_speed,duration,session_type2').eq('player_id', playerId).gte('session_date', since7Str).order('session_date', { ascending: false }),
-    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness').eq('player_id', playerId).gte('record_date', since7Str).order('record_date', { ascending: false }),
-  ]);
-
-  const sessions = (rpe28 || []).map(r => ({ date: r.record_date, rpe: parseFloat(r.rpe) || 0, dur: parseFloat(r.duration) || 0 }));
-  const acwrData = calcACWR(sessions, today);
-  const mss = parseFloat(player.mss) || 0;
-  const gpsSess = (gps14 || []).map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed) || 0 }));
-  const mvExp = mss > 0 ? calcMVExposure(gpsSess, mss, today) : null;
-  const todayW = (well7 || []).find(r => r.record_date === today);
-
-  const acwrColor = v => !v ? 'var(--text3)' : v > 1.5 ? '#ef4444' : v > 1.3 ? '#f59e0b' : v < 0.8 ? '#eab308' : '#22c55e';
-  const acwrLabel = v => !v ? '—' : v > 1.5 ? '고위험' : v > 1.3 ? '주의' : v < 0.8 ? '과소부하' : '안전';
-  const wColor = v => !v ? 'var(--text3)' : v >= 4 ? '#22c55e' : v >= 3 ? '#eab308' : v >= 2 ? '#f97316' : '#ef4444';
-
-  const recentGps = (gps14 || []).slice(0, 5);
-
-  content.innerHTML = `
-    <div style="margin-bottom:16px">
-      <div style="font-size:18px;font-weight:700">${player.name}</div>
-      <div style="font-size:12px;color:var(--text3);margin-top:2px">${player.position || '—'} · MSS ${mss || '—'} km/h</div>
-    </div>
-
-    <div class="stat-grid" style="margin-bottom:16px">
-      <div class="stat-item">
-        <div class="stat-label">ACWR</div>
-        <div class="stat-value" style="color:${acwrColor(acwrData.acwr)}">${acwrData.acwr ? acwrData.acwr.toFixed(2) : '—'}</div>
-        <div style="font-size:10px;color:${acwrColor(acwrData.acwr)};margin-top:2px">${acwrLabel(acwrData.acwr)}</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">MSS 노출</div>
-        <div class="stat-value" style="color:${mvExp && mvExp.daysSinceExposed >= 14 ? '#ef4444' : mvExp && mvExp.daysSinceExposed >= 7 ? '#f59e0b' : '#22c55e'}">${mvExp ? mvExp.daysSinceExposed + 'd' : '—'}</div>
-        <div style="font-size:10px;color:var(--text3);margin-top:2px">미노출 일수</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-label">오늘 웰니스</div>
-        ${todayW
-          ? `<div class="stat-value" style="color:${wColor(((todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0))/4)}">${((todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0))}</div><div style="font-size:10px;color:var(--text3);margin-top:2px">/ 20</div>`
-          : '<div class="stat-value" style="color:var(--text3)">미입력</div>'}
-      </div>
-    </div>
-
-    ${recentGps.length ? `
-    <div style="margin-bottom:16px">
-      <div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:8px">최근 훈련 데이터</div>
-      ${recentGps.map(r => `
-        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
-          <span style="color:var(--text3)">${r.session_date}</span>
-          <span>TD <b>${parseFloat(r.td).toFixed(1)}</b>km · Sprint <b>${r.sprint ? Math.round(r.sprint) : '—'}m</b></span>
-        </div>`).join('')}
-    </div>` : ''}
-
-    <button class="btn-secondary" onclick="closePlayerOverlay()">닫기</button>
-  `;
+// ══════════════════════════════════════════════════════
+// 5. 알림 / 채팅
+// ══════════════════════════════════════════════════════
+function switchNotifyTab(tab){
+  document.getElementById('notify-announce').style.display=tab==='announce'?'block':'none';
+  document.getElementById('notify-chat').style.display=tab==='chat'?'block':'none';
+  document.getElementById('stab-announce').className='sub-tab'+(tab==='announce'?' active':'');
+  document.getElementById('stab-chat').className='sub-tab'+(tab==='chat'?' active':'');
+  if(tab==='chat') loadChatList();
 }
 
-function closePlayerOverlay(e) {
-  if (!e || e.target === document.getElementById('player-overlay')) {
-    document.getElementById('player-overlay').style.display = 'none';
+async function sendAnnouncement(){
+  const title=document.getElementById('announce-title').value.trim();
+  const body=document.getElementById('announce-body').value.trim();
+  if(!title||!body){showToast('제목과 내용을 입력하세요',true);return;}
+  const btn=document.getElementById('announce-btn');
+  btn.disabled=true;btn.textContent='발송 중...';
+  try{
+    await supa.from('notifications').insert(_players.map(p=>({title,body,target_type:'player',target_value:p.id,created_by:currentUser?.email||'coach'})));
+    showToast('✅ 전체 '+_players.length+'명에게 공지 발송');
+    document.getElementById('announce-title').value='';
+    document.getElementById('announce-body').value='';
+  }catch(e){showToast('발송 실패: '+e.message,true);}
+  finally{btn.disabled=false;btn.textContent='📢 전체 발송';}
+}
+
+async function loadChatList(){
+  const el=document.getElementById('chat-list-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span></div>';
+  let msgs=[];
+  try{
+    const {data}=await supa.from('messages').select('player_id,sender,content,created_at,is_read').order('created_at',{ascending:false});
+    msgs=data||[];
+  }catch(e){
+    el.innerHTML='<div style="font-size:12px;color:var(--text3);text-align:center;padding:20px">채팅 기능을 사용하려면 messages 테이블을 먼저 생성해주세요</div>';
+    return;
   }
-}
-
-// ═══════════════════════════════════════════════════════
-// CRI 계산 함수 (기존 코치앱 동일)
-// ═══════════════════════════════════════════════════════
-function calcACWR(sessions, today) {
-  const todayD = new Date(today);
-  const diff = d => Math.floor((todayD - new Date(d)) / 86400000);
-  let acute = 0, chronicSum = 0, chronicDays = 0;
-  sessions.forEach(s => {
-    const sRPE = (parseFloat(s.rpe) || 0) * (parseFloat(s.dur) || 0);
-    if (!sRPE) return;
-    const d = diff(s.date);
-    if (d >= 0 && d < 7) acute += sRPE;
-    if (d >= 0 && d < 28) { chronicSum += sRPE; chronicDays++; }
+  const lastMsg={},unread={};
+  msgs.forEach(m=>{
+    if(!lastMsg[m.player_id]) lastMsg[m.player_id]=m;
+    if(m.sender==='player'&&!m.is_read) unread[m.player_id]=(unread[m.player_id]||0)+1;
   });
-  const chronic = chronicDays > 0 ? (chronicSum / chronicDays) * 7 : 0;
-  const acwr = chronic > 0 ? acute / chronic : null;
-  return { acute: Math.round(acute), chronic: Math.round(chronic), acwr };
+  const withMsg=_players.filter(p=>lastMsg[p.id]).sort((a,b)=>new Date(lastMsg[b.id].created_at)-new Date(lastMsg[a.id].created_at));
+  const noMsg=_players.filter(p=>!lastMsg[p.id]);
+  const sorted=[...withMsg,...noMsg];
+  const tStr=iso=>{const d=new Date(new Date(iso).getTime()+9*3600000);const td=getKSTDateStr();const md=d.toISOString().split('T')[0];return md===td?d.toTimeString().slice(0,5):md.slice(5).replace('-','/');};
+  el.innerHTML=sorted.map(p=>{
+    const last=lastMsg[p.id];const uc=unread[p.id]||0;
+    return '<div class="chat-list-item" onclick="openChatThread(\''+p.id+'\',\''+p.name+'\',\''+( p.position||'')+'\')">'
+      +'<div class="chat-avatar">'+p.name.slice(0,1)+'</div>'
+      +'<div class="chat-info"><div class="chat-name">'+p.name+' <span style="font-size:10px;color:var(--text3)">'+(p.position||'')+'</span></div>'
+      +'<div class="chat-preview">'+(last?(last.sender==='coach'?'나: ':'')+last.content:'대화 없음')+'</div></div>'
+      +'<div class="chat-meta">'+(last?'<span class="chat-time">'+tStr(last.created_at)+'</span>':'')
+      +(uc?'<span class="unread-badge">'+uc+'</span>':'')+'</div></div>';
+  }).join('');
 }
 
-function calcMVExposure(sessions, mss, today) {
-  if (!mss || mss <= 0) return null;
-  const zone5 = mss * 0.9;
-  const todayD = new Date(today);
-  const diff = d => Math.floor((todayD - new Date(d)) / 86400000);
-  const sorted = [...sessions].sort((a, b) => new Date(b.date) - new Date(a.date));
-  let zone5Days = 0, totalDays = 0, lastExposed = null, maxSpeedWeek = 0;
-  sorted.forEach(s => {
-    const d = diff(s.date);
-    if (d < 0 || d >= 21) return;
+async function openChatThread(playerId,playerName,playerPos){
+  _currentChatPlayerId=playerId;
+  document.getElementById('chat-thread-name').textContent=playerName;
+  document.getElementById('chat-thread-pos').textContent=playerPos||'';
+  document.getElementById('chat-thread-overlay').classList.add('open');
+  document.getElementById('chat-input').focus();
+  await loadChatMessages(playerId);
+  // 읽음 처리
+  supa.from('messages').update({is_read:true}).eq('player_id',playerId).eq('sender','player').eq('is_read',false).then(()=>{});
+  // 실시간 구독
+  if(_chatSub) supa.removeChannel(_chatSub);
+  _chatSub=supa.channel('chat-'+playerId)
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages',filter:'player_id=eq.'+playerId},()=>loadChatMessages(playerId))
+    .subscribe();
+}
+
+async function loadChatMessages(playerId){
+  const el=document.getElementById('chat-thread-messages');
+  const {data:msgs}=await supa.from('messages').select('*').eq('player_id',playerId).order('created_at',{ascending:true});
+  if(!msgs||!msgs.length){
+    el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;margin-top:60px">아직 대화가 없어요<br><span style="font-size:11px">메시지를 먼저 보내보세요</span></div>';
+    return;
+  }
+  const tStr=iso=>{const d=new Date(new Date(iso).getTime()+9*3600000);return d.toTimeString().slice(0,5);};
+  el.innerHTML=msgs.map(m=>{
+    const isC=m.sender==='coach';
+    return '<div class="msg-wrap-'+(isC?'coach':'player')+'">'
+      +'<div class="msg-bubble msg-'+(isC?'coach':'player')+'">'+escHtml(m.content)+'</div>'
+      +'<div class="msg-time">'+tStr(m.created_at)+'</div></div>';
+  }).join('');
+  el.scrollTop=el.scrollHeight;
+}
+
+async function sendChatMsg(){
+  const input=document.getElementById('chat-input');
+  const content=input.value.trim();
+  if(!content||!_currentChatPlayerId) return;
+  input.value='';
+  try{
+    await supa.from('messages').insert({player_id:_currentChatPlayerId,sender:'coach',sender_name:currentUser?.email||'coach',content,is_read:false});
+    await supa.from('notifications').insert({title:'코치 메시지',body:content,target_type:'player',target_value:_currentChatPlayerId,created_by:currentUser?.email||'coach'});
+  }catch(e){showToast('전송 실패',true);}
+}
+
+function closeChatThread(){
+  document.getElementById('chat-thread-overlay').classList.remove('open');
+  if(_chatSub){supa.removeChannel(_chatSub);_chatSub=null;}
+  _currentChatPlayerId=null;
+  loadChatList();
+}
+
+function escHtml(str){return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+
+// ══════════════════════════════════════════════════════
+// 선수 상세
+// ══════════════════════════════════════════════════════
+async function showPlayerDetail(playerId){
+  const overlay=document.getElementById('player-overlay');
+  const content=document.getElementById('player-detail-content');
+  overlay.style.display='flex';
+  content.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const player=_players.find(p=>p.id===playerId);
+  if(!player) return;
+  const today=getKSTDateStr();
+  const since28=new Date(); since28.setDate(since28.getDate()-28);
+  const since7=new Date(); since7.setDate(since7.getDate()-7);
+  const [{data:rpe28},{data:gps7},{data:well7}]=await Promise.all([
+    supa.from('session_records').select('record_date,rpe,duration').eq('player_id',playerId).gte('record_date',since28.toISOString().split('T')[0]),
+    supa.from('gps_records').select('session_date,td,sprint,max_speed,duration').eq('player_id',playerId).gte('session_date',since7.toISOString().split('T')[0]).order('session_date',{ascending:false}),
+    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness').eq('player_id',playerId).gte('record_date',since7.toISOString().split('T')[0]).order('record_date',{ascending:false}),
+  ]);
+  const sessions=(rpe28||[]).map(r=>({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0}));
+  const acwrData=calcACWR(sessions,today);
+  const mss=parseFloat(player.mss)||0;
+  const mvExp=mss>0?calcMVExposure((gps7||[]).map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),mss,today):null;
+  const todayW=(well7||[]).find(r=>r.record_date===today);
+  const acwrColor=v=>!v?'var(--text3)':v>1.5?'#ef4444':v>1.3?'#f59e0b':v<0.8?'#eab308':'#22c55e';
+  const wColor=v=>!v?'var(--text3)':v>=4?'#22c55e':v>=3?'#eab308':v>=2?'#f97316':'#ef4444';
+  const wt=todayW?(todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0):null;
+  content.innerHTML=
+    '<div style="margin-bottom:16px"><div style="font-size:18px;font-weight:700">'+player.name+'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">'+(player.position||'—')+' · MSS '+(mss||'—')+' km/h</div></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
+    +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">ACWR</div><div style="font-size:16px;font-weight:600;color:'+acwrColor(acwrData.acwr)+'">'+(acwrData.acwr?acwrData.acwr.toFixed(2):'—')+'</div></div>'
+    +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MSS 미노출</div><div style="font-size:16px;font-weight:600;color:'+(mvExp&&mvExp.daysSinceExposed>=14?'#ef4444':mvExp&&mvExp.daysSinceExposed>=7?'#f59e0b':'#22c55e')+'">'+(mvExp?mvExp.daysSinceExposed+'d':'—')+'</div></div>'
+    +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">오늘 웰니스</div>'
+    +(wt!==null?'<div style="font-size:16px;font-weight:600;color:'+wColor(wt/4)+'">'+wt+'/20</div>':'<div style="font-size:14px;color:var(--text3)">미입력</div>')+'</div></div>'
+    +((gps7||[]).slice(0,5).length?'<div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:8px">최근 훈련</div>'
+      +(gps7||[]).slice(0,5).map(r=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:.5px solid var(--border);font-size:12px"><span style="color:var(--text3)">'+r.session_date+'</span><span>TD <b>'+parseFloat(r.td).toFixed(1)+'</b>km · Sprint <b>'+(r.sprint?Math.round(r.sprint):'—')+'m</b></span></div>').join(''):'')
+    +'<button class="btn-secondary" style="margin-top:16px" onclick="closePlayerOverlay()">닫기</button>';
+}
+function closePlayerOverlay(e){
+  if(!e||e.target===document.getElementById('player-overlay'))
+    document.getElementById('player-overlay').style.display='none';
+}
+
+// ══════════════════════════════════════════════════════
+// CRI 계산
+// ══════════════════════════════════════════════════════
+function calcACWR(sessions,today){
+  const tD=new Date(today);
+  const diff=d=>Math.floor((tD-new Date(d))/86400000);
+  let acute=0,cSum=0,cDays=0;
+  sessions.forEach(s=>{
+    const sRPE=(parseFloat(s.rpe)||0)*(parseFloat(s.dur)||0);
+    if(!sRPE) return;
+    const d=diff(s.date);
+    if(d>=0&&d<7) acute+=sRPE;
+    if(d>=0&&d<28){cSum+=sRPE;cDays++;}
+  });
+  const chronic=cDays>0?(cSum/cDays)*7:0;
+  const acwr=chronic>0?acute/chronic:null;
+  return{acute:Math.round(acute),chronic:Math.round(chronic),acwr};
+}
+function calcMVExposure(sessions,mss,today){
+  if(!mss||mss<=0) return null;
+  const zone5=mss*0.9;
+  const tD=new Date(today);
+  const diff=d=>Math.floor((tD-new Date(d))/86400000);
+  let zone5Days=0,totalDays=0,lastExposed=null,maxSpeedWeek=0;
+  [...sessions].sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(s=>{
+    const d=diff(s.date);
+    if(d<0||d>=21) return;
     totalDays++;
-    const spd = parseFloat(s.maxSpeed) || 0;
-    if (spd >= zone5) { zone5Days++; if (lastExposed === null || d < lastExposed) lastExposed = d; }
-    if (d < 7 && spd > maxSpeedWeek) maxSpeedWeek = spd;
+    const spd=parseFloat(s.maxSpeed)||0;
+    if(spd>=zone5){zone5Days++;if(lastExposed===null||d<lastExposed)lastExposed=d;}
+    if(d<7&&spd>maxSpeedWeek) maxSpeedWeek=spd;
   });
-  const daysSinceExposed = lastExposed !== null ? lastExposed : 99;
-  const pctMSS = mss > 0 ? (maxSpeedWeek / mss) * 100 : 0;
-  return { exposureRatio: totalDays > 0 ? zone5Days / totalDays : 0, daysSinceExposed, maxSpeedWeek, pctMSS, zone5Threshold: zone5 };
+  const daysSinceExposed=lastExposed!==null?lastExposed:99;
+  const pctMSS=mss>0?(maxSpeedWeek/mss)*100:0;
+  return{exposureRatio:totalDays>0?zone5Days/totalDays:0,daysSinceExposed,maxSpeedWeek,pctMSS};
 }
-
-function calcWellnessRisk(wellness7, todayW) {
-  if (!todayW || !wellness7.length) return null;
-  const avg = f => wellness7.reduce((a, r) => a + (r[f] || 0), 0) / wellness7.length;
-  const baseTotal = avg('fatigue') + avg('sleep_quality') + avg('stress') + avg('muscle_soreness');
-  const todayTotal = (todayW.fatigue || 0) + (todayW.sleep_quality || 0) + (todayW.stress || 0) + (todayW.muscle_soreness || 0);
-  const dropPct = baseTotal > 0 ? (baseTotal - todayTotal) / baseTotal : 0;
-  return { baseline: (baseTotal / 4).toFixed(1), todayAvg: (todayTotal / 4).toFixed(1), dropPct, absScore: todayTotal };
+function calcWellnessRisk(wellness7,todayW){
+  if(!todayW||!wellness7.length) return null;
+  const avg=f=>wellness7.reduce((a,r)=>a+(r[f]||0),0)/wellness7.length;
+  const base=avg('fatigue')+avg('sleep_quality')+avg('stress')+avg('muscle_soreness');
+  const tod=(todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0);
+  const dropPct=base>0?(base-tod)/base:0;
+  return{baseline:(base/4).toFixed(1),todayAvg:(tod/4).toFixed(1),dropPct,absScore:tod};
 }
-
-function calcRiskLevel(acwr, mvExp, wellnessRisk) {
-  let score = 0;
-  const flags = [];
-  if (acwr !== null) {
-    if (acwr > 1.5)           { score += 3; flags.push({ type: 'ACWR', msg: `ACWR ${acwr.toFixed(2)} — 급성 과부하` }); }
-    else if (acwr > 1.3)      { score += 2; flags.push({ type: 'ACWR', msg: `ACWR ${acwr.toFixed(2)} — 부하 주의` }); }
-    else if (acwr < 0.8 && acwr > 0) { score += 1; flags.push({ type: 'ACWR', msg: `ACWR ${acwr.toFixed(2)} — 과소부하` }); }
+function calcRiskLevel(acwr,mvExp,wellData){
+  let score=0;const flags=[];
+  if(acwr!==null){
+    if(acwr>1.5){score+=3;flags.push({type:'ACWR',msg:'ACWR '+acwr.toFixed(2)+' — 급성 과부하'});}
+    else if(acwr>1.3){score+=2;flags.push({type:'ACWR',msg:'ACWR '+acwr.toFixed(2)+' — 부하 주의'});}
+    else if(acwr<0.8&&acwr>0){score+=1;flags.push({type:'ACWR',msg:'ACWR '+acwr.toFixed(2)+' — 과소부하'});}
   }
-  if (mvExp !== null) {
-    if (mvExp.daysSinceExposed >= 14)    { score += 3; flags.push({ type: 'MV', msg: `최고속도 ${mvExp.daysSinceExposed}일 미노출 — 햄스트링 고위험` }); }
-    else if (mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type: 'MV', msg: `최고속도 ${mvExp.daysSinceExposed}일 미노출 — 주의` }); }
-    else if (mvExp.pctMSS < 80)          { score += 1; flags.push({ type: 'MV', msg: `최고속도 MSS ${mvExp.pctMSS.toFixed(0)}% — 노출 부족` }); }
+  if(mvExp!==null){
+    if(mvExp.daysSinceExposed>=14){score+=3;flags.push({type:'MV',msg:'최고속도 '+mvExp.daysSinceExposed+'일 미노출'});}
+    else if(mvExp.daysSinceExposed>=7){score+=2;flags.push({type:'MV',msg:'최고속도 '+mvExp.daysSinceExposed+'일 미노출'});}
+    else if(mvExp.pctMSS<80){score+=1;flags.push({type:'MV',msg:'MSS '+mvExp.pctMSS.toFixed(0)+'% — 노출 부족'});}
   }
-  if (wellnessRisk !== null) {
-    if (wellnessRisk.absScore <= 8)        { score += 2; flags.push({ type: 'W', msg: `웰니스 총점 ${wellnessRisk.absScore}/20 — 과훈련 위험` }); }
-    else if (wellnessRisk.dropPct >= 0.25) { score += 2; flags.push({ type: 'W', msg: `웰니스 ${(wellnessRisk.dropPct * 100).toFixed(0)}% 급락` }); }
-    else if (wellnessRisk.dropPct >= 0.15) { score += 1; flags.push({ type: 'W', msg: `웰니스 ${(wellnessRisk.dropPct * 100).toFixed(0)}% 하락` }); }
+  if(wellData!==null){
+    if(wellData.absScore<=8){score+=2;flags.push({type:'W',msg:'웰니스 '+wellData.absScore+'/20 — 과훈련 위험'});}
+    else if(wellData.dropPct>=0.25){score+=2;flags.push({type:'W',msg:'웰니스 '+(wellData.dropPct*100).toFixed(0)+'% 급락'});}
+    else if(wellData.dropPct>=0.15){score+=1;flags.push({type:'W',msg:'웰니스 '+(wellData.dropPct*100).toFixed(0)+'% 하락'});}
   }
-  const level = score >= 4 ? 'red' : score >= 2 ? 'amber' : score >= 1 ? 'yellow' : 'green';
-  return { score, level, flags };
+  const level=score>=4?'red':score>=2?'amber':score>=1?'yellow':'green';
+  return{score,level,flags};
 }
 </script>
 </body>
