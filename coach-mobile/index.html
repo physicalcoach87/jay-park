@@ -369,16 +369,16 @@ let _schedTouchX = 0;
 const DOW = ['일','월','화','수','목','금','토'];
 const MD_COLORS = {'MD-5':'#60a5fa','MD-4':'#34d399','MD-3':'#fbbf24','MD-2':'#f87171','MD-1':'#e879f9','MD':'#4ade80','MD+1':'#94a3b8','MD+2':'#94a3b8'};
 const EVENT_TYPE_COLORS = {
-  '훈련': {bg:'rgba(22,163,74,.30)',   border:'#16a34a',text:'#86efac'},
-  'GYM':  {bg:'rgba(37,99,235,.30)',   border:'#2563eb',text:'#93c5fd'},
-  '경기': {bg:'rgba(220,38,38,.30)',   border:'#dc2626',text:'#fca5a5'},
-  '식사': {bg:'rgba(180,83,9,.35)',    border:'#b45309',text:'#fcd34d'},
-  '미팅': {bg:'rgba(109,40,217,.30)',  border:'#6d28d9',text:'#c4b5fd'},
-  '이동': {bg:'rgba(29,78,216,.30)',   border:'#1d4ed8',text:'#bfdbfe'},
-  '재활': {bg:'rgba(6,182,212,.28)',   border:'#06b6d4',text:'#67e8f9'},
-  '체크인':{bg:'rgba(5,150,105,.28)',  border:'#059669',text:'#6ee7b7'},
-  '휴식': {bg:'rgba(71,85,105,.28)',   border:'#475569',text:'#cbd5e1'},
-  '기타': {bg:'rgba(100,116,139,.25)', border:'#64748b',text:'#e2e8f0'},
+  '훈련': {bg:'#14532d', border:'#22c55e', text:'#86efac'},
+  'GYM':  {bg:'#1e3a8a', border:'#3b82f6', text:'#93c5fd'},
+  '경기': {bg:'#7f1d1d', border:'#ef4444', text:'#fca5a5'},
+  '식사': {bg:'#78350f', border:'#f59e0b', text:'#fcd34d'},
+  '미팅': {bg:'#3b0764', border:'#a855f7', text:'#d8b4fe'},
+  '이동': {bg:'#172554', border:'#60a5fa', text:'#bfdbfe'},
+  '재활': {bg:'#164e63', border:'#06b6d4', text:'#67e8f9'},
+  '체크인':{bg:'#064e3b', border:'#10b981', text:'#6ee7b7'},
+  '휴식': {bg:'#1e293b', border:'#64748b', text:'#94a3b8'},
+  '기타': {bg:'#1e293b', border:'#475569', text:'#cbd5e1'},
 };
 
 function kst(d){ const dt=d?new Date(d):new Date(); return new Date(dt.getTime()+9*3600000); }
