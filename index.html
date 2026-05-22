@@ -8855,26 +8855,8 @@ async function loadTeamSummary(){
     </div>`;
 
   out.innerHTML = `
-    <!-- ③ 팀 평균 (GPS 있을 때만) -->
-    ${hasGps ? `
-    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
-        ${date} 팀 평균 — 팀훈련(M) (${fullGps.length}명)
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center">
-        <div><div style="font-size:20px;font-weight:700;color:var(--accent2)">${avgGroup(fullGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
-        <div><div style="font-size:20px;font-weight:700;color:#f59e0b">${avgGroup(fullGps,'running_high')}</div><div style="font-size:11px;color:var(--text3)">HSR (m)</div></div>
-        <div><div style="font-size:20px;font-weight:700;color:#ef4444">${avgGroup(fullGps,'sprint')}</div><div style="font-size:11px;color:var(--text3)">Sprint (m)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#a78bfa">${avgGroup(fullGps,'player_load',1)}</div><div style="font-size:11px;color:var(--text3)">Player Load</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgGroup(fullGps,'max_speed',1)}</div><div style="font-size:11px;color:var(--text3)">최고속도 (km/h)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(fullGps,'accel')}</div><div style="font-size:11px;color:var(--text3)">가속 (N)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#34d399">${avgGroup(fullGps,'rhie')}</div><div style="font-size:11px;color:var(--text3)">RHIE</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#fbbf24">${mRpeAvg}</div><div style="font-size:11px;color:var(--text3)">평균 RPE</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#c084fc">${mSrpeAvg}</div><div style="font-size:11px;color:var(--text3)">평균 sRPE (AU)</div></div>
-      </div>
-    </div>
-
     <!-- ③ GPS 선수 테이블 (M그룹) -->
+    ${hasGps ? `
     <div style="overflow-x:auto;margin-bottom:14px">
       <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
         ${tableHeader}
@@ -8890,17 +8872,6 @@ async function loadTeamSummary(){
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
         서브/미엔트리(S) ${indGps.length - ssGps.length - xGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">스페셜 세션(SS) '+ssGps.length+'명 — 팀 평균 미반영</span>' : ''}${xGps.length > 0 ? ' · <span style="color:#f87171;font-weight:600">엔트리 제외(X) '+xGps.length+'명 — 팀 평균 미반영</span>' : ''}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;text-align:center;margin-bottom:12px">
-        <div><div style="font-size:18px;font-weight:700;color:var(--accent2)">${avgGroup(indGps,'td')}</div><div style="font-size:11px;color:var(--text3)">TD (m)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#f59e0b">${avgGroup(indGps,'running_high')}</div><div style="font-size:11px;color:var(--text3)">HSR (m)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#ef4444">${avgGroup(indGps,'sprint')}</div><div style="font-size:11px;color:var(--text3)">Sprint (m)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#a78bfa">${avgGroup(indGps,'player_load',1)}</div><div style="font-size:11px;color:var(--text3)">P.Load</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#60a5fa">${avgGroup(indGps,'max_speed',1)}</div><div style="font-size:11px;color:var(--text3)">최고속도</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#fb923c">${avgGroup(indGps,'accel')}</div><div style="font-size:11px;color:var(--text3)">가속 (N)</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#34d399">${avgGroup(indGps,'rhie')}</div><div style="font-size:11px;color:var(--text3)">RHIE</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#fbbf24">${calcAvgRpe(indGps)}</div><div style="font-size:11px;color:var(--text3)">평균 RPE</div></div>
-        <div><div style="font-size:18px;font-weight:700;color:#c084fc">${calcAvgSrpe(indGps)}</div><div style="font-size:11px;color:var(--text3)">평균 sRPE</div></div>
       </div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
