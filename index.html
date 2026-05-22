@@ -158,7 +158,18 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 .vm-dl{font-size:11px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit;white-space:nowrap}
 .vm-clr{font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit}
 @media(min-width:1024px){body{zoom:1.05}}@media(min-width:1280px){body{zoom:1.09}}
-@media print{.tabs,.btn-gen,.export-bar,.vid-row,.var-row,.vm-bar{display:none!important}body{background:#fff;color:#000;zoom:1}.flow-card-row{display:flex!important;flex-wrap:nowrap!important;overflow:visible!important;gap:4px!important}.flow-card-row>div{flex:1!important;min-width:0!important}}
+@media print{
+  .tabs,.btn-gen,.export-bar,.vid-row,.var-row,.vm-bar,.tab-wrapper,.header{display:none!important}
+  body{background:#fff!important;color:#000!important;zoom:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .flow-card-row{display:flex!important;flex-wrap:nowrap!important;overflow:visible!important;gap:4px!important}
+  .flow-card-row>div{flex:1!important;min-width:0!important}
+  .print-page-start{page-break-before:always!important;break-before:page!important;margin-top:0!important}
+  .match-report-wrap>div{page-break-inside:avoid}
+  svg{max-width:100%!important}
+  table{page-break-inside:auto}
+  tr{page-break-inside:avoid;page-break-after:auto}
+  @page{margin:12mm 10mm;size:A4}
+}
 /* PIN 잠금 화면 */
 #pin-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:0}
 #pin-box{width:100%;max-width:340px;padding:2rem 1.5rem;display:flex;flex-direction:column;align-items:center;gap:1.5rem}
@@ -347,6 +358,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <div id="morning-report-output">
     <div style="text-align:center;padding:3rem;color:var(--text3)">레포트 불러오는 중...</div>
+  </div>
+
+  <!-- 부상위험 상세 분석 (알림탭에서 이동) -->
+  <div id="injury-risk-section" style="margin-top:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">⚠️ 부상위험 상세 분석</div>
+      <button onclick="runInjuryRiskAnalysis()" style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 재분석</button>
+    </div>
+    <div id="injury-risk-output" style="max-height:600px;overflow-y:auto">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">GPS 데이터 업로드 후 자동으로 분석됩니다</div>
+    </div>
   </div>
 </div>
 
@@ -871,7 +893,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           📊 보고서 생성
         </button>
       </div>
-      <div id="match-report-output">
+      <div id="match-report-output" class="match-report-wrap">
         <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">경기를 선택하고 보고서 생성 버튼을 누르세요</div>
       </div>
     </div>
@@ -1474,87 +1496,79 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 서브 탭 -->
   <div style="display:flex;gap:8px;margin-bottom:14px">
-    <button class="btn-exp" id="ntab-risk" onclick="setNotifyTab('risk')"
-      style="flex:1">⚠️ 부상위험</button>
     <button class="btn-exp" id="ntab-notice" onclick="setNotifyTab('notice')"
       style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📢 공지 알림</button>
     <button class="btn-exp" id="ntab-message" onclick="setNotifyTab('message')"
       style="flex:1">💬 1:1 메시지</button>
   </div>
 
-  <!-- 부상위험 분석 뷰 -->
-  <div id="nv-risk" style="display:none">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-      <div style="font-size:12px;color:var(--text3)">GPS 업로드 직후 자동 계산됩니다</div>
-      <button onclick="runInjuryRiskAnalysis()" style="font-size:12px;padding:6px 14px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 재분석</button>
-    </div>
-    <div id="injury-risk-output">
-      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">GPS 데이터 업로드 후 자동으로 분석됩니다</div>
-    </div>
-  </div>
-
-  <!-- 공지 알림 뷰 -->
+  <!-- 공지 알림 뷰 (카카오톡 채팅방 스타일) -->
   <div id="nv-notice">
-    <!-- 알림 작성 -->
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:1.25rem;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">새 공지 작성</div>
-      <div class="ctrls g2" style="margin-bottom:10px">
-        <div class="ctrl">
-          <label>대상</label>
-          <select id="notify-target" style="width:100%" onchange="onNotifyTargetChange()">
-            <option value="all">전체 선수</option>
-            <option value="position">포지션별</option>
-            <option value="player">개인</option>
-          </select>
-        </div>
-        <div class="ctrl" id="notify-target-val-wrap" style="display:none">
-          <label id="notify-target-val-label">포지션</label>
-          <select id="notify-target-val" style="width:100%"></select>
-        </div>
+    <!-- 채팅방 헤더 -->
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px 12px 0 0;border-bottom:none">
+      <div style="width:36px;height:36px;background:#f59e0b;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">📢</div>
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">공지 채널</div>
+        <div style="font-size:11px;color:var(--text3)">전체 · 포지션 · 개인 공지</div>
       </div>
-      <div class="ctrl full" style="margin-bottom:10px">
-        <label>제목</label>
-        <input type="text" id="notify-title" placeholder="알림 제목" style="width:100%">
-      </div>
-      <div class="ctrl full" style="margin-bottom:12px">
-        <label>내용</label>
-        <textarea id="notify-body" rows="3" placeholder="알림 내용을 입력하세요"
-          style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical"></textarea>
-      </div>
-      <button onclick="sendNotification()" class="btn-exp pri" style="width:100%;padding:11px">📢 발송</button>
-      <div id="notify-msg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px"></div>
     </div>
 
-    <!-- 발송 내역 -->
-    <div style="font-size:12px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">발송 내역</div>
-    <div id="notify-history"></div>
+    <!-- 채팅 히스토리 -->
+    <div id="notify-history" style="background:var(--surface);border:1px solid var(--border);border-top:1px solid var(--border2);min-height:260px;max-height:420px;overflow-y:auto;padding:14px;"></div>
+
+    <!-- 발송 오류/완료 메시지 -->
+    <div id="notify-msg" style="font-size:12px;text-align:center;padding:4px 0;min-height:18px;background:var(--surface);border-left:1px solid var(--border);border-right:1px solid var(--border)"></div>
+
+    <!-- 입력 영역 -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:0 0 12px 12px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px">
+        <select id="notify-target" onchange="onNotifyTargetChange()"
+          style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:12px;outline:none">
+          <option value="all">📣 전체 선수</option>
+          <option value="position">👥 포지션별</option>
+          <option value="player">👤 개인</option>
+        </select>
+        <select id="notify-target-val" style="display:none;flex:1;padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:12px;outline:none"></select>
+      </div>
+      <input type="text" id="notify-title" placeholder="제목"
+        style="width:100%;padding:9px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;outline:none">
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <textarea id="notify-body" rows="2" placeholder="공지 내용을 입력하세요..."
+          style="flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:none"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendNotification()}"></textarea>
+        <button onclick="sendNotification()"
+          style="padding:9px 16px;background:#f59e0b;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit">전송</button>
+      </div>
+    </div>
   </div>
 
-  <!-- 1:1 메시지 뷰 -->
+  <!-- 1:1 메시지 뷰 (카카오톡 DM 스타일) -->
   <div id="nv-message" style="display:none">
-    <div class="ctrls g2" style="margin-bottom:12px">
-      <div class="ctrl">
-        <label>선수 선택</label>
-        <select id="msg-player-sel" onchange="loadMessageThread()" style="width:100%">
+    <!-- 선수 선택 헤더 -->
+    <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:12px 12px 0 0;border-bottom:none">
+      <div id="msg-player-avatar" style="width:36px;height:36px;background:#3b82f6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">?</div>
+      <div style="flex:1">
+        <select id="msg-player-sel" onchange="loadMessageThread()"
+          style="width:100%;padding:0;border:none;background:transparent;color:var(--text);font-family:inherit;font-size:13px;font-weight:700;outline:none;cursor:pointer">
           <option value="">선수를 선택하세요</option>
         </select>
       </div>
+      <div id="msg-del-all-wrap"></div>
     </div>
 
     <!-- 채팅창 -->
-    <div id="msg-thread" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;min-height:300px;max-height:400px;overflow-y:auto;margin-bottom:10px">
+    <div id="msg-thread" style="background:#b5c9e040;border:1px solid var(--border);border-top:1px solid var(--border2);min-height:260px;max-height:420px;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px">
       <div style="text-align:center;color:var(--text3);font-size:13px;padding:2rem">선수를 선택하세요</div>
     </div>
 
-    <!-- 대화 전체 삭제 버튼 -->
-    <div id="msg-del-all-wrap" style="text-align:right;margin-bottom:6px"></div>
-
     <!-- 메시지 입력 -->
-    <div style="display:flex;gap:8px">
-      <input type="text" id="msg-input" placeholder="메시지 입력..."
-        style="flex:1;padding:11px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;font-size:13px;outline:none"
-        onkeydown="if(event.key==='Enter')sendMessage()">
-      <button onclick="sendMessage()" class="btn-exp pri" style="padding:11px 16px">전송</button>
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:0 0 12px 12px;padding:10px 12px;display:flex;gap:8px;align-items:flex-end">
+      <textarea id="msg-input" rows="1" placeholder="메시지 입력..."
+        style="flex:1;padding:9px 12px;border-radius:20px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:none;max-height:80px;overflow-y:auto"
+        oninput="this.style.height='auto';this.style.height=this.scrollHeight+'px'"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"></textarea>
+      <button onclick="sendMessage()"
+        style="padding:9px 16px;background:#f59e0b;color:#000;border:none;border-radius:20px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:inherit;flex-shrink:0">전송</button>
     </div>
   </div>
 </div>
@@ -1837,19 +1851,9 @@ async function showApp(user, preloadedRole){
   }
   await loadUserPermissions(user.id, role);
   applyTabPermissions();
-  // 로그인 직후 첫 화면 (마지막 위치 복원, 없으면 기본값)
+  // 로그인 직후 첫 화면
   setTimeout(()=>{
-    const savedTab = localStorage.getItem('lastTab');
-    const savedView = localStorage.getItem('lastPlayerView');
-    if(savedTab && userPermissions[savedTab]){
-      const btn = document.querySelector(`.tab[onclick*="switchTab('${savedTab}'"]`);
-      if(btn){
-        switchTab(savedTab, btn);
-        if(savedTab === 'players' && savedView){
-          setTimeout(()=>setPlayerView(savedView), 300);
-        }
-      }
-    } else if(userPermissions['report']){
+    if(userPermissions['report']){
       const btn = document.querySelector(".tab[onclick*=\"switchTab('report'\"]");
       if(btn) switchTab('report', btn);
     } else if(userPermissions['players']){
@@ -1864,8 +1868,6 @@ function showLogin(){
   isAdmin = false;
   currentRole = 'coach';
   userPermissions = {};
-  localStorage.removeItem('lastTab');
-  localStorage.removeItem('lastPlayerView');
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('main-app').style.display='none';
 }
@@ -5288,7 +5290,6 @@ async function loadPlayerManagement(){
 }
 
 function setPlayerView(view){
-  localStorage.setItem('lastPlayerView', view);
   ['team','wellness','roster','dashboard','upload','match'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
     if(el) el.style.display = v===view ? 'block' : 'none';
@@ -6163,9 +6164,6 @@ async function loadMorningReport(){
     _players = data || [];
   }
 
-  // GPS duration 자동 동기화 (선수는 GPS 업로드 전에 RPE 입력 → 새로고침 시 자동 보정)
-  await autoSyncGpsDuration(today);
-
   // 병렬 데이터 조회
   const [
     {data:weekGps},
@@ -6186,7 +6184,7 @@ async function loadMorningReport(){
       .eq('session_date', yesterdayStr)
       .order('td',{ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe,duration,session_type,created_at')
+      .select('player_id,record_date,rpe,duration,created_at')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
@@ -6977,16 +6975,9 @@ async function loadMorningReport(){
             ${todayRpeRows.map(r=>{
               const rp=_players.find(p=>p.id===r.player_id);
               const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-              const cur=r.session_type||'AM';
-              const typeOpts=['AM','PM','추가','개인훈련'].map(t=>`<option value="${t}"${cur===t?' selected':''}>${t}</option>`).join('');
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px;gap:6px">
-                <span style="color:var(--text);font-weight:500;min-width:55px;flex-shrink:0">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
-                <select data-pid="${r.player_id}" data-date="${r.record_date}" data-orig="${cur}"
-                  onchange="updateRpeSessionType(this)"
-                  style="font-size:10px;background:var(--surface);border:1px solid var(--border2);color:var(--text2);border-radius:4px;padding:1px 4px;cursor:pointer;font-family:inherit">
-                  ${typeOpts}
-                </select>
-                <span style="color:#a78bfa;font-size:10px;white-space:nowrap;flex:1;text-align:right">RPE ${parseFloat(r.rpe)} · ${rt}</span>
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
+                <span style="color:var(--text);font-weight:500">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
+                <span style="color:#a78bfa;font-size:10px">RPE ${parseFloat(r.rpe)} · ✓ ${rt}</span>
               </div>`;
             }).join('')}
           </div>` : ''}
@@ -6994,44 +6985,9 @@ async function loadMorningReport(){
       </div>
 
     </div>`;
-}
 
-// ── RPE session_type 수정 ──────────────────────────────────────
-async function updateRpeSessionType(sel){
-  const pid=sel.dataset.pid, date=sel.dataset.date, orig=sel.dataset.orig, newType=sel.value;
-  if(newType===orig) return;
-  sel.disabled=true;
-  const {error}=await supa.from('session_records')
-    .update({session_type:newType})
-    .eq('player_id',pid)
-    .eq('record_date',date)
-    .eq('session_type',orig);
-  sel.disabled=false;
-  if(error){
-    alert('수정 실패: '+error.message);
-    sel.value=orig;
-  } else {
-    sel.dataset.orig=newType;
-    sel.style.color='var(--accent2)';
-    setTimeout(()=>sel.style.color='var(--text2)',1500);
-  }
-}
-
-// ── GPS duration 자동 동기화 (새로고침 시 자동 실행) ───────────
-async function autoSyncGpsDuration(today){
-  const [{data:gpsRecs},{data:nullRecs}] = await Promise.all([
-    supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',today),
-    supa.from('session_records').select('id,player_id,session_type,rpe').eq('record_date',today).is('duration',null)
-  ]);
-  if(!gpsRecs?.length || !nullRecs?.length) return;
-  const toFill = nullRecs.filter(r=>parseFloat(r.rpe)>0);
-  for(const rec of toFill){
-    // 1차: session_type 일치
-    let g = gpsRecs.find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
-    // 2차 폴백: 해당 선수 GPS 1개뿐이면 타입 무관 매칭
-    if(!g){ const pg=gpsRecs.filter(g=>g.player_id===rec.player_id); if(pg.length===1) g=pg[0]; }
-    if(g?.duration) await supa.from('session_records').update({duration:g.duration,session_type:g.session_label||rec.session_type}).eq('id',rec.id);
-  }
+  // 부상위험 상세 분석 자동 실행
+  runInjuryRiskAnalysis();
 }
 
 // ── Morning Report 웰니스/RPE 서브탭 전환 ──────────────────────
@@ -9373,27 +9329,14 @@ async function saveGpsData(){
     if(error) errors.push('훈련: '+error.message);
     else {
       trainSaved = trainRecords.length;
-      // GPS duration → session_records 백필 (선수는 GPS 업로드보다 먼저 RPE 입력 → session_type 불일치 폴백 처리)
+      // GPS duration → session_records 백필
       for(const r of trainRecords){
         if(r.duration && r.player_id && r.session_date){
-          // 1차: session_type 일치하는 null 레코드 채우기
-          const {data:exact}=await supa.from('session_records').select('id')
-            .eq('player_id',r.player_id).eq('record_date',r.session_date)
-            .eq('session_type',r.session_label).is('duration',null);
-          if(exact?.length){
-            await supa.from('session_records').update({duration:r.duration})
-              .eq('player_id',r.player_id).eq('record_date',r.session_date)
-              .eq('session_type',r.session_label).is('duration',null);
-          } else {
-            // 2차 폴백: null duration이 1개뿐이면 session_type 무관하게 채우기 (+ session_type 보정)
-            const {data:anyNull}=await supa.from('session_records').select('id')
-              .eq('player_id',r.player_id).eq('record_date',r.session_date).is('duration',null);
-            if(anyNull?.length===1){
-              await supa.from('session_records')
-                .update({duration:r.duration,session_type:r.session_label||'AM'})
-                .eq('id',anyNull[0].id);
-            }
-          }
+          await supa.from('session_records')
+            .update({duration: r.duration})
+            .eq('player_id', r.player_id)
+            .eq('record_date', r.session_date)
+            .is('duration', null);
         }
       }
     }
@@ -9576,21 +9519,22 @@ async function autoUpdateMSS(gpsData){
 
 // ACWR 계산: 최근 7일 acute / 28일 chronic
 function calcACWR(sessions, today){
-  // 같은 날 오전+오후 세션은 날짜별로 합산 후 unique 날짜로 chronic 계산
-  const byDate = {};
-  sessions.forEach(s => {
-    const sRPE = (parseFloat(s.rpe)||0) * (parseFloat(s.dur)||0);
-    if(!sRPE) return;
-    byDate[s.date] = (byDate[s.date]||0) + sRPE;
-  });
   const toDate = d => new Date(d);
   const todayD = toDate(today);
+
+  const daysDiff = (a, b) => Math.floor((b - a) / 86400000);
+
   let acute = 0, chronicSum = 0, chronicDays = 0;
-  Object.entries(byDate).forEach(([date, sRPE]) => {
-    const diff = Math.floor((todayD - toDate(date)) / 86400000);
+  sessions.forEach(s => {
+    const rpe  = parseFloat(s.rpe)  || 0;
+    const dur  = parseFloat(s.dur)  || 0;
+    const sRPE = rpe * dur;
+    if(!sRPE) return;
+    const diff = daysDiff(toDate(s.date), todayD);
     if(diff >= 0 && diff < 7)  acute += sRPE;
     if(diff >= 0 && diff < 28){ chronicSum += sRPE; chronicDays++; }
   });
+
   const chronic = chronicDays > 0 ? (chronicSum / chronicDays) * 7 : 0;
   const acwr = chronic > 0 ? acute / chronic : null;
   return { acute: Math.round(acute), chronic: Math.round(chronic), acwr };
@@ -10088,8 +10032,7 @@ async function loadNotifyTab(){
 function setNotifyTab(tab){
   document.getElementById('nv-notice').style.display  = tab==='notice' ?'block':'none';
   document.getElementById('nv-message').style.display = tab==='message'?'block':'none';
-  document.getElementById('nv-risk').style.display    = tab==='risk'   ?'block':'none';
-  ['notice','message','risk'].forEach(t=>{
+  ['notice','message'].forEach(t=>{
     const btn = document.getElementById(`ntab-${t}`);
     if(!btn) return;
     btn.style.borderColor = t===tab?'var(--accent)':'var(--border2)';
@@ -10097,23 +10040,17 @@ function setNotifyTab(tab){
     btn.style.color       = t===tab?'var(--accent2)':'var(--text2)';
   });
   if(tab==='message') loadMessageList();
-  if(tab==='risk') runInjuryRiskAnalysis();
 }
 
 function onNotifyTargetChange(){
   const val = document.getElementById('notify-target').value;
-  const wrap = document.getElementById('notify-target-val-wrap');
-  const label = document.getElementById('notify-target-val-label');
-  if(val==='all'){ wrap.style.display='none'; return; }
-  wrap.style.display='block';
+  const sel = document.getElementById('notify-target-val');
+  if(val==='all'){ sel.style.display='none'; return; }
+  sel.style.display='block';
   if(val==='position'){
-    label.textContent='포지션';
-    document.getElementById('notify-target-val').innerHTML =
-      ['CB','FB','CDM','CM','CAM','WG','ST','GK'].map(p=>`<option value="${p}">${p}</option>`).join('');
+    sel.innerHTML = ['CB','FB','CDM','CM','CAM','WG','ST','GK'].map(p=>`<option value="${p}">${p}</option>`).join('');
   } else {
-    label.textContent='선수';
-    document.getElementById('notify-target-val').innerHTML =
-      _players.map(p=>`<option value="${p.id}">${p.name} (${p.position})</option>`).join('');
+    sel.innerHTML = _players.map(p=>`<option value="${p.id}">${p.name} (${p.position})</option>`).join('');
   }
 }
 
@@ -10161,35 +10098,39 @@ async function deleteNotification(id){
 async function loadNotifyHistory(){
   const el = document.getElementById('notify-history');
   if(!el) return;
-  const {data} = await supa.from('notifications').select('*').order('created_at',{ascending:false}).limit(20);
-  if(!data?.length){ el.innerHTML='<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">발송 내역 없음</div>'; return; }
+  const {data} = await supa.from('notifications').select('*').order('created_at',{ascending:true}).limit(30);
+  if(!data?.length){
+    el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">📭 발송 내역 없음</div>';
+    return;
+  }
   el.innerHTML = data.map(n=>{
-    const target = n.target_type==='all'?'전체':n.target_type==='position'?`포지션: ${n.target_value}`:
-      `${_players.find(p=>p.id===n.target_value)?.name||n.target_value}`;
+    const target = n.target_type==='all'?'📣 전체':n.target_type==='position'?`👥 ${n.target_value}`:
+      `👤 ${_players.find(p=>p.id===n.target_value)?.name||n.target_value}`;
     const time = new Date(n.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
+    const readBadge = n.player_read_at
+      ? `<span style="font-size:10px;color:#34d399">읽음</span>`
+      : `<span style="font-size:10px;color:var(--text3)">미확인</span>`;
     return `
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:600;color:var(--text)">${n.title}</div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:8px">
-          <div style="font-size:11px;color:var(--text3)">${time}</div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <div style="max-width:80%">
+        <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;margin-bottom:3px">
+          ${readBadge}
+          <span style="font-size:10px;color:var(--text3)">${time}</span>
           <button onclick="deleteNotification('${n.id}')"
-            style="background:transparent;border:1px solid var(--red);border-radius:5px;
-                   color:var(--red);font-size:11px;padding:2px 7px;cursor:pointer">삭제</button>
+            style="background:transparent;border:none;color:var(--text3);font-size:12px;cursor:pointer;padding:0;line-height:1"
+            title="삭제">🗑</button>
         </div>
-      </div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${n.body}</div>
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--accent-bg);color:var(--accent2)">→ ${target}</span>
-        ${n.player_read_at
-          ? `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:rgba(52,211,153,0.12);color:#34d399">
-              👁 읽음 · ${new Date(n.player_read_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false})}
-             </span>`
-          : `<span style="font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--text3)">미확인</span>`
-        }
+        <div style="background:#f59e0b;color:#000;border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13px;line-height:1.5">
+          <div style="font-weight:700;margin-bottom:4px">${n.title}</div>
+          <div style="font-size:12px;opacity:0.85">${n.body}</div>
+        </div>
+        <div style="text-align:right;margin-top:4px">
+          <span style="font-size:10px;padding:2px 7px;border-radius:4px;background:var(--accent-bg);color:var(--accent2)">${target}</span>
+        </div>
       </div>
     </div>`;
   }).join('');
+  el.scrollTop = el.scrollHeight;
 }
 
 // ── 1:1 메시지 ────────────────────────────
@@ -10197,6 +10138,10 @@ async function loadMessageThread(){
   const playerId = document.getElementById('msg-player-sel').value;
   _msgPlayerId = playerId;
   if(!playerId) return;
+  // 아바타 업데이트
+  const player = _players.find(p=>p.id===playerId);
+  const av = document.getElementById('msg-player-avatar');
+  if(av && player) av.textContent = player.name.charAt(0);
   if(_msgInterval) clearInterval(_msgInterval);
   _msgInterval = setInterval(()=>{ if(_msgPlayerId) renderMessageThread(_msgPlayerId); }, 5000);
   await renderMessageThread(playerId);
@@ -10242,37 +10187,53 @@ async function renderMessageThread(playerId){
     return;
   }
   const playerName = _players.find(p=>p.id===playerId)?.name||'선수';
+  const initial = playerName.charAt(0);
   el.innerHTML = data.map(m=>{
     const isCoach = m.sender==='coach';
-    const time = new Date(m.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false});
-    return `
-    <div style="display:flex;justify-content:${isCoach?'flex-end':'flex-start'};margin-bottom:10px;position:relative" 
-         class="msg-row" onmouseenter="this.querySelector('.msg-del-btn').style.display='block'"
-         onmouseleave="this.querySelector('.msg-del-btn').style.display='none'">
-      <div style="max-width:75%;position:relative">
-        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;text-align:${isCoach?'right':'left'}">${isCoach?'코치님':playerName} · ${time}</div>
-        <div style="padding:10px 14px;border-radius:${isCoach?'14px 14px 4px 14px':'14px 14px 14px 4px'};
-          background:${isCoach?'var(--accent)':'var(--surface2)'};
-          color:${isCoach?'#000':'var(--text)'};font-size:13px;line-height:1.5">
-          ${m.content}
+    const time = new Date(m.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+    if(isCoach){
+      return `
+      <div style="display:flex;justify-content:flex-end;gap:6px;align-items:flex-end"
+           onmouseenter="this.querySelector('.msg-del-btn').style.opacity='1'"
+           onmouseleave="this.querySelector('.msg-del-btn').style.opacity='0'">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+          <button class="msg-del-btn" onclick="deleteMessage('${m.id}')"
+            style="opacity:0;background:transparent;border:none;cursor:pointer;font-size:12px;color:var(--text3);padding:0;transition:opacity .15s">🗑</button>
+          <span style="font-size:10px;color:var(--text3)">${time}</span>
         </div>
-        <button class="msg-del-btn" onclick="deleteMessage('${m.id}')"
-          style="display:none;position:absolute;${isCoach?'left:-28px':'right:-28px'};top:50%;transform:translateY(-50%);
-                 background:transparent;border:none;cursor:pointer;font-size:14px;color:var(--text3);padding:4px"
-          title="메시지 삭제">🗑</button>
-      </div>
-    </div>`;
+        <div style="max-width:72%">
+          <div style="background:#f59e0b;color:#000;border-radius:14px 14px 4px 14px;padding:10px 14px;font-size:13px;line-height:1.5;word-break:break-word">${m.content}</div>
+        </div>
+      </div>`;
+    } else {
+      return `
+      <div style="display:flex;gap:8px;align-items:flex-end"
+           onmouseenter="this.querySelector('.msg-del-btn').style.opacity='1'"
+           onmouseleave="this.querySelector('.msg-del-btn').style.opacity='0'">
+        <div style="width:32px;height:32px;background:#3b82f6;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${initial}</div>
+        <div style="max-width:72%">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${playerName}</div>
+          <div style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:14px 14px 14px 4px;padding:10px 14px;font-size:13px;line-height:1.5;word-break:break-word">${m.content}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
+          <span style="font-size:10px;color:var(--text3)">${time}</span>
+          <button class="msg-del-btn" onclick="deleteMessage('${m.id}')"
+            style="opacity:0;background:transparent;border:none;cursor:pointer;font-size:12px;color:var(--text3);padding:0;transition:opacity .15s">🗑</button>
+        </div>
+      </div>`;
+    }
   }).join('');
   el.scrollTop = el.scrollHeight;
 }
 
 async function sendMessage(){
   const playerId = document.getElementById('msg-player-sel').value;
-  const content = document.getElementById('msg-input').value.trim();
+  const inp = document.getElementById('msg-input');
+  const content = inp.value.trim();
   if(!playerId){ alert('선수를 선택해주세요'); return; }
   if(!content) return;
   await supa.from('messages').insert({player_id:playerId, sender:'coach', content, is_read:false, coach_email: currentUser?.email||null});
-  document.getElementById('msg-input').value='';
+  inp.value=''; inp.style.height='auto';
   renderMessageThread(playerId);
   // 해당 선수에게 푸시 알림 발송
   const playerName = _players.find(p=>p.id===playerId)?.name||'선수';
@@ -13139,6 +13100,7 @@ async function generateMatchReport(){
   };
 
   const card = content => `<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">${content}</div>`;
+  const pageBreakCard = content => `<div class="print-page-start" style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px">${content}</div>`;
   const secHead = (icon,title,sub='') => `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
       <span style="font-size:15px">${icon}</span>
@@ -13476,7 +13438,7 @@ async function generateMatchReport(){
     `);
   })()}
 
-  ${card(`
+  ${pageBreakCard(`
     ${secHead('📊','팀 합계 종합 분석','최근 3경기 비교 + 전·후반')}
 
     <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 최근 3경기 비교 (FT 출전 전원 합산)</div>
@@ -13503,42 +13465,6 @@ async function generateMatchReport(){
       </table>
     </div>
     `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${last3.length}경기)</div>`}
-
-    ${last3.length>=1?`
-    <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px;margin-bottom:20px">
-      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:4px">▸ 팀 경기 평균 비교 (출전시간 정규화)</div>
-      <div style="font-size:10px;color:var(--text3);margin-bottom:8px">공식: (Σ지표 ÷ Σ출전시간) × max출전시간 — 최근 ${last3.length}경기 평균 자동 산출</div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
-          <thead>
-            <tr style="background:var(--surface2)">
-              <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표</th>
-              ${last3.map(m=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
-              <th style="padding:7px 8px;text-align:right;color:#a78bfa;font-weight:700">최근 ${last3.length}경기 평균</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${[
-              {k:'td',   l:'TD',         fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'hir',  l:'HIR+Sprint', fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'b4',   l:'Band4 (m)',  fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'b5',   l:'Sprint(B5)', fmt:v=>v!=null?Math.round(v).toLocaleString()+' m':'—'},
-              {k:'acc',  l:'가속 (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
-              {k:'dec',  l:'감속 (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
-              {k:'pl',   l:'P.Load',     fmt:v=>v!=null?Math.round(v)+'':'—'},
-              {k:'rhie', l:'RHIE (회)',  fmt:v=>v!=null?Math.round(v)+'회':'—'},
-              {k:'mpm',  l:'평균 m/min', fmt:v=>v!=null?v.toFixed(1):'—'},
-              {k:'vmax', l:'평균 Vmax',  fmt:v=>v!=null?v.toFixed(1)+' km/h':'—'},
-            ].map(f=>`
-            <tr style="border-bottom:1px solid var(--border)">
-              <td style="padding:6px 8px;color:var(--accent2);font-weight:600">${f.l}</td>
-              ${last3.map(m=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.avg[f.k])}</td>`).join('')}
-              <td style="padding:6px 8px;text-align:right;color:#a78bfa;font-weight:600">${f.fmt(avg3[f.k])}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`:''}
 
     ${hasHalf?`
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
@@ -13602,7 +13528,7 @@ async function generateMatchReport(){
       const intLbl = intPct==null?'—':(intPct>=80?'🟢':intPct>=60?'🟡':'🔴')+' '+intPct+'%';
       return {absPct,intPct,absCol,absLbl,absBg,intCol,intLbl,intBg};
     };
-    const sec2td = card(`
+    const sec2td = pageBreakCard(`
       ${secHead('📏','총이동거리 — 개인별 Match Max 대비','TD 내림차순 · 절대% = TD/Match Max · 강도% = MPM/Match Max')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px">
@@ -13648,7 +13574,7 @@ async function generateMatchReport(){
 
     // ── § 3: 고강도 러닝 + 스프린트 (HSR 내림차순) ─────────
     const sec3Sorted = [...secPl].sort(byDesc(p=>p.hsr.v));
-    const sec3 = card(`
+    const sec3 = pageBreakCard(`
       ${secHead('🏃','고강도 러닝 + 스프린트 (개인별)','HIR+Sprint 내림차순 · 본인 Match Max 대비')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
@@ -13684,7 +13610,7 @@ async function generateMatchReport(){
 
     // ── § 4: 가속 + RHIE (RHIE 내림차순) ─────────────
     const sec4Sorted = [...secPl].sort(byDesc(p=>p.rhie.v));
-    const sec4 = card(`
+    const sec4 = pageBreakCard(`
       ${secHead('⚡','가속·감속 + RHIE (개인별)','RHIE 내림차순 · 본인 Match Max 대비')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:480px">
@@ -13719,7 +13645,7 @@ async function generateMatchReport(){
 
     // ── § 5: FMP (Dyn.H 내림차순) ─────────────────
     const sec5Sorted = [...secPl].sort(byDesc(p=>p.fmpDynH.v));
-    const sec5 = card(`
+    const sec5 = pageBreakCard(`
       ${secHead('🦵','FMP (Functional Movement Profile)','FMP Dynamic.H 내림차순 · 본인 Match Max 대비 · Dyn H/M 비율 = eccentric 부하 지표')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
@@ -13759,7 +13685,7 @@ async function generateMatchReport(){
 
     // ── § 6: 최고 스피드 (Vmax 내림차순) ──────────
     const sec6Sorted = [...secPl].sort(byDesc(p=>p.vmax.v));
-    const sec6 = card(`
+    const sec6 = pageBreakCard(`
       ${secHead('💨','최고 스피드 (Vmax)','Vmax 내림차순 · 본인 Match Max 대비 · MSS 90% 노출 체크')}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:420px">
@@ -13802,7 +13728,7 @@ async function generateMatchReport(){
   ${(()=>{
     // ── § 7: 팀 1분 롤링 mpm 분석 ──────────────────
     if(!minuteRows || !minuteRows.length){
-      return card(`
+      return pageBreakCard(`
         ${secHead('📈','팀 1분 롤링 mpm 분석')}
         <div style="color:var(--text3);font-size:12px;text-align:center;padding:14px">
           이 경기의 1분 롤링 데이터가 없습니다.<br>
@@ -13914,7 +13840,7 @@ async function generateMatchReport(){
         <text x="${cx}" y="${cy-6}" fill="#ef4444" font-size="8" text-anchor="middle">${label}</text>`;
     }).join('');
 
-    return card(`
+    return pageBreakCard(`
       ${secHead('📈','팀 1분 롤링 mpm 분석',`팀 평균 m/min · 5분 이동평균 · 1Q 종료: ${halfBreak}' / 2Q 시작: ${halfStart}'`)}
       <div style="overflow-x:auto">
         <svg viewBox="0 0 ${W} ${H+14}" style="width:100%;height:auto;display:block;background:var(--surface2);border-radius:8px">
@@ -14082,7 +14008,7 @@ async function generateMatchReport(){
     window._reportP8XRange = {xMin, xMax};
     const selectOpts = stats.map((s,i)=>`<option value="${i}">${s.name}${s.pos?` (${s.pos})`:''} · ${s.dur}분 · 낙폭 ${s.drop!=null?(s.drop>0?'+':'')+s.drop.toFixed(1)+'%':'—'}</option>`).join('');
 
-    return card(`
+    return pageBreakCard(`
       ${secHead('👤','개인별 1분 롤링 mpm 분석','출전 전 선수 · 후반 낙폭 큰 순 · 5분 MA 기준')}
       <div style="overflow-x:auto;margin-bottom:14px">
         <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:680px">
@@ -14175,7 +14101,7 @@ async function generateMatchReport(){
     `);
   })()}
 
-  ${card(`
+  ${pageBreakCard(`
     ${secHead('🏥','회복 우선순위','출전시간 기준 그룹 · GPS 위험도 참고')}
 
     ${(()=>{
@@ -16134,7 +16060,6 @@ function switchTab(tab,el){
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
-  localStorage.setItem('lastTab', tab);
   if(tab==='players'){loadPlayerManagement();}
   if(tab==='notify')loadNotifyTab();
   if(tab==='report'){ loadMorningReport(); loadScheduleCalendar(); }
