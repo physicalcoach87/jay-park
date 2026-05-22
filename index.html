@@ -8585,7 +8585,7 @@ async function buildWeeklyLoadHtml(forDate){
       <td style="padding:7px 8px;text-align:right">${rhieCell}</td>
       <td style="padding:7px 8px;text-align:right">${sRPECell}</td>
     </tr>`;
-    return matchRowHtml+(dayRow.length||!isPast?trainRowHtml:'');
+    return (dayMatchRows.length&&isPast) ? matchRowHtml : (dayRow.length||!isPast?trainRowHtml:'');
   }).join('');
 
   const wkAllGps=(wkGps||[]).filter(r=>r.session_date<=forDate&&(r.session_type2||'').trim().toUpperCase()==='M');
