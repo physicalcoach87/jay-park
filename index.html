@@ -8534,52 +8534,56 @@ async function buildWeeklyLoadHtml(forDate){
     const td=dayRow.length?_trainAvg(dayRow,'td'):null;
     const hsr=dayRow.length?_trainAvg(dayRow,'running_high'):null;
     const sp=dayRow.length?_trainAvg(dayRow,'sprint'):null;
+    const accel=dayRow.length?_trainAvg(dayRow,'accel'):null;
+    const rhie=dayRow.length?_trainAvg(dayRow,'rhie'):null;
     const dayRpe=(rpe28w||[]).filter(r=>r.record_date===date);
     const avgRpe=isTeamDay&&dayRpe.length?dayRpe.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/dayRpe.length:0;
     const avgDur=dayRow.length?_avgF(dayRow,'duration'):0;
     const sRPE=(avgRpe&&avgDur)?Math.round(avgRpe*avgDur):null;
-    let dayACWR=null;
-    if(isPast&&sRPE){
-      const dateD=new Date(date);
-      const all=_players.map(p=>{const sess=rpeMap[p.id]||[];let a=0,c=0;sess.forEach(s=>{const diff=Math.floor((dateD-new Date(s.date))/86400000);const sr=s.rpe*s.dur;if(diff>=0&&diff<7)a+=sr;if(diff>=0&&diff<28)c+=sr;});const chr=(c/28)*7;return chr>0?a/chr:null;}).filter(v=>v!==null);
-      dayACWR=all.length?all.reduce((a,b)=>a+b,0)/all.length:null;
-    }
     const mdStyle=Object.keys(mdMap).find(k=>topic?.toUpperCase().includes(k));
     const mdBadge=topic?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdStyle?mdMap[mdStyle]:'background:var(--surface2);color:var(--text3)'}">${topic}</span>`:`<span style="font-size:10px;color:var(--text3)">—</span>`;
-    const typeTag=isPast&&dayRow.length?(isTeamDay?`<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:4px">M</span>`:`<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:4px">S</span>`):'';
+    const typeBadge=isPast&&dayRow.length?(isTeamDay?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#0c1a2e;color:#60a5fa;font-weight:700">M</span>`:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#1a1a2e;color:#9ca3af;font-weight:700">S</span>`):`<span style="color:var(--text3)">—</span>`;
     const selLabel=isSel?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#15803d;color:white;margin-left:4px">조회일</span>`:'';
+    const oppCell=opp?`<span style="font-size:10px;color:var(--text3)">vs ${opp}</span>`:`<span style="color:var(--text3)">—</span>`;
     const tdCell=td?`<span style="color:var(--accent2)">${(td/1000).toFixed(1)}k</span>${_pb(td,mRef3.td)}`:'<span style="color:var(--text3)">—</span>';
     const hsrCell=hsr?`<span style="color:#f59e0b">${Math.round(hsr)}</span>${_pb(hsr,mRef3.hsr)}`:'<span style="color:var(--text3)">—</span>';
     const spCell=sp?`<span style="color:#ef4444">${Math.round(sp)}</span>${_pb(sp,mRef3.sprint)}`:'<span style="color:var(--text3)">—</span>';
+    const accelCell=accel?`<span style="color:#fb923c">${Math.round(accel)}</span>`:'<span style="color:var(--text3)">—</span>';
+    const rhieCell=rhie?`<span style="color:#34d399">${parseFloat(rhie.toFixed(1))}</span>`:'<span style="color:var(--text3)">—</span>';
     const sRPECell=sRPE?`<span style="color:#c084fc">${sRPE}</span>`:'<span style="color:var(--text3)">—</span>';
-    const acwrCell=dayACWR?`<span style="color:${_ac(dayACWR)};font-weight:500">${dayACWR.toFixed(2)}</span>`:'<span style="color:var(--text3)">—</span>';
-    const statusCell=!isPast?`<span style="font-size:10px;color:var(--text3);font-style:italic">${opp||'예정'}</span>`:dayACWR?`<span style="font-size:10px;padding:1px 6px;border-radius:10px;background:${dayACWR>1.5?'#3b1219':dayACWR>1.3?'#2a1a00':dayACWR<0.8?'#1a1a00':'#052e16'};color:${_ac(dayACWR)}">${_al(dayACWR)}</span>`:'—';
     const dayMatchRows=wkMatchByDate[date]||[];
     const matchRowHtml=(dayMatchRows.length&&isPast)?(()=>{
       const mTD=_mAvg(dayMatchRows,'td');const mHSR=_mAvg(dayMatchRows,'band4_td');const mSP=_mAvg(dayMatchRows,'band5_td');
+      const mAc=_mAvg(dayMatchRows,'accel');const mRH=_mAvg(dayMatchRows,'rhie');
       const mOpp=dayMatchRows[0]?.opponent||'';const mResult=dayMatchRows[0]?.result||'';
       const rColor=mResult==='W'?'#22c55e':mResult==='L'?'#ef4444':'#9ca3af';const rLabel=mResult==='W'?'승':mResult==='L'?'패':mResult==='D'?'무':'';
+      const mDur=Math.round(Math.max(...dayMatchRows.map(r=>parseFloat(r.duration)||0)));
       return `<tr style="border-bottom:0.5px solid var(--border);background:#1a0a0a">
-        <td style="padding:6px 10px;white-space:nowrap"><span style="color:#f87171;font-weight:600">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700;margin-left:4px">🏟️</span></td>
-        <td style="padding:6px 8px;text-align:center"><span style="font-size:10px;color:#f87171;font-weight:600">vs ${mOpp}</span></td>
-        <td style="padding:6px 8px;text-align:right">—</td>
+        <td style="padding:6px 10px;white-space:nowrap"><span style="color:#f87171;font-weight:600">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span><span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700;margin-left:4px">🏟️ 경기</span></td>
+        <td style="padding:6px 8px;text-align:center"><span style="font-size:10px;color:#f87171;font-weight:600">${rLabel||''}</span></td>
+        <td style="padding:6px 8px;text-align:center"><span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700">경기</span></td>
+        <td style="padding:6px 8px;text-align:center"><span style="font-size:10px;color:#f87171">vs ${mOpp}</span></td>
+        <td style="padding:6px 8px;text-align:right;color:var(--text2)">${mDur}min</td>
         <td style="padding:6px 8px;text-align:right">${mTD?`<span style="color:#60a5fa;font-weight:500">${(mTD/1000).toFixed(1)}k</span>`:'—'}</td>
         <td style="padding:6px 8px;text-align:right">${mHSR?`<span style="color:#f59e0b">${Math.round(mHSR)}</span>`:'—'}</td>
         <td style="padding:6px 8px;text-align:right">${mSP?`<span style="color:#ef4444">${Math.round(mSP)}</span>`:'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td><td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
-        <td style="padding:6px 8px;text-align:center">${rLabel?`<span style="font-size:11px;font-weight:700;color:${rColor}">${rLabel}</span>`:''}</td>
+        <td style="padding:6px 8px;text-align:right">${mAc?`<span style="color:#fb923c">${Math.round(mAc)}</span>`:'—'}</td>
+        <td style="padding:6px 8px;text-align:right">${mRH?`<span style="color:#34d399">${parseFloat(mRH.toFixed(1))}</span>`:'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
       </tr>`;
     })():'';
     const trainRowHtml=`<tr style="border-bottom:0.5px solid var(--border);${isSel?'background:#0a1f10':''};${!isPast?'opacity:0.45':''}">
-      <td style="padding:7px 10px;white-space:nowrap"><span style="color:${isSel?'#4ade80':'var(--text2)'};font-weight:${isSel?'600':'400'}">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>${typeTag}${selLabel}</td>
+      <td style="padding:7px 10px;white-space:nowrap"><span style="color:${isSel?'#4ade80':'var(--text2)'};font-weight:${isSel?'600':'400'}">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>${selLabel}</td>
       <td style="padding:7px 8px;text-align:center">${mdBadge}</td>
+      <td style="padding:7px 8px;text-align:center">${typeBadge}</td>
+      <td style="padding:7px 8px;text-align:center">${oppCell}</td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${dayRow.length?Math.round(_avgF(dayRow,'duration')||0)+'min':'—'}</td>
       <td style="padding:7px 8px;text-align:right">${tdCell}</td>
       <td style="padding:7px 8px;text-align:right">${hsrCell}</td>
       <td style="padding:7px 8px;text-align:right">${spCell}</td>
+      <td style="padding:7px 8px;text-align:right">${accelCell}</td>
+      <td style="padding:7px 8px;text-align:right">${rhieCell}</td>
       <td style="padding:7px 8px;text-align:right">${sRPECell}</td>
-      <td style="padding:7px 8px;text-align:right">${acwrCell}</td>
-      <td style="padding:7px 8px;text-align:center">${statusCell}</td>
     </tr>`;
     return matchRowHtml+(dayRow.length||!isPast?trainRowHtml:'');
   }).join('');
@@ -8599,7 +8603,7 @@ async function buildWeeklyLoadHtml(forDate){
 
   return `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
-      <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">이번 주 팀 부하 흐름 <span style="font-size:10px;color:var(--text3);margin-left:4px">(${weekStartStr} ~ ${weekEndStr})</span></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text2)">📋 훈련 데이터 보고서 <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">${weekStartStr} ~ ${weekEndStr}</span></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <span style="font-size:11px;color:var(--text3)">TD <strong style="color:var(--text)">${wkTD}km</strong></span>
         <span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${wkHSR}m</strong></span>
@@ -8612,15 +8616,17 @@ async function buildWeeklyLoadHtml(forDate){
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:520px">
         <thead><tr style="background:var(--surface2)">
-          <th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">요일·날짜</th>
-          <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">주기</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">시간</th>
+          <th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">날짜</th>
+          <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">훈련 주제</th>
+          <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">주전(M)/서브(S)</th>
+          <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">준비 상대</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">운동시간</th>
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">TD</th>
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">HSR</th>
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">Sprint</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--fb923c);font-weight:500;border-bottom:0.5px solid var(--border)">가속</th>
+          <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">RHIE</th>
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">sRPE</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">ACWR</th>
-          <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">상태</th>
         </tr></thead>
         <tbody>${weekRowsHtml}</tbody>
       </table>
@@ -8820,9 +8826,8 @@ async function loadTeamSummary(){
   const mRpeAvg  = calcAvgRpe(fullGps);
   const mSrpeAvg = calcAvgSrpe(fullGps);
 
-  out.innerHTML = `
-
-    <!-- ① RPE/체중 입력 현황 (항상 표시) -->
+  const _rpeHtml = `
+    <!-- ④ RPE/체중 입력 현황 -->
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">
@@ -8847,9 +8852,10 @@ async function loadTeamSummary(){
           ${rpeStatusHtml}
         </table>
       </div>
-    </div>
+    </div>`;
 
-    <!-- ② GPS 팀 평균 (GPS 있을 때만) -->
+  out.innerHTML = `
+    <!-- ③ 팀 평균 (GPS 있을 때만) -->
     ${hasGps ? `
     <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:12px">
@@ -8904,7 +8910,8 @@ async function loadTeamSummary(){
       </div>
     </div>` : ''}` : ''}`;
 
-  // ── 이번주 팀 부하 흐름 삽입 ──
+  // ── 섹션 순서 조합: 훈련데이터보고서 > 팀평균 > RPE ──
+  out.innerHTML += _rpeHtml;
   const weeklyLoadHtml = await buildWeeklyLoadHtml(date);
   out.innerHTML = weeklyLoadHtml + out.innerHTML;
 
