@@ -896,10 +896,20 @@ async function loadWellness(){
   const el=document.getElementById('wellness-content');
   el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
   const today=getKSTDateStr();
-  const {data:todayWell}=await supa.from('wellness_records')
-    .select('player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
-    .eq('record_date',today);
+  const since7=new Date();since7.setDate(since7.getDate()-7);
+  const since7Str=since7.toISOString().split('T')[0];
+  const [{data:todayWell},{data:well7}]=await Promise.all([
+    supa.from('wellness_records')
+      .select('player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
+      .eq('record_date',today),
+    supa.from('wellness_records')
+      .select('player_id,record_date,morning_weight')
+      .gte('record_date',since7Str).neq('record_date',today),
+  ]);
   const wMap={};(todayWell||[]).forEach(r=>{wMap[r.player_id]=r;});
+  const w7AvgMap={};
+  (well7||[]).forEach(r=>{if(!r.morning_weight)return;if(!w7AvgMap[r.player_id])w7AvgMap[r.player_id]=[];w7AvgMap[r.player_id].push(parseFloat(r.morning_weight));});
+  const getAvgWeight=pid=>{const arr=w7AvgMap[pid];return arr&&arr.length?(arr.reduce((a,v)=>a+v,0)/arr.length).toFixed(1):null;};
   const responded=_players.filter(p=>wMap[p.id]).sort((a,b)=>{
     const ta=(wMap[a.id].fatigue||0)+(wMap[a.id].sleep_quality||0)+(wMap[a.id].stress||0)+(wMap[a.id].muscle_soreness||0);
     const tb=(wMap[b.id].fatigue||0)+(wMap[b.id].sleep_quality||0)+(wMap[b.id].stress||0)+(wMap[b.id].muscle_soreness||0);
@@ -921,7 +931,7 @@ async function loadWellness(){
       +'<td style="color:'+wColor(w.sleep_quality)+'">'+(w.sleep_quality||'—')+'</td>'
       +'<td style="color:'+wColor(w.stress)+'">'+(w.stress||'—')+'</td>'
       +'<td style="color:'+wColor(w.muscle_soreness)+'">'+(w.muscle_soreness||'—')+'</td>'
-      +'<td style="color:var(--text3)">'+(w.morning_weight?w.morning_weight+'kg':'—')+'</td>'
+      +'<td style="color:var(--text3)">'+(w.morning_weight?(()=>{const avg=getAvgWeight(p.id);return avg?w.morning_weight+'<span style="font-size:9px;color:var(--text3)">/'+(avg)+'</span>kg':w.morning_weight+'kg';})():'—')+'</td>'
       +'</tr>';
   }).join('');
 
