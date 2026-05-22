@@ -119,16 +119,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .risk-card-yellow{background:#1a1a0020;border-color:#eab30850}
 
 /* ─── Schedule Card ─────────────────────────────────── */
-.sched-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-.sched-nav-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;padding:5px 14px;font-size:18px;cursor:pointer;font-family:inherit;line-height:1;transition:background .1s}
-.sched-nav-btn:active{background:var(--border)}
-.sched-nav-label{font-size:13px;font-weight:600;color:var(--text)}
 .sched-header-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .sched-header-btns{display:flex;gap:6px}
 .sched-btn-add{font-size:11px;padding:5px 11px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:600}
 .sched-btn-week{font-size:11px;padding:5px 11px;background:var(--surface2);color:var(--text2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-family:inherit}
-.sched-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-.sched-col{display:flex;flex-direction:column}
+.sched-carousel{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.sched-carousel::-webkit-scrollbar{display:none}
+.sched-slide{scroll-snap-align:start;flex:0 0 100%;width:100%;min-height:100px}
+.sched-dots{display:flex;justify-content:center;align-items:center;gap:5px;padding:10px 0 2px}
+.sched-dot{width:6px;height:6px;border-radius:3px;background:var(--border);transition:all .25s;cursor:pointer;flex-shrink:0}
+.sched-dot.active{width:18px;background:#22c55e}
+.sched-dot.today-dot{background:rgba(34,197,94,.35)}
 .sched-col-hdr{text-align:center;padding:8px 2px 10px;border-bottom:1px solid var(--border);margin-bottom:6px}
 .sched-col-hdr-day{font-size:11px;font-weight:600;margin-bottom:6px;color:var(--text3)}
 .sched-col-hdr-numwrap{display:flex;align-items:center;justify-content:center;height:40px}
@@ -614,19 +615,17 @@ async function loadHome(){
 }
 
 // ══════════════════════════════════════════════════════
-// 일정 카드 — 3일 뷰 + 컬러 이벤트 + 수정 + 주간입력
+// 일정 카드 — 7일 캐러셀
 // ══════════════════════════════════════════════════════
-function getDayWindowBounds(offset){
+function getWeekDays(){
   const now=kst();
-  const base=new Date(now);
-  base.setHours(0,0,0,0);
-  base.setDate(now.getDate()+(offset||0));
+  const day=now.getDay();
+  const mon=new Date(now);
+  mon.setDate(now.getDate()-(day===0?6:day-1));
+  mon.setHours(0,0,0,0);
   const days=[];
-  for(let i=0;i<2;i++){
-    const d=new Date(base); d.setDate(base.getDate()+i);
-    days.push(d.toISOString().split('T')[0]);
-  }
-  return {days, start:days[0], end:days[1]};
+  for(let i=0;i<7;i++){const d=new Date(mon);d.setDate(mon.getDate()+i);days.push(d.toISOString().split('T')[0]);}
+  return days;
 }
 
 async function loadScheduleCard(){
@@ -634,11 +633,12 @@ async function loadScheduleCard(){
   if(!el) return;
   el.innerHTML='<div class="loading" style="padding:16px 0"><span class="spinner">⏳</span></div>';
 
-  const {days,start,end}=getDayWindowBounds(_schedDayOffset);
   const today=getKSTDateStr();
+  const days=getWeekDays();
+
   const {data:weekSched}=await supa.from('weekly_schedule')
     .select('id,event_date,event_type,md_stage,title,start_time')
-    .gte('event_date',start).lte('event_date',end)
+    .gte('event_date',days[0]).lte('event_date',days[6])
     .order('event_date').order('start_time',{nullsFirst:false});
 
   const schedByDate={};
@@ -647,10 +647,7 @@ async function loadScheduleCard(){
     schedByDate[e.event_date].push(e);
   });
 
-  const fmtDay=ds=>{const d=new Date(ds+'T12:00:00');return(d.getMonth()+1)+'/'+d.getDate()+'('+DOW[d.getDay()]+')';}
-  const winLabel=fmtDay(start)+' ~ '+fmtDay(end);
-
-  const gridHtml=days.map(ds=>{
+  const slidesHtml=days.map((ds,idx)=>{
     const d=new Date(ds+'T12:00:00');
     const isT=ds===today;
     const dw=d.getDay();
@@ -668,22 +665,22 @@ async function loadScheduleCard(){
         +timeSpan+'<span class="sched-pill-title">'+escHtml(e.title||e.event_type||'')+'</span></div>';
     }).join('');
 
-    const numHtml='<div class="sched-col-hdr-numwrap">'
-      +(isT
-        ?'<div class="sched-today-circle">'+d.getDate()+'</div>'
-        :'<div class="sched-col-hdr-num" style="color:'+dc+'">'+d.getDate()+'</div>')
-      +'</div>';
+    const numHtml=isT
+      ?'<div class="sched-today-circle">'+d.getDate()+'</div>'
+      :'<div class="sched-col-hdr-num" style="color:'+dc+'">'+d.getDate()+'</div>';
 
-    return '<div class="sched-col">'
+    return '<div class="sched-slide" id="sched-slide-'+idx+'">'
       +'<div class="sched-col-hdr'+(isT?' today':'')+'">'
       +'<div class="sched-col-hdr-day" style="color:'+dc+'">'+DOW[dw]+'</div>'
-      +numHtml
+      +'<div class="sched-col-hdr-numwrap">'+numHtml+'</div>'
       +(md?'<div class="sched-md-tag" style="color:'+mdColor+'">'+md+'</div>':'')
       +'</div>'
       +'<div class="sched-col-body">'+pills
       +'<div class="sched-add-btn" onclick="openSchedAdd(\''+ds+'\')">+</div>'
       +'</div></div>';
   }).join('');
+
+  const dotsHtml=days.map((ds,i)=>'<div class="sched-dot'+(ds===today?' today-dot':'')+'" onclick="scrollSchedTo('+i+')"></div>').join('');
 
   el.innerHTML=
     '<div class="sched-header-row">'
@@ -692,19 +689,40 @@ async function loadScheduleCard(){
     +'<button class="sched-btn-add" onclick="openSchedAdd()">+ 추가</button>'
     +'<button class="sched-btn-week" onclick="openWeekInput()">주간 입력</button>'
     +'</div></div>'
-    +'<div class="sched-nav">'
-    +'<button class="sched-nav-btn" onclick="changeSchedWindow(-1)">‹</button>'
-    +'<div class="sched-nav-label" style="font-size:12px">'+winLabel+'</div>'
-    +'<button class="sched-nav-btn" onclick="changeSchedWindow(1)">›</button>'
-    +'</div>'
-    +'<div class="sched-grid" id="sched-grid">'+gridHtml+'</div>';
+    +'<div class="sched-carousel" id="sched-carousel">'+slidesHtml+'</div>'
+    +'<div class="sched-dots" id="sched-dots">'+dotsHtml+'</div>';
 
-  initSchedSwipe();
+  const todayIdx=days.indexOf(today);
+  requestAnimationFrame(()=>scrollSchedTo(todayIdx>=0?todayIdx:0, false));
+  initSchedCarousel(days, today);
 }
 
-function changeSchedWindow(delta){
-  _schedDayOffset+=delta;
-  loadScheduleCard();
+function scrollSchedTo(idx, smooth=true){
+  const carousel=document.getElementById('sched-carousel');
+  const slide=document.getElementById('sched-slide-'+idx);
+  if(!carousel||!slide) return;
+  carousel.scrollTo({left:slide.offsetLeft, behavior:smooth?'smooth':'instant'});
+}
+
+function initSchedCarousel(days, today){
+  const carousel=document.getElementById('sched-carousel');
+  if(!carousel) return;
+  let ticking=false;
+  carousel.addEventListener('scroll',()=>{
+    if(ticking) return;
+    ticking=true;
+    requestAnimationFrame(()=>{
+      const idx=Math.round(carousel.scrollLeft/carousel.clientWidth);
+      document.querySelectorAll('.sched-dot').forEach((dot,i)=>{
+        const isActive=i===idx;
+        const isToday=days[i]===today;
+        dot.classList.toggle('active',isActive);
+        if(!isActive) dot.style.background=isToday?'rgba(34,197,94,.4)':'';
+        else dot.style.background='';
+      });
+      ticking=false;
+    });
+  },{passive:true});
 }
 
 function guessEventType(title, eventType){
@@ -725,15 +743,6 @@ function guessEventType(title, eventType){
   return 'DEFAULT';
 }
 
-function initSchedSwipe(){
-  const el=document.getElementById('sched-grid');
-  if(!el) return;
-  el.addEventListener('touchstart',e=>{_schedTouchX=e.touches[0].clientX;},{passive:true});
-  el.addEventListener('touchend',e=>{
-    const dx=e.changedTouches[0].clientX-_schedTouchX;
-    if(Math.abs(dx)>60) changeSchedWindow(dx>0?-1:1);
-  },{passive:true});
-}
 
 function openSchedAdd(dateStr){
   _schedEditId=null;
