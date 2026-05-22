@@ -6190,7 +6190,7 @@ async function loadMorningReport(){
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
       .eq('record_date', today),
     supa.from('wellness_records')
-      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
+      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
       .gte('record_date', since7Str).order('record_date',{ascending:false}),
     supa.from('injury_records')
       .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
@@ -6916,20 +6916,7 @@ async function loadMorningReport(){
     <!-- 섹션4: 오늘 관리 우선순위 -->
     ${priorityAlertHtml}
 
-    <!-- 섹션5: 부상위험 선수 (5명 노출 + 스크롤) -->
-    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3)">⚠️ 부상위험 선수 (${riskResults.length}명)</div>
-        <div style="display:flex;gap:4px">
-          ${['red','amber','yellow'].map(l=>`<span style="font-size:9px;padding:1px 5px;border-radius:6px;background:${levelCfg[l].bg};color:${levelCfg[l].color};border:0.5px solid ${levelCfg[l].border}">${levelCfg[l].label.split(' ')[0]} ${riskResults.filter(r=>r.risk.level===l).length}</span>`).join('')}
-        </div>
-      </div>
-      <div style="max-height:270px;overflow-y:auto;padding-right:2px">
-        ${riskHtml}
-      </div>
-    </div>
-
-    <!-- 섹션6: 웰니스 + RPE 2열 -->
+    <!-- 섹션5: 웰니스 + RPE 2열 -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;align-items:start">
 
       <!-- 오늘 웰니스 -->
@@ -6957,7 +6944,11 @@ async function loadMorningReport(){
                   </td>
                   <td style="padding:5px 6px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
                   <td style="padding:5px 6px;text-align:center;font-size:10px">${status}</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:11px;color:var(--text2)">${r.morning_weight?r.morning_weight+'kg':'—'}</td>
+                  <td style="padding:5px 6px;text-align:center;font-size:11px;color:var(--text2)">${(()=>{
+                    const w7 = (well7||[]).filter(x=>x.player_id===r.player_id&&x.morning_weight&&x.record_date!==today);
+                    const avg7 = w7.length ? (w7.reduce((a,x)=>a+(parseFloat(x.morning_weight)||0),0)/w7.length).toFixed(1) : null;
+                    return r.morning_weight ? (avg7?`${r.morning_weight}<span style="color:var(--text3);font-size:9px">/${avg7}</span>kg`:`${r.morning_weight}kg`) : '—';
+                  })()}</td>
                   <td style="padding:5px 6px;text-align:center;font-size:10px;color:#4ade80">${chkTime}</td>
                 </tr>`;
               }).join('')}
