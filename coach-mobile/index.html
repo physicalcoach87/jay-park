@@ -1488,32 +1488,84 @@ async function showPlayerDetail(playerId){
   const player=_players.find(p=>p.id===playerId);
   if(!player) return;
   const today=getKSTDateStr();
-  const since28=new Date(); since28.setDate(since28.getDate()-28);
-  const since7=new Date(); since7.setDate(since7.getDate()-7);
-  const [{data:rpe28},{data:gps7},{data:well7}]=await Promise.all([
+  const now=kst();
+  const dow=now.getDay();
+  const thisMon=new Date(now);
+  thisMon.setDate(now.getDate()-(dow===0?6:dow-1));
+  thisMon.setHours(0,0,0,0);
+  const thisMonStr=thisMon.toISOString().split('T')[0];
+  const since28=new Date(now); since28.setDate(now.getDate()-28);
+  const since7=new Date(now); since7.setDate(now.getDate()-6);
+  const [{data:rpe28},{data:gps7},{data:well7},{data:injuries}]=await Promise.all([
     supa.from('session_records').select('record_date,rpe,duration').eq('player_id',playerId).gte('record_date',since28.toISOString().split('T')[0]),
     supa.from('gps_records').select('session_date,td,sprint,max_speed,duration').eq('player_id',playerId).gte('session_date',since7.toISOString().split('T')[0]).order('session_date',{ascending:false}),
-    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness').eq('player_id',playerId).gte('record_date',since7.toISOString().split('T')[0]).order('record_date',{ascending:false}),
+    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness').eq('player_id',playerId).gte('record_date',since7.toISOString().split('T')[0]).order('record_date',{ascending:true}),
+    supa.from('injury_records').select('body_part,status,return_date').eq('player_id',playerId).in('status',['치료중','재활중','부분 참여']),
   ]);
   const sessions=(rpe28||[]).map(r=>({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0}));
   const acwrData=calcACWR(sessions,today);
   const mss=parseFloat(player.mss)||0;
   const mvExp=mss>0?calcMVExposure((gps7||[]).map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),mss,today):null;
   const todayW=(well7||[]).find(r=>r.record_date===today);
+  const weekRpe=(rpe28||[]).filter(r=>r.record_date>=thisMonStr&&parseFloat(r.rpe)>0);
+  const weekSRPE=Math.round(weekRpe.reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+rv*dur;},0));
   const acwrColor=v=>!v?'var(--text3)':v>1.5?'#ef4444':v>1.3?'#f59e0b':v<0.8?'#eab308':'#22c55e';
   const wColor=v=>!v?'var(--text3)':v>=4?'#22c55e':v>=3?'#eab308':v>=2?'#f97316':'#ef4444';
   const wt=todayW?(todayW.fatigue||0)+(todayW.sleep_quality||0)+(todayW.stress||0)+(todayW.muscle_soreness||0):null;
+  const sc=v=>v>=16?'#22c55e':v>=12?'#eab308':v>=8?'#f97316':'#ef4444';
+  // 7일 웰니스 트렌드 strip
+  const wellMap={};(well7||[]).forEach(r=>{wellMap[r.record_date]=r;});
+  const last7=Array.from({length:7},(_,i)=>{const d=new Date(now);d.setDate(now.getDate()-6+i);return d.toISOString().split('T')[0];});
+  const strip=last7.map(ds=>{
+    const w=wellMap[ds];const isT=ds===today;
+    const dw=new Date(ds+'T12:00:00').getDay();
+    const lbl=['일','월','화','수','목','금','토'][dw];
+    if(!w) return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
+      +'<div style="width:30px;height:30px;border-radius:50%;background:var(--surface2);border:1.5px solid var(--border)"></div>'
+      +'<div style="font-size:9px;color:var(--text3)">'+(isT?'<b>오늘</b>':lbl)+'</div></div>';
+    const score=(w.fatigue||0)+(w.sleep_quality||0)+(w.stress||0)+(w.muscle_soreness||0);
+    const col=sc(score);
+    return '<div style="display:flex;flex-direction:column;align-items:center;gap:3px">'
+      +'<div style="width:30px;height:30px;border-radius:50%;background:'+col+'22;border:2px solid '+col+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:'+col+'">'+score+'</div>'
+      +'<div style="font-size:9px;color:'+(isT?'var(--text)':'var(--text3)')+'">'+(isT?'<b>오늘</b>':lbl)+'</div></div>';
+  }).join('');
+  // 부상
+  const injHtml=(injuries&&injuries.length)
+    ?'<div style="margin-bottom:12px;padding:10px 12px;background:#3b121920;border:1px solid #ef444440;border-radius:10px">'
+      +'<div style="font-size:11px;font-weight:600;color:#f87171;margin-bottom:4px">🏥 부상 중</div>'
+      +injuries.map(inj=>'<div style="font-size:12px;color:var(--text)">'+inj.body_part+' · '+inj.status+(inj.return_date?' · 복귀예정 '+inj.return_date:'')+'</div>').join('')
+      +'</div>'
+    :'';
   content.innerHTML=
-    '<div style="margin-bottom:16px"><div style="font-size:18px;font-weight:700">'+player.name+'</div>'
+    '<div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:flex-start">'
+    +'<div><div style="font-size:18px;font-weight:700">'+player.name+'</div>'
     +'<div style="font-size:12px;color:var(--text3);margin-top:2px">'+(player.position||'—')+' · MSS '+(mss||'—')+' km/h</div></div>'
-    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
-    +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">ACWR</div><div style="font-size:16px;font-weight:600;color:'+acwrColor(acwrData.acwr)+'">'+(acwrData.acwr?acwrData.acwr.toFixed(2):'—')+'</div></div>'
-    +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">MSS 미노출</div><div style="font-size:16px;font-weight:600;color:'+(mvExp&&mvExp.daysSinceExposed>=14?'#ef4444':mvExp&&mvExp.daysSinceExposed>=7?'#f59e0b':'#22c55e')+'">'+(mvExp?mvExp.daysSinceExposed+'d':'—')+'</div></div>'
-    +'<div style="background:var(--surface2);border-radius:12px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">오늘 웰니스</div>'
-    +(wt!==null?'<div style="font-size:16px;font-weight:600;color:'+wColor(wt/4)+'">'+wt+'/20</div>':'<div style="font-size:14px;color:var(--text3)">미입력</div>')+'</div></div>'
-    +((gps7||[]).slice(0,5).length?'<div style="font-size:12px;color:var(--text3);font-weight:600;margin-bottom:8px">최근 훈련</div>'
-      +(gps7||[]).slice(0,5).map(r=>'<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:.5px solid var(--border);font-size:12px"><span style="color:var(--text3)">'+r.session_date+'</span><span>TD <b>'+parseFloat(r.td).toFixed(1)+'</b>km · Sprint <b>'+(r.sprint?Math.round(r.sprint):'—')+'m</b></span></div>').join(''):'')
-    +'<button class="btn-secondary" style="margin-top:16px" onclick="closePlayerOverlay()">닫기</button>';
+    +((injuries&&injuries.length)?'<span style="font-size:10px;padding:3px 8px;border-radius:6px;background:#7f1d1d;color:#fca5a5;font-weight:600">부상</span>':'')
+    +'</div>'
+    +injHtml
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:14px">'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">ACWR</div><div style="font-size:15px;font-weight:600;color:'+acwrColor(acwrData.acwr)+'">'+(acwrData.acwr?acwrData.acwr.toFixed(2):'—')+'</div></div>'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">MSS미노출</div><div style="font-size:15px;font-weight:600;color:'+(mvExp&&mvExp.daysSinceExposed>=14?'#ef4444':mvExp&&mvExp.daysSinceExposed>=7?'#f59e0b':'#22c55e')+'">'+(mvExp?mvExp.daysSinceExposed+'d':'—')+'</div></div>'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">오늘웰니스</div>'
+    +(wt!==null?'<div style="font-size:15px;font-weight:600;color:'+wColor(wt/4)+'">'+wt+'/20</div>':'<div style="font-size:12px;color:var(--text3)">미입력</div>')+'</div>'
+    +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:9px;color:var(--text3);margin-bottom:2px">주간sRPE</div><div style="font-size:15px;font-weight:600;color:#a78bfa">'+(weekSRPE||'—')+'</div></div>'
+    +'</div>'
+    +'<div style="background:var(--surface2);border-radius:12px;padding:10px 12px;margin-bottom:14px">'
+    +'<div style="font-size:10px;color:var(--text3);font-weight:600;margin-bottom:8px">7일 웰니스 트렌드</div>'
+    +'<div style="display:flex;justify-content:space-between">'+strip+'</div></div>'
+    +((gps7||[]).length
+      ?'<div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:6px">최근 훈련</div>'
+        +(gps7||[]).slice(0,5).map(r=>{
+          const spd=parseFloat(r.max_speed)||0;const mssR=mss>0?spd/mss*100:0;
+          return '<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:.5px solid var(--border);font-size:11px">'
+            +'<span style="color:var(--text3)">'+r.session_date+'</span>'
+            +'<span>TD <b>'+parseFloat(r.td).toFixed(1)+'km</b></span>'
+            +'<span>Sprint <b>'+(r.sprint?Math.round(r.sprint):'—')+'m</b></span>'
+            +(spd?'<span style="color:'+(mssR>=90?'#ef4444':mssR>=80?'#f59e0b':'#60a5fa')+'">'+spd.toFixed(1)+'<span style="font-size:9px">km/h</span></span>':'<span style="color:var(--text3)">—</span>')
+            +'</div>';
+        }).join('')
+      :'')
+    +'<button class="btn-secondary" style="margin-top:14px" onclick="closePlayerOverlay()">닫기</button>';
 }
 function closePlayerOverlay(e){
   if(!e||e.target===document.getElementById('player-overlay'))
