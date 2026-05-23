@@ -226,12 +226,26 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- 2. 웰니스 -->
   <div class="page" id="page-wellness">
+    <div style="padding:12px 16px 0">
+      <div class="sub-tabs">
+        <div class="sub-tab active" id="wtab-today" onclick="switchWellnessTab('today')">오늘</div>
+        <div class="sub-tab" id="wtab-week" onclick="switchWellnessTab('week')">이번 주</div>
+      </div>
+    </div>
     <div id="wellness-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
+    <div id="wellness-week-content" style="display:none"></div>
   </div>
 
   <!-- 3. RPE -->
   <div class="page" id="page-rpe">
+    <div style="padding:12px 16px 0">
+      <div class="sub-tabs">
+        <div class="sub-tab active" id="rtab-today" onclick="switchRpeTab('today')">오늘</div>
+        <div class="sub-tab" id="rtab-week" onclick="switchRpeTab('week')">이번 주</div>
+      </div>
+    </div>
     <div id="rpe-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
+    <div id="rpe-week-content" style="display:none"></div>
   </div>
 
   <!-- 4. 훈련 -->
@@ -375,6 +389,10 @@ let _schedDayOffset = 0;
 let _schedEditId = null;
 let _schedEditDate = null;
 let _schedTouchX = 0;
+let _wellnessTab = 'today';
+let _rpeTab = 'today';
+let _wellnessWeekLoaded = false;
+let _rpeWeekLoaded = false;
 
 const DOW = ['일','월','화','수','목','금','토'];
 const MD_COLORS = {'MD-5':'#60a5fa','MD-4':'#34d399','MD-3':'#fbbf24','MD-2':'#f87171','MD-1':'#e879f9','MD':'#4ade80','MD+1':'#94a3b8','MD+2':'#94a3b8'};
@@ -455,8 +473,8 @@ function switchPage(page,el){
 
   const refreshFns={
     home:    ()=>{_loadedPages['home']=false;    loadHome();},
-    wellness:()=>{_loadedPages['wellness']=false; loadWellness();},
-    rpe:     ()=>{_loadedPages['rpe']=false;      loadRpe();},
+    wellness:()=>{_loadedPages['wellness']=false;_wellnessWeekLoaded=false;if(_wellnessTab==='today')loadWellness();else loadWellnessWeek();},
+    rpe:     ()=>{_loadedPages['rpe']=false;_rpeWeekLoaded=false;if(_rpeTab==='today')loadRpe();else loadRpeWeek();},
     training:()=>{_loadedPages['training']=false; loadTraining();},
     notify:  ()=>loadChatList(),
   };
@@ -1326,6 +1344,133 @@ function closeChatThread(){
 }
 
 function escHtml(str){return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+
+// ══════════════════════════════════════════════════════
+// 웰니스 탭 전환 + 이번 주 뷰
+// ══════════════════════════════════════════════════════
+function switchWellnessTab(tab){
+  _wellnessTab=tab;
+  document.getElementById('wellness-content').style.display=tab==='today'?'block':'none';
+  document.getElementById('wellness-week-content').style.display=tab==='week'?'block':'none';
+  document.getElementById('wtab-today').className='sub-tab'+(tab==='today'?' active':'');
+  document.getElementById('wtab-week').className='sub-tab'+(tab==='week'?' active':'');
+  if(tab==='week'&&!_wellnessWeekLoaded){_wellnessWeekLoaded=true;loadWellnessWeek();}
+}
+async function loadWellnessWeek(){
+  const el=document.getElementById('wellness-week-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const now=kst();
+  const dow=now.getDay();
+  const thisMon=new Date(now);
+  thisMon.setDate(now.getDate()-(dow===0?6:dow-1));
+  thisMon.setHours(0,0,0,0);
+  const lastMon=new Date(thisMon);lastMon.setDate(thisMon.getDate()-7);
+  const lastSun=new Date(thisMon);lastSun.setDate(thisMon.getDate()-1);
+  const thisMonStr=thisMon.toISOString().split('T')[0];
+  const lastMonStr=lastMon.toISOString().split('T')[0];
+  const lastSunStr=lastSun.toISOString().split('T')[0];
+  const today=getKSTDateStr();
+  const [{data:thisWeek},{data:lastWeek}]=await Promise.all([
+    supa.from('wellness_records').select('player_id,fatigue,sleep_quality,stress,muscle_soreness')
+      .gte('record_date',thisMonStr).lte('record_date',today),
+    supa.from('wellness_records').select('player_id,fatigue,sleep_quality,stress,muscle_soreness')
+      .gte('record_date',lastMonStr).lte('record_date',lastSunStr),
+  ]);
+  const buildMap=rows=>{const m={};(rows||[]).forEach(r=>{const s=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);if(!m[r.player_id])m[r.player_id]=[];m[r.player_id].push(s);});return m;};
+  const thisMap=buildMap(thisWeek);
+  const lastMap=buildMap(lastWeek);
+  const avg=arr=>arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:null;
+  const playerData=_players.map(p=>{
+    const ta=avg(thisMap[p.id]||[]);const la=avg(lastMap[p.id]||[]);
+    const trend=(ta!==null&&la!==null&&la>0)?(ta-la)/la*100:null;
+    return{player:p,thisAvg:ta,lastAvg:la,trend,days:(thisMap[p.id]||[]).length};
+  }).filter(d=>d.thisAvg!==null).sort((a,b)=>a.thisAvg-b.thisAvg);
+  const sc=v=>v>=16?'#22c55e':v>=12?'#eab308':'#ef4444';
+  const tr=t=>t===null?'<span style="color:var(--text3)">—</span>'
+    :'<span style="color:'+(t>=0?'#22c55e':'#ef4444')+';font-size:11px">'+(t>=0?'↑':'↓')+Math.abs(t).toFixed(0)+'%</span>';
+  const rows=playerData.map(d=>'<tr onclick="showPlayerDetail(\''+d.player.id+'\')">'
+    +'<td><div style="font-size:12px;font-weight:500">'+d.player.name+'</div><div style="font-size:10px;color:var(--text3)">'+(d.player.position||'—')+'</div></td>'
+    +'<td><span style="font-size:15px;font-weight:700;color:'+sc(d.thisAvg)+'">'+d.thisAvg.toFixed(1)+'</span><span style="font-size:9px;color:var(--text3)">/20</span></td>'
+    +'<td>'+tr(d.trend)+'</td>'
+    +'<td style="color:var(--text3)">'+d.days+'일</td></tr>').join('');
+  const noResp=_players.filter(p=>!thisMap[p.id]);
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">'+thisMonStr.slice(5).replace('-','/')+' ~ '+today.slice(5).replace('-','/')+'</div>'
+    +'<button class="refresh-btn" onclick="_wellnessWeekLoaded=false;loadWellnessWeek()">🔄</button></div>'
+    +(playerData.length
+      ?'<div class="card" style="padding:12px 0"><div class="card-title" style="padding:0 16px 8px">💚 이번 주 평균 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+playerData.length+'명</span></div>'
+        +'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>주평균</th><th>전주대비</th><th>응답</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'
+      :'<div class="card"><div class="empty-state"><p>이번 주 웰니스 데이터 없음</p></div></div>')
+    +(noResp.length
+      ?'<div class="card"><div class="card-title">❌ 이번 주 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+noResp.length+'명</span></div>'
+        +noResp.map(p=>'<div class="player-row"><div><div class="player-name">'+p.name+'</div><div class="player-pos">'+(p.position||'—')+'</div></div></div>').join('')+'</div>'
+      :'');
+}
+
+// ══════════════════════════════════════════════════════
+// RPE 탭 전환 + 이번 주 뷰
+// ══════════════════════════════════════════════════════
+function switchRpeTab(tab){
+  _rpeTab=tab;
+  document.getElementById('rpe-content').style.display=tab==='today'?'block':'none';
+  document.getElementById('rpe-week-content').style.display=tab==='week'?'block':'none';
+  document.getElementById('rtab-today').className='sub-tab'+(tab==='today'?' active':'');
+  document.getElementById('rtab-week').className='sub-tab'+(tab==='week'?' active':'');
+  if(tab==='week'&&!_rpeWeekLoaded){_rpeWeekLoaded=true;loadRpeWeek();}
+}
+async function loadRpeWeek(){
+  const el=document.getElementById('rpe-week-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const now=kst();
+  const dow=now.getDay();
+  const thisMon=new Date(now);
+  thisMon.setDate(now.getDate()-(dow===0?6:dow-1));
+  thisMon.setHours(0,0,0,0);
+  const thisMonStr=thisMon.toISOString().split('T')[0];
+  const today=getKSTDateStr();
+  const since28=new Date(now);since28.setDate(now.getDate()-28);
+  const since28Str=since28.toISOString().split('T')[0];
+  const {data:rpe28}=await supa.from('session_records')
+    .select('player_id,record_date,rpe,duration').gte('record_date',since28Str).lte('record_date',today);
+  const playerData=_players.map(p=>{
+    const allSess=(rpe28||[]).filter(r=>r.player_id===p.id)
+      .map(r=>({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0}));
+    const weekSess=(rpe28||[]).filter(r=>r.player_id===p.id&&r.record_date>=thisMonStr&&parseFloat(r.rpe)>0);
+    const weekSRPE=weekSess.reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+rv*dur;},0);
+    const acwrData=calcACWR(allSess,today);
+    const days=new Set(weekSess.map(r=>r.record_date)).size;
+    return{player:p,weekSRPE:Math.round(weekSRPE),acwr:acwrData.acwr,days};
+  }).filter(d=>d.weekSRPE>0).sort((a,b)=>(b.acwr||0)-(a.acwr||0));
+  const ac=v=>!v?'var(--text3)':v>1.5?'#ef4444':v>1.3?'#f59e0b':v<0.8?'#eab308':'#22c55e';
+  const ab=v=>{if(!v)return '—';const lbl=v>1.5?'⚠️ 고위험':v>1.3?'주의':v<0.8?'과소':'정상';
+    return '<span style="color:'+ac(v)+';font-size:11px;font-weight:600">'+v.toFixed(2)+' <span style="font-size:9px">'+lbl+'</span></span>';};
+  const rows=playerData.map(d=>'<tr onclick="showPlayerDetail(\''+d.player.id+'\')">'
+    +'<td><div style="font-size:12px;font-weight:500">'+d.player.name+'</div><div style="font-size:10px;color:var(--text3)">'+(d.player.position||'—')+'</div></td>'
+    +'<td style="color:#a78bfa;font-weight:600">'+d.weekSRPE.toLocaleString()+'</td>'
+    +'<td>'+ab(d.acwr)+'</td>'
+    +'<td style="color:var(--text3)">'+d.days+'일</td></tr>').join('');
+  const noResp=_players.filter(p=>!playerData.find(d=>d.player.id===p.id));
+  const teamAvg=playerData.length?Math.round(playerData.reduce((s,d)=>s+d.weekSRPE,0)/playerData.length):0;
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">'+thisMonStr.slice(5).replace('-','/')+' ~ '+today.slice(5).replace('-','/')+' 주간 sRPE</div>'
+    +'<button class="refresh-btn" onclick="_rpeWeekLoaded=false;loadRpeWeek()">🔄</button></div>'
+    +(playerData.length
+      ?'<div class="card"><div class="card-title">📊 팀 요약</div>'
+        +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">'
+        +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">평균 sRPE</div><div style="font-size:16px;font-weight:600;color:#a78bfa">'+teamAvg.toLocaleString()+'</div></div>'
+        +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">입력</div><div style="font-size:16px;font-weight:600;color:var(--text)">'+playerData.length+'명</div></div>'
+        +'<div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center"><div style="font-size:10px;color:var(--text3)">미입력</div><div style="font-size:16px;font-weight:600;color:'+(noResp.length?'#ef4444':'#22c55e')+'">'+noResp.length+'명</div></div>'
+        +'</div></div>'
+        +'<div class="card" style="padding:12px 0"><div class="card-title" style="padding:0 16px 8px">💢 선수별 주간 sRPE</div>'
+        +'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th style="color:#a78bfa">주간sRPE</th><th>ACWR</th><th>훈련일</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>'
+      :'<div class="card"><div class="empty-state"><p>이번 주 RPE 데이터 없음</p></div></div>')
+    +(noResp.length
+      ?'<div class="card"><div class="card-title">❌ 미입력 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+noResp.length+'명</span></div>'
+        +noResp.map(p=>'<div class="player-row"><div><div class="player-name">'+p.name+'</div><div class="player-pos">'+(p.position||'—')+'</div></div></div>').join('')+'</div>'
+      :'');
+}
 
 // ══════════════════════════════════════════════════════
 // 선수 상세
