@@ -169,6 +169,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   table{page-break-inside:auto}
   tr{page-break-inside:avoid;page-break-after:auto}
   @page{margin:12mm 10mm;size:A4}
+  .report-sel-row{background:#c6efce!important;}
+  .report-sel-row td,.report-sel-row td span{color:#14532d!important;}
+  .report-sel-row .sel-tag{background:#166534!important;color:#fff!important;}
 }
 /* PIN 잠금 화면 */
 #pin-overlay{position:fixed;inset:0;background:var(--bg);display:flex;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:0}
@@ -8543,7 +8546,7 @@ async function buildWeeklyLoadHtml(forDate){
     const mdStyle=Object.keys(mdMap).find(k=>topic?.toUpperCase().includes(k));
     const mdBadge=topic?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdStyle?mdMap[mdStyle]:'background:var(--surface2);color:var(--text3)'}">${topic}</span>`:`<span style="font-size:10px;color:var(--text3)">—</span>`;
     const typeBadge=isPast&&dayRow.length?(isTeamDay?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#0c1a2e;color:#60a5fa;font-weight:700">M</span>`:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#1a1a2e;color:#9ca3af;font-weight:700">S</span>`):`<span style="color:var(--text3)">—</span>`;
-    const selLabel=isSel?`<span style="font-size:9px;padding:1px 5px;border-radius:8px;background:#15803d;color:white;margin-left:4px">조회일</span>`:'';
+    const selLabel=isSel?`<span class="sel-tag" style="font-size:9px;padding:1px 5px;border-radius:8px;background:#15803d;color:white;margin-left:4px">조회일</span>`:'';
     const oppCell=opp?`<span style="font-size:10px;color:var(--text3)">vs ${opp}</span>`:`<span style="color:var(--text3)">—</span>`;
     const tdCell=td?`<span style="color:var(--accent2)">${(td/1000).toFixed(1)}k</span>${_pb(td,mRef3.td)}`:'<span style="color:var(--text3)">—</span>';
     const hsrCell=hsr?`<span style="color:#f59e0b">${Math.round(hsr)}</span>${_pb(hsr,mRef3.hsr)}`:'<span style="color:var(--text3)">—</span>';
@@ -8572,7 +8575,7 @@ async function buildWeeklyLoadHtml(forDate){
         <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
       </tr>`;
     })():'';
-    const trainRowHtml=`<tr style="border-bottom:0.5px solid var(--border);${isSel?'background:#0a1f10':''};${!isPast?'opacity:0.45':''}">
+    const trainRowHtml=`<tr class="${isSel?'report-sel-row':''}" style="border-bottom:0.5px solid var(--border);${isSel?'background:#0a1f10':''};${!isPast?'opacity:0.45':''}">
       <td style="padding:7px 10px;white-space:nowrap"><span style="color:${isSel?'#4ade80':'var(--text2)'};font-weight:${isSel?'600':'400'}">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>${selLabel}</td>
       <td style="padding:7px 8px;text-align:center">${mdBadge}</td>
       <td style="padding:7px 8px;text-align:center">${typeBadge}</td>
