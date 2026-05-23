@@ -8575,7 +8575,7 @@ async function buildWeeklyLoadHtml(forDate){
         <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
       </tr>`;
     })():'';
-    const trainRowHtml=`<tr class="${isSel?'report-sel-row':''}" style="border-bottom:0.5px solid var(--border);${isSel?'background:#0a1f10':''};${!isPast?'opacity:0.45':''}">
+    const trainRowHtml=`<tr class="${isSel?'report-sel-row':''}" style="border-bottom:0.5px solid var(--border);${isSel?'background:rgba(34,197,94,0.13);outline:1px solid rgba(34,197,94,0.4)':''};${!isPast?'opacity:0.45':''}">
       <td style="padding:7px 10px;white-space:nowrap"><span style="color:${isSel?'#4ade80':'var(--text2)'};font-weight:${isSel?'600':'400'}">${WEEK_DAYS[d.getDay()]} · ${(d.getMonth()+1)}/${d.getDate()}</span>${selLabel}</td>
       <td style="padding:7px 8px;text-align:center">${mdBadge}</td>
       <td style="padding:7px 8px;text-align:center">${typeBadge}</td>
