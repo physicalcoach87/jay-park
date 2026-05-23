@@ -1137,11 +1137,13 @@ async function loadTraining(){
   const since28=new Date(now); since28.setDate(now.getDate()-28);
   const since14Str=since14.toISOString().split('T')[0];
   const since28Str=since28.toISOString().split('T')[0];
-  const [{data:gps14},{data:rpe28}]=await Promise.all([
+  const [{data:gps14},{data:rpe28},{data:sched14}]=await Promise.all([
     supa.from('gps_records').select('session_date,player_id,td,running_high,sprint,duration,session_type2,session_topic')
       .gte('session_date',since14Str).lte('session_date',today).order('session_date',{ascending:true}),
     supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',since28Str),
+    supa.from('weekly_schedule').select('event_date,event_type').gte('event_date',since14Str).lte('event_date',today),
   ]);
+  const matchDates=new Set((sched14||[]).filter(e=>(e.event_type||'').toUpperCase()==='MATCH').map(e=>e.event_date));
 
   const plRpe={};
   (rpe28||[]).forEach(r=>{if(!plRpe[r.player_id])plRpe[r.player_id]=[];plRpe[r.player_id].push({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0});});
@@ -1163,9 +1165,12 @@ async function loadTraining(){
     const dayGps=(gps14||[]).filter(r=>r.session_date===ds);
     const mGps=dayGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
     const useGps=mGps.length?mGps:dayGps;
+    const isMatch=matchDates.has(ds);
+    const matchBadge=isMatch?'<span style="font-size:9px;padding:1px 5px;border-radius:4px;font-weight:600;background:rgba(239,68,68,0.2);border:1px solid rgba(239,68,68,0.4);color:#fca5a5;margin-left:4px">경기</span>':'';
+    const trainBadge=!isMatch&&useGps.length?'<span style="font-size:9px;padding:1px 5px;border-radius:4px;font-weight:600;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);color:#4ade80;margin-left:4px">훈련</span>':'';
     if(!useGps.length){
-      return '<tr'+(isT?' class="today-row"':'')+'>'
-        +'<td><span style="color:'+dc+'">'+DOW[d.getDay()]+' '+d.getDate()+'</span>'+(isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':'')+'</td>'
+      return '<tr'+(isT?' class="today-row"':isMatch?' style="background:rgba(239,68,68,0.05)"':'')+'>'
+        +'<td><span style="color:'+dc+'">'+DOW[d.getDay()]+' '+d.getDate()+'</span>'+(isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':'')+matchBadge+'</td>'
         +'<td colspan="5" style="color:var(--text3);font-style:italic;text-align:center">—</td></tr>';
     }
     const sumDur=useGps.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
@@ -1182,8 +1187,8 @@ async function loadTraining(){
     if(hsrV) tHSR+=hsrV;
     if(sprintV) tSprint+=sprintV;
     if(sRPE) tSRPE+=sRPE;
-    return '<tr'+(isT?' class="today-row"':'')+'>'
-      +'<td><span style="color:'+dc+'">'+DOW[d.getDay()]+' '+d.getDate()+'</span>'+(isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':'')+(topic?'<div style="font-size:9px;color:var(--text3)">'+topic+'</div>':'')+'</td>'
+    return '<tr'+(isT?' class="today-row"':isMatch?' style="background:rgba(239,68,68,0.05)"':'')+'>'
+      +'<td><span style="color:'+dc+'">'+DOW[d.getDay()]+' '+d.getDate()+'</span>'+(isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':'')+(matchBadge||trainBadge)+(topic?'<div style="font-size:9px;color:var(--text3)">'+topic+'</div>':'')+'</td>'
       +'<td style="color:#60a5fa">'+(tdV?tdV.toFixed(1):'—')+'</td>'
       +'<td style="color:#f59e0b">'+(hsrV?Math.round(hsrV):'—')+'</td>'
       +'<td style="color:#ef4444">'+(sprintV?Math.round(sprintV):'—')+'</td>'
