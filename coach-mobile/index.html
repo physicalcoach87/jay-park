@@ -250,7 +250,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
   <!-- 4. 훈련 -->
   <div class="page" id="page-training">
+    <div style="padding:12px 16px 0">
+      <div class="sub-tabs">
+        <div class="sub-tab active" id="ttab-team" onclick="switchTrainingTab('team')">팀 흐름</div>
+        <div class="sub-tab" id="ttab-player" onclick="switchTrainingTab('player')">개인별</div>
+      </div>
+    </div>
     <div id="training-content"><div class="loading"><span class="spinner">⏳</span> 로딩 중...</div></div>
+    <div id="training-player-content" style="display:none"></div>
   </div>
 
   <!-- 5. 알림 -->
@@ -391,8 +398,10 @@ let _schedEditDate = null;
 let _schedTouchX = 0;
 let _wellnessTab = 'today';
 let _rpeTab = 'today';
+let _trainingTab = 'team';
 let _wellnessWeekLoaded = false;
 let _rpeWeekLoaded = false;
+let _trainingPlayerLoaded = false;
 
 const DOW = ['일','월','화','수','목','금','토'];
 const MD_COLORS = {'MD-5':'#60a5fa','MD-4':'#34d399','MD-3':'#fbbf24','MD-2':'#f87171','MD-1':'#e879f9','MD':'#4ade80','MD+1':'#94a3b8','MD+2':'#94a3b8'};
@@ -475,7 +484,7 @@ function switchPage(page,el){
     home:    ()=>{_loadedPages['home']=false;    loadHome();},
     wellness:()=>{_loadedPages['wellness']=false;_wellnessWeekLoaded=false;if(_wellnessTab==='today')loadWellness();else loadWellnessWeek();},
     rpe:     ()=>{_loadedPages['rpe']=false;_rpeWeekLoaded=false;if(_rpeTab==='today')loadRpe();else loadRpeWeek();},
-    training:()=>{_loadedPages['training']=false; loadTraining();},
+    training:()=>{_loadedPages['training']=false;_trainingPlayerLoaded=false;if(_trainingTab==='team')loadTraining();else loadTrainingPlayer();},
     notify:  ()=>loadChatList(),
   };
 
@@ -1378,6 +1387,76 @@ function closeChatThread(){
 }
 
 function escHtml(str){return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');}
+
+// ══════════════════════════════════════════════════════
+// 훈련 탭 전환 + 개인별 뷰
+// ══════════════════════════════════════════════════════
+function switchTrainingTab(tab){
+  _trainingTab=tab;
+  document.getElementById('training-content').style.display=tab==='team'?'block':'none';
+  document.getElementById('training-player-content').style.display=tab==='player'?'block':'none';
+  document.getElementById('ttab-team').className='sub-tab'+(tab==='team'?' active':'');
+  document.getElementById('ttab-player').className='sub-tab'+(tab==='player'?' active':'');
+  if(tab==='player'&&!_trainingPlayerLoaded){_trainingPlayerLoaded=true;loadTrainingPlayer();}
+}
+async function loadTrainingPlayer(){
+  const el=document.getElementById('training-player-content');
+  el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
+  const now=kst();
+  const dow=now.getDay();
+  const thisMon=new Date(now);
+  thisMon.setDate(now.getDate()-(dow===0?6:dow-1));
+  thisMon.setHours(0,0,0,0);
+  const thisMonStr=thisMon.toISOString().split('T')[0];
+  const today=getKSTDateStr();
+  const since28=new Date(now);since28.setDate(now.getDate()-28);
+  const since28Str=since28.toISOString().split('T')[0];
+  const [{data:rpe28},{data:gpsWeek}]=await Promise.all([
+    supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',since28Str).lte('record_date',today),
+    supa.from('gps_records').select('player_id,session_date,td,duration,session_type2').gte('session_date',thisMonStr).lte('session_date',today),
+  ]);
+  const playerData=_players.map(p=>{
+    const allSess=(rpe28||[]).filter(r=>r.player_id===p.id)
+      .map(r=>({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0}));
+    const acwrData=calcACWR(allSess,today);
+    const weekSess=(rpe28||[]).filter(r=>r.player_id===p.id&&r.record_date>=thisMonStr&&parseFloat(r.rpe)>0);
+    const weekSRPE=Math.round(weekSess.reduce((s,r)=>{const rv=parseFloat(r.rpe)||0,dur=parseFloat(r.duration)||0;return s+rv*dur;},0));
+    const pgps=(gpsWeek||[]).filter(r=>r.player_id===p.id);
+    const pgpsM=pgps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    const useGps=pgpsM.length?pgpsM:pgps;
+    const weekDays=[...new Set(useGps.map(r=>r.session_date))];
+    let weekTD=0;
+    weekDays.forEach(ds=>{
+      const dg=useGps.filter(r=>r.session_date===ds);
+      const sumDur=dg.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+      const maxDur=Math.max(...dg.map(r=>parseFloat(r.duration)||0));
+      weekTD+=sumDur>0?dg.reduce((a,r)=>a+(parseFloat(r.td)||0),0)/sumDur*maxDur:0;
+    });
+    const trainDays=new Set(weekSess.map(r=>r.record_date)).size;
+    return{player:p,acwr:acwrData.acwr,weekSRPE,weekTD,trainDays};
+  }).sort((a,b)=>(b.acwr||0)-(a.acwr||0));
+  const ac=v=>!v?'var(--text3)':v>1.5?'#ef4444':v>1.3?'#f59e0b':v<0.8?'#eab308':'#22c55e';
+  const acLbl=v=>{
+    if(!v)return '<span style="color:var(--text3)">—</span>';
+    const lbl=v>1.5?'⚠️고위험':v>1.3?'주의':v<0.8?'과소':'정상';
+    return '<span style="color:'+ac(v)+';font-weight:600">'+v.toFixed(2)+'</span><span style="font-size:9px;color:'+ac(v)+';margin-left:3px">'+lbl+'</span>';
+  };
+  const rows=playerData.map(d=>'<tr onclick="showPlayerDetail(\''+d.player.id+'\')">'
+    +'<td><div style="font-size:12px;font-weight:500">'+d.player.name+'</div><div style="font-size:10px;color:var(--text3)">'+(d.player.position||'—')+'</div></td>'
+    +'<td>'+acLbl(d.acwr)+'</td>'
+    +'<td style="color:#a78bfa;font-weight:600">'+(d.weekSRPE||'—')+'</td>'
+    +'<td style="color:#60a5fa">'+(d.weekTD>0?d.weekTD.toFixed(1):'—')+'</td>'
+    +'<td style="color:var(--text3)">'+d.trainDays+'</td></tr>').join('');
+  el.innerHTML=
+    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:13px;color:var(--text3)">'+thisMonStr.slice(5).replace('-','/')+' ~ '+today.slice(5).replace('-','/')+' 개인별</div>'
+    +'<button class="refresh-btn" onclick="_trainingPlayerLoaded=false;loadTrainingPlayer()">🔄</button></div>'
+    +'<div class="card" style="padding:12px 0">'
+    +'<div class="card-title" style="padding:0 16px 8px">🏃 선수별 이번 주 부하 <span style="font-size:11px;font-weight:400;color:var(--text3)">ACWR 높은 순</span></div>'
+    +'<div style="overflow-x:auto;padding:0 16px">'
+    +'<table class="data-table"><thead><tr><th>선수</th><th>ACWR</th><th style="color:#a78bfa">sRPE</th><th style="color:#60a5fa">TD(km)</th><th>일수</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody></table></div></div>';
+}
 
 // ══════════════════════════════════════════════════════
 // 웰니스 탭 전환 + 이번 주 뷰
