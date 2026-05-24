@@ -160,6 +160,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 @media(min-width:1024px){body{zoom:1.05}}@media(min-width:1280px){body{zoom:1.09}}
 @media print{
   .tabs,.btn-gen,.export-bar,.vid-row,.var-row,.vm-bar,.tab-wrapper,.header{display:none!important}
+  .no-print{display:none!important}
+  #tab-cardio.group-mode>*:not(#cardio-output){display:none!important}
   body{background:#fff!important;color:#000!important;zoom:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .flow-card-row{display:flex!important;flex-wrap:nowrap!important;overflow:visible!important;gap:4px!important}
   .flow-card-row>div{flex:1!important;min-width:0!important}
@@ -919,8 +921,35 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <!-- 유산소 처방 서브탭 -->
 <div id="tab-cardio" style="display:none">
 
+  <!-- 처방 모드 토글 -->
+  <div id="cardio-mode-toggle" class="no-print" style="display:flex;gap:8px;margin-bottom:14px">
+    <button id="cmtb-individual" onclick="setCardioMode('individual')"
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">
+      👤 개인 처방
+    </button>
+    <button id="cmtb-group" onclick="setCardioMode('group')"
+      style="flex:1;padding:9px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">
+      👥 단체 훈련
+    </button>
+  </div>
+
+  <!-- 단체 훈련 그룹 설정 패널 -->
+  <div id="cardio-group-config" class="no-print" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--accent2);text-transform:uppercase;letter-spacing:.6px">그룹 편성 — MAS 자동 분류</div>
+      <button onclick="resetGroupAssignments()" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:inherit">↺ 자동 재분류</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="font-size:11px;color:var(--text3)">그룹 수</span>
+      <button id="gcnt-2" onclick="setGroupCount(2)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">2그룹</button>
+      <button id="gcnt-3" onclick="setGroupCount(3)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">3그룹</button>
+      <button id="gcnt-4" onclick="setGroupCount(4)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">4그룹</button>
+    </div>
+    <div id="group-player-list"></div>
+  </div>
+
   <!-- ① 컨트롤 -->
-  <div class="ctrls g4" style="margin-bottom:12px;align-items:end">
+  <div id="cardio-ind-controls" class="ctrls g4" style="margin-bottom:12px;align-items:end">
     <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end">
       <label>선수 선택
         <button onclick="openPlayerMgmt()" style="margin-left:6px;font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:inherit">관리</button>
@@ -11106,6 +11135,238 @@ function initCustomEx(){
 // ═══════════════════════════════════════════
 let _players = [];
 let _cardioLocation = 'outdoor';
+
+// ── 단체 훈련 그룹 처방 모듈 ──────────────────────
+let _cardioMode = 'individual';
+let _groupCount  = 3;
+let _groupAssignments = {};
+const GROUP_DEFS = [
+  {id:'A', label:'A그룹', color:'#4ade80', border:'#166534', bg:'#052e16'},
+  {id:'B', label:'B그룹', color:'#60a5fa', border:'#1d4ed8', bg:'#0d1f3c'},
+  {id:'C', label:'C그룹', color:'#fb923c', border:'#c2410c', bg:'#1c0a03'},
+  {id:'D', label:'D그룹', color:'#f87171', border:'#991b1b', bg:'#1f0808'},
+];
+function activeGroupDefs(){ return GROUP_DEFS.slice(0, _groupCount); }
+
+function setGroupCount(n){
+  _groupCount = n;
+  [2,3,4].forEach(k=>{
+    const btn = document.getElementById('gcnt-'+k);
+    if(!btn) return;
+    const on = k===n;
+    btn.style.borderColor  = on ? 'var(--accent)' : 'var(--border2)';
+    btn.style.background   = on ? 'var(--accent-bg)' : 'transparent';
+    btn.style.color        = on ? 'var(--accent2)' : 'var(--text2)';
+    btn.style.fontWeight   = on ? '700' : '600';
+  });
+  computeGroupAssignments();
+  renderGroupPlayerList();
+  const out = document.getElementById('cardio-output');
+  if(out) out.innerHTML='';
+}
+
+function setCardioMode(mode){
+  _cardioMode = mode;
+  const isGroup = mode === 'group';
+  const tab = document.getElementById('tab-cardio');
+  if(tab){ isGroup ? tab.classList.add('group-mode') : tab.classList.remove('group-mode'); }
+  ['individual','group'].forEach(m=>{
+    const btn = document.getElementById('cmtb-'+m);
+    if(!btn) return;
+    const on = m === mode;
+    btn.style.borderColor = on ? 'var(--accent)' : 'var(--border2)';
+    btn.style.background  = on ? 'var(--accent-bg)' : 'transparent';
+    btn.style.color       = on ? 'var(--accent2)' : 'var(--text2)';
+    btn.style.fontWeight  = on ? '700' : '600';
+  });
+  const indCtrl = document.getElementById('cardio-ind-controls');
+  const indInfo = document.getElementById('cardio-player-info');
+  const grpCfg  = document.getElementById('cardio-group-config');
+  if(indCtrl) indCtrl.style.display = isGroup ? 'none' : '';
+  if(indInfo) indInfo.style.display = 'none';
+  if(grpCfg)  grpCfg.style.display  = isGroup ? '' : 'none';
+  const out = document.getElementById('cardio-output');
+  if(out) out.innerHTML = '';
+  if(isGroup){ computeGroupAssignments(); renderGroupPlayerList(); }
+}
+
+function computeGroupAssignments(){
+  _groupAssignments = {};
+  const ids    = activeGroupDefs().map(g=>g.id);
+  const last   = ids[ids.length-1];
+  const sorted = _players.filter(p=>parseFloat(p.mas)>0)
+    .sort((a,b)=>parseFloat(b.mas)-parseFloat(a.mas));
+  const n = sorted.length;
+  sorted.forEach((p,i)=>{
+    const idx = Math.min(Math.floor(i*_groupCount/n), _groupCount-1);
+    _groupAssignments[p.id] = ids[idx];
+  });
+  _players.filter(p=>!parseFloat(p.mas)).forEach(p=>{ _groupAssignments[p.id]=last; });
+}
+
+function resetGroupAssignments(){
+  computeGroupAssignments();
+  renderGroupPlayerList();
+  const out = document.getElementById('cardio-output');
+  if(out) out.innerHTML='';
+}
+
+function changePlayerGroup(playerId, group){
+  _groupAssignments[playerId] = group;
+  renderGroupPlayerList();
+}
+
+function renderGroupPlayerList(){
+  const el = document.getElementById('group-player-list');
+  if(!el) return;
+  const withMas = _players.filter(p=>parseFloat(p.mas)>0);
+  if(!withMas.length){
+    el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:12px">MAS 데이터를 가진 선수가 없습니다. 선수 관리에서 MAS를 입력하세요.</div>';
+    return;
+  }
+  const sorted = [...withMas].sort((a,b)=>parseFloat(b.mas)-parseFloat(a.mas));
+  const active = activeGroupDefs();
+  const stats = {};
+  active.forEach(g=>{
+    const members = sorted.filter(p=>_groupAssignments[p.id]===g.id);
+    const masList = members.map(p=>parseFloat(p.mas||0)).filter(Boolean).sort((a,b)=>b-a);
+    const avgMas  = masList.length ? (masList.reduce((s,v)=>s+v,0)/masList.length).toFixed(1) : '—';
+    const rangeStr= masList.length>=2 ? `${masList[masList.length-1].toFixed(1)}–${masList[0].toFixed(1)}` : (masList[0]?.toFixed(1)||'—');
+    stats[g.id] = {count:members.length, avgMas, rangeStr};
+  });
+  let html = `<div style="display:grid;grid-template-columns:repeat(${active.length},1fr);gap:8px;margin-bottom:12px">`;
+  active.forEach(g=>{
+    html += `<div style="padding:10px;border-radius:8px;border:1px solid ${g.border};background:${g.bg};text-align:center">
+      <div style="font-size:14px;font-weight:700;color:${g.color}">${g.label}</div>
+      <div style="font-size:11px;color:${g.color};margin-top:2px;opacity:.9">${stats[g.id].count}명 · 평균 ${stats[g.id].avgMas}</div>
+      <div style="font-size:10px;color:${g.color};opacity:.6;margin-top:1px">MAS ${stats[g.id].rangeStr} km/h</div>
+    </div>`;
+  });
+  html += `</div><div style="border:1px solid var(--border2);border-radius:8px;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="background:var(--surface2)">
+        <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">이름</th>
+        <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">포지션</th>
+        <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">MAS</th>
+        <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">그룹 배정</th>
+      </tr></thead>
+      <tbody>`;
+  sorted.forEach((p,i)=>{
+    const grp  = _groupAssignments[p.id]||active[active.length-1].id;
+    const gDef = active.find(g=>g.id===grp)||active[active.length-1];
+    html += `<tr style="border-top:${i>0?'1px solid var(--border)':'none'}">
+      <td style="padding:8px 10px;color:var(--text);font-weight:600">${p.name}</td>
+      <td style="padding:8px 10px;text-align:center;color:var(--text3)">${p.position}</td>
+      <td style="padding:8px 10px;text-align:center;font-weight:700;color:var(--accent2)">${p.mas}</td>
+      <td style="padding:8px 10px;text-align:center">
+        <select onchange="changePlayerGroup('${p.id}',this.value)"
+          style="padding:4px 10px;border-radius:6px;border:1px solid ${gDef.border};background:${gDef.bg};color:${gDef.color};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
+          ${active.map(g=>`<option value="${g.id}"${grp===g.id?' selected':''}>${g.label}</option>`).join('')}
+        </select>
+      </td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+async function generateGroupCardio(){
+  if(!_cardioExId){ alert('운동 유형을 선택해주세요'); return; }
+  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
+  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
+  if(!ex){ alert('운동 데이터를 찾을 수 없습니다'); return; }
+
+  const md       = document.getElementById('cardio-md')?.value||'MD3';
+  const mdLabel  = {'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
+  const locLabel = {outdoor:'야외',treadmill:'트레드밀',cycle:'사이클'}[_cardioLocation]||'';
+
+  const intensity   = parseFloat(document.getElementById('cp-intensity')?.value||0);
+  const sets        = parseInt(document.getElementById('cp-sets')?.value||0);
+  const reps        = parseInt(document.getElementById('cp-reps')?.value||0);
+  const durationMin = parseFloat(document.getElementById('cp-duration')?.value||0);
+  const workMin     = parseFloat(document.getElementById('cp-work-min')?.value||0);
+  const restMin     = parseFloat(document.getElementById('cp-rest-min')?.value||0);
+  const distance    = parseInt(document.getElementById('cp-distance')?.value||0);
+  const repRest     = parseInt(document.getElementById('cp-rep-rest')?.value||0);
+  const setRestSec  = parseInt(document.getElementById('cp-set-rest-sec')?.value||0);
+  const setRestMin  = parseFloat(document.getElementById('cp-set-rest')?.value||0);
+  const codAngle    = parseInt(document.getElementById('cp-cod-angle')?.value||0);
+  const codCount    = parseInt(document.getElementById('cp-cod-count')?.value||1);
+  const perSetIntensities = [];
+  if(ex.paramType==='set_time_rest_perset'){
+    for(let i=0;i<sets;i++){
+      perSetIntensities.push(parseFloat(document.getElementById(`cp-set-intensity-${i}`)?.value||intensity));
+    }
+  }
+
+  const activeGroups = activeGroupDefs().map(gDef=>{
+    const players = _players.filter(p=>_groupAssignments[p.id]===gDef.id && parseFloat(p.mas)>0);
+    if(!players.length) return null;
+    const avgMas = players.reduce((s,p)=>s+parseFloat(p.mas||0),0)/players.length;
+    const mssArr = players.filter(p=>parseFloat(p.mss)>0);
+    const avgMss = mssArr.length ? mssArr.reduce((s,p)=>s+parseFloat(p.mss||0),0)/mssArr.length : null;
+    let speedKmh = null;
+    if(intensity && avgMas && ex.intensityUnit.includes('MAS'))
+      speedKmh = +(avgMas*intensity/100).toFixed(1);
+    if(intensity && avgMss && (ex.intensityUnit.includes('MSS')||ex.intensityUnit.includes('Vmax')))
+      speedKmh = +(avgMss*intensity/100).toFixed(1);
+    return {...gDef, players, avgMas:+avgMas.toFixed(1), avgMss:avgMss?+avgMss.toFixed(1):null, speedKmh};
+  }).filter(Boolean);
+
+  if(!activeGroups.length){ alert('MAS 데이터가 있는 선수가 그룹에 배정되지 않았습니다'); return; }
+
+  const today = new Date().toLocaleDateString('ko-KR');
+  const cols  = activeGroups.length;
+
+  let html = `<div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--border2)">
+    <div style="font-size:17px;font-weight:800;color:var(--text)">단체 유산소 훈련 처방</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:4px">${today} &nbsp;·&nbsp; ${mdLabel} &nbsp;·&nbsp; ${locLabel} &nbsp;·&nbsp; ${ex.name}</div>
+  </div>`;
+
+  html += `<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">그룹 편성</div>
+  <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px;margin-bottom:16px">`;
+  activeGroups.forEach(g=>{
+    html += `<div style="border:1px solid ${g.border};border-radius:8px;background:${g.bg};padding:10px">
+      <div style="font-size:13px;font-weight:700;color:${g.color};margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline">
+        <span>${g.label}</span>
+        <span style="font-size:11px;font-weight:500;opacity:.8">대표 MAS ${g.avgMas} km/h</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">
+        ${g.players.map(p=>`<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:${g.color}22;color:${g.color};border:1px solid ${g.border}">${p.name}<span style="opacity:.6"> ${p.mas}</span></span>`).join('')}
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  html += `<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">그룹별 처방</div>
+  <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;margin-bottom:16px">`;
+  activeGroups.forEach(g=>{
+    const params = {
+      intensity, sets, reps, durationMin, workMin, restMin,
+      distance, repRest, setRestSec, setRestMin,
+      speedKmh:g.speedKmh, mas:g.avgMas, mss:g.avgMss,
+      perSetIntensities, codAngle, codCount
+    };
+    html += `<div style="border:2px solid ${g.border};border-radius:10px;overflow:hidden">
+      <div style="background:${g.bg};padding:9px 14px;border-bottom:1px solid ${g.border};display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:14px;font-weight:700;color:${g.color}">${g.label}</span>
+        <span style="font-size:12px;color:${g.color};opacity:.8">MAS ${g.avgMas} km/h</span>
+      </div>
+      <div style="padding:10px">${buildCardioPrescriptionBlock(ex,catData,params)}</div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  const coachNote = getCardioCoachNote(ex.id, md);
+  html += `<div class="slabel" style="margin-top:4px;margin-bottom:8px">코칭 포인트</div>
+    <div class="coaching-box"><p>${coachNote}</p></div>
+    <div class="export-bar">
+      <button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button>
+    </div>`;
+
+  document.getElementById('cardio-output').innerHTML = html;
+  document.getElementById('cardio-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+}
 let _cardioCategory = '';
 let _cardioExId = '';
 
@@ -12021,6 +12282,7 @@ function updateCardioIntensityPreview(){
 
 // ── 처방 생성 ─────────────────────────────────
 async function generateCardio(){
+  if(_cardioMode==='group'){ await generateGroupCardio(); return; }
   if(!_cardioExId){ alert('운동 유형을 선택해주세요'); return; }
   const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
   const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
