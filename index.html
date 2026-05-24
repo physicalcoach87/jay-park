@@ -162,6 +162,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   .tabs,.btn-gen,.export-bar,.vid-row,.var-row,.vm-bar,.tab-wrapper,.header{display:none!important}
   .no-print{display:none!important}
   #tab-cardio.group-mode>*:not(#cardio-output){display:none!important}
+  .group-cardio-output{border-radius:0!important;padding:0!important;margin:0!important;box-shadow:none!important}
   body{background:#fff!important;color:#000!important;zoom:1;-webkit-print-color-adjust:exact;print-color-adjust:exact}
   .flow-card-row{display:flex!important;flex-wrap:nowrap!important;overflow:visible!important;gap:4px!important}
   .flow-card-row>div{flex:1!important;min-width:0!important}
@@ -11395,7 +11396,9 @@ async function generateGroupCardio(){
                    : ex.paramType==='rhie_sprint'   ? `${ex.workSec}초 거리`
                    : ex.paramType==='set_time_rest' ? '세트 거리' : '';
 
-  let html = `<div style="font-family:inherit">`;
+  // 웹: 흰 카드로 감싸 다크 테마 위에서도 가독성 확보
+  // 인쇄: @media print 에서 border-radius/shadow 제거, 그대로 흰 배경
+  let html = `<div class="group-cardio-output" style="font-family:inherit;background:#fff;color:#111;border-radius:12px;padding:20px 22px;margin-top:8px">`;
 
   // ① 헤더
   html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;padding-bottom:12px;border-bottom:2.5px solid #111">
