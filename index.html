@@ -11315,54 +11315,141 @@ async function generateGroupCardio(){
 
   if(!activeGroups.length){ alert('MAS 데이터가 있는 선수가 그룹에 배정되지 않았습니다'); return; }
 
-  const today = new Date().toLocaleDateString('ko-KR');
-  const cols  = activeGroups.length;
+  // 인쇄 친화적 그룹 색상 (밝은 배경 + 진한 텍스트)
+  const PC = {
+    A:{tc:'#14532d',bc:'#16a34a',bg:'#f0fdf4',hbg:'#dcfce7'},
+    B:{tc:'#1e3a8a',bc:'#2563eb',bg:'#eff6ff',hbg:'#dbeafe'},
+    C:{tc:'#7c2d12',bc:'#ea580c',bg:'#fff7ed',hbg:'#fed7aa'},
+    D:{tc:'#7f1d1d',bc:'#dc2626',bg:'#fef2f2',hbg:'#fecaca'},
+  };
 
-  let html = `<div style="text-align:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--border2)">
-    <div style="font-size:17px;font-weight:800;color:var(--text)">단체 유산소 훈련 처방</div>
-    <div style="font-size:12px;color:var(--text3);margin-top:4px">${today} &nbsp;·&nbsp; ${mdLabel} &nbsp;·&nbsp; ${locLabel} &nbsp;·&nbsp; ${ex.name}</div>
+  // 그룹별 처방 핵심 지표 계산
+  function calcMetrics(g){
+    const spd = g.speedKmh;
+    const ws  = ex.workSec||0;
+    const m   = {mas:g.avgMas, speed:spd?`${spd} km/h`:(intensity?`${intensity}% MAS`:'—')};
+    if(ex.paramType==='set_rep_rest'){
+      const d = spd ? calcDist(spd, ws) : null;
+      const total = sets*reps;
+      m.structure = `${sets}세트 × ${reps}rep`;
+      m.workRest  = `${ws}s : ${ws}s`;
+      m.distPerRep= d ? `${d} m` : '—';
+      m.totalWork = `${ws*total} 초`;
+      m.setRest   = `${setRestMin} min`;
+      m.totalDist = d ? `${(d*total).toLocaleString()} m` : '—';
+    } else if(ex.paramType==='time_only'){
+      const sec = Math.round(durationMin*60);
+      const d = spd ? calcDist(spd, sec) : null;
+      m.structure = `${durationMin}분 지속`;
+      m.totalWork = `${durationMin} min`;
+      m.totalDist = d ? `~${d.toLocaleString()} m` : '—';
+    } else if(ex.paramType==='set_time_rest'){
+      const sec = Math.round(workMin*60);
+      const d = spd ? calcDist(spd, sec) : null;
+      m.structure = `${sets}세트 × ${workMin}min`;
+      m.distPerRep= d ? `${d} m / set` : '—';
+      m.totalWork = `${sets*workMin} min`;
+      m.setRest   = `${restMin} min`;
+      m.totalDist = d ? `${(d*sets).toLocaleString()} m` : '—';
+    } else if(ex.paramType==='set_time_rest_perset'){
+      const sec = Math.round(workMin*60);
+      const ints = perSetIntensities.length===sets ? perSetIntensities : Array(sets).fill(intensity);
+      const dists = ints.map(i=>g.avgMas ? calcDist(+(g.avgMas*i/100).toFixed(1), sec) : null);
+      m.structure = `${sets}세트 × ${workMin}min`;
+      m.distPerRep= dists[0] ? dists.map((d,i)=>`Set${i+1}: ${d}m`).join(' / ') : '—';
+      m.totalWork = `${sets*workMin} min`;
+      m.setRest   = `${restMin} min`;
+      m.totalDist = dists[0] ? `${dists.reduce((a,b)=>a+b,0).toLocaleString()} m` : '—';
+    } else if(ex.paramType==='dist_rep_rest'){
+      const t = spd ? Math.round(distance/(spd/3.6)) : null;
+      m.structure = `${distance}m × ${reps}rep`;
+      m.totalWork = t ? `${Math.round(t*reps/60)} min` : '—';
+      m.setRest   = `${repRest} 초`;
+      m.totalDist = `${(distance*reps).toLocaleString()} m`;
+    } else if(ex.paramType==='rhie_sprint'){
+      const d = spd ? calcDist(spd, ws) : null;
+      const total = sets*reps;
+      m.structure = `${sets}세트 × ${reps}rep`;
+      m.distPerRep= d ? `${d} m / ${ws}초` : '—';
+      m.totalWork = `${ws*total} 초`;
+      m.setRest   = `${setRestSec} 초`;
+      m.totalDist = d ? `${(d*total).toLocaleString()} m` : '—';
+    }
+    return m;
+  }
+
+  const gData = activeGroups.map(g=>({...g, pc:PC[g.id]||PC.D, metrics:calcMetrics(g)}));
+  const today = new Date().toLocaleDateString('ko-KR');
+
+  // 비교 테이블에 표시할 행 정의 (첫 그룹 metrics 기준)
+  const ref = gData[0].metrics;
+  const metaRows = [
+    {key:'mas',      label:'대표 MAS (km/h)', bold:false},
+    {key:'speed',    label:'목표 속도',        bold:true},
+    {key:'structure',label:'훈련 구성',        bold:false, skip:!ref.structure},
+    {key:'workRest', label:'Work : Rest',      bold:false, skip:!ref.workRest},
+    {key:'distPerRep',label:'구간 거리',       bold:true,  skip:!ref.distPerRep},
+    {key:'totalWork', label:'총 Work 시간',    bold:false, skip:!ref.totalWork},
+    {key:'setRest',   label:'세트간 휴식',     bold:false, skip:!ref.setRest},
+    {key:'totalDist', label:'총 이동거리',     bold:true,  skip:!ref.totalDist},
+  ].filter(r=>!r.skip);
+
+  // ── HTML 생성 ──────────────────────────────
+  const thStyle = (g)=>`padding:10px 14px;background:${g.pc.hbg};border:1px solid ${g.pc.bc};color:${g.pc.tc};font-size:13px;font-weight:700;text-align:center;`;
+  const tdStyle = (bold)=>`padding:9px 12px;border:1px solid #d1d5db;text-align:center;background:#fff;font-size:${bold?'14px':'12px'};font-weight:${bold?'700':'400'};color:#111;`;
+  const thLbl   = `padding:9px 12px;border:1px solid #d1d5db;background:#f3f4f6;font-size:12px;font-weight:600;color:#374151;white-space:nowrap;`;
+
+  let html = `<div style="font-family:inherit">`;
+
+  // 헤더
+  html += `<div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e5e7eb">
+    <div style="font-size:18px;font-weight:800;color:#111">단체 유산소 훈련 처방</div>
+    <div style="font-size:12px;color:#6b7280;margin-top:5px">${today} &nbsp;·&nbsp; ${mdLabel} &nbsp;·&nbsp; ${locLabel} &nbsp;·&nbsp; ${ex.name}</div>
   </div>`;
 
-  html += `<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">그룹 편성</div>
-  <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:10px;margin-bottom:16px">`;
-  activeGroups.forEach(g=>{
-    html += `<div style="border:1px solid ${g.border};border-radius:8px;background:${g.bg};padding:10px">
-      <div style="font-size:13px;font-weight:700;color:${g.color};margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline">
-        <span>${g.label}</span>
-        <span style="font-size:11px;font-weight:500;opacity:.8">대표 MAS ${g.avgMas} km/h</span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:4px">
-        ${g.players.map(p=>`<span style="font-size:11px;padding:2px 8px;border-radius:12px;background:${g.color}22;color:${g.color};border:1px solid ${g.border}">${p.name}<span style="opacity:.6"> ${p.mas}</span></span>`).join('')}
-      </div>
-    </div>`;
-  });
-  html += `</div>`;
+  // ① 그룹 편성 테이블
+  html += `<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">그룹 편성</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px">
+    <thead><tr>
+      ${gData.map(g=>`<th style="${thStyle(g)}">${g.label}<br><span style="font-size:11px;font-weight:400">대표 MAS ${g.avgMas} km/h · ${g.players.length}명</span></th>`).join('')}
+    </tr></thead>
+    <tbody><tr>
+      ${gData.map(g=>`<td style="padding:10px 12px;border:1px solid #d1d5db;vertical-align:top;background:#fff">
+        ${g.players.map(p=>`<span style="display:inline-block;margin:2px 2px;padding:3px 9px;border-radius:20px;border:1.5px solid ${g.pc.bc};color:${g.pc.tc};background:${g.pc.bg};font-size:11px;font-weight:600">${p.name} <span style="font-weight:400;opacity:.7">${p.mas}</span></span>`).join('')}
+      </td>`).join('')}
+    </tr></tbody>
+  </table>`;
 
-  html += `<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">그룹별 처방</div>
-  <div style="display:grid;grid-template-columns:repeat(${cols},1fr);gap:12px;margin-bottom:16px">`;
-  activeGroups.forEach(g=>{
-    const params = {
-      intensity, sets, reps, durationMin, workMin, restMin,
-      distance, repRest, setRestSec, setRestMin,
-      speedKmh:g.speedKmh, mas:g.avgMas, mss:g.avgMss,
-      perSetIntensities, codAngle, codCount
-    };
-    html += `<div style="border:2px solid ${g.border};border-radius:10px;overflow:hidden">
-      <div style="background:${g.bg};padding:9px 14px;border-bottom:1px solid ${g.border};display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:14px;font-weight:700;color:${g.color}">${g.label}</span>
-        <span style="font-size:12px;color:${g.color};opacity:.8">MAS ${g.avgMas} km/h</span>
-      </div>
-      <div style="padding:10px">${buildCardioPrescriptionBlock(ex,catData,params)}</div>
-    </div>`;
-  });
-  html += `</div>`;
+  // ② 처방 비교 테이블
+  html += `<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">처방 비교</div>
+  <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px">
+    <thead><tr>
+      <th style="${thLbl}font-size:11px;">항목</th>
+      ${gData.map(g=>`<th style="${thStyle(g)}">${g.label}</th>`).join('')}
+    </tr></thead>
+    <tbody>`;
 
+  metaRows.forEach((row,i)=>{
+    const stripe = i%2===0 ? '#fff' : '#f9fafb';
+    html += `<tr>
+      <td style="${thLbl}background:${stripe}">${row.label}</td>
+      ${gData.map(g=>{
+        const val = g.metrics[row.key]??'—';
+        return `<td style="${tdStyle(row.bold)}background:${stripe}">${val}</td>`;
+      }).join('')}
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+
+  // ③ 코칭 포인트
   const coachNote = getCardioCoachNote(ex.id, md);
-  html += `<div class="slabel" style="margin-top:4px;margin-bottom:8px">코칭 포인트</div>
-    <div class="coaching-box"><p>${coachNote}</p></div>
+  html += `<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">코칭 포인트</div>
+    <div style="padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;line-height:1.8;margin-bottom:4px">${coachNote}</div>
     <div class="export-bar">
       <button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button>
-    </div>`;
+    </div>
+  </div>`;
 
   document.getElementById('cardio-output').innerHTML = html;
   document.getElementById('cardio-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
