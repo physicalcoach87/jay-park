@@ -11381,75 +11381,93 @@ async function generateGroupCardio(){
   const gData = activeGroups.map(g=>({...g, pc:PC[g.id]||PC.D, metrics:calcMetrics(g)}));
   const today = new Date().toLocaleDateString('ko-KR');
 
-  // 비교 테이블에 표시할 행 정의 (첫 그룹 metrics 기준)
+  // ── HTML 생성 (Sample B: 그룹 카드 + 빅 넘버) ──────────────────────────────
   const ref = gData[0].metrics;
-  const metaRows = [
-    {key:'mas',      label:'대표 MAS (km/h)', bold:false},
-    {key:'speed',    label:'목표 속도',        bold:true},
-    {key:'structure',label:'훈련 구성',        bold:false, skip:!ref.structure},
-    {key:'workRest', label:'Work : Rest',      bold:false, skip:!ref.workRest},
-    {key:'distPerRep',label:'구간 거리',       bold:true,  skip:!ref.distPerRep},
-    {key:'totalWork', label:'총 Work 시간',    bold:false, skip:!ref.totalWork},
-    {key:'setRest',   label:'세트간 휴식',     bold:false, skip:!ref.setRest},
-    {key:'totalDist', label:'총 이동거리',     bold:true,  skip:!ref.totalDist},
-  ].filter(r=>!r.skip);
+  const structureStr = ref.structure || '';
+  const setRestStr   = ref.setRest   ? `세트간 ${ref.setRest}` : '';
 
-  // ── HTML 생성 ──────────────────────────────
-  const thStyle = (g)=>`padding:10px 14px;background:${g.pc.hbg};border:1px solid ${g.pc.bc};color:${g.pc.tc};font-size:13px;font-weight:700;text-align:center;`;
-  const tdStyle = (bold)=>`padding:9px 12px;border:1px solid #d1d5db;text-align:center;background:#fff;font-size:${bold?'14px':'12px'};font-weight:${bold?'700':'400'};color:#111;`;
-  const thLbl   = `padding:9px 12px;border:1px solid #d1d5db;background:#f3f4f6;font-size:12px;font-weight:600;color:#374151;white-space:nowrap;`;
+  // 헤더 darkBg 색상 (진한 배경, 카드 상단)
+  const HEAD_BG = {A:'#15803d', B:'#1d4ed8', C:'#c2410c', D:'#991b1b'};
+
+  // paramType별 stat 구성 결정
+  const useThreeStat = ['set_rep_rest','rhie_sprint','set_time_rest'].includes(ex.paramType);
+  const stat1Label = ex.paramType==='set_rep_rest'  ? `${ex.workSec}초 거리`
+                   : ex.paramType==='rhie_sprint'   ? `${ex.workSec}초 거리`
+                   : ex.paramType==='set_time_rest' ? '세트 거리' : '';
 
   let html = `<div style="font-family:inherit">`;
 
-  // 헤더
-  html += `<div style="text-align:center;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #e5e7eb">
-    <div style="font-size:18px;font-weight:800;color:#111">단체 유산소 훈련 처방</div>
-    <div style="font-size:12px;color:#6b7280;margin-top:5px">${today} &nbsp;·&nbsp; ${mdLabel} &nbsp;·&nbsp; ${locLabel} &nbsp;·&nbsp; ${ex.name}</div>
+  // ① 헤더
+  html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;padding-bottom:12px;border-bottom:2.5px solid #111">
+    <div>
+      <div style="font-size:20px;font-weight:900;color:#111">단체 유산소 훈련 처방</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:4px">${ex.name}</div>
+    </div>
+    <div style="font-size:11px;color:#6b7280;text-align:right;line-height:1.8">
+      ${today}<br>
+      ${mdLabel} &nbsp;·&nbsp; ${locLabel}<br>
+      <span style="font-size:11px;font-weight:700;color:#111">${structureStr}${setRestStr ? ` &nbsp;·&nbsp; ${setRestStr}` : ''}</span>
+    </div>
   </div>`;
 
-  // ① 그룹 편성 테이블
-  html += `<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">그룹 편성</div>
-  <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px">
-    <thead><tr>
-      ${gData.map(g=>`<th style="${thStyle(g)}">${g.label}<br><span style="font-size:11px;font-weight:400">대표 MAS ${g.avgMas} km/h · ${g.players.length}명</span></th>`).join('')}
-    </tr></thead>
-    <tbody><tr>
-      ${gData.map(g=>`<td style="padding:10px 12px;border:1px solid #d1d5db;vertical-align:top;background:#fff">
-        ${g.players.map(p=>`<span style="display:inline-block;margin:2px 2px;padding:3px 9px;border-radius:20px;border:1.5px solid ${g.pc.bc};color:${g.pc.tc};background:${g.pc.bg};font-size:11px;font-weight:600">${p.name} <span style="font-weight:400;opacity:.7">${p.mas}</span></span>`).join('')}
-      </td>`).join('')}
-    </tr></tbody>
-  </table>`;
+  // ② 그룹 카드 그리드
+  html += `<div style="display:grid;grid-template-columns:repeat(${gData.length},1fr);gap:12px;margin-bottom:16px">`;
 
-  // ② 처방 비교 테이블
-  html += `<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">처방 비교</div>
-  <table style="width:100%;border-collapse:collapse;margin-bottom:18px;font-size:12px">
-    <thead><tr>
-      <th style="${thLbl}font-size:11px;">항목</th>
-      ${gData.map(g=>`<th style="${thStyle(g)}">${g.label}</th>`).join('')}
-    </tr></thead>
-    <tbody>`;
+  gData.forEach(g => {
+    const m  = g.metrics;
+    const pc = g.pc;
+    const headBg = HEAD_BG[g.id] || '#374151';
 
-  metaRows.forEach((row,i)=>{
-    const stripe = i%2===0 ? '#fff' : '#f9fafb';
-    html += `<tr>
-      <td style="${thLbl}background:${stripe}">${row.label}</td>
-      ${gData.map(g=>{
-        const val = g.metrics[row.key]??'—';
-        return `<td style="${tdStyle(row.bold)}background:${stripe}">${val}</td>`;
-      }).join('')}
-    </tr>`;
+    const speedNum   = g.speedKmh !== null ? g.speedKmh : '—';
+    const speedLabel = g.speedKmh !== null ? `km/h &nbsp;목표 속도 (${intensity}% MAS)` : '목표 속도';
+
+    // 스탯 행
+    let statHtml = '';
+    if(useThreeStat && m.distPerRep){
+      statHtml = `
+        <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.distPerRep}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">${stat1Label}</div></div>
+        <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.totalWork||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 Work</div></div>
+        <div style="text-align:center"><div style="font-size:13px;font-weight:700;color:${pc.tc}">${m.totalDist||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 거리</div></div>`;
+    } else {
+      statHtml = `
+        <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.totalWork||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 Work</div></div>
+        <div style="text-align:center"><div style="font-size:13px;font-weight:700;color:${pc.tc}">${m.totalDist||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 거리</div></div>`;
+    }
+
+    // 선수 목록 (이름 | 개인 MAS)
+    const playerRows = g.players.map(p =>
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f3f4f6;font-size:12px">
+        <span style="font-weight:600;color:#111">${p.name}</span>
+        <span style="font-size:12px;font-weight:700;color:${pc.tc}">${p.mas}</span>
+      </div>`
+    ).join('');
+
+    html += `
+      <div style="border-radius:8px;overflow:hidden;border:1.5px solid ${pc.bc}">
+        <div style="padding:10px 14px;background:${headBg};color:#fff;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:16px;font-weight:900">${g.label}</span>
+          <span style="font-size:11px;font-weight:500;opacity:.85">MAS ${g.avgMas} km/h</span>
+        </div>
+        <div style="padding:10px 14px;background:#fff">
+          <div style="font-size:26px;font-weight:900;line-height:1;margin-bottom:2px;color:${pc.tc}">${speedNum}</div>
+          <div style="font-size:10px;color:#6b7280;margin-bottom:8px">${speedLabel}</div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;border-top:1px solid #e5e7eb;padding-top:7px;margin-top:7px">
+            ${statHtml}
+          </div>
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e5e7eb">
+            ${playerRows}
+          </div>
+        </div>
+      </div>`;
   });
 
-  html += `</tbody></table>`;
+  html += `</div>`;
 
   // ③ 코칭 포인트
   const coachNote = getCardioCoachNote(ex.id, md);
-  html += `<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">코칭 포인트</div>
-    <div style="padding:12px 16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;font-size:12px;color:#374151;line-height:1.8;margin-bottom:4px">${coachNote}</div>
-    <div class="export-bar">
-      <button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button>
-    </div>
-  </div>`;
+  html += `<div style="padding:9px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;line-height:1.7;margin-bottom:8px">💬 ${coachNote}</div>`;
+  html += `<div class="export-bar no-print"><button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button></div>`;
+  html += `</div>`;
 
   document.getElementById('cardio-output').innerHTML = html;
   document.getElementById('cardio-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
