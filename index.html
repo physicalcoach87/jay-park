@@ -311,14 +311,14 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <div class="header">
   <div class="header-left" onclick="location.reload()" style="cursor:pointer;user-select:none" title="새로고침">
     <div class="logo"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-    <div><div class="htitle">부산아이파크 선수 관리 시스템</div></div>
+    <div><div class="htitle" id="club-title">선수 관리 시스템</div></div>
   </div>
   <div style="display:flex;gap:8px;align-items:center">
     <span id="user-role" style="font-size:11px;color:var(--accent2);font-weight:600"></span>
     <span id="user-email" style="font-size:11px;color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     <button onclick="openMgmt()" class="admin-only" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">👥 스텝 관리</button>
     <button onclick="doLogout()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">로그아웃</button>
-    <span class="hbadge">IPARK FC</span>
+    <span class="hbadge" id="club-badge">-</span>
   </div>
 </div>
 
@@ -1752,6 +1752,8 @@ let currentUser = null;
 let isAdmin = false;
 let currentRole = 'coach';
 let userPermissions = {};
+let currentClubId = null;
+let currentClubName = '';
 
 // ── 역할 레이블 ───────────────────────────────
 const ROLE_LABELS = {
@@ -1871,6 +1873,12 @@ async function showApp(user, preloadedRole){
   document.getElementById('main-app').style.display='block';
   const emailEl = document.getElementById('user-email');
   if(emailEl && user?.email) emailEl.textContent = user.email;
+  if(currentClubName){
+    const t = document.getElementById('club-title');
+    const b = document.getElementById('club-badge');
+    if(t) t.textContent = currentClubName + ' 선수 관리 시스템';
+    if(b) b.textContent = currentClubName;
+  }
   isAdmin = checkAdmin(user);
   // 역할 결정
   let role = preloadedRole;
@@ -1878,8 +1886,13 @@ async function showApp(user, preloadedRole){
     if(isAdmin){
       role = 'admin';
     } else {
-      const {data:prof, error:pe} = await supa.from('profiles').select('role').eq('id', user.id).single();
+      const {data:prof, error:pe} = await supa.from('profiles').select('role,club_id').eq('id', user.id).single();
       role = (pe || !prof) ? 'coach' : (prof.role || 'coach');
+      if(prof?.club_id){
+        currentClubId = prof.club_id;
+        const {data:club} = await supa.from('clubs').select('name,gps_plan').eq('id', prof.club_id).single();
+        if(club){ currentClubName = club.name; }
+      }
     }
   }
   await loadUserPermissions(user.id, role);
@@ -5302,7 +5315,7 @@ async function loadPlayerManagement(){
   if(dateEl && !dateEl.value) dateEl.value = today;
   const wDateEl = document.getElementById('wellness-view-date');
   if(wDateEl && !wDateEl.value) wDateEl.value = today;
-  const {data} = await supa.from('player_profiles').select('*').order('position').order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('position').order('name');
   _players = data || [];
   const sel = document.getElementById('dashboard-player');
   if(sel){
@@ -5356,7 +5369,7 @@ function setPlayerView(view){
     if(sel && sel.options.length <= 1 && _players.length){
       _players.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
     } else if(sel && sel.options.length <= 1){
-      supa.from('player_profiles').select('id,name,position').then(({data})=>{
+      supa.from('player_profiles').select('id,name,position').eq('club_id', currentClubId).then(({data})=>{
         (data||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
       });
     }
@@ -5853,7 +5866,7 @@ function renderSchedPlayerList(){
     : (window._globalPlayers||[]);
   if(!pool.length){
     // 선수 목록 없으면 로드
-    supa.from('player_profiles').select('id,name,position,team').order('position').order('name').then(({data})=>{
+    supa.from('player_profiles').select('id,name,position,team').eq('club_id', currentClubId).order('position').order('name').then(({data})=>{
       if(data){ window._globalPlayers = data; renderSchedPlayerList(); }
     });
     el.innerHTML = '<span style="font-size:12px;color:var(--text3)">로딩 중...</span>';
@@ -6193,7 +6206,7 @@ async function loadMorningReport(){
   const since7Str  = since7.toISOString().split('T')[0];
 
   if(!_players.length){
-    const {data} = await supa.from('player_profiles').select('*');
+    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
     _players = data || [];
   }
 
@@ -7655,7 +7668,7 @@ async function loadTeamWellness(){
 async function loadRosterList(){
   const listEl = document.getElementById('roster-list');
   if(!listEl) return;
-  const {data} = await supa.from('player_profiles').select('*').order('position').order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('position').order('name');
   _players = data || [];
   document.getElementById('roster-count').textContent = `총 ${_players.length}명 등록`;
   const groups = {};
@@ -7760,7 +7773,7 @@ async function savePlayerForm(){
   };
   let error;
   if(id){({error}=await supa.from('player_profiles').update(payload).eq('id',id));}
-  else{({error}=await supa.from('player_profiles').insert(payload));}
+  else{({error}=await supa.from('player_profiles').insert({...payload, club_id:currentClubId}));}
   if(error){err.textContent='오류: '+error.message;return;}
   closePlayerForm();
   await loadPlayerManagement();
@@ -9373,7 +9386,7 @@ async function parseGpsFile(file){
       };
 
       // 선수 이름 → ID 매핑
-      const {data:players} = await supa.from('player_profiles').select('id,name');
+      const {data:players} = await supa.from('player_profiles').select('id,name').eq('club_id', currentClubId);
       const playerMap = {};
       (players||[]).forEach(p=>{ playerMap[p.name]=p.id; });
 
@@ -9809,7 +9822,7 @@ async function runInjuryRiskAnalysis(){
 
   // 선수 목록 보장
   if(!_players.length){
-    const {data} = await supa.from('player_profiles').select('*');
+    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
     _players = data || [];
   }
 
@@ -10186,7 +10199,7 @@ async function loadNotifyTab(){
   // 탭 진입 시 뱃지 클리어
   const badge = document.getElementById('notify-tab-badge');
   if(badge) badge.style.display = 'none';
-  const {data} = await supa.from('player_profiles').select('*').order('position').order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('position').order('name');
   _players = data||[];
   const msgSel = document.getElementById('msg-player-sel');
   if(msgSel){
@@ -11706,7 +11719,7 @@ function getCardioFitnessType(player){
 async function loadCardioPlayers(){
   const sel = document.getElementById('cardio-player');
   if(!sel) return;
-  const {data} = await supa.from('player_profiles').select('*').order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('name');
   _players = data || [];
   sel.innerHTML = '<option value="">선수를 선택하세요</option>' +
     _players.map(p=>`<option value="${p.id}">${p.name} (${p.position}) — MAS ${p.mas}</option>`).join('');
@@ -13185,7 +13198,7 @@ function updateAsrPreview(){
 }
 async function loadPlayerList(){
   const listEl=document.getElementById('player-list');
-  const {data}=await supa.from('player_profiles').select('*').order('name');
+  const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('name');
   _players=data||[];
   if(!_players.length){listEl.innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">등록된 선수가 없습니다</div>';return;}
   listEl.innerHTML=_players.map(p=>`
@@ -13215,7 +13228,7 @@ async function savePlayer(){
   const payload={name,position:pos,mas,mss,notes,updated_at:new Date().toISOString(),created_by:currentUser?.email||''};
   let error;
   if(id){({error}=await supa.from('player_profiles').update(payload).eq('id',id));}
-  else{({error}=await supa.from('player_profiles').insert(payload));}
+  else{({error}=await supa.from('player_profiles').insert({...payload, club_id:currentClubId}));}
   if(error){msg.textContent='오류: '+error.message;msg.style.color='var(--red)';return;}
   msg.textContent=id?'✓ 수정 완료':'✓ 저장 완료';
   msg.style.color='var(--accent2)';
@@ -15167,7 +15180,7 @@ ${printContent}
 // 탭 진입 시
 async function loadMatchTab(){
   if(!_players.length){
-    const {data}=await supa.from('player_profiles').select('*');
+    const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
     _players=data||[];
   }
   const sel=document.getElementById('match-player-sel');
@@ -15548,7 +15561,7 @@ async function parseMinuteFile(file){
 
   // 선수명 → ID 매핑
   if(!_players.length){
-    const {data} = await supa.from('player_profiles').select('id,name');
+    const {data} = await supa.from('player_profiles').select('id,name').eq('club_id', currentClubId);
     _players = data || [];
   }
   const nameMap = {};
@@ -15774,7 +15787,7 @@ async function parseTrainMinuteFile(file){
   }
 
   if(!_players.length){
-    const {data} = await supa.from('player_profiles').select('id,name');
+    const {data} = await supa.from('player_profiles').select('id,name').eq('club_id', currentClubId);
     _players = data || [];
   }
   const nameMap = {};
@@ -16145,7 +16158,7 @@ async function recalcAllMatchMax(){
   if(!pids.length){ alert('재계산할 데이터가 없습니다.'); if(btn){btn.disabled=false;btn.textContent='🔄 전체 재계산';} return; }
   await updateMatchMax(pids);
   // _players 최신화 후 재렌더
-  const {data:fresh}=await supa.from('player_profiles').select('*');
+  const {data:fresh}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
   if(fresh) _players=fresh;
   if(btn){ btn.disabled=false; btn.textContent='🔄 전체 재계산'; }
   loadMatchMax();
@@ -16505,7 +16518,7 @@ async function loadMatchMax(){
   out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
 
   if(!_players.length){
-    const {data}=await supa.from('player_profiles').select('*');
+    const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
     _players=data||[];
   }
 
