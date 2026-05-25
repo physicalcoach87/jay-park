@@ -1873,27 +1873,24 @@ async function showApp(user, preloadedRole){
   document.getElementById('main-app').style.display='block';
   const emailEl = document.getElementById('user-email');
   if(emailEl && user?.email) emailEl.textContent = user.email;
+  isAdmin = checkAdmin(user);
+  // 역할 결정
+  let role = preloadedRole;
+  if(!role){
+    const {data:prof, error:pe} = await supa.from('profiles').select('role,club_id').eq('id', user.id).single();
+    role = isAdmin ? 'admin' : ((pe || !prof) ? 'coach' : (prof.role || 'coach'));
+    if(prof?.club_id){
+      currentClubId = prof.club_id;
+      const {data:club} = await supa.from('clubs').select('name,gps_plan').eq('id', prof.club_id).single();
+      if(club){ currentClubName = club.name; }
+    }
+  }
+  // 클럽명 헤더 표시 (club_id 로드 후)
   if(currentClubName){
     const t = document.getElementById('club-title');
     const b = document.getElementById('club-badge');
     if(t) t.textContent = currentClubName + ' 선수 관리 시스템';
     if(b) b.textContent = currentClubName;
-  }
-  isAdmin = checkAdmin(user);
-  // 역할 결정
-  let role = preloadedRole;
-  if(!role){
-    if(isAdmin){
-      role = 'admin';
-    } else {
-      const {data:prof, error:pe} = await supa.from('profiles').select('role,club_id').eq('id', user.id).single();
-      role = (pe || !prof) ? 'coach' : (prof.role || 'coach');
-      if(prof?.club_id){
-        currentClubId = prof.club_id;
-        const {data:club} = await supa.from('clubs').select('name,gps_plan').eq('id', prof.club_id).single();
-        if(club){ currentClubName = club.name; }
-      }
-    }
   }
   await loadUserPermissions(user.id, role);
   applyTabPermissions();
