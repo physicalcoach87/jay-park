@@ -10,14 +10,14 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { email, password, club_id, role } = await req.json();
+    const { email, password, club_id: reqClubId, role: reqRole } = await req.json();
     if (!email || !password) {
       return new Response(JSON.stringify({ error: "이메일과 비밀번호는 필수입니다." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // 호출자가 superadmin인지 확인
+    // 호출자 인증 및 역할 확인
     const authHeader = req.headers.get("Authorization");
     const callerClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -31,12 +31,29 @@ serve(async (req) => {
       });
     }
     const { data: callerProf } = await callerClient
-      .from("profiles").select("role").eq("id", caller.id).single();
-    if (callerProf?.role !== "superadmin") {
-      return new Response(JSON.stringify({ error: "슈퍼어드민 권한이 필요합니다." }), {
+      .from("profiles").select("role,club_id").eq("id", caller.id).single();
+
+    const callerRole = callerProf?.role;
+
+    // superadmin: 모든 역할·모든 팀 생성 가능
+    // admin: coach/physical/medical만, 자기 팀에만
+    if (callerRole === "superadmin") {
+      // OK — no restrictions
+    } else if (callerRole === "admin") {
+      const forbidden = ["admin", "superadmin"];
+      if (forbidden.includes(reqRole)) {
+        return new Response(JSON.stringify({ error: "팀 관리자는 admin 이상 역할을 생성할 수 없습니다." }), {
+          status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    } else {
+      return new Response(JSON.stringify({ error: "권한이 없습니다." }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // club_id 결정: admin이면 반드시 자기 팀, superadmin은 요청값 사용
+    const finalClubId = callerRole === "admin" ? callerProf.club_id : (reqClubId || null);
 
     // 서비스 롤 키로 유저 생성
     const adminClient = createClient(
@@ -58,8 +75,8 @@ serve(async (req) => {
     await adminClient.from("profiles").upsert({
       id: newUser.user.id,
       email,
-      club_id: club_id || null,
-      role: role || "coach",
+      club_id: finalClubId,
+      role: reqRole || "coach",
     });
 
     return new Response(JSON.stringify({ success: true, user_id: newUser.user.id }), {
