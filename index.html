@@ -7887,6 +7887,7 @@ async function savePlayerForm(){
     updated_at:new Date().toISOString(),
     created_by:currentUser?.email||''
   };
+  const isNew = !id;
   let error;
   if(id){({error}=await supa.from('player_profiles').update(payload).eq('id',id));}
   else{({error}=await supa.from('player_profiles').insert({...payload, club_id:currentClubId}));}
@@ -7895,6 +7896,13 @@ async function savePlayerForm(){
   await loadPlayerManagement();
   loadRosterList();
   loadCardioPlayers();
+  if(isNew){
+    const t=document.createElement('div');
+    t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#0a2010;border:1px solid var(--accent);border-radius:14px;padding:14px 20px;z-index:99999;max-width:320px;min-width:240px;box-shadow:0 4px 24px rgba(0,0,0,0.5);text-align:center';
+    t.innerHTML=`<div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:6px">✅ ${name} 선수 추가 완료</div><div style="font-size:12px;color:var(--text2);line-height:1.6">선수앱 초기 PIN은 <b style="color:#fff">0000</b> 입니다<br>선수에게 로그인 후 PIN 변경하도록 안내해주세요</div>`;
+    document.body.appendChild(t);
+    setTimeout(()=>{t.style.transition='opacity .4s';t.style.opacity='0';setTimeout(()=>t.remove(),400);},6000);
+  }
 }
 
 async function confirmDeletePlayer(id,name){
