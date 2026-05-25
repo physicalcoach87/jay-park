@@ -327,6 +327,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
   <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)" id="tab-btn-notify" style="position:relative">🔔 알림/메시지<span id="notify-tab-badge" style="display:none;position:absolute;top:4px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button>
+  <button class="tab" id="tab-btn-perms" onclick="switchTab('perms',this)" style="display:none">⚙️ 권한 설정</button>
   <button class="tab" id="tab-btn-superadmin" onclick="switchTab('superadmin',this)" style="display:none">🏢 팀 관리</button>
 </div>
 
@@ -1610,6 +1611,14 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <!-- 커스텀 프로그램 탭 (placeholder — 실제 UI는 ptab-content-cprog에 직접 렌더링됨) -->
 <div id="tab-cprog" style="display:none"></div>
 
+<!-- 권한 설정 탭 (admin + superadmin) -->
+<div id="tab-perms" style="display:none;padding:1.5rem;max-width:700px;margin:0 auto">
+  <div style="font-size:16px;font-weight:700;margin-bottom:4px">⚙️ 역할별 권한 설정</div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:1.5rem">슈퍼어드민이 허용한 탭 안에서만 설정 가능합니다</div>
+  <div id="perms-role-tabs" style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap"></div>
+  <div id="perms-editor"></div>
+</div>
+
 <!-- 슈퍼어드민 탭 -->
 <div id="tab-superadmin" style="display:none;padding:1.5rem;max-width:700px;margin:0 auto">
 
@@ -1618,7 +1627,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div style="font-size:16px;font-weight:700">🏢 팀 목록</div>
     <button onclick="saShowAddClub()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit">+ 팀 추가</button>
   </div>
-  <div id="sa-clubs-list" style="margin-bottom:2rem"></div>
+  <div id="sa-clubs-list" style="margin-bottom:1rem"></div>
+  <div id="sa-club-perms-panel" style="display:none"></div>
 
   <!-- 팀 추가 폼 (숨김) -->
   <div id="sa-add-club-form" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.25rem;margin-bottom:2rem">
@@ -1825,10 +1835,12 @@ function getKSTNow() {
 let currentUser = null;
 let isAdmin = false;
 let isSuperAdmin = false;
+let isTeamAdmin = false;
 let currentRole = 'coach';
 let userPermissions = {};
 let currentClubId = null;
 let currentClubName = '';
+let currentClubPermissions = {}; // 슈퍼어드민이 설정한 팀 허용 탭
 
 // ── 역할 레이블 ───────────────────────────────
 const ROLE_LABELS = {
@@ -1883,10 +1895,31 @@ const TAB_LABELS = {
   'extab-cardio':'유산소 운동', 'extab-progmgmt':'프로그램 관리'
 };
 
-// ── 사용자 권한 로드 (role 기본값 + 개인 오버라이드) ──
+// ── 사용자 권한 로드 (role 기본값 → 팀 역할 오버라이드 → 클럽 최종 게이트) ──
 async function loadUserPermissions(userId, role){
   currentRole = role || 'coach';
+  // 1단계: 역할 기본값
   userPermissions = Object.assign({}, ROLE_PERMISSIONS[currentRole] || ROLE_PERMISSIONS.coach);
+
+  // 2단계: 팀 관리자가 설정한 역할별 권한 로드
+  if(currentClubId && !isSuperAdmin){
+    const {data:rp} = await supa.from('club_role_permissions')
+      .select('permissions').eq('club_id', currentClubId).eq('role', currentRole).single();
+    if(rp?.permissions){
+      Object.keys(rp.permissions).forEach(tab => {
+        userPermissions[tab] = rp.permissions[tab] ? 1 : 0;
+      });
+    }
+  }
+
+  // 3단계: 슈퍼어드민이 설정한 클럽 허용 탭으로 최종 차단 (superadmin 본인은 제외)
+  if(!isSuperAdmin && Object.keys(currentClubPermissions).length){
+    Object.keys(userPermissions).forEach(tab => {
+      if(currentClubPermissions[tab] === false) userPermissions[tab] = 0;
+    });
+  }
+
+  // 기존 개인 오버라이드 (하위 호환)
   if(userId){
     const {data} = await supa.from('user_tab_overrides')
       .select('tab_id,allowed').eq('user_id', userId);
@@ -1955,15 +1988,22 @@ async function showApp(user, preloadedRole){
     const {data:prof, error:pe} = await supa.from('profiles').select('role,club_id').eq('id', user.id).single();
     role = isAdmin ? 'admin' : ((pe || !prof) ? 'coach' : (prof.role || 'coach'));
     isSuperAdmin = (prof?.role === 'superadmin');
+    isTeamAdmin  = (prof?.role === 'admin' || prof?.role === 'superadmin');
     if(prof?.club_id){
       currentClubId = prof.club_id;
-      const {data:club} = await supa.from('clubs').select('name,gps_plan').eq('id', prof.club_id).single();
-      if(club){ currentClubName = club.name; }
+      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions').eq('id', prof.club_id).single();
+      if(club){
+        currentClubName = club.name;
+        currentClubPermissions = club.permissions || {};
+      }
     }
   }
   // 슈퍼어드민 탭 표시
   const saTab = document.getElementById('tab-btn-superadmin');
   if(saTab) saTab.style.display = isSuperAdmin ? '' : 'none';
+  // 팀 권한 설정 탭 표시 (admin 이상)
+  const permTab = document.getElementById('tab-btn-perms');
+  if(permTab) permTab.style.display = isTeamAdmin ? '' : 'none';
   // 클럽명 헤더 표시 (club_id 로드 후)
   if(currentClubName){
     const t = document.getElementById('club-title');
@@ -16655,7 +16695,7 @@ async function loadMatchMax(){
 
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['exercise','players','notify','report','match','cprog','superadmin'].forEach(id=>{
+  ['exercise','players','notify','report','match','cprog','superadmin','perms'].forEach(id=>{
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
@@ -16665,6 +16705,7 @@ function switchTab(tab,el){
   if(tab==='match') loadMatchTab();
   if(tab==='exercise') switchExerciseTab('gym');
   if(tab==='superadmin') loadSuperAdmin();
+  if(tab==='perms') loadPermsTab();
 }
 
 function switchExerciseTab(sub){
@@ -16777,8 +16818,12 @@ async function saLoadClubs(){
           &nbsp;·&nbsp; ID: <span style="font-size:10px;opacity:.5">${c.id.slice(0,8)}...</span>
         </div>
       </div>
-      <button onclick="saDeleteClub('${c.id}','${c.name}')"
-        style="background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">삭제</button>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="saEditClubPerms('${c.id}','${c.name}')"
+          style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">탭 권한</button>
+        <button onclick="saDeleteClub('${c.id}','${c.name}')"
+          style="background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">삭제</button>
+      </div>
     </div>`).join('');
 }
 
@@ -16883,6 +16928,183 @@ async function saSaveCoach(profileId){
   const {error} = await supa.from('profiles').update({club_id:clubId, role}).eq('id', profileId);
   if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='오류: '+error.message; return; }
   msgEl.style.color='var(--accent)'; msgEl.textContent='✅ 저장 완료';
+}
+
+// ── 슈퍼어드민: 팀별 허용 탭 편집 ────────────────────────────
+let _saEditingClubId = null;
+
+async function saEditClubPerms(clubId, clubName){
+  _saEditingClubId = clubId;
+  const panel = document.getElementById('sa-club-perms-panel');
+  panel.style.display = 'block';
+  panel.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:1rem">불러오는 중...</div>';
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  const {data:club} = await supa.from('clubs').select('permissions').eq('id', clubId).single();
+  const cp = club?.permissions || {};
+
+  const mainTabs = ['report','players','exercise','notify'];
+  const playerSubs = ['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'];
+  const exerciseSubs = ['extab-gym','extab-preact','extab-cardio','extab-progmgmt'];
+
+  const row = (tab) => {
+    const on = cp[tab] !== false;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border2)">
+      <span style="font-size:13px;color:var(--text)">${TAB_LABELS[tab]||tab}</span>
+      <div onclick="saClubPermToggle('${tab}')" id="sacp-toggle-${tab}"
+        style="width:40px;height:22px;border-radius:11px;background:${on?'var(--accent)':'var(--border2)'};cursor:pointer;transition:.2s;flex-shrink:0;position:relative">
+        <div id="sacp-knob-${tab}" style="position:absolute;top:3px;left:${on?'21px':'3px'};width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s"></div>
+      </div>
+      <input type="checkbox" id="sacp-${tab}" ${on?'checked':''} style="display:none">
+    </div>`;
+  };
+
+  const grp = (title, tabs) => `
+    <div style="margin-bottom:1rem">
+      <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">${title}</div>
+      ${tabs.map(row).join('')}
+    </div>`;
+
+  panel.innerHTML = `
+    <div style="background:var(--surface2);border:2px solid var(--accent);border-radius:12px;padding:1.25rem;margin-bottom:1.5rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+        <div style="font-size:14px;font-weight:700">${clubName} — 허용 탭 설정</div>
+        <button onclick="saHideClubPerms()" style="background:transparent;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">×</button>
+      </div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:1rem">비활성화된 탭은 이 팀의 모든 역할이 사용 불가합니다</div>
+      ${grp('메인 탭', mainTabs)}
+      ${grp('선수 관리 하위', playerSubs)}
+      ${grp('운동 처방 하위', exerciseSubs)}
+      <button onclick="saSaveClubPerms()"
+        style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px">저장</button>
+      <div id="sacp-msg" style="text-align:center;font-size:12px;min-height:16px;margin-top:6px"></div>
+    </div>`;
+}
+
+function saClubPermToggle(tabId){
+  const cb = document.getElementById('sacp-'+tabId);
+  const toggle = document.getElementById('sacp-toggle-'+tabId);
+  const knob = document.getElementById('sacp-knob-'+tabId);
+  if(!cb) return;
+  cb.checked = !cb.checked;
+  toggle.style.background = cb.checked ? 'var(--accent)' : 'var(--border2)';
+  knob.style.left = cb.checked ? '21px' : '3px';
+}
+
+function saHideClubPerms(){
+  const panel = document.getElementById('sa-club-perms-panel');
+  if(panel){ panel.style.display='none'; panel.innerHTML=''; }
+}
+
+async function saSaveClubPerms(){
+  const msgEl = document.getElementById('sacp-msg');
+  msgEl.style.color = 'var(--text3)'; msgEl.textContent = '저장 중...';
+  const permissions = {};
+  Object.keys(TAB_LABELS).forEach(tab => {
+    const cb = document.getElementById('sacp-'+tab);
+    if(cb) permissions[tab] = cb.checked;
+  });
+  const {error} = await supa.from('clubs').update({permissions}).eq('id', _saEditingClubId);
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='오류: '+error.message; return; }
+  msgEl.style.color = 'var(--accent)'; msgEl.textContent = '✅ 저장 완료';
+}
+
+// ── 팀 관리자: 역할별 권한 설정 탭 ────────────────────────────
+let _permRole = 'coach';
+
+async function loadPermsTab(){
+  const roles = ['coach','physical','medical','admin'];
+  const roleLabels = {coach:'코치', physical:'피지컬', medical:'의무', admin:'팀관리자'};
+
+  const roleTabs = document.getElementById('perms-role-tabs');
+  if(!roleTabs) return;
+  roleTabs.innerHTML = roles.map(r => {
+    const active = r === _permRole;
+    return `<button onclick="permsSwitchRole('${r}')" id="perm-role-btn-${r}"
+      style="padding:7px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;
+             border:1px solid ${active?'var(--accent)':'var(--border2)'};
+             background:${active?'var(--accent-bg)':'transparent'};
+             color:${active?'var(--accent2)':'var(--text3)'}">${roleLabels[r]}</button>`;
+  }).join('');
+
+  await permsLoadEditor(_permRole);
+}
+
+async function permsSwitchRole(role){
+  _permRole = role;
+  await loadPermsTab();
+}
+
+async function permsLoadEditor(role){
+  const edEl = document.getElementById('perms-editor');
+  if(!edEl) return;
+  edEl.innerHTML = '<div style="color:var(--text3);font-size:13px">불러오는 중...</div>';
+
+  let existingPerms = {};
+  if(currentClubId){
+    const {data:rp} = await supa.from('club_role_permissions')
+      .select('permissions').eq('club_id', currentClubId).eq('role', role).single();
+    if(rp?.permissions) existingPerms = rp.permissions;
+  }
+  const defaults = ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.coach;
+
+  const mainTabs = ['report','players','exercise','notify'];
+  const playerSubs = ['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'];
+  const exerciseSubs = ['extab-gym','extab-preact','extab-cardio','extab-progmgmt'];
+
+  const row = (tab) => {
+    const blocked = currentClubPermissions[tab] === false;
+    const on = blocked ? false : (tab in existingPerms ? !!existingPerms[tab] : !!defaults[tab]);
+    const blockedLabel = blocked ? ' <span style="font-size:10px;color:#ef4444">(슈퍼어드민 차단)</span>' : '';
+    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border2)">
+      <span style="font-size:13px;color:${blocked?'var(--text3)':'var(--text)'}">${TAB_LABELS[tab]||tab}${blockedLabel}</span>
+      <div onclick="${blocked?'':("permsToggle('"+tab+"')")}" id="perm-toggle-${tab}"
+        style="width:40px;height:22px;border-radius:11px;background:${on?'var(--accent)':'var(--border2)'};cursor:${blocked?'not-allowed':'pointer'};transition:.2s;flex-shrink:0;position:relative">
+        <div id="perm-knob-${tab}" style="position:absolute;top:3px;left:${on?'21px':'3px'};width:16px;height:16px;border-radius:50%;background:#fff;transition:.2s"></div>
+      </div>
+      <input type="checkbox" id="perm-${tab}" ${on?'checked':''} ${blocked?'disabled':''} style="display:none">
+    </div>`;
+  };
+
+  const grp = (title, tabs) => `
+    <div style="margin-bottom:1rem">
+      <div style="font-size:11px;color:var(--text3);font-weight:600;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">${title}</div>
+      ${tabs.map(row).join('')}
+    </div>`;
+
+  edEl.innerHTML = `
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.25rem">
+      ${grp('메인 탭', mainTabs)}
+      ${grp('선수 관리 하위', playerSubs)}
+      ${grp('운동 처방 하위', exerciseSubs)}
+      <button onclick="permsSave('${role}')"
+        style="width:100%;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:11px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-top:4px">저장</button>
+      <div id="perms-save-msg" style="text-align:center;font-size:12px;min-height:16px;margin-top:6px"></div>
+    </div>`;
+}
+
+function permsToggle(tabId){
+  const cb = document.getElementById('perm-'+tabId);
+  const toggle = document.getElementById('perm-toggle-'+tabId);
+  const knob = document.getElementById('perm-knob-'+tabId);
+  if(!cb || cb.disabled) return;
+  cb.checked = !cb.checked;
+  toggle.style.background = cb.checked ? 'var(--accent)' : 'var(--border2)';
+  knob.style.left = cb.checked ? '21px' : '3px';
+}
+
+async function permsSave(role){
+  const msgEl = document.getElementById('perms-save-msg');
+  msgEl.style.color = 'var(--text3)'; msgEl.textContent = '저장 중...';
+  const permissions = {};
+  Object.keys(TAB_LABELS).forEach(tab => {
+    const cb = document.getElementById('perm-'+tab);
+    if(cb) permissions[tab] = cb.checked ? 1 : 0;
+  });
+  const {error} = await supa.from('club_role_permissions')
+    .upsert({club_id: currentClubId, role, permissions}, {onConflict:'club_id,role'});
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='오류: '+error.message; return; }
+  msgEl.style.color = 'var(--accent)'; msgEl.textContent = '✅ 저장 완료';
 }
 </script>
 </body>
