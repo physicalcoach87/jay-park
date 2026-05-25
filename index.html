@@ -327,6 +327,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
   <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)" id="tab-btn-notify" style="position:relative">🔔 알림/메시지<span id="notify-tab-badge" style="display:none;position:absolute;top:4px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button>
+  <button class="tab" id="tab-btn-superadmin" onclick="switchTab('superadmin',this)" style="display:none">🏢 팀 관리</button>
 </div>
 
 <!-- 모닝 레포트 탭 -->
@@ -1609,6 +1610,49 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <!-- 커스텀 프로그램 탭 (placeholder — 실제 UI는 ptab-content-cprog에 직접 렌더링됨) -->
 <div id="tab-cprog" style="display:none"></div>
 
+<!-- 슈퍼어드민 탭 -->
+<div id="tab-superadmin" style="display:none;padding:1.5rem;max-width:700px;margin:0 auto">
+
+  <!-- 팀 목록 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <div style="font-size:16px;font-weight:700">🏢 팀 목록</div>
+    <button onclick="saShowAddClub()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit">+ 팀 추가</button>
+  </div>
+  <div id="sa-clubs-list" style="margin-bottom:2rem"></div>
+
+  <!-- 팀 추가 폼 (숨김) -->
+  <div id="sa-add-club-form" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.25rem;margin-bottom:2rem">
+    <div style="font-size:14px;font-weight:600;margin-bottom:1rem">신규 팀 추가</div>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <input id="sa-club-name" type="text" placeholder="팀 이름 (예: 수원FC)"
+        style="font-size:14px;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+      <select id="sa-club-plan" style="font-size:14px;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+        <option value="V2">V2 — 프리미엄 (Catapult 19개 지표)</option>
+        <option value="V1">V1 — 베이직 (범용 12개 지표)</option>
+      </select>
+      <div style="display:flex;gap:8px">
+        <button onclick="saAddClub()" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">추가</button>
+        <button onclick="saHideAddClub()" style="flex:1;background:var(--surface);border:1px solid var(--border2);color:var(--text3);border-radius:8px;padding:10px;font-size:14px;cursor:pointer;font-family:inherit">취소</button>
+      </div>
+      <div id="sa-club-err" style="font-size:12px;color:#ef4444;min-height:16px"></div>
+    </div>
+  </div>
+
+  <!-- 코치 관리 -->
+  <div style="font-size:16px;font-weight:700;margin-bottom:1rem">👤 코치 계정 관리</div>
+  <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.25rem;margin-bottom:1rem">
+    <div style="font-size:13px;color:var(--text3);margin-bottom:10px">이메일로 코치 계정 검색 후 팀·역할 배정</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input id="sa-coach-email" type="email" placeholder="코치 이메일 입력"
+        style="flex:1;font-size:14px;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none"
+        onkeydown="if(event.key==='Enter')saSearchCoach()">
+      <button onclick="saSearchCoach()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px 16px;font-size:13px;cursor:pointer;font-family:inherit">검색</button>
+    </div>
+    <div id="sa-coach-result"></div>
+  </div>
+
+</div>
+
 <!-- 기존 처방 불러오기 모달 -->
 <div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;align-items:center;justify-content:center;padding:1rem">
   <div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:100%;max-width:420px">
@@ -1750,6 +1794,7 @@ function getKSTNow() {
 
 let currentUser = null;
 let isAdmin = false;
+let isSuperAdmin = false;
 let currentRole = 'coach';
 let userPermissions = {};
 let currentClubId = null;
@@ -1879,12 +1924,16 @@ async function showApp(user, preloadedRole){
   if(!role){
     const {data:prof, error:pe} = await supa.from('profiles').select('role,club_id').eq('id', user.id).single();
     role = isAdmin ? 'admin' : ((pe || !prof) ? 'coach' : (prof.role || 'coach'));
+    isSuperAdmin = (prof?.role === 'superadmin');
     if(prof?.club_id){
       currentClubId = prof.club_id;
       const {data:club} = await supa.from('clubs').select('name,gps_plan').eq('id', prof.club_id).single();
       if(club){ currentClubName = club.name; }
     }
   }
+  // 슈퍼어드민 탭 표시
+  const saTab = document.getElementById('tab-btn-superadmin');
+  if(saTab) saTab.style.display = isSuperAdmin ? '' : 'none';
   // 클럽명 헤더 표시 (club_id 로드 후)
   if(currentClubName){
     const t = document.getElementById('club-title');
@@ -16576,7 +16625,7 @@ async function loadMatchMax(){
 
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['exercise','players','notify','report','match','cprog'].forEach(id=>{
+  ['exercise','players','notify','report','match','cprog','superadmin'].forEach(id=>{
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
@@ -16585,6 +16634,7 @@ function switchTab(tab,el){
   if(tab==='report'){ loadMorningReport(); loadScheduleCalendar(); }
   if(tab==='match') loadMatchTab();
   if(tab==='exercise') switchExerciseTab('gym');
+  if(tab==='superadmin') loadSuperAdmin();
 }
 
 function switchExerciseTab(sub){
@@ -16667,6 +16717,107 @@ function updateHeaderHeight(){
 }
 window.addEventListener('load', updateHeaderHeight);
 window.addEventListener('resize', updateHeaderHeight);
+
+// ══════════════════════════════════════════════
+// 슈퍼어드민 — 팀 관리
+// ══════════════════════════════════════════════
+async function loadSuperAdmin(){
+  await saLoadClubs();
+}
+
+async function saLoadClubs(){
+  const el = document.getElementById('sa-clubs-list');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text3);font-size:13px">불러오는 중...</div>';
+  const {data:clubs} = await supa.from('clubs').select('*').order('created_at');
+  if(!clubs?.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">등록된 팀 없음</div>'; return; }
+
+  // 팀별 선수 수 조회
+  const counts = {};
+  const {data:players} = await supa.from('player_profiles').select('club_id');
+  (players||[]).forEach(p=>{ if(p.club_id) counts[p.club_id] = (counts[p.club_id]||0)+1; });
+
+  el.innerHTML = clubs.map(c=>`
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:1rem;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:1rem">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${c.name}</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:3px">
+          GPS: <span style="color:var(--accent)">${c.gps_plan||'—'}</span>
+          &nbsp;·&nbsp; 선수: <span style="color:var(--accent)">${counts[c.id]||0}명</span>
+          &nbsp;·&nbsp; ID: <span style="font-size:10px;opacity:.5">${c.id.slice(0,8)}...</span>
+        </div>
+      </div>
+      <button onclick="saDeleteClub('${c.id}','${c.name}')"
+        style="background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">삭제</button>
+    </div>`).join('');
+}
+
+function saShowAddClub(){ document.getElementById('sa-add-club-form').style.display='block'; }
+function saHideAddClub(){ document.getElementById('sa-add-club-form').style.display='none'; }
+
+async function saAddClub(){
+  const name = document.getElementById('sa-club-name').value.trim();
+  const plan = document.getElementById('sa-club-plan').value;
+  const errEl = document.getElementById('sa-club-err');
+  errEl.textContent='';
+  if(!name){ errEl.textContent='팀 이름을 입력하세요.'; return; }
+  const {error} = await supa.from('clubs').insert({name, gps_plan:plan});
+  if(error){ errEl.textContent='오류: '+error.message; return; }
+  document.getElementById('sa-club-name').value='';
+  saHideAddClub();
+  await saLoadClubs();
+}
+
+async function saDeleteClub(id, name){
+  if(!confirm(`"${name}" 팀을 삭제하시겠습니까?\n소속 선수의 club_id가 null이 됩니다.`)) return;
+  await supa.from('clubs').delete().eq('id', id);
+  await saLoadClubs();
+}
+
+async function saSearchCoach(){
+  const email = document.getElementById('sa-coach-email').value.trim();
+  const el = document.getElementById('sa-coach-result');
+  if(!email){ el.innerHTML='<div style="color:#ef4444;font-size:12px">이메일을 입력하세요.</div>'; return; }
+  el.innerHTML='<div style="color:var(--text3);font-size:13px">검색 중...</div>';
+
+  const {data:prof} = await supa.from('profiles').select('id,email,role,club_id').eq('email', email).single();
+  if(!prof){ el.innerHTML='<div style="color:#ef4444;font-size:13px">계정을 찾을 수 없습니다. Supabase Auth에 계정이 있어야 합니다.</div>'; return; }
+
+  const {data:clubs} = await supa.from('clubs').select('id,name').order('name');
+  const clubOptions = (clubs||[]).map(c=>`<option value="${c.id}" ${c.id===prof.club_id?'selected':''}>${c.name}</option>`).join('');
+  const roleOptions = ['superadmin','admin','physical','coach','medical'].map(r=>`<option value="${r}" ${r===prof.role?'selected':''}>${r}</option>`).join('');
+
+  el.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:1rem">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">${prof.email}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">소속 팀</label>
+          <select id="sa-assign-club" style="width:100%;font-size:13px;padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit">
+            <option value="">팀 없음</option>${clubOptions}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">역할</label>
+          <select id="sa-assign-role" style="width:100%;font-size:13px;padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit">
+            ${roleOptions}
+          </select>
+        </div>
+        <button onclick="saSaveCoach('${prof.id}')"
+          style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">저장</button>
+        <div id="sa-coach-save-msg" style="font-size:12px;min-height:16px;text-align:center"></div>
+      </div>
+    </div>`;
+}
+
+async function saSaveCoach(profileId){
+  const clubId = document.getElementById('sa-assign-club').value || null;
+  const role   = document.getElementById('sa-assign-role').value;
+  const msgEl  = document.getElementById('sa-coach-save-msg');
+  const {error} = await supa.from('profiles').update({club_id:clubId, role}).eq('id', profileId);
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='오류: '+error.message; return; }
+  msgEl.style.color='var(--accent)'; msgEl.textContent='✅ 저장 완료';
+}
 </script>
 </body>
 </html>
