@@ -11384,9 +11384,10 @@ function renderGroupPlayerList(){
   active.forEach(g=>{
     const members = sorted.filter(p=>_groupAssignments[p.id]===g.id);
     const masList = members.map(p=>parseFloat(p.mas||0)).filter(Boolean).sort((a,b)=>b-a);
-    const avgMas  = masList.length ? (masList.reduce((s,v)=>s+v,0)/masList.length).toFixed(1) : '—';
+    const avgNum  = masList.length ? masList.reduce((s,v)=>s+v,0)/masList.length : null;
+    const avgMas  = avgNum!==null ? avgNum.toFixed(1) : '—';
     const rangeStr= masList.length>=2 ? `${masList[masList.length-1].toFixed(1)}–${masList[0].toFixed(1)}` : (masList[0]?.toFixed(1)||'—');
-    stats[g.id] = {count:members.length, avgMas, rangeStr};
+    stats[g.id] = {count:members.length, avgMas, avgNum, rangeStr};
   });
   let html = `<div style="display:grid;grid-template-columns:repeat(${active.length},1fr);gap:8px;margin-bottom:12px">`;
   active.forEach(g=>{
@@ -11402,16 +11403,36 @@ function renderGroupPlayerList(){
         <th style="padding:8px 10px;text-align:left;color:var(--text3);font-weight:600">이름</th>
         <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">포지션</th>
         <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">MAS</th>
+        <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">강도 (그룹평균 대비)</th>
         <th style="padding:8px 10px;text-align:center;color:var(--text3);font-weight:600">그룹 배정</th>
       </tr></thead>
       <tbody>`;
   sorted.forEach((p,i)=>{
     const grp  = _groupAssignments[p.id]||active[active.length-1].id;
     const gDef = active.find(g=>g.id===grp)||active[active.length-1];
+    // 그룹 평균 대비 개인 MAS 편차 → 과부하/저부하 판정
+    // MAS > 평균 → 그룹속도가 본인보다 느림 → 저부하 / MAS < 평균 → 과부하(완주 부담 ⚠️)
+    const avgNum = stats[grp]?.avgNum;
+    let devCell = '<span style="color:var(--text3)">—</span>';
+    if(avgNum!==null && avgNum!==undefined){
+      const dev = parseFloat(p.mas) - avgNum;
+      const a = Math.abs(dev);
+      if(a <= 0.25){
+        devCell = `<span style="color:#4ade80;font-weight:600">적정 (${dev>=0?'+':''}${dev.toFixed(1)})</span>`;
+      } else if(dev < 0){
+        // 본인 MAS < 그룹평균 → 과부하
+        const warn = a >= 0.6 ? ' ⚠️' : '';
+        devCell = `<span style="color:#f87171;font-weight:700">과부하 ${dev.toFixed(1)}${warn}</span>`;
+      } else {
+        // 본인 MAS > 그룹평균 → 저부하
+        devCell = `<span style="color:#60a5fa;font-weight:700">저부하 +${dev.toFixed(1)}</span>`;
+      }
+    }
     html += `<tr style="border-top:${i>0?'1px solid var(--border)':'none'}">
       <td style="padding:8px 10px;color:var(--text);font-weight:600">${p.name}</td>
       <td style="padding:8px 10px;text-align:center;color:var(--text3)">${p.position}</td>
       <td style="padding:8px 10px;text-align:center;font-weight:700;color:var(--accent2)">${p.mas}</td>
+      <td style="padding:8px 10px;text-align:center;font-size:11px">${devCell}</td>
       <td style="padding:8px 10px;text-align:center">
         <select onchange="changePlayerGroup('${p.id}',this.value)"
           style="padding:4px 10px;border-radius:6px;border:1px solid ${gDef.border};background:${gDef.bg};color:${gDef.color};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">
