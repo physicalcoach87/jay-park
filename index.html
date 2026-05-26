@@ -6023,6 +6023,7 @@ function clearSchedPlayers(){
 let _weekGridBase = new Date();
 let _weekGridData = [];
 let _weekGridRowCnt = 0;
+let _wgCopiedRow = null;   // 복사된 카드 데이터
 
 function openWeekGridModal(){
   _weekGridBase = new Date(_calBaseDate);
@@ -6031,6 +6032,7 @@ function openWeekGridModal(){
 }
 function closeWeekGridModal(){
   document.getElementById('week-grid-overlay').style.display = 'none';
+  _wgCopiedRow = null;
 }
 function wgNavPrev(){ _weekGridBase.setDate(_weekGridBase.getDate()-7); loadWeekGrid(); }
 function wgNavNext(){ _weekGridBase.setDate(_weekGridBase.getDate()+7); loadWeekGrid(); }
@@ -6079,6 +6081,7 @@ function renderWeekGrid(){
       html += `<div data-rowid="${row.rowId}" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:6px;display:flex;flex-direction:column;gap:3px">
         <div style="display:flex;gap:3px;align-items:center">
           <input type="time" data-field="time" value="${row.time}" style="${IS};flex:1">
+          <button onclick="wgCopyRow('${row.rowId}')" title="복사" style="flex-shrink:0;background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;padding:0 2px;line-height:1">📋</button>
           <button onclick="deleteGridRow('${row.rowId}')" style="flex-shrink:0;background:none;border:none;color:#ef4444;cursor:pointer;font-size:13px;padding:0 2px;line-height:1">✕</button>
         </div>
         <select data-field="type" style="${IS}">${selHtml(typeOpts,row.type)}</select>
@@ -6088,7 +6091,11 @@ function renderWeekGrid(){
       </div>`;
     });
     html += `</div>`;
+    const pasteBtn = _wgCopiedRow
+      ? `<button onclick="wgPasteRow('${ds}')" style="width:100%;padding:5px;font-size:11px;border:1px solid #3b82f6;background:rgba(59,130,246,0.1);color:#93c5fd;border-radius:5px;cursor:pointer;font-family:inherit;margin-bottom:4px">📋 붙여넣기</button>`
+      : '';
     html += `<div style="padding:0 6px 6px">
+      ${pasteBtn}
       <button onclick="addGridRow('${ds}')" style="width:100%;padding:5px;font-size:11px;border:1px dashed var(--border2);background:transparent;color:var(--text3);border-radius:5px;cursor:pointer;font-family:inherit">+ 추가</button>
     </div></div>`;
   }
@@ -6096,42 +6103,20 @@ function renderWeekGrid(){
 }
 
 function addGridRow(date){
-  // 현재 DOM에 입력된 값을 _weekGridData에 먼저 동기화
-  const container = document.getElementById('week-grid-content');
-  if(container){
-    _weekGridData.filter(r=>!r._del).forEach(row=>{
-      const el = container.querySelector('[data-rowid="'+row.rowId+'"]');
-      if(!el) return;
-      row.time  = el.querySelector('[data-field="time"]').value;
-      row.type  = el.querySelector('[data-field="type"]').value;
-      row.md    = el.querySelector('[data-field="md"]').value;
-      row.title = el.querySelector('[data-field="title"]').value.trim();
-      row.team  = el.querySelector('[data-field="team"]').value;
-    });
-  }
+  _wgSyncDom();
   _weekGridRowCnt++;
   _weekGridData.push({rowId:'new_'+_weekGridRowCnt,id:null,date,time:'',type:'TRAINING',md:'',title:'',team:'ALL',_del:false});
   renderWeekGrid();
 }
 function deleteGridRow(rowId){
-  // 현재 DOM에 입력된 값을 _weekGridData에 먼저 동기화
-  const container = document.getElementById('week-grid-content');
-  if(container){
-    _weekGridData.filter(r=>!r._del).forEach(row=>{
-      const el = container.querySelector('[data-rowid="'+row.rowId+'"]');
-      if(!el) return;
-      row.time  = el.querySelector('[data-field="time"]').value;
-      row.type  = el.querySelector('[data-field="type"]').value;
-      row.md    = el.querySelector('[data-field="md"]').value;
-      row.title = el.querySelector('[data-field="title"]').value.trim();
-      row.team  = el.querySelector('[data-field="team"]').value;
-    });
-  }
+  _wgSyncDom();
   const row = _weekGridData.find(r=>r.rowId===rowId);
   if(row){ row._del=true; renderWeekGrid(); }
 }
-async function saveWeekGrid(){
+
+function _wgSyncDom(){
   const container = document.getElementById('week-grid-content');
+  if(!container) return;
   _weekGridData.filter(r=>!r._del).forEach(row=>{
     const el = container.querySelector('[data-rowid="'+row.rowId+'"]');
     if(!el) return;
@@ -6141,6 +6126,34 @@ async function saveWeekGrid(){
     row.title = el.querySelector('[data-field="title"]').value.trim();
     row.team  = el.querySelector('[data-field="team"]').value;
   });
+}
+function wgCopyRow(rowId){
+  _wgSyncDom();
+  const row = _weekGridData.find(r=>r.rowId===rowId&&!r._del);
+  if(!row) return;
+  _wgCopiedRow = { time:row.time, type:row.type, md:row.md, title:row.title, team:row.team };
+  // 복사 완료 토스트
+  const t = document.createElement('div');
+  t.style.cssText='position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1e3a5f;border:1px solid #3b82f6;border-radius:10px;padding:10px 18px;z-index:99999;color:#93c5fd;font-size:13px;font-weight:600;pointer-events:none;white-space:nowrap;transition:opacity .3s';
+  t.textContent = '📋 복사됨 — 다른 날에 붙여넣기 버튼을 눌러주세요';
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.style.opacity='0'; setTimeout(()=>t.remove(),400); }, 2500);
+  renderWeekGrid();
+}
+function wgPasteRow(date){
+  if(!_wgCopiedRow) return;
+  _wgSyncDom();
+  _weekGridRowCnt++;
+  _weekGridData.push({
+    rowId:'new_'+_weekGridRowCnt, id:null, date,
+    time:_wgCopiedRow.time, type:_wgCopiedRow.type,
+    md:_wgCopiedRow.md, title:_wgCopiedRow.title,
+    team:_wgCopiedRow.team, _del:false
+  });
+  renderWeekGrid();
+}
+async function saveWeekGrid(){
+  _wgSyncDom();
   const toDel = _weekGridData.filter(r=>r._del&&r.id);
   const toIns = _weekGridData.filter(r=>!r._del&&!r.id);
   const toUpd = _weekGridData.filter(r=>!r._del&&r.id);
