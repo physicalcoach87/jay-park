@@ -1264,6 +1264,13 @@ async function loadTraining(){
     const c=p>=80?'#22c55e':p>=60?'#eab308':'#ef4444';
     return ` <span style="font-size:9px;color:${c}">${p}%</span>`;
   };
+  // 2주 테이블용: % 를 아랫줄에 블록으로 표시
+  const pctB=(val,ref)=>{
+    if(!val||!ref) return '';
+    const p=Math.round(val/ref*100);
+    const c=p>=80?'#22c55e':p>=60?'#eab308':'#ef4444';
+    return `<div style="font-size:9px;color:${c};line-height:1.2">${p}%</div>`;
+  };
 
   // 이번주 경기 데이터 맵
   const weekMatchByDate={};
@@ -1405,6 +1412,8 @@ async function loadTraining(){
     const dateCell=`<td style="padding:5px 8px"><span style="color:${dc}">${DOW[d.getDay()]} ${d.getDate()}</span>${isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':''}${typeTag}</td>`;
     const acwr=calcDayACWR(ds);
 
+    const td2=(v,cl,ref)=>`<td style="padding:4px 3px;text-align:right;vertical-align:middle"><div style="color:${cl};font-size:11px;font-weight:500">${v||'—'}</div>${v?pctB(parseFloat(v),ref):''}</td>`;
+
     // 경기 날 → match_records 데이터 표시
     if(hasMatch){
       const tdV=matchAvg(dayMatch,'td');
@@ -1415,11 +1424,11 @@ async function loadTraining(){
       if(spV) t14SP+=spV;
       return `<tr${isT?' class="today-row"':''} style="border-bottom:.5px solid var(--border);background:#1a0505">
         ${dateCell}
-        <td style="padding:5px 6px;text-align:right;color:#60a5fa;font-size:11px">${tdV?(tdV/1000).toFixed(1)+pct(tdV,matchRef.td):'—'}</td>
-        <td style="padding:5px 6px;text-align:right;color:#f59e0b;font-size:11px">${hsrV?Math.round(hsrV)+pct(hsrV,matchRef.hsr):'—'}</td>
-        <td style="padding:5px 6px;text-align:right;color:#ef4444;font-size:11px">${spV?Math.round(spV)+pct(spV,matchRef.sp):'—'}</td>
-        <td style="padding:5px 6px;text-align:right;color:#a78bfa;font-size:11px">—</td>
-        <td style="padding:5px 6px;text-align:right;font-size:10px;color:${acwrColor(acwr)};font-weight:500">${acwr?acwr.toFixed(2):'—'}</td>
+        ${td2(tdV?(tdV/1000).toFixed(1):null,'#60a5fa',matchRef.td)}
+        ${td2(hsrV?Math.round(hsrV):null,'#f59e0b',matchRef.hsr)}
+        ${td2(spV?Math.round(spV):null,'#ef4444',matchRef.sp)}
+        <td style="padding:4px 3px;text-align:right;color:#a78bfa;font-size:11px">—</td>
+        <td style="padding:4px 3px;text-align:right;font-size:10px;color:${acwrColor(acwr)};font-weight:500">${acwr?acwr.toFixed(2):'—'}</td>
       </tr>`;
     }
 
@@ -1439,11 +1448,11 @@ async function loadTraining(){
     if(sRPE) t14SRPE+=sRPE;
     return `<tr${isT?' class="today-row"':''} style="border-bottom:.5px solid var(--border)">
       ${dateCell}
-      <td style="padding:5px 6px;text-align:right;color:#60a5fa;font-size:11px">${tdV?(tdV/1000).toFixed(1)+pct(tdV,matchRef.td):'—'}</td>
-      <td style="padding:5px 6px;text-align:right;color:#f59e0b;font-size:11px">${hsrV?Math.round(hsrV)+pct(hsrV,matchRef.hsr):'—'}</td>
-      <td style="padding:5px 6px;text-align:right;color:#ef4444;font-size:11px">${spV?Math.round(spV)+pct(spV,matchRef.sp):'—'}</td>
-      <td style="padding:5px 6px;text-align:right;color:#a78bfa;font-size:11px">${sRPE||'—'}</td>
-      <td style="padding:5px 6px;text-align:right;font-size:10px;color:${acwrColor(acwr)};font-weight:500">${acwr?acwr.toFixed(2):'—'}</td>
+      ${td2(tdV?(tdV/1000).toFixed(1):null,'#60a5fa',matchRef.td)}
+      ${td2(hsrV?Math.round(hsrV):null,'#f59e0b',matchRef.hsr)}
+      ${td2(spV?Math.round(spV):null,'#ef4444',matchRef.sp)}
+      <td style="padding:4px 3px;text-align:right;color:#a78bfa;font-size:11px">${sRPE||'—'}</td>
+      <td style="padding:4px 3px;text-align:right;font-size:10px;color:${acwrColor(acwr)};font-weight:500">${acwr?acwr.toFixed(2):'—'}</td>
     </tr>`;
   }).join('');
 
@@ -1484,14 +1493,23 @@ async function loadTraining(){
     <!-- 2주 날짜별 테이블 -->
     <div class="card" style="padding:12px 0">
       <div style="overflow-x:auto;padding:0 8px">
-        <table class="data-table"><thead><tr>
-          <th>날짜</th>
-          <th style="color:#60a5fa">TD<br><span style="font-size:9px">(km)</span></th>
-          <th style="color:#f59e0b">HSR<br><span style="font-size:9px">(m)</span></th>
-          <th style="color:#ef4444">Sprint<br><span style="font-size:9px">(m)</span></th>
-          <th style="color:#a78bfa">sRPE</th>
-          <th>ACWR</th>
-        </tr></thead><tbody>${rows14}</tbody></table>
+        <table class="data-table" style="width:100%;table-layout:fixed">
+          <colgroup>
+            <col style="width:68px">
+            <col style="width:52px">
+            <col style="width:52px">
+            <col style="width:52px">
+            <col style="width:42px">
+            <col style="width:42px">
+          </colgroup>
+          <thead><tr>
+            <th>날짜</th>
+            <th style="color:#60a5fa">TD<br><span style="font-size:9px">(km)</span></th>
+            <th style="color:#f59e0b">HSR<br><span style="font-size:9px">(m)</span></th>
+            <th style="color:#ef4444">Sprint<br><span style="font-size:9px">(m)</span></th>
+            <th style="color:#a78bfa">sRPE</th>
+            <th>ACWR</th>
+          </tr></thead><tbody>${rows14}</tbody></table>
       </div>
       ${ref3Html}
     </div>
