@@ -947,6 +947,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button id="gcnt-2" onclick="setGroupCount(2)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">2그룹</button>
       <button id="gcnt-3" onclick="setGroupCount(3)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">3그룹</button>
       <button id="gcnt-4" onclick="setGroupCount(4)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">4그룹</button>
+      <button id="gcnt-5" onclick="setGroupCount(5)" style="padding:5px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">5그룹</button>
     </div>
     <div id="group-player-list"></div>
   </div>
@@ -11276,12 +11277,13 @@ const GROUP_DEFS = [
   {id:'B', label:'B그룹', color:'#60a5fa', border:'#1d4ed8', bg:'#0d1f3c'},
   {id:'C', label:'C그룹', color:'#fb923c', border:'#c2410c', bg:'#1c0a03'},
   {id:'D', label:'D그룹', color:'#f87171', border:'#991b1b', bg:'#1f0808'},
+  {id:'E', label:'E그룹', color:'#e879f9', border:'#86198f', bg:'#1a0320'},
 ];
 function activeGroupDefs(){ return GROUP_DEFS.slice(0, _groupCount); }
 
 function setGroupCount(n){
   _groupCount = n;
-  [2,3,4].forEach(k=>{
+  [2,3,4,5].forEach(k=>{
     const btn = document.getElementById('gcnt-'+k);
     if(!btn) return;
     const on = k===n;
