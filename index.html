@@ -11327,27 +11327,30 @@ function computeGroupAssignments(){
   const last   = ids[ids.length-1];
   const sorted = _players.filter(p=>parseFloat(p.mas)>0)
     .sort((a,b)=>parseFloat(b.mas)-parseFloat(a.mas));
-  const n = sorted.length;
+  const n = sorted.length, k = _groupCount;
 
   if(n > 0){
-    if(n <= _groupCount){
-      // 선수 수 ≤ 그룹 수: 1명씩 순서대로 배정
-      sorted.forEach((p,i)=>{ _groupAssignments[p.id] = ids[Math.min(i, ids.length-1)]; });
+    if(n <= k){
+      // 선수 수 ≤ 그룹 수: 1명씩 배정
+      sorted.forEach((p,i)=>{ _groupAssignments[p.id]=ids[Math.min(i,ids.length-1)]; });
     } else {
-      // 자연 분기점(Natural Breaks): MAS 간격이 가장 큰 곳에서 그룹 경계 설정
-      const gaps = [];
-      for(let i=0;i<n-1;i++){
-        gaps.push({ gap: parseFloat(sorted[i].mas)-parseFloat(sorted[i+1].mas), at: i+1 });
-      }
-      // 그룹 수-1 개의 경계를 가장 큰 간격 위치에 배치
-      const boundaries = gaps
-        .sort((a,b)=>b.gap-a.gap)
-        .slice(0, _groupCount-1)
-        .map(g=>g.at)
-        .sort((a,b)=>a-b);
-      let gi = 0;
+      // 그룹 내 최대 MAS 편차가 최소가 되는 경계 탐색 (exhaustive search)
+      // 30명 × 4그룹 기준 최대 C(29,3)=3654 조합 → JS에서 즉시 처리
+      const mv  = sorted.map(p=>parseFloat(p.mas));          // 내림차순 MAS 배열
+      const rng = (s,e) => mv[s] - mv[e-1];                  // 그룹[s..e) 내 편차
+      let bestScore = Infinity, bestBounds = [];
+      const search = (from, rem, cur) => {
+        if(rem === 0){
+          const pts = [0, ...cur, n];
+          const score = Math.max(...pts.slice(1).map((b,i)=>rng(pts[i],b)));
+          if(score < bestScore){ bestScore=score; bestBounds=[...cur]; }
+          return;
+        }
+        for(let b=from+1; b<=n-rem; b++) search(b, rem-1, [...cur,b]);
+      };
+      search(0, k-1, []);
       sorted.forEach((p,i)=>{
-        if(boundaries.length && i === boundaries[0]){ gi++; boundaries.shift(); }
+        const gi = bestBounds.filter(b=>i>=b).length;
         _groupAssignments[p.id] = ids[Math.min(gi, ids.length-1)];
       });
     }
