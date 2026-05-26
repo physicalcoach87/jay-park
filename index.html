@@ -777,7 +777,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <!-- ── 훈련 mpm ── -->
       <div class="coaching-box" style="margin-bottom:1rem">
         <p><strong style="color:var(--accent2)">🏃 훈련 mpm</strong> — 파일명: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">YYYY-MM-DD-AM_mpm.csv</code> / <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">YYYY-MM-DD-PM_mpm.csv</code><br>
-        컬럼: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">이름 / 분 / 분당이동거리</code></p>
+        컬럼: <code style="background:var(--surface2);padding:1px 5px;border-radius:3px">이름 / 분 (또는 시간) / 분당이동거리</code></p>
       </div>
       <div id="train-minute-drop-zone" style="border:2px dashed var(--border2);border-radius:12px;padding:2rem;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:1rem"
         onclick="document.getElementById('train-minute-file-input').click()"
@@ -15941,8 +15941,9 @@ async function parseTrainMinuteFile(file){
   const header = raw[0].map(h => (h||'').toString().trim());
   const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
 
-  // 새 형식 감지: 이름 / 분 / 분당이동거리
-  const isNewFormat = ci('이름')>=0 && ci('분')>=0 && ci('분당이동거리')>=0;
+  // 새 형식 감지: 이름 / (분 or 시간) / 분당이동거리
+  const hasTimeCol = ci('시간')>=0;  // HH:MM:SS 형식
+  const isNewFormat = ci('이름')>=0 && (ci('분')>=0 || hasTimeCol) && ci('분당이동거리')>=0;
 
   if(!isNewFormat){
     const COL = {
@@ -15971,12 +15972,21 @@ async function parseTrainMinuteFile(file){
   let invalidTime = 0;
 
   if(isNewFormat){
-    // 새 형식: 이름(한국어) / 분(정수) / 분당이동거리
-    const colName = ci('이름'), colMin = ci('분'), colMpm = ci('분당이동거리');
+    // 새 형식: 이름(한국어) / 분(정수) or 시간(HH:MM:SS) / 분당이동거리
+    const colName = ci('이름'), colMin = ci('분'), colTime = ci('시간'), colMpm = ci('분당이동거리');
     for(const row of raw.slice(1)){
       const name = row[colName] ? String(row[colName]).trim() : null;
       if(!name) continue;
-      const minute = parseInt(row[colMin]);
+      // 분(정수) 또는 시간(HH:MM:SS) → 분 변환
+      let minute;
+      if(colMin>=0){
+        minute = parseInt(row[colMin]);
+      } else {
+        // HH:MM:SS → 분 (00:05:30 → 5)
+        const t = String(row[colTime]||'').trim();
+        const parts = t.split(':');
+        minute = parts.length>=2 ? parseInt(parts[0])*60+parseInt(parts[1]) : NaN;
+      }
       const mpm = parseFloat(row[colMpm]);
       if(isNaN(minute) || isNaN(mpm)) continue;
       const pid = nameMap[name] || null;
