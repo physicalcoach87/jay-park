@@ -11533,10 +11533,11 @@ async function generateGroupCardio(){
       const ints = perSetIntensities.length===sets ? perSetIntensities : Array(sets).fill(intensity);
       const dists = ints.map(i=>g.avgMas ? calcDist(+(g.avgMas*i/100).toFixed(1), sec) : null);
       m.structure = `${sets}세트 × ${workMin}min`;
-      // 카드용: 세트별 강도가 같으면 1개 값, 다르면 최소~최대 범위
+      // 카드용: 세트별 강도가 같으면 단일값, 다르면 배열로 저장
       const validDists = dists.filter(Boolean);
       const allSame = validDists.every(d=>d===validDists[0]);
-      m.distPerRep = validDists.length ? (allSame ? `${validDists[0]} m` : `${Math.min(...validDists)}–${Math.max(...validDists)} m`) : '—';
+      m.distPerRep    = validDists.length ? (allSame ? `${validDists[0]} m` : null) : '—';
+      m.distPerRepArr = (!allSame && validDists.length) ? validDists : null;
       m.totalWork = `${sets*workMin} min`;
       m.setRest   = `${restMin} min`;
       m.totalDist = validDists.length ? `${validDists.reduce((a,b)=>a+b,0).toLocaleString()} m` : '—';
@@ -11607,9 +11608,12 @@ async function generateGroupCardio(){
 
     // 스탯 행
     let statHtml = '';
-    if(useThreeStat && m.distPerRep){
+    if(useThreeStat && (m.distPerRep || m.distPerRepArr)){
+      const distCell = m.distPerRepArr
+        ? `<div style="font-size:11px;font-weight:700;line-height:1.6">${m.distPerRepArr.map((d,i)=>`<span style="display:block">Set${i+1}: ${d} m</span>`).join('')}</div>`
+        : `<div style="font-size:13px;font-weight:700">${m.distPerRep}</div>`;
       statHtml = `
-        <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.distPerRep}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">${stat1Label}</div></div>
+        <div style="text-align:center">${distCell}<div style="font-size:9px;color:#9ca3af;margin-top:1px">${stat1Label}</div></div>
         <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.totalWork||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 Work</div></div>
         <div style="text-align:center"><div style="font-size:13px;font-weight:700;color:${pc.tc}">${m.totalDist||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 거리</div></div>`;
     } else {
