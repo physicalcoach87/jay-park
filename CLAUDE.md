@@ -30,17 +30,36 @@
 
 ### 배포
 ```
-코치 앱: https://physicalcoach87.github.io/jay-park
-선수 앱: https://physicalcoach87.github.io/ipark-player
-GitHub:  physicalcoach87/jay-park (index.html 단일 파일, ~7,500줄)
-Supabase: https://gmrhkbddhzpfqzkhuvgf.supabase.co
-anon key: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI
+코치 웹앱:    https://physicalcoach87.github.io/jay-park
+코치 모바일:  https://physicalcoach87.github.io/jay-park/coach-mobile/
+선수 앱:      https://physicalcoach87.github.io/ipark-player
+GitHub:       physicalcoach87/jay-park
+Supabase:     https://gmrhkbddhzpfqzkhuvgf.supabase.co
+anon key:     eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI
 ```
 
 ### 파일 구조
+```
+jay-park/
+├── index.html            ← 코치 웹앱 (단일 파일, ~17,000줄)
+└── coach-mobile/
+    └── index.html        ← 코치 모바일앱 (단일 파일, ~1,750줄)
+```
 - 모든 CSS/JS 인라인 — 단일 HTML 파일
 - Supabase JS CDN 사용
 - GitHub Pages로 자동 배포
+
+### 코치 모바일앱 탭 구조 (coach-mobile/index.html)
+```
+🏠 홈       오늘 일정 카드 슬라이드 + 팀 현황 요약 + pull-to-refresh
+💚 웰니스   선수별 웰니스 응답 현황 테이블
+💢 RPE      선수별 RPE 입력 현황
+🏃 훈련     훈련 GPS 요약
+💬 알림     공지 발송 / 1:1 채팅 목록
+```
+- 바텀 탭 네비게이션, PWA(홈화면 추가) 지원
+- pull-to-refresh, 카드 캐러셀 방식 일정 표시
+- 주간 일정 입력 모달 (week-input overlay) 포함
 
 ---
 
