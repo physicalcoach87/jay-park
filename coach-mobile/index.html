@@ -1406,15 +1406,18 @@ async function loadTraining(){
     const acwr=calcDayACWR(ds);
 
     // display: 화면에 표시할 문자열, raw: 단위 원시값(m), ref: 기준값(m)
+    // "/" 위치를 열 중앙에 고정: [값 우정렬 | / | % 좌정렬]
     const td2=(display,raw,cl,ref)=>{
       const p=raw&&ref?Math.round(raw/ref*100):null;
       const pc=p!==null?(p>=80?'#22c55e':p>=60?'#eab308':'#ef4444'):null;
-      const txt=display
-        ?(pc!==null
-          ?`<span style="color:${cl};font-size:10px;font-weight:600">${display}</span><span style="color:var(--text3);font-size:9px"> / </span><span style="font-size:9px;color:${pc}">${p}%</span>`
-          :`<span style="color:${cl};font-size:10px;font-weight:600">${display}</span>`)
-        :'<span style="color:var(--text3)">—</span>';
-      return `<td style="padding:4px 3px;text-align:right;vertical-align:middle;white-space:nowrap">${txt}</td>`;
+      if(!display) return `<td style="padding:4px 3px;text-align:center;color:var(--text3)">—</td>`;
+      return `<td style="padding:4px 2px;vertical-align:middle">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:1px">
+          <span style="text-align:right;color:${cl};font-size:10px;font-weight:600">${display}</span>
+          <span style="color:var(--text3);font-size:9px;padding:0 2px">${pc!==null?'/':''}</span>
+          <span style="text-align:left;font-size:9px;color:${pc||'transparent'}">${pc!==null?p+'%':''}</span>
+        </div>
+      </td>`;
     };
 
     // 경기 날 → match_records 데이터 표시
@@ -1496,7 +1499,15 @@ async function loadTraining(){
     <!-- 2주 날짜별 테이블 -->
     <div class="card" style="padding:12px 0">
       <div style="overflow-x:auto;padding:0 8px">
-        <table class="data-table" style="min-width:340px">
+        <table class="data-table" style="width:100%;table-layout:fixed">
+          <colgroup>
+            <col style="width:64px">
+            <col style="width:72px">
+            <col style="width:72px">
+            <col style="width:72px">
+            <col style="width:40px">
+            <col style="width:38px">
+          </colgroup>
           <thead><tr>
             <th>날짜</th>
             <th style="color:#60a5fa">TD<br><span style="font-size:9px">(km)</span></th>
