@@ -799,6 +799,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div id="train-minute-upload-msg" style="font-size:12px;margin-top:8px;min-height:16px;color:var(--text3)"></div>
       </div>
       <div id="train-minute-upload-msg-top" style="font-size:12px;margin-top:4px;min-height:16px;color:var(--text3)"></div>
+      <div id="train-minute-wcs-output"></div>
       <div style="margin-top:1.2rem">
         <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏃 업로드된 훈련 mpm</div>
         <div id="train-minute-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
@@ -13607,6 +13608,31 @@ function renderP8Detail(idx){
     </div>`;
 }
 
+// ── WCS (Worst Case Scenario) 유틸 ────────────────────────
+// minuteArr: [{m: 분, v: mpm}, ...]  정렬 필요 없음
+function computeWCS(minuteArr){
+  if(!minuteArr||!minuteArr.length) return null;
+  const sorted = [...minuteArr].sort((a,b)=>a.m-b.m);
+  const mpms = sorted.map(r=>r.v||0);
+  function rollingPeak(n){
+    if(mpms.length<n) return mpms.reduce((s,v)=>s+v,0)/mpms.length;
+    let best=0;
+    for(let i=0;i<=mpms.length-n;i++){
+      const avg=mpms.slice(i,i+n).reduce((s,v)=>s+v,0)/n;
+      if(avg>best) best=avg;
+    }
+    return best;
+  }
+  return {
+    peak1:  Math.round(rollingPeak(1)),
+    peak5:  Math.round(rollingPeak(5)),
+    peak10: Math.round(rollingPeak(10)),
+    timeOver150: mpms.filter(v=>v>150).length,
+    timeOver130: mpms.filter(v=>v>130).length,
+    timeOver110: mpms.filter(v=>v>110).length,
+  };
+}
+
 async function generateMatchReport(){
   const sel=document.getElementById('report-match-sel');
   const out=document.getElementById('match-report-output');
@@ -14746,6 +14772,101 @@ async function generateMatchReport(){
         🔴 후반 낙폭 ≤ −15% → 다음 경기 로테이션 후보 / 🟠 −10~−15% → MD+1 비하중 회복
         · 5분 peak (PIP) → 경기 내 최대 강도 노출 확인 (개인 컨디셔닝 타깃 설정)
         · sparkline → 교체 타이밍 패턴 시각 확인
+      </div>
+    `);
+  })()}
+
+  ${(()=>{
+    // ── § 9: WCS (Worst Case Scenario) 경기 피크 강도 분석 ──────────────
+    if(!minuteRows||!minuteRows.length) return '';
+
+    // 선수별 WCS 계산
+    const wcsMap = {};
+    minuteRows.forEach(r=>{
+      const key = r.player_id||r.player_name; if(!key) return;
+      const m=parseInt(r.minute,10), v=parseFloat(r.mpm);
+      if(isNaN(m)||isNaN(v)) return;
+      if(!wcsMap[key]) wcsMap[key]={pid:r.player_id,name:r.player_name,rows:[]};
+      wcsMap[key].rows.push({m,v});
+    });
+    const pidName9={};
+    (_players||[]).forEach(p=>{ pidName9[p.id]={name:p.name,pos:p.position}; });
+
+    const entries = Object.values(wcsMap).map(p=>{
+      const meta9 = pidName9[p.pid]||{name:p.name||'—',pos:''};
+      const wcs = computeWCS(p.rows);
+      return {name:meta9.name, pos:meta9.pos, wcs};
+    }).filter(e=>e.wcs).sort((a,b)=>(b.wcs.peak5||0)-(a.wcs.peak5||0));
+
+    // 팀 WCS (분별 팀 평균으로 계산)
+    const teamByMin={};
+    minuteRows.forEach(r=>{
+      const m=parseInt(r.minute,10),v=parseFloat(r.mpm);
+      if(isNaN(m)||isNaN(v)) return;
+      (teamByMin[m]=teamByMin[m]||[]).push(v);
+    });
+    const teamMins=Object.keys(teamByMin).map(x=>parseInt(x,10)).sort((a,b)=>a-b);
+    const teamAvgArr=teamMins.map(m=>({m,v:teamByMin[m].reduce((s,v)=>s+v,0)/teamByMin[m].length}));
+    const teamWCS = computeWCS(teamAvgArr);
+
+    // 전체 최대값 (강조용)
+    const allPeak5 = entries.map(e=>e.wcs.peak5);
+    const maxPeak5 = allPeak5.length?Math.max(...allPeak5):0;
+
+    // WCS 캐시 저장 (훈련 비교용)
+    window._matchWCSCache = {};
+    entries.forEach(e=>{ window._matchWCSCache[e.name]=e.wcs; });
+
+    const wcsCell=(v,suffix,max)=>{
+      if(v==null||isNaN(v)) return `<span style="color:var(--text3)">—</span>`;
+      const isTop = max&&v>=max;
+      return `<span style="font-weight:${isTop?'800':'600'};color:${isTop?'#fbbf24':'var(--text)'}">${v}${suffix}</span>`;
+    };
+
+    return pageBreakCard(`
+      ${secHead('⚡','경기 피크 강도 분석 (WCS)','Peak Rolling 윈도우 · 강도대 체류시간 · FT 선수 기준')}
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+        <strong style="color:var(--text2)">WCS란?</strong>
+        평균이 아닌 <strong>경기 내 최고 강도 구간</strong>을 측정합니다.
+        Peak N분 = N분 롤링 윈도우 내 최대 평균 mpm · <span style="color:#fbbf24">🏆 팀 내 최고값</span>
+      </div>
+      <div style="overflow-x:auto;margin-bottom:12px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:640px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:#fbbf24">Peak 1분</th>
+            <th style="padding:6px 8px;text-align:right;color:#fb923c">Peak 5분</th>
+            <th style="padding:6px 8px;text-align:right;color:#f87171">Peak 10분</th>
+            <th style="padding:6px 8px;text-align:right;color:#a78bfa">&gt;150 m/min</th>
+            <th style="padding:6px 8px;text-align:right;color:#60a5fa">&gt;130 m/min</th>
+            <th style="padding:6px 8px;text-align:right;color:#4ade80">&gt;110 m/min</th>
+          </tr></thead>
+          <tbody>
+            ${entries.map(e=>`<tr style="border-bottom:1px solid var(--border)">
+              <td style="padding:6px 8px"><div style="font-weight:600;color:var(--text)">${e.name}</div><div style="font-size:10px;color:var(--text3)">${e.pos||''}</div></td>
+              <td style="padding:6px 8px;text-align:right">${wcsCell(e.wcs.peak1,' m/min',null)}</td>
+              <td style="padding:6px 8px;text-align:right">${wcsCell(e.wcs.peak5,' m/min',maxPeak5)}</td>
+              <td style="padding:6px 8px;text-align:right">${wcsCell(e.wcs.peak10,' m/min',null)}</td>
+              <td style="padding:6px 8px;text-align:right">${wcsCell(e.wcs.timeOver150,'분',null)}</td>
+              <td style="padding:6px 8px;text-align:right">${wcsCell(e.wcs.timeOver130,'분',null)}</td>
+              <td style="padding:6px 8px;text-align:right">${wcsCell(e.wcs.timeOver110,'분',null)}</td>
+            </tr>`).join('')}
+            ${teamWCS?`<tr style="background:#0d1b2a;border-top:2px solid var(--border2)">
+              <td style="padding:6px 8px;font-weight:700;color:#60a5fa">팀 평균</td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${teamWCS.peak1} m/min</td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${teamWCS.peak5} m/min</td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${teamWCS.peak10} m/min</td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${teamWCS.timeOver150}분</td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${teamWCS.timeOver130}분</td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${teamWCS.timeOver110}분</td>
+            </tr>`:''}
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3);line-height:1.6">
+        <strong style="color:var(--text2)">훈련 처방 활용:</strong>
+        Peak 5분 mpm = 경기에서 가장 강도 높은 5분 구간 → 훈련에서 이 값의 90% 이상 복제 목표
+        · &gt;150 m/min 체류시간 = 고속 질주 노출 빈도 → 인터벌 처방의 목표 강도 기준
       </div>
     `);
   })()}
@@ -16101,6 +16222,8 @@ async function saveTrainMinuteData(){
   }
 
   const savedCount = rows.length;
+  const savedRows = [...rows]; // WCS 계산용 복사본
+  const savedDate = meta.date;
   _trainMinuteParseData = null;
   document.getElementById('train-minute-upload-preview').style.display = 'none';
   document.getElementById('train-minute-drop-zone').style.display = 'block';
@@ -16118,6 +16241,9 @@ async function saveTrainMinuteData(){
     dz.parentNode.insertBefore(toast, dz);
     setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 3500);
   }
+
+  // WCS 분석 표시 (경기 baseline 비교)
+  showTrainingWCS(savedDate, savedRows);
 }
 
 function cancelTrainMinuteUpload(){
@@ -16127,6 +16253,128 @@ function cancelTrainMinuteUpload(){
   document.getElementById('train-minute-file-input').value = '';
   const msg = document.getElementById('train-minute-upload-msg');
   if(msg) msg.innerHTML = '';
+}
+
+async function showTrainingWCS(sessionDate, rows){
+  const el = document.getElementById('train-minute-wcs-output');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text3);font-size:12px;padding:8px 0">⚡ WCS 분석 중...</div>';
+
+  // 선수별 그룹핑
+  const byPlayer = {};
+  rows.forEach(r=>{
+    const key = r.player_name || r.player_id; if(!key) return;
+    const m=parseInt(r.minute,10), v=parseFloat(r.mpm);
+    if(isNaN(m)||isNaN(v)) return;
+    if(!byPlayer[key]) byPlayer[key]={name:r.player_name||String(r.player_id), rows:[]};
+    byPlayer[key].rows.push({m,v});
+  });
+
+  // 훈련 WCS 계산
+  const trainWCS = {};
+  Object.entries(byPlayer).forEach(([key,p])=>{
+    const wcs = computeWCS(p.rows);
+    if(wcs) trainWCS[p.name] = wcs;
+  });
+
+  // 경기 baseline: 최근 5경기 match_minute_records
+  let matchBaseline = {};
+  try{
+    const {data: recentMpm} = await supa.from('match_minute_records')
+      .select('player_name,player_id,minute,mpm,match_date,opponent')
+      .lte('match_date', sessionDate)
+      .order('match_date',{ascending:false})
+      .limit(3000);
+
+    if(recentMpm?.length){
+      // 경기별로 그룹핑 (최근 5경기만)
+      const matchKeys = [...new Set(recentMpm.map(r=>`${r.match_date}__${r.opponent}`))].slice(0,5);
+      const recentRows = recentMpm.filter(r=>matchKeys.includes(`${r.match_date}__${r.opponent}`));
+
+      // 선수별 경기별 WCS → 경기 최대값을 baseline으로
+      const byNameMatch = {};
+      recentRows.forEach(r=>{
+        const name = r.player_name; if(!name) return;
+        const matchKey = `${r.match_date}__${r.opponent}`;
+        const m=parseInt(r.minute,10), v=parseFloat(r.mpm);
+        if(isNaN(m)||isNaN(v)) return;
+        if(!byNameMatch[name]) byNameMatch[name]={};
+        if(!byNameMatch[name][matchKey]) byNameMatch[name][matchKey]=[];
+        byNameMatch[name][matchKey].push({m,v});
+      });
+
+      Object.entries(byNameMatch).forEach(([name, matches])=>{
+        const best={peak1:0,peak5:0,peak10:0,timeOver150:0,timeOver130:0,timeOver110:0};
+        Object.values(matches).forEach(mrows=>{
+          const w=computeWCS(mrows); if(!w) return;
+          best.peak1    =Math.max(best.peak1,    w.peak1);
+          best.peak5    =Math.max(best.peak5,    w.peak5);
+          best.peak10   =Math.max(best.peak10,   w.peak10);
+          best.timeOver150=Math.max(best.timeOver150,w.timeOver150);
+          best.timeOver130=Math.max(best.timeOver130,w.timeOver130);
+          best.timeOver110=Math.max(best.timeOver110,w.timeOver110);
+        });
+        matchBaseline[name] = best;
+      });
+    }
+  }catch(e){ console.warn('WCS baseline 조회 실패', e); }
+
+  const playerNames = Object.keys(trainWCS).sort();
+  if(!playerNames.length){ el.innerHTML=''; return; }
+
+  const hasBaseline = Object.keys(matchBaseline).length > 0;
+
+  const ratioColor = r => r>=90?'#4ade80':r>=70?'#eab308':'#ef4444';
+  const cell = (trainVal, baseVal, suffix) => {
+    if(trainVal==null) return `<span style="color:var(--text3)">—</span>`;
+    if(!baseVal) return `<span style="color:var(--text2)">${trainVal}${suffix}</span>`;
+    const r = Math.round(trainVal/baseVal*100);
+    return `<span style="font-weight:700;color:${ratioColor(r)}">${trainVal}${suffix}<br><span style="font-size:10px;font-weight:400">(${r}%)</span></span>`;
+  };
+
+  el.innerHTML = `
+    <div style="margin-top:14px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px">
+      <div style="font-size:14px;font-weight:700;color:var(--accent2);margin-bottom:6px">⚡ 훈련 WCS 분석</div>
+      <div style="font-size:10px;color:var(--text3);margin-bottom:10px;line-height:1.6">
+        ${hasBaseline
+          ? `경기 Best(최근 5경기 최대값) 대비 달성률 &nbsp;
+             <span style="color:#4ade80">■ ≥90%</span>
+             <span style="color:#eab308;margin-left:6px">■ 70~89%</span>
+             <span style="color:#ef4444;margin-left:6px">■ &lt;70%</span>`
+          : '⚠️ 경기 mpm 데이터 없음 — 훈련값만 표시 (경기 mpm 업로드 후 재시도)'}
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:580px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:6px 8px;text-align:right;color:#fbbf24">Peak 1분</th>
+            <th style="padding:6px 8px;text-align:right;color:#fb923c">Peak 5분</th>
+            <th style="padding:6px 8px;text-align:right;color:#f87171">Peak 10분</th>
+            <th style="padding:6px 8px;text-align:right;color:#a78bfa">&gt;150 m/min</th>
+            <th style="padding:6px 8px;text-align:right;color:#60a5fa">&gt;130 m/min</th>
+            <th style="padding:6px 8px;text-align:right;color:#4ade80">&gt;110 m/min</th>
+          </tr></thead>
+          <tbody>
+            ${playerNames.map(name=>{
+              const tw=trainWCS[name], mb=matchBaseline[name];
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px;font-weight:600;color:var(--text)">${name}</td>
+                <td style="padding:6px 8px;text-align:right;line-height:1.3">${cell(tw.peak1,mb?.peak1,' m/min')}</td>
+                <td style="padding:6px 8px;text-align:right;line-height:1.3">${cell(tw.peak5,mb?.peak5,' m/min')}</td>
+                <td style="padding:6px 8px;text-align:right;line-height:1.3">${cell(tw.peak10,mb?.peak10,' m/min')}</td>
+                <td style="padding:6px 8px;text-align:right;line-height:1.3">${cell(tw.timeOver150,mb?.timeOver150,'분')}</td>
+                <td style="padding:6px 8px;text-align:right;line-height:1.3">${cell(tw.timeOver130,mb?.timeOver130,'분')}</td>
+                <td style="padding:6px 8px;text-align:right;line-height:1.3">${cell(tw.timeOver110,mb?.timeOver110,'분')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text3)">
+        Peak 5분 ≥90% → 경기 고강도 구간 재현 ✅ · &lt;70% → 훈련 강도 상향 필요 🔴
+      </div>
+    </div>
+  `;
 }
 
 async function loadTrainMinuteHistory(){
