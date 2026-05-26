@@ -15982,10 +15982,19 @@ async function parseTrainMinuteFile(file){
       if(colMin>=0){
         minute = parseInt(row[colMin]);
       } else {
-        // HH:MM:SS → 분 (00:05:30 → 5)
-        const t = String(row[colTime]||'').trim();
-        const parts = t.split(':');
-        minute = parts.length>=2 ? parseInt(parts[0])*60+parseInt(parts[1]) : NaN;
+        const rawTime = row[colTime];
+        if(rawTime == null){
+          minute = NaN;
+        } else if(typeof rawTime === 'number'){
+          // SheetJS가 CSV 시간값을 Excel 시리얼(0~1)로 읽는 경우 → 분 변환
+          // 예: 00:01:00 → 0.000694 → round(0.000694*24*60) = 1
+          minute = Math.round(rawTime * 24 * 60);
+        } else {
+          // HH:MM:SS 문자열 → 분 (00:05:00 → 5)
+          const t = String(rawTime).trim();
+          const parts = t.split(':');
+          minute = parts.length>=2 ? parseInt(parts[0])*60+parseInt(parts[1]) : NaN;
+        }
       }
       const mpm = parseFloat(row[colMpm]);
       if(isNaN(minute) || isNaN(mpm)) continue;
