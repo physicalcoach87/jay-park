@@ -1424,28 +1424,26 @@ async function loadTraining(){
       <button class="refresh-btn" onclick="_loadedPages['training']=false;loadTraining()">🔄</button>
     </div>
 
-    <!-- 주간 합계 칩 -->
-    <div style="padding:0 16px 8px;display:flex;gap:6px;flex-wrap:wrap">
-      <span style="font-size:11px;background:var(--surface2);border-radius:8px;padding:3px 8px">TD <strong style="color:#60a5fa">${(wTD/1000).toFixed(1)}km</strong></span>
-      <span style="font-size:11px;background:var(--surface2);border-radius:8px;padding:3px 8px">HSR <strong style="color:#f59e0b">${Math.round(wHSR)}m</strong></span>
-      <span style="font-size:11px;background:var(--surface2);border-radius:8px;padding:3px 8px">Sprint <strong style="color:#ef4444">${Math.round(wSP)}m</strong></span>
-      <span style="font-size:11px;background:var(--surface2);border-radius:8px;padding:3px 8px">sRPE <strong style="color:#a78bfa">${Math.round(wSRPE)}</strong></span>
-    </div>
-
-    <!-- 이번 주 테이블 -->
-    <div class="card" style="padding:10px 0">
-      <div style="overflow-x:auto;padding:0 4px">
-        <table class="data-table" style="min-width:390px"><thead><tr>
-          <th>날짜</th>
-          <th>주기</th>
-          <th style="color:#60a5fa">TD</th>
-          <th style="color:#f59e0b">HSR</th>
-          <th style="color:#ef4444">Sprint</th>
-          <th style="color:#a78bfa">sRPE</th>
-          <th>ACWR</th>
-        </tr></thead><tbody>${weekRows}</tbody></table>
+    <!-- 이번 주 합계 카드 -->
+    <div class="card"><div class="card-title">📊 이번 주 합계</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+        <div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">TD</div>
+          <div style="font-size:14px;font-weight:600;color:#60a5fa">${(wTD/1000).toFixed(1)}<span style="font-size:9px;color:var(--text3)">km</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">HSR</div>
+          <div style="font-size:14px;font-weight:600;color:#f59e0b">${Math.round(wHSR).toLocaleString()}<span style="font-size:9px;color:var(--text3)">m</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">Sprint</div>
+          <div style="font-size:14px;font-weight:600;color:#ef4444">${Math.round(wSP).toLocaleString()}<span style="font-size:9px;color:var(--text3)">m</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:8px;text-align:center">
+          <div style="font-size:10px;color:var(--text3)">sRPE</div>
+          <div style="font-size:14px;font-weight:600;color:#a78bfa">${Math.round(wSRPE).toLocaleString()}</div>
+        </div>
       </div>
-      ${ref3Html}
     </div>
 
     <!-- 2주 세션 현황 -->
