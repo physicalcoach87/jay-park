@@ -1394,7 +1394,15 @@ async function loadTraining(){
     const dayAll=(gps14||[]).filter(r=>r.session_date===ds);
     const mGps=dayAll.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
     const useGps=mGps.length?mGps:dayAll;
-    if(!useGps.length) return `<tr${isT?' class="today-row"':''}><td><span style="color:${dc}">${DOW[d.getDay()]} ${d.getDate()}</span>${isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':''}</td><td colspan="5" style="color:var(--text3);text-align:center">—</td></tr>`;
+    const hasMatch=(matchFT||[]).some(r=>r.match_date===ds);
+    const typeTag=hasMatch
+      ?'<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700;margin-left:3px">경기</span>'
+      :mGps.length
+        ?'<span style="font-size:9px;padding:1px 3px;border-radius:3px;background:#0c1a2e;color:#60a5fa;font-weight:700;margin-left:3px">M</span>'
+        :dayAll.length
+          ?'<span style="font-size:9px;padding:1px 3px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:3px">S</span>'
+          :'';
+    if(!useGps.length) return `<tr${isT?' class="today-row"':''}><td style="padding:5px 8px"><span style="color:${dc}">${DOW[d.getDay()]} ${d.getDate()}</span>${isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':''}${typeTag}</td><td colspan="5" style="color:var(--text3);text-align:center">—</td></tr>`;
     const tdV=trainAvg(useGps,'td');
     const hsrV=trainAvg(useGps,'running_high');
     const spV=trainAvg(useGps,'sprint');
@@ -1408,7 +1416,7 @@ async function loadTraining(){
     if(spV) t14SP+=spV;
     if(sRPE) t14SRPE+=sRPE;
     return `<tr${isT?' class="today-row"':''} style="border-bottom:.5px solid var(--border)">
-      <td style="padding:5px 8px"><span style="color:${dc}">${DOW[d.getDay()]} ${d.getDate()}</span>${isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':''}</td>
+      <td style="padding:5px 8px"><span style="color:${dc}">${DOW[d.getDay()]} ${d.getDate()}</span>${isT?' <span style="font-size:9px;color:#4ade80">오늘</span>':''}${typeTag}</td>
       <td style="padding:5px 6px;text-align:right;color:#60a5fa;font-size:11px">${tdV?(tdV/1000).toFixed(1)+pct(tdV,matchRef.td):'—'}</td>
       <td style="padding:5px 6px;text-align:right;color:#f59e0b;font-size:11px">${hsrV?Math.round(hsrV)+pct(hsrV,matchRef.hsr):'—'}</td>
       <td style="padding:5px 6px;text-align:right;color:#ef4444;font-size:11px">${spV?Math.round(spV)+pct(spV,matchRef.sp):'—'}</td>
