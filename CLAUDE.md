@@ -206,3 +206,5 @@ Pre-activation
 ### 인프라
 - Supabase Edge Function (자정 자동 부상 분석)
 - 푸시 알림 연동
+
+-
