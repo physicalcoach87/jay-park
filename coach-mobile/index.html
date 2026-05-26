@@ -1189,14 +1189,14 @@ async function loadTraining(){
   // 병렬 데이터 조회
   const [{data:gps14},{data:rpe28},{data:matchFT}]=await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,duration,session_type2,session_topic,opponent')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent')
       .gte('session_date',since14Str).lte('session_date',today)
       .order('session_date',{ascending:true}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration')
       .gte('record_date',since28Str),
     supa.from('match_records')
-      .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,result,score')
+      .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
       .eq('time_type','FT')
       .order('match_date',{ascending:false})
       .limit(300),
@@ -1254,9 +1254,11 @@ async function loadTraining(){
     .sort((a,b)=>b.localeCompare(a)).slice(0,3);
   const mRows3=(matchFT||[]).filter(r=>mKeys3.includes(r.match_date+'__'+r.opponent));
   const matchRef={
-    td:   matchAvg(mRows3,'td'),
-    hsr:  matchAvg(mRows3,'band4_td'),
-    sp:   matchAvg(mRows3,'band5_td'),
+    td:    matchAvg(mRows3,'td'),
+    hsr:   matchAvg(mRows3,'band4_td'),
+    sp:    matchAvg(mRows3,'band5_td'),
+    accel: matchAvg(mRows3,'accel'),
+    rhie:  matchAvg(mRows3,'rhie'),
   };
   const pct=(val,ref)=>{
     if(!val||!ref) return '';
@@ -1428,11 +1430,15 @@ async function loadTraining(){
       if(tdV) t14TD+=tdV;
       if(hsrV) t14HSR+=hsrV;
       if(spV) t14SP+=spV;
+      const accelV=matchAvg(dayMatch,'accel');
+      const rhieV=matchAvg(dayMatch,'rhie');
       return `<tr${isT?' class="today-row"':''} style="border-bottom:.5px solid var(--border);background:#1a0505">
         ${dateCell}
         ${td2(tdV?(tdV/1000).toFixed(1):null, tdV, '#60a5fa', matchRef.td)}
         ${td2(hsrV?Math.round(hsrV):null, hsrV, '#f59e0b', matchRef.hsr)}
         ${td2(spV?Math.round(spV):null, spV, '#ef4444', matchRef.sp)}
+        ${td2(accelV?Math.round(accelV):null, accelV, '#34d399', matchRef.accel)}
+        ${td2(rhieV?Math.round(rhieV):null, rhieV, '#f472b6', matchRef.rhie)}
         <td style="padding:4px 3px;text-align:right;color:#a78bfa;font-size:10px">—</td>
         <td style="padding:4px 3px;text-align:right;font-size:10px;color:${acwrColor(acwr)};font-weight:500">${acwr?acwr.toFixed(2):'—'}</td>
       </tr>`;
@@ -1440,10 +1446,12 @@ async function loadTraining(){
 
     // 훈련 날 → GPS 데이터 표시
     const useGps=mGps.length?mGps:dayAll;
-    if(!useGps.length) return `<tr${isT?' class="today-row"':''}>${dateCell}<td colspan="5" style="color:var(--text3);text-align:center">—</td></tr>`;
+    if(!useGps.length) return `<tr${isT?' class="today-row"':''}>${dateCell}<td colspan="7" style="color:var(--text3);text-align:center">—</td></tr>`;
     const tdV=trainAvg(useGps,'td');
     const hsrV=trainAvg(useGps,'running_high');
     const spV=trainAvg(useGps,'sprint');
+    const accelV=trainAvg(useGps,'accel');
+    const rhieV=trainAvg(useGps,'rhie');
     const dayRpe=(rpe28||[]).filter(r=>r.record_date===ds&&parseFloat(r.rpe)>0);
     const rpeAvg=dayRpe.length?dayRpe.reduce((a,r)=>a+parseFloat(r.rpe),0)/dayRpe.length:null;
     const durAvg=useGps.filter(r=>parseFloat(r.duration)>0).reduce((a,r,_,arr)=>a+parseFloat(r.duration)/arr.length,0)||null;
@@ -1457,6 +1465,8 @@ async function loadTraining(){
       ${td2(tdV?(tdV/1000).toFixed(1):null, tdV, '#60a5fa', matchRef.td)}
       ${td2(hsrV?Math.round(hsrV):null, hsrV, '#f59e0b', matchRef.hsr)}
       ${td2(spV?Math.round(spV):null, spV, '#ef4444', matchRef.sp)}
+      ${td2(accelV?Math.round(accelV):null, accelV, '#34d399', matchRef.accel)}
+      ${td2(rhieV?Math.round(rhieV):null, rhieV, '#f472b6', matchRef.rhie)}
       <td style="padding:4px 3px;text-align:right;color:#a78bfa;font-size:10px">${sRPE||'—'}</td>
       <td style="padding:4px 3px;text-align:right;font-size:10px;color:${acwrColor(acwr)};font-weight:500">${acwr?acwr.toFixed(2):'—'}</td>
     </tr>`;
@@ -1499,22 +1509,16 @@ async function loadTraining(){
     <!-- 2주 날짜별 테이블 -->
     <div class="card" style="padding:12px 0">
       <div style="overflow-x:auto;padding:0 8px">
-        <table class="data-table" style="width:100%;table-layout:fixed">
-          <colgroup>
-            <col style="width:64px">
-            <col style="width:72px">
-            <col style="width:72px">
-            <col style="width:72px">
-            <col style="width:40px">
-            <col style="width:38px">
-          </colgroup>
+        <table class="data-table" style="min-width:560px">
           <thead><tr>
-            <th>날짜</th>
-            <th style="color:#60a5fa">TD<br><span style="font-size:9px">(km)</span></th>
-            <th style="color:#f59e0b">HSR<br><span style="font-size:9px">(m)</span></th>
-            <th style="color:#ef4444">Sprint<br><span style="font-size:9px">(m)</span></th>
-            <th style="color:#a78bfa">sRPE</th>
-            <th>ACWR</th>
+            <th style="min-width:64px">날짜</th>
+            <th style="color:#60a5fa;min-width:72px">TD<br><span style="font-size:9px">(km)</span></th>
+            <th style="color:#f59e0b;min-width:72px">HSR<br><span style="font-size:9px">(m)</span></th>
+            <th style="color:#ef4444;min-width:72px">Sprint<br><span style="font-size:9px">(m)</span></th>
+            <th style="color:#34d399;min-width:68px">가속<br><span style="font-size:9px">(회)</span></th>
+            <th style="color:#f472b6;min-width:60px">RHIE<br><span style="font-size:9px">(회)</span></th>
+            <th style="color:#a78bfa;min-width:40px">sRPE</th>
+            <th style="min-width:38px">ACWR</th>
           </tr></thead><tbody>${rows14}</tbody></table>
       </div>
       ${ref3Html}
