@@ -4536,32 +4536,43 @@ async function generateGym(){
     return;
   }
 
-  // ── 단일 분류 — Supabase 기반 슈퍼세트 처방 ──
+  // ── 단일 분류 — Supabase 기반 처방 (방법 반영) ──
   const bpMap2={UB:'상체',LB:'하체',Core:'코어',AB:'전신'};
   const purposeMap2={stab:'활성화',endur:'근지구력',hyper:'근비대',strength:'근력',power:'파워'};
   const supaEquip2=getGymEquipList();
   const supaPurpose2=purposeMap2[purpKey]||'근비대';
   const supaBp2=bpMap2[bp];
   const numPairs=parseInt(document.getElementById('gym-num-ex')?.value||4);
+  const method2=_currentGymMethod;
+  // 컨트라스트: A 운동은 '근력'으로 조회 (B 파워/점프는 buildContrastPairs 내부에서 별도 조회)
+  const queryPurpose2=method2==='컨트라스트'?'근력':supaPurpose2;
   const out=document.getElementById('gym-output');
   out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 운동 데이터 불러오는 중...</div>';
 
   try {
-    let query=supa.from('exercises').select('*').contains('purposes',[supaPurpose2]);
+    let query=supa.from('exercises').select('*').contains('purposes',[queryPurpose2]);
     if(supaBp2) query=query.eq('body_part',supaBp2);
     const {data,error}=await query;
     if(error) throw error;
     const filtered=(data||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip2.includes(eq)));
-    if(!filtered.length){out.innerHTML='<p style="color:var(--text3);padding:1rem">조건에 맞는 운동이 없습니다. 장비 또는 운동 부위를 바꿔보세요.</p>';return;}
+    if(!filtered.length){out.innerHTML='<p style="color:var(--text3);padding:1rem">조건에 맞는 운동이 없습니다. 기구 세팅 또는 운동 부위를 바꿔보세요.</p>';return;}
 
-    // numPairs: 상단에서 gym-num-ex 값으로 이미 선언됨
-    const pairs=buildSupersetPairs(filtered,numPairs);
+    let pairs;
+    if(method2==='서킷'){
+      pairs=buildCircuitStations(filtered,numPairs);
+    } else if(method2==='컨트라스트'){
+      pairs=await buildContrastPairs(filtered,numPairs,supaEquip2);
+    } else {
+      pairs=buildSupersetPairs(filtered,numPairs);
+    }
     const totalEx=pairs.reduce((s,p)=>s+(p.b?2:1),0);
 
     const bpLabel={UB:'Upper Body',LB:'Lower Body',Core:'Core',AB:'All Body'}[bp]||bp;
     const bpColors={UB:{c:'#3b82f6',b:'#1e40af',bg:'rgba(59,130,246,0.12)'},LB:{c:'#22c55e',b:'#15803d',bg:'rgba(34,197,94,0.12)'},Core:{c:'#a855f7',b:'#7e22ce',bg:'rgba(168,85,247,0.12)'},AB:{c:'#f59e0b',b:'#b45309',bg:'rgba(245,158,11,0.12)'}};
     const bc=bpColors[bp]||bpColors.UB;
     const bpChip=`<span class="chip" style="color:${bc.c};border-color:${bc.b};background:${bc.bg}">${bpLabel}</span>`;
+    const mi2=GYM_METHOD_INFO[method2];
+    const methodChip2=mi2?`<span class="chip" style="color:${mi2.color};border-color:${mi2.border};background:${mi2.bg}">${mi2.icon} ${method2}</span>`:'';
 
     const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
@@ -4570,46 +4581,67 @@ async function generateGym(){
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">총 운동</div><div style="font-size:15px;font-weight:700;color:var(--text)">${totalEx}개</div></div>
     </div>`;
 
+    const indTypeMap={
+      superset:{label:'🔄 슈퍼세트',bg:'rgba(99,102,241,0.15)',color:'#818cf8'},
+      contrast:{label:'⚡ 컨트라스트',bg:'rgba(245,158,11,0.15)',color:'#fbbf24'},
+      circuit:{label:'🔁 서킷',bg:'rgba(59,130,246,0.15)',color:'#60a5fa'},
+      straight:{label:'▶ 스트레이트',bg:'rgba(107,114,128,0.1)',color:'var(--text3)'},
+      single:{label:'◆ 단독',bg:'rgba(107,114,128,0.1)',color:'var(--text3)'},
+    };
+
     const pairsHtml=pairs.map((pair,i)=>{
-      const isSuperset=pair.type==='superset';
-      const typeLabel=isSuperset?'🔄 슈퍼세트':'▶ 스트레이트';
-      const typeBg=isSuperset?'rgba(99,102,241,0.15)':'rgba(107,114,128,0.1)';
-      const typeColor=isSuperset?'#818cf8':'var(--text3)';
+      const tm=indTypeMap[pair.type]||indTypeMap.single;
+      const isContrast=pair.type==='contrast';
+      const muscleInfo=pair.b
+        ?(isContrast?`${pair.a.primary_muscle_ko} → ⚡ 파워/점프`:`${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}`)
+        :pair.a.primary_muscle_ko||'';
+      // 컨트라스트 B (파워/점프) 처방: 고정 (3-5세트 × 3-5회, 최대속도)
+      const bRx=isContrast?`3–5세트 × 3–5회 &nbsp;·&nbsp; 최대 속도/높이 &nbsp;·&nbsp; 휴식 3분`:`${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}`;
+      const contrastNote=isContrast?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;padding:5px 10px;background:rgba(245,158,11,0.1);border-radius:4px;border-left:3px solid #f59e0b">⚡ A 완료 후 60–120초 이내 B 즉시 실시 — PAP(활성화 후 파워 증폭) 효과</div>`:'';
       return `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
           <div style="width:24px;height:24px;border-radius:6px;background:${bc.b};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</div>
-          <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${typeBg};color:${typeColor};font-weight:600">${typeLabel}</span>
-          ${pair.b?`<span style="font-size:11px;color:var(--text3);margin-left:auto">${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}</span>`:''}
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${tm.bg};color:${tm.color};font-weight:600">${tm.label}</span>
+          ${pair.b?`<span style="font-size:11px;color:var(--text3);margin-left:auto">${muscleInfo}</span>`:''}
         </div>
         <div style="background:var(--surface2);border-radius:8px;padding:10px;${pair.b?'margin-bottom:6px;':''}border-left:3px solid #3b82f6">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             ${pair.b?`<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#1e3a5f;color:#60a5fa;font-weight:700">A</span>`:''}
             <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.a.name_ko}</span>
             <span style="font-size:11px;color:var(--text3)">${pair.a.name_en}</span>
+            ${isContrast?`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.15);color:#60a5fa;margin-left:auto">💪 근력</span>`:''}
           </div>
           <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
           ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
         </div>
-        ${pair.b?`<div style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
+        ${pair.b?`<div style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid ${isContrast?'#f59e0b':'#f59e0b'}">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
             <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#3d2200;color:#fbbf24;font-weight:700">B</span>
             <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.b.name_ko}</span>
             <span style="font-size:11px;color:var(--text3)">${pair.b.name_en}</span>
+            ${isContrast?`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.15);color:#fbbf24;margin-left:auto">⚡ 파워/점프</span>`:''}
           </div>
-          <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+          <div style="font-size:12px;color:var(--text2)">${bRx}</div>
           ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
         </div>`:''}
+        ${contrastNote}
       </div>`;
     }).join('');
 
+    const summaryLabel=method2==='컨트라스트'
+      ?`컨트라스트 프로그램 — ${pairs.length}세트 (A 근력 + B 파워/점프 각 1회 = 1세트)`
+      :method2==='서킷'
+        ?`서킷 프로그램 — ${pairs.length}스테이션 연속 순환`
+        :`개인 운동 프로그램 — ${totalEx}개 운동 · ${pairs.filter(p=>p.type==='superset').length}슈퍼세트`;
+
     out.innerHTML=`
-      <div class="chips"><span class="chip">${mdL}</span><span class="chip">${timeL}</span>${bpChip}${purpChip}</div>
+      <div class="chips"><span class="chip">${mdL}</span><span class="chip">${timeL}</span>${bpChip}${purpChip}${methodChip2}</div>
       <div class="goal-box"><p><strong>세션 목표:</strong> ${bpLabel} | ${purpT.icon} ${purpT.label} — ${purpT.desc}</p></div>
       ${purpBox}
-      <div class="slabel" style="margin-bottom:10px">개인 운동 프로그램 — ${totalEx}개 운동 · ${pairs.filter(p=>p.type==='superset').length}슈퍼세트</div>
+      <div class="slabel" style="margin-bottom:10px">${summaryLabel}</div>
       ${pairsHtml}
       <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
-      <div class="coaching-box"><p>${purpT.coaching}</p></div>
+      <div class="coaching-box"><p>${method2==='컨트라스트'?'PAP 효과 극대화: A(근력) 세트 완료 후 60–120초 이내 반드시 B(파워) 실시. 피로 누적 시 B 세트 수 감소 가능. 세트 간 완전 회복 후 다음 세트.':purpT.coaching}</p></div>
       ${expBar('gym-output')}`;
     out.querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
   } catch(err){
