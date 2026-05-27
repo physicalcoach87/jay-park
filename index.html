@@ -4435,42 +4435,86 @@ async function generateGym(){
     return;
   }
 
-  // ── 단일 분류 기존 로직 ───────────────────
-  const pool=GYM_POOL[bp];
-  const t=parseInt(time);
-  const baseCount=t>=60?2:1;
-  const selectedEx=[];
-  Object.keys(pool.subs).forEach(subKey=>{
-    const sub=pool.subs[subKey];
-    const avail=sub.ex.filter(e=>gymEquipOk(e.equip,selEquip));
-    if(!avail.length)return;
-    const arr=[...avail];
-    for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
-    arr.slice(0,baseCount).forEach(e=>selectedEx.push({...e,s:`${purpT.sets}×${purpT.reps}`,i:purpT.rpe,r:`${purpT.rest} 휴식`,p:e.p||'main'}));
-  });
-  if(!selectedEx.length){document.getElementById('gym-output').innerHTML='<p style="color:var(--text3);padding:1rem">선택된 장비에 맞는 운동이 없습니다. 장비를 변경해 주세요.</p>';return;}
-  const blocks=[{l:`${pool.label} — ${purpT.label}`,p:'main',ex:selectedEx}];
-  const prog={goal:`${pool.label} | ${purpT.icon} ${purpT.label} — ${purpT.desc}`,coaching:purpT.coaching,blocks};
-  _lastGymState={pos,md,bodyPart:bp,purpose:purpKey,v:'RAND',prog};
-  const bpChip=`<span class="chip" style="color:${pool.color};border-color:${pool.border};background:${pool.bg}">${pool.label}</span>`;
-  const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
-    <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
-    <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">강도</div><div style="font-size:15px;font-weight:700;color:${purpT.color}">${purpT.rpe}</div></div>
-    <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">휴식</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.rest}</div></div>
-    <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">총 운동</div><div style="font-size:15px;font-weight:700;color:var(--text)">${selectedEx.length}개</div></div>
-  </div>`;
-  let gi=1;
-  const cards=selectedEx.map(e=>buildCard(e,gi++,links)).join('');
-  document.getElementById('gym-output').innerHTML=`
-    <div class="chips"><span class="chip">${posL}</span><span class="chip">${mdL}</span><span class="chip">${timeL}</span>${bpChip}${purpChip}</div>
-    <div class="goal-box"><p><strong>세션 목표:</strong> ${prog.goal}</p></div>
-    ${purpBox}
-    <div class="slabel" style="margin-bottom:10px">${pool.label} 프로그램 — 카드 클릭 시 운동 방법 표시</div>
-    ${cards}
-    <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
-    <div class="coaching-box"><p>${prog.coaching}</p></div>
-    ${expBar('gym-output')}`;
-  document.getElementById('gym-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+  // ── 단일 분류 — Supabase 기반 슈퍼세트 처방 ──
+  const bpMap2={UB:'상체',LB:'하체',Core:'코어',AB:'전신'};
+  const purposeMap2={stab:'활성화',endur:'근지구력',hyper:'근비대',power:'파워'};
+  const equipAll2=['바벨','덤벨','케틀벨','머신','케이블','밴드','맨몸','풀업바','플라이오박스'];
+  const equipMap3={full:equipAll2,bb:['바벨','덤벨','케틀벨','밴드','맨몸','풀업바'],db:['덤벨','케틀벨','밴드','맨몸'],bw:['맨몸','밴드']};
+  const supaEquip2=equipMap3[selEquip]||equipAll2;
+  const supaPurpose2=purposeMap2[purpKey]||'근비대';
+  const supaBp2=bpMap2[bp];
+  const out=document.getElementById('gym-output');
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 운동 데이터 불러오는 중...</div>';
+
+  try {
+    let query=supa.from('exercises').select('*').contains('purposes',[supaPurpose2]);
+    if(supaBp2) query=query.eq('body_part',supaBp2);
+    const {data,error}=await query;
+    if(error) throw error;
+    const filtered=(data||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip2.includes(eq)));
+    if(!filtered.length){out.innerHTML='<p style="color:var(--text3);padding:1rem">조건에 맞는 운동이 없습니다. 장비 또는 운동 부위를 바꿔보세요.</p>';return;}
+
+    const numPairs=parseInt(time)>=60?4:parseInt(time)>=45?3:2;
+    const pairs=buildSupersetPairs(filtered,numPairs);
+    const totalEx=pairs.reduce((s,p)=>s+(p.b?2:1),0);
+
+    const bpLabel={UB:'Upper Body',LB:'Lower Body',Core:'Core',AB:'All Body'}[bp]||bp;
+    const bpColors={UB:{c:'#3b82f6',b:'#1e40af',bg:'rgba(59,130,246,0.12)'},LB:{c:'#22c55e',b:'#15803d',bg:'rgba(34,197,94,0.12)'},Core:{c:'#a855f7',b:'#7e22ce',bg:'rgba(168,85,247,0.12)'},AB:{c:'#f59e0b',b:'#b45309',bg:'rgba(245,158,11,0.12)'}};
+    const bc=bpColors[bp]||bpColors.UB;
+    const bpChip=`<span class="chip" style="color:${bc.c};border-color:${bc.b};background:${bc.bg}">${bpLabel}</span>`;
+
+    const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">강도</div><div style="font-size:15px;font-weight:700;color:${purpT.color}">${purpT.rpe}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">휴식</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.rest}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">총 운동</div><div style="font-size:15px;font-weight:700;color:var(--text)">${totalEx}개</div></div>
+    </div>`;
+
+    const pairsHtml=pairs.map((pair,i)=>{
+      const isSuperset=pair.type==='superset';
+      const typeLabel=isSuperset?'🔄 슈퍼세트':'▶ 스트레이트';
+      const typeBg=isSuperset?'rgba(99,102,241,0.15)':'rgba(107,114,128,0.1)';
+      const typeColor=isSuperset?'#818cf8':'var(--text3)';
+      return `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <div style="width:24px;height:24px;border-radius:6px;background:${bc.b};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</div>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${typeBg};color:${typeColor};font-weight:600">${typeLabel}</span>
+          ${pair.b?`<span style="font-size:11px;color:var(--text3);margin-left:auto">${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}</span>`:''}
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:10px;${pair.b?'margin-bottom:6px;':''}border-left:3px solid #3b82f6">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            ${pair.b?`<span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#1e3a5f;color:#60a5fa;font-weight:700">A</span>`:''}
+            <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.a.name_ko}</span>
+            <span style="font-size:11px;color:var(--text3)">${pair.a.name_en}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+          ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
+        </div>
+        ${pair.b?`<div style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#3d2200;color:#fbbf24;font-weight:700">B</span>
+            <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.b.name_ko}</span>
+            <span style="font-size:11px;color:var(--text3)">${pair.b.name_en}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+          ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
+        </div>`:''}
+      </div>`;
+    }).join('');
+
+    out.innerHTML=`
+      <div class="chips"><span class="chip">${posL}</span><span class="chip">${mdL}</span><span class="chip">${timeL}</span>${bpChip}${purpChip}</div>
+      <div class="goal-box"><p><strong>세션 목표:</strong> ${bpLabel} | ${purpT.icon} ${purpT.label} — ${purpT.desc}</p></div>
+      ${purpBox}
+      <div class="slabel" style="margin-bottom:10px">개인 운동 프로그램 — ${totalEx}개 운동 · ${pairs.filter(p=>p.type==='superset').length}슈퍼세트</div>
+      ${pairsHtml}
+      <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
+      <div class="coaching-box"><p>${purpT.coaching}</p></div>
+      ${expBar('gym-output')}`;
+    out.querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+  } catch(err){
+    out.innerHTML=`<p style="color:#ef4444;padding:1rem">오류: ${err.message}</p>`;
+  }
 }
 
 async function buildManualGym(){
