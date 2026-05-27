@@ -1078,6 +1078,36 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
 <!-- GYM -->
 <div id="tab-gym" style="display:none">
+
+  <!-- 세션 타입 선택 -->
+  <div style="display:flex;gap:8px;margin-bottom:14px">
+    <button id="gym-stype-ind" class="btn-exp" onclick="setGymSessionType('individual')" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2);font-weight:700">👤 개인 운동</button>
+    <button id="gym-stype-grp" class="btn-exp" onclick="setGymSessionType('group')">👥 단체 운동</button>
+  </div>
+
+  <!-- 단체 설정 패널 -->
+  <div id="gym-group-config" style="display:none;background:var(--surface);border:1px solid #1d4ed8;border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">👥 단체 세션 설정</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <div class="ctrl"><label>총 인원</label>
+        <select id="gym-total-players" onchange="updateStationCount()">
+          <option value="9">9명</option><option value="12" selected>12명</option>
+          <option value="15">15명</option><option value="18">18명</option>
+          <option value="21">21명</option><option value="24">24명</option>
+        </select>
+      </div>
+      <div class="ctrl"><label>그룹당 인원</label>
+        <select id="gym-group-size" onchange="updateStationCount()">
+          <option value="2">2명</option><option value="3" selected>3명</option>
+          <option value="4">4명</option><option value="5">5명</option>
+        </select>
+      </div>
+      <div class="ctrl"><label>스테이션 수</label>
+        <div id="gym-station-display" style="padding:8px 10px;background:var(--surface2);border-radius:6px;font-size:15px;font-weight:700;color:#60a5fa;text-align:center;border:1px solid var(--border2)">4개</div>
+      </div>
+    </div>
+  </div>
+
   <!-- ① 컨트롤 -->
   <div class="ctrls g4">
     <div class="ctrl"><label>포지션</label><select id="gym-pos">
@@ -1210,7 +1240,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- ⑤ 랜덤 패널 -->
   <div id="gym-rand-panel">
-    <button class="btn-gen" onclick="generateGym()">처방 생성</button>
+    <button class="btn-gen" id="gym-gen-btn" onclick="onGymGenerate()">처방 생성</button>
   </div>
 
   <!-- ⑥ 수동 패널 -->
@@ -3981,6 +4011,7 @@ function buildNoteBox(note, appliedRules){
 let _currentGymBodyPart='LB';
 let _currentGymPurpose='hyper';
 let _currentGymMode='rand';
+let _currentGymSessionType='individual';
 
 // 멀티 운동 설정 (카테고리별 포함 여부 + 운동 수)
 let _multiConfig={
@@ -4012,6 +4043,172 @@ function initGymTab(){
   autoSetGymPurpose();
   setGymBodyPart(_currentGymBodyPart, true);
   setGymMode(_currentGymMode, true);
+}
+
+function setGymSessionType(type){
+  _currentGymSessionType=type;
+  const indBtn=document.getElementById('gym-stype-ind');
+  const grpBtn=document.getElementById('gym-stype-grp');
+  const grpConfig=document.getElementById('gym-group-config');
+  const genBtn=document.getElementById('gym-gen-btn');
+  if(type==='group'){
+    if(grpBtn){grpBtn.style.borderColor='#1d4ed8';grpBtn.style.background='rgba(59,130,246,0.15)';grpBtn.style.color='#60a5fa';grpBtn.style.fontWeight='700';}
+    if(indBtn){indBtn.style.borderColor='var(--border2)';indBtn.style.background='transparent';indBtn.style.color='var(--text2)';indBtn.style.fontWeight='';}
+    if(grpConfig)grpConfig.style.display='';
+    if(genBtn)genBtn.textContent='👥 단체 세션 생성';
+    updateStationCount();
+  } else {
+    if(indBtn){indBtn.style.borderColor='var(--accent)';indBtn.style.background='var(--accent-bg)';indBtn.style.color='var(--accent2)';indBtn.style.fontWeight='700';}
+    if(grpBtn){grpBtn.style.borderColor='var(--border2)';grpBtn.style.background='transparent';grpBtn.style.color='var(--text2)';grpBtn.style.fontWeight='';}
+    if(grpConfig)grpConfig.style.display='none';
+    if(genBtn)genBtn.textContent='처방 생성';
+  }
+}
+
+function updateStationCount(){
+  const total=parseInt(document.getElementById('gym-total-players')?.value||12);
+  const gs=parseInt(document.getElementById('gym-group-size')?.value||3);
+  const n=Math.ceil(total/gs);
+  const el=document.getElementById('gym-station-display');
+  if(el)el.textContent=n+'개';
+  return n;
+}
+
+function onGymGenerate(){
+  if(_currentGymSessionType==='group') generateGroupGym();
+  else generateGym();
+}
+
+async function generateGroupGym(){
+  const md=document.getElementById('gym-md').value;
+  const time=parseInt(document.getElementById('gym-time')?.value||60);
+  const selEquip=document.getElementById('gym-equip').value;
+  const bp=_currentGymBodyPart;
+  const purpKey=_currentGymPurpose;
+  const purpT=GYM_PURPOSE_TEMPLATE[purpKey];
+  const totalPlayers=parseInt(document.getElementById('gym-total-players')?.value||12);
+  const groupSize=parseInt(document.getElementById('gym-group-size')?.value||3);
+  const numStations=Math.ceil(totalPlayers/groupSize);
+  const mdL=document.getElementById('gym-md').selectedOptions[0].text;
+  const timeL=document.getElementById('gym-time').selectedOptions[0].text;
+  const out=document.getElementById('gym-output');
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 운동 데이터 불러오는 중...</div>';
+
+  const bpMap={UB:'상체',LB:'하체',Core:'코어',AB:'전신'};
+  const purposeMap={stab:'활성화',endur:'근지구력',hyper:'근비대',power:'파워'};
+  const equipAll=['바벨','덤벨','케틀벨','머신','케이블','밴드','맨몸','풀업바','플라이오박스'];
+  const equipBB=['바벨','덤벨','케틀벨','밴드','맨몸','풀업바'];
+  const equipDB=['덤벨','케틀벨','밴드','맨몸'];
+  const equipBW=['맨몸','밴드'];
+  const equipMap2={full:equipAll,bb:equipBB,db:equipDB,bw:equipBW};
+  const supaEquip=equipMap2[selEquip]||equipAll;
+  const supaPurpose=purposeMap[purpKey]||'근비대';
+
+  try {
+    let query=supa.from('exercises').select('*').contains('purposes',[supaPurpose]);
+    if(bp!=='Multi'){const supaBp=bpMap[bp];if(supaBp)query=query.eq('body_part',supaBp);}
+    const {data,error}=await query;
+    if(error)throw error;
+    const filtered=(data||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq)));
+    if(!filtered.length){
+      out.innerHTML='<p style="color:var(--text3);padding:1rem">조건에 맞는 운동이 없습니다. 장비 또는 운동 부위를 바꿔보세요.</p>';
+      return;
+    }
+    const pairs=buildSupersetPairs(filtered,numStations);
+    renderGroupSession(pairs,purpT,{totalPlayers,groupSize,numStations,mdL,time,timeL});
+  } catch(err){
+    out.innerHTML=`<p style="color:#ef4444;padding:1rem">오류: ${err.message}</p>`;
+  }
+}
+
+function buildSupersetPairs(exercises,maxPairs){
+  const arr=[...exercises];
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  const used=new Set();
+  const pairs=[];
+  for(const ex of arr){
+    if(used.has(ex.id)||pairs.length>=maxPairs)break;
+    used.add(ex.id);
+    const partner=arr.find(e=>!used.has(e.id)&&ex.antagonist_ko&&e.primary_muscle_ko===ex.antagonist_ko);
+    if(partner){used.add(partner.id);pairs.push({a:ex,b:partner,type:'superset'});}
+    else{
+      const filler=arr.find(e=>!used.has(e.id));
+      if(filler){used.add(filler.id);pairs.push({a:ex,b:filler,type:'straight'});}
+      else pairs.push({a:ex,b:null,type:'single'});
+    }
+  }
+  return pairs.slice(0,maxPairs);
+}
+
+function renderGroupSession(pairs,purpT,cfg){
+  const {totalPlayers,groupSize,numStations,mdL,time,timeL}=cfg;
+  const warmup=10,cooldown=5;
+  const workMin=time-warmup-cooldown;
+  const perStation=Math.round(workMin/numStations);
+  const groups=Math.ceil(totalPlayers/groupSize);
+
+  const stationsHtml=pairs.map((pair,i)=>{
+    const isSuperset=pair.type==='superset';
+    const typeLabel=isSuperset?'🔄 슈퍼세트':'▶ 스트레이트';
+    const typeBg=isSuperset?'rgba(99,102,241,0.15)':'rgba(107,114,128,0.1)';
+    const typeColor=isSuperset?'#818cf8':'var(--text3)';
+    const muscleInfo=pair.b?`${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}`:pair.a.primary_muscle_ko;
+    return `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="width:28px;height:28px;border-radius:8px;background:#1d4ed8;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--text)">Station ${i+1}</div>
+        <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${typeBg};color:${typeColor};font-weight:600">${typeLabel}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:auto">${muscleInfo}</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid #3b82f6">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#1e3a5f;color:#60a5fa;font-weight:700">A</span>
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.a.name_ko}</span>
+          <span style="font-size:11px;color:var(--text3)">${pair.a.name_en}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+        ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
+      </div>
+      ${pair.b?`<div style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#3d2200;color:#fbbf24;font-weight:700">B</span>
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.b.name_ko}</span>
+          <span style="font-size:11px;color:var(--text3)">${pair.b.name_en}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+        ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
+      </div>`:''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('gym-output').innerHTML=`
+    <div class="chips">
+      <span class="chip">${mdL}</span><span class="chip">${timeL}</span>
+      <span class="chip" style="color:#60a5fa;border-color:#1d4ed8;background:rgba(59,130,246,0.12)">👥 ${totalPlayers}명 · ${groupSize}명/그룹 · ${numStations}스테이션</span>
+      <span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스테이션</div><div style="font-size:16px;font-weight:700;color:#60a5fa">${numStations}개</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:16px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스테이션당</div><div style="font-size:16px;font-weight:700;color:#a78bfa">${perStation}분</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">그룹 수</div><div style="font-size:16px;font-weight:700;color:var(--text)">${groups}팀</div></div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px">⏱️ 타임라인</div>
+      <div style="display:flex;gap:3px;border-radius:6px;overflow:hidden">
+        <div style="flex:${warmup};background:#1e3a5f;padding:8px 4px;text-align:center"><div style="font-size:9px;color:#93c5fd">웜업</div><div style="font-size:12px;font-weight:700;color:#60a5fa">${warmup}분</div></div>
+        <div style="flex:${workMin};background:#1a2e1a;padding:8px 4px;text-align:center"><div style="font-size:9px;color:#86efac">본운동</div><div style="font-size:12px;font-weight:700;color:#4ade80">${workMin}분</div></div>
+        <div style="flex:${cooldown};background:#2a1a1a;padding:8px 4px;text-align:center"><div style="font-size:9px;color:#fca5a5">쿨다운</div><div style="font-size:12px;font-weight:700;color:#f87171">${cooldown}분</div></div>
+      </div>
+    </div>
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">🔄 로테이션</div>
+      <div style="font-size:12px;color:var(--text3)">${groups}개 그룹 (각 ${groupSize}명) · 신호에 맞춰 다음 스테이션으로 순서 이동 · 스테이션당 <strong style="color:var(--text2)">${perStation}분</strong></div>
+    </div>
+    <div class="slabel" style="margin-bottom:10px">스테이션별 운동 처방</div>
+    ${stationsHtml}
+    ${expBar('gym-output')}
+  `;
 }
 
 function setGymBodyPart(part, silent){
