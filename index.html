@@ -1221,6 +1221,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button id="gympurp-stab" class="btn-exp" onclick="setGymPurpose('stab')">🛡️ 안정화</button>
       <button id="gympurp-endur" class="btn-exp" onclick="setGymPurpose('endur')">🔥 근지구력</button>
       <button id="gympurp-hyper" class="btn-exp" onclick="setGymPurpose('hyper')">💪 근비대</button>
+      <button id="gympurp-strength" class="btn-exp" onclick="setGymPurpose('strength')">🏋️ 최대 근력</button>
       <button id="gympurp-power" class="btn-exp" onclick="setGymPurpose('power')">⚡ 파워</button>
     </div>
     <div id="gym-purp-info" style="padding:8px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text2);border-left:3px solid var(--border2)"></div>
@@ -3382,12 +3383,16 @@ const GYM_PURPOSE_TEMPLATE={
     sets:'4', reps:'8-12', rpe:'RPE 7-8', rest:'2분',
     desc:'기계적 장력 + 대사 스트레스. 근육량·최대근력 기반 구축.',
     coaching:'세트 간 완전 회복. 마지막 2-3회는 도전적 강도 유지. TUT 고려.'},
+  strength:{label:'최대 근력', icon:'🏋️', color:'#dc2626', bg:'rgba(220,38,38,0.12)', border:'#7f1d1d',
+    sets:'4-5', reps:'3-5', rpe:'RPE 8-9', rest:'3-5분',
+    desc:'신경근 적응 + 최대 근력 발휘. 폭발적 의도로 수행.',
+    coaching:'세트 간 완전 회복 필수. 기술 저하 시 즉시 중단. 질이 양보다 중요.'},
   power:{label:'파워', icon:'⚡', color:'#ef4444', bg:'rgba(239,68,68,0.12)', border:'#991b1b',
     sets:'4-5', reps:'3-5', rpe:'RPE 8-9', rest:'3분',
     desc:'신경근 파워 + 힘-속도 관계. 최대 의도적 속도로 수행.',
     coaching:'세트 간 완전 회복 필수. 피로 시 즉시 중단. 질이 양보다 중요. 세션당 총 볼륨 제한.'}
 };
-const GYM_MD_PURPOSE={MD5:'stab',MD4:'endur',MD3:'hyper',MD2:'power',MD1:'stab'};
+const GYM_MD_PURPOSE={MD5:'stab',MD4:'strength',MD3:'power',MD2:'power',MD1:'stab'};
 const GYM_MD_METHOD={MD5:'서킷',MD4:'슈퍼세트',MD3:'컨트라스트',MD2:'컨트라스트',MD1:'슈퍼세트'};
 const GYM_METHOD_INFO={
   '슈퍼세트':{icon:'🔄',desc:'A → 즉시 B → 휴식 · 주동-길항 쌍 · 볼륨 시간 30% 단축',color:'#818cf8',bg:'rgba(99,102,241,0.12)',border:'#4f46e5'},
@@ -4101,7 +4106,7 @@ async function generateGroupGym(){
   out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 운동 데이터 불러오는 중...</div>';
 
   const bpMap={UB:'상체',LB:'하체',Core:'코어',AB:'전신'};
-  const purposeMap={stab:'활성화',endur:'근지구력',hyper:'근비대',power:'파워'};
+  const purposeMap={stab:'활성화',endur:'근지구력',hyper:'근비대',strength:'근력',power:'파워'};
   const equipAll=['바벨','덤벨','케틀벨','머신','케이블','밴드','맨몸','풀업바','플라이오박스'];
   const equipBB=['바벨','덤벨','케틀벨','밴드','맨몸','풀업바'];
   const equipDB=['덤벨','케틀벨','밴드','맨몸'];
@@ -4496,7 +4501,7 @@ async function generateGym(){
 
   // ── 단일 분류 — Supabase 기반 슈퍼세트 처방 ──
   const bpMap2={UB:'상체',LB:'하체',Core:'코어',AB:'전신'};
-  const purposeMap2={stab:'활성화',endur:'근지구력',hyper:'근비대',power:'파워'};
+  const purposeMap2={stab:'활성화',endur:'근지구력',hyper:'근비대',strength:'근력',power:'파워'};
   const equipAll2=['바벨','덤벨','케틀벨','머신','케이블','밴드','맨몸','풀업바','플라이오박스'];
   const equipMap3={full:equipAll2,bb:['바벨','덤벨','케틀벨','밴드','맨몸','풀업바'],db:['덤벨','케틀벨','밴드','맨몸'],bw:['맨몸','밴드']};
   const supaEquip2=equipMap3[selEquip]||equipAll2;
