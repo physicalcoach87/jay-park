@@ -1109,13 +1109,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 
   <!-- ① 컨트롤 -->
-  <div class="ctrls g4">
-    <div class="ctrl"><label>포지션</label><select id="gym-pos">
-      <option value="CB">CB — 센터백</option><option value="FB">FB/WB — 풀백/윙백</option>
-      <option value="CDM">CDM — 수비형 미드</option><option value="CM">CM — 센트럴 미드</option>
-      <option value="CAM">CAM — 공격형 미드</option><option value="WG">WG — 윙어</option>
-      <option value="ST">ST — 스트라이커</option>
-    </select></div>
+  <div class="ctrls g3">
     <div class="ctrl"><label>MD 단계</label><select id="gym-md" onchange="autoSetGymPurpose()">
       <option value="MD5">MD-5 신경근 유지</option>
       <option value="MD4">MD-4 고볼륨</option>
@@ -1232,7 +1226,13 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="gym-purp-info" style="padding:8px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text2);border-left:3px solid var(--border2)"></div>
   </div>
 
-  <!-- ④ 랜덤/수동 모드 토글 -->
+  <!-- ④ 운동 방법 -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;color:var(--text3);margin-bottom:6px;font-weight:600;letter-spacing:.04em">운동 방법 <span style="font-weight:400;font-size:10px">(MD → 목적에 따라 자동 권장)</span></div>
+    <div id="gym-method-info" style="padding:8px 12px;background:var(--bg2);border-radius:8px;font-size:12px;color:var(--text2);border-left:3px solid var(--border2)"></div>
+  </div>
+
+  <!-- ⑤ 랜덤/수동 모드 토글 -->
   <div style="display:flex;gap:8px;margin-bottom:14px">
     <button id="gym-mode-rand" class="btn-exp" onclick="setGymMode('rand')" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">🎲 랜덤 처방 생성</button>
     <button id="gym-mode-manual" class="btn-exp" onclick="setGymMode('manual')">✋ 수동 선택</button>
@@ -3388,6 +3388,12 @@ const GYM_PURPOSE_TEMPLATE={
     coaching:'세트 간 완전 회복 필수. 피로 시 즉시 중단. 질이 양보다 중요. 세션당 총 볼륨 제한.'}
 };
 const GYM_MD_PURPOSE={MD5:'stab',MD4:'endur',MD3:'hyper',MD2:'power',MD1:'stab'};
+const GYM_MD_METHOD={MD5:'서킷',MD4:'슈퍼세트',MD3:'컨트라스트',MD2:'컨트라스트',MD1:'슈퍼세트'};
+const GYM_METHOD_INFO={
+  '슈퍼세트':{icon:'🔄',desc:'A → 즉시 B → 휴식 · 주동-길항 쌍 · 볼륨 시간 30% 단축',color:'#818cf8',bg:'rgba(99,102,241,0.12)',border:'#4f46e5'},
+  '서킷':{icon:'🔁',desc:'A→B→C→D 연속 순환 · 대사적 자극 · 시간 효율 극대화',color:'#3b82f6',bg:'rgba(59,130,246,0.12)',border:'#1d4ed8'},
+  '컨트라스트':{icon:'⚡',desc:'근력(A) → 즉시 파워/점프(B) · PAP 효과 · 파워 출력 극대화',color:'#f59e0b',bg:'rgba(245,158,11,0.12)',border:'#b45309'},
+};
 
 const GYM_POOL={
   UB:{label:'Upper Body',color:'#3b82f6',bg:'rgba(59,130,246,0.12)',border:'#1e40af',
@@ -4114,11 +4120,41 @@ async function generateGroupGym(){
       out.innerHTML='<p style="color:var(--text3);padding:1rem">조건에 맞는 운동이 없습니다. 장비 또는 운동 부위를 바꿔보세요.</p>';
       return;
     }
-    const pairs=buildSupersetPairs(filtered,numStations);
-    renderGroupSession(pairs,purpT,{totalPlayers,groupSize,numStations,mdL,time,timeL});
+    const method=GYM_MD_METHOD[md]||'슈퍼세트';
+    let pairs;
+    if(method==='서킷'){
+      pairs=buildCircuitStations(filtered,numStations);
+    } else if(method==='컨트라스트'){
+      pairs=await buildContrastPairs(filtered,numStations,supaEquip);
+    } else {
+      pairs=buildSupersetPairs(filtered,numStations);
+    }
+    renderGroupSession(pairs,purpT,{totalPlayers,groupSize,numStations,mdL,time,timeL,method});
   } catch(err){
     out.innerHTML=`<p style="color:#ef4444;padding:1rem">오류: ${err.message}</p>`;
   }
+}
+
+function buildCircuitStations(exercises,numStations){
+  const arr=[...exercises];
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  return arr.slice(0,numStations).map(ex=>({a:ex,b:null,type:'circuit'}));
+}
+
+async function buildContrastPairs(strengthExercises,numStations,equipList){
+  // 파워/점프 운동 조회
+  const {data:powerData}=await supa.from('exercises').select('*').in('category',['특수_파워','특수_점프']);
+  const powerEx=(powerData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>equipList.includes(eq)));
+  const arr=[...strengthExercises];
+  for(let i=arr.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]];}
+  const usedPower=new Set();
+  const pairs=[];
+  for(let i=0;i<Math.min(numStations,arr.length);i++){
+    const power=powerEx.find(p=>!usedPower.has(p.id));
+    if(power)usedPower.add(power.id);
+    pairs.push({a:arr[i],b:power||null,type:'contrast'});
+  }
+  return pairs;
 }
 
 function buildSupersetPairs(exercises,maxPairs){
@@ -4147,12 +4183,19 @@ function renderGroupSession(pairs,purpT,cfg){
   const perStation=Math.round(workMin/numStations);
   const groups=Math.ceil(totalPlayers/groupSize);
 
+  const {method='슈퍼세트'}=cfg;
   const stationsHtml=pairs.map((pair,i)=>{
-    const isSuperset=pair.type==='superset';
-    const typeLabel=isSuperset?'🔄 슈퍼세트':'▶ 스트레이트';
-    const typeBg=isSuperset?'rgba(99,102,241,0.15)':'rgba(107,114,128,0.1)';
-    const typeColor=isSuperset?'#818cf8':'var(--text3)';
+    const typeMap={
+      superset:{label:'🔄 슈퍼세트',bg:'rgba(99,102,241,0.15)',color:'#818cf8'},
+      contrast:{label:'⚡ 컨트라스트',bg:'rgba(245,158,11,0.15)',color:'#fbbf24'},
+      circuit:{label:'🔁 서킷',bg:'rgba(59,130,246,0.15)',color:'#60a5fa'},
+      straight:{label:'▶ 스트레이트',bg:'rgba(107,114,128,0.1)',color:'var(--text3)'},
+      single:{label:'◆ 단독',bg:'rgba(107,114,128,0.1)',color:'var(--text3)'},
+    };
+    const tm=typeMap[pair.type]||typeMap.single;
+    const typeLabel=tm.label,typeBg=tm.bg,typeColor=tm.color;
     const muscleInfo=pair.b?`${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}`:pair.a.primary_muscle_ko;
+    const contrastNote=pair.type==='contrast'?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;padding:4px 8px;background:rgba(245,158,11,0.1);border-radius:4px">⚡ A 완료 후 60–120초 이내 B 실시 (PAP 효과)</div>`:'';
     return `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <div style="width:28px;height:28px;border-radius:8px;background:#1d4ed8;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</div>
@@ -4178,6 +4221,7 @@ function renderGroupSession(pairs,purpT,cfg){
         <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
         ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
       </div>`:''}
+      ${contrastNote}
     </div>`;
   }).join('');
 
@@ -4186,6 +4230,7 @@ function renderGroupSession(pairs,purpT,cfg){
       <span class="chip">${mdL}</span><span class="chip">${timeL}</span>
       <span class="chip" style="color:#60a5fa;border-color:#1d4ed8;background:rgba(59,130,246,0.12)">👥 ${totalPlayers}명 · ${groupSize}명/그룹 · ${numStations}스테이션</span>
       <span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>
+      ${(()=>{const mi=GYM_METHOD_INFO[method];return mi?`<span class="chip" style="color:${mi.color};border-color:${mi.border};background:${mi.bg}">${mi.icon} ${method}</span>`:'';})()}
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스테이션</div><div style="font-size:16px;font-weight:700;color:#60a5fa">${numStations}개</div></div>
@@ -4202,8 +4247,14 @@ function renderGroupSession(pairs,purpT,cfg){
       </div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:14px">
-      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">🔄 로테이션</div>
-      <div style="font-size:12px;color:var(--text3)">${groups}개 그룹 (각 ${groupSize}명) · 신호에 맞춰 다음 스테이션으로 순서 이동 · 스테이션당 <strong style="color:var(--text2)">${perStation}분</strong></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">🔄 로테이션 방식</div>
+      <div style="font-size:12px;color:var(--text3)">${
+        method==='서킷'
+          ?`${groups}개 그룹 · 전 스테이션 쉬지 않고 연속 순환 · 1라운드 완료 후 ${purpT.rest} 휴식`
+          :method==='컨트라스트'
+            ?`${groups}개 그룹 (각 ${groupSize}명) · A 세트 후 60–120초 내 B 즉시 실시 · 스테이션 완료 후 이동`
+            :`${groups}개 그룹 (각 ${groupSize}명) · 신호에 맞춰 다음 스테이션으로 이동 · 스테이션당 <strong style="color:var(--text2)">${perStation}분</strong>`
+      }</div>
     </div>
     <div class="slabel" style="margin-bottom:10px">스테이션별 운동 처방</div>
     ${stationsHtml}
@@ -4248,6 +4299,14 @@ function setGymPurpose(key){
 function autoSetGymPurpose(){
   const md=document.getElementById('gym-md')?.value||'MD3';
   setGymPurpose(GYM_MD_PURPOSE[md]||'hyper');
+  // 운동 방법 표시 업데이트
+  const method=GYM_MD_METHOD[md]||'슈퍼세트';
+  const mi=GYM_METHOD_INFO[method];
+  const el=document.getElementById('gym-method-info');
+  if(el&&mi){
+    el.innerHTML=`<strong style="color:${mi.color}">${mi.icon} ${method}</strong> &nbsp;|&nbsp; <span style="font-size:11px;color:var(--text3)">${mi.desc}</span>`;
+    el.style.borderLeftColor=mi.border;
+  }
 }
 
 function setGymMode(mode, silent){
