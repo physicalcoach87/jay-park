@@ -321,6 +321,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <button onclick="openMgmt()" class="admin-only" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">👥 스텝 관리</button>
     <button onclick="doLogout()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text3);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit">로그아웃</button>
     <span class="hbadge" id="club-badge">-</span>
+    <span id="plan-badge" style="display:none;font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;border:1px solid;letter-spacing:.3px"></span>
   </div>
 </div>
 
@@ -2147,6 +2148,7 @@ let currentRole = 'coach';
 let userPermissions = {};
 let currentClubId = null;
 let currentClubName = '';
+let currentGpsPlan = 'V2';   // 'V1' | 'V2'
 let currentClubPermissions = {}; // 슈퍼어드민이 설정한 팀 허용 탭
 
 // ── 역할 레이블 ───────────────────────────────
@@ -2301,6 +2303,7 @@ async function showApp(user, preloadedRole){
       const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions').eq('id', prof.club_id).single();
       if(club){
         currentClubName = club.name;
+        currentGpsPlan  = club.gps_plan || 'V2';
         currentClubPermissions = club.permissions || {};
       }
     }
@@ -2315,8 +2318,17 @@ async function showApp(user, preloadedRole){
   if(currentClubName){
     const t = document.getElementById('club-title');
     const b = document.getElementById('club-badge');
+    const pb = document.getElementById('plan-badge');
     if(t) t.textContent = currentClubName + ' 선수 관리 시스템';
     if(b) b.textContent = currentClubName;
+    if(pb){
+      const isV1 = currentGpsPlan === 'V1';
+      pb.textContent = isV1 ? 'V1 베이직' : 'V2 프리미엄';
+      pb.style.display = '';
+      pb.style.background = isV1 ? 'rgba(251,191,36,0.12)' : 'rgba(139,92,246,0.12)';
+      pb.style.color = isV1 ? '#fbbf24' : '#a78bfa';
+      pb.style.borderColor = isV1 ? 'rgba(251,191,36,0.4)' : 'rgba(139,92,246,0.4)';
+    }
   }
   await loadUserPermissions(user.id, role);
   applyTabPermissions();
@@ -18734,23 +18746,33 @@ async function saLoadClubs(){
   const {data:players} = await supa.from('player_profiles').select('club_id');
   (players||[]).forEach(p=>{ if(p.club_id) counts[p.club_id] = (counts[p.club_id]||0)+1; });
 
-  el.innerHTML = clubs.map(c=>`
+  el.innerHTML = clubs.map(c=>{
+    const isV1 = (c.gps_plan||'V2') === 'V1';
+    const planBadge = isV1
+      ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.4)">V1 베이직</span>`
+      : `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4)">V2 프리미엄</span>`;
+    return `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:1rem;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:1rem">
       <div>
-        <div style="font-size:14px;font-weight:600;color:var(--text)">${c.name}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:3px">
-          GPS: <span style="color:var(--accent)">${c.gps_plan||'—'}</span>
-          &nbsp;·&nbsp; 선수: <span style="color:var(--accent)">${counts[c.id]||0}명</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="font-size:14px;font-weight:600;color:var(--text)">${c.name}</div>
+          ${planBadge}
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">
+          선수: <span style="color:var(--accent)">${counts[c.id]||0}명</span>
           &nbsp;·&nbsp; ID: <span style="font-size:10px;opacity:.5">${c.id.slice(0,8)}...</span>
         </div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="saChangePlan('${c.id}','${c.name}','${c.gps_plan||'V2'}')"
+          style="background:transparent;border:1px solid #fbbf24;color:#fbbf24;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">플랜 변경</button>
         <button onclick="saEditClubPerms('${c.id}','${c.name}')"
           style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">탭 권한</button>
         <button onclick="saDeleteClub('${c.id}','${c.name}')"
           style="background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">삭제</button>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function saShowAddClub(){ document.getElementById('sa-add-club-form').style.display='block'; }
@@ -18805,6 +18827,15 @@ async function saAddClub(){
   await saLoadClubs();
 }
 
+async function saChangePlan(id, name, currentPlan){
+  const newPlan = currentPlan === 'V1' ? 'V2' : 'V1';
+  const newLabel = newPlan === 'V1' ? 'V1 베이직' : 'V2 프리미엄';
+  const curLabel = currentPlan === 'V1' ? 'V1 베이직' : 'V2 프리미엄';
+  if(!confirm(`"${name}" 팀 플랜을\n${curLabel} → ${newLabel}으로 변경할까요?`)) return;
+  const {error} = await supa.from('clubs').update({gps_plan: newPlan}).eq('id', id);
+  if(error){ alert('변경 실패: '+error.message); return; }
+  await saLoadClubs();
+}
 async function saDeleteClub(id, name){
   if(!confirm(`"${name}" 팀을 삭제하시겠습니까?\n소속 선수의 club_id가 null이 됩니다.`)) return;
   await supa.from('clubs').delete().eq('id', id);
