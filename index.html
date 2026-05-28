@@ -5192,6 +5192,124 @@ function renderGymManualSelector(){
   document.getElementById('gym-cat-selector').innerHTML=html||'<p style="color:var(--text3);font-size:13px">선택된 장비에 맞는 운동이 없습니다.</p>';
 }
 
+// ── Mix + 컨트라스트: 부위별 근력(A)→파워(B) 페어, 부위 교차 (Supabase) ──
+async function generateMultiContrast(){
+  const out=document.getElementById('gym-output');
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 운동 데이터 불러오는 중...</div>';
+  const mdL=document.getElementById('gym-md').selectedOptions[0].text;
+  const purpKey=_currentGymPurpose;
+  const purpT=GYM_PURPOSE_TEMPLATE[purpKey];
+  const supaEquip=getGymEquipList();
+  const playerSel=document.getElementById('gym-player-select');
+  const playerName=(playerSel?.value&&playerSel.selectedOptions[0]?.textContent)||'';
+  const playerChip=playerName?`<span class="chip" style="color:#4ade80;border-color:#15803d;background:rgba(34,197,94,0.12)">👤 ${playerName}</span>`:'';
+  const multiChip=`<span class="chip" style="color:#e879f9;border-color:#a21caf;background:rgba(232,121,249,0.12)">🔀 멀티 믹스</span>`;
+  const purpChip=`<span class="chip" style="color:${purpT.color};border-color:${purpT.border};background:${purpT.bg}">${purpT.icon} ${purpT.label}</span>`;
+  const methodChip=`<span class="chip" style="color:#fbbf24;border-color:#b45309;background:rgba(245,158,11,0.12)">🔥 컨트라스트</span>`;
+
+  const ORDER=['UB','LB','AB','Core'];
+  const bpMap={UB:'상체',LB:'하체',AB:'전신',Core:'코어'};
+  const enabledParts=ORDER.filter(k=>_multiConfig[k]?.on);
+  Object.entries(_multiConfig).forEach(([k,v])=>{if(v.on&&!enabledParts.includes(k))enabledParts.push(k);});
+  if(!enabledParts.length){out.innerHTML='<p style="color:var(--text3);padding:1rem">포함할 부위를 하나 이상 선택하세요.</p>';return;}
+
+  try{
+    // 전신 파워/점프 (B 폴백용)
+    const {data:jumpData}=await supa.from('exercises').select('*').in('category',['특수_파워','특수_점프']);
+    const jumpPool=(jumpData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq)));
+
+    const partPairs={};
+    const allStrength=[];const allPower=[...jumpPool];
+    const usedPowerIds=new Set();
+
+    for(const pk of enabledParts){
+      const bpName=bpMap[pk];const cnt=_multiConfig[pk].cnt;
+      // 부위 근력(A)
+      const {data:sData}=await supa.from('exercises').select('*').eq('body_part',bpName).contains('purposes',['근력']);
+      const strengthPool=(sData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq)));
+      // 부위 파워(B 우선)
+      const {data:pData}=await supa.from('exercises').select('*').eq('body_part',bpName).contains('purposes',['파워']);
+      const partPower=(pData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq)));
+      allStrength.push(...strengthPool);
+      partPower.forEach(p=>{if(!allPower.find(x=>x.id===p.id))allPower.push(p);});
+
+      const balancedA=buildBalancedExercises(strengthPool,cnt);
+      const pairs=[];
+      for(let i=0;i<balancedA.length;i++){
+        // B: 같은 부위 파워 우선 → 없으면 전신 점프/올림픽
+        let b=partPower.find(p=>!usedPowerIds.has(p.id))||jumpPool.find(p=>!usedPowerIds.has(p.id));
+        if(b)usedPowerIds.add(b.id);
+        pairs.push({a:balancedA[i],b:b||null,type:'contrast',partKey:pk});
+      }
+      if(pairs.length)partPairs[pk]=pairs;
+    }
+
+    // swap용 전역
+    _gymAllExercises=allStrength;
+    _gymPowerExercises=allPower;
+    _currentGymPurpT=purpT;
+
+    // 부위 교차 라운드로빈 병합 (상체→하체→전신→코어→상체...)
+    const seq=[];const idx={};enabledParts.forEach(pk=>idx[pk]=0);
+    let rem=true;
+    while(rem){rem=false;for(const pk of enabledParts){const arr=partPairs[pk];if(!arr)continue;if(idx[pk]<arr.length){seq.push(arr[idx[pk]++]);rem=true;}}}
+    _currentGymPairs=seq;
+
+    if(!seq.length){out.innerHTML='<p style="color:var(--text3);padding:1rem">조건에 맞는 운동이 없습니다. 기구 세팅 또는 부위를 바꿔보세요.</p>';return;}
+
+    const bpColors={UB:{c:'#3b82f6',b:'#1e40af'},LB:{c:'#22c55e',b:'#15803d'},AB:{c:'#f59e0b',b:'#b45309'},Core:{c:'#a855f7',b:'#7e22ce'}};
+    const pairsHtml=seq.map((pair,i)=>{
+      const pk=pair.partKey;const bc=bpColors[pk]||bpColors.UB;
+      const aRx=`${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}`;
+      const bRx=`3–5세트 × 3–5회 &nbsp;·&nbsp; 최대 속도/높이 &nbsp;·&nbsp; 휴식 3분`;
+      const muscleInfo=pair.b?`${pair.a.primary_muscle_ko||''} → ⚡ ${pair.b.primary_muscle_ko||'파워/점프'}`:(pair.a.primary_muscle_ko||'');
+      return `<div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <div style="width:24px;height:24px;border-radius:6px;background:${bc.b};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${bc.c}22;color:${bc.c};font-weight:700">${GYM_PART_KOR[pk]||pk}</span>
+          <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:rgba(245,158,11,0.15);color:#fbbf24;font-weight:600">🔥 컨트라스트</span>
+          ${pair.b?`<span style="font-size:11px;color:var(--text3);margin-left:auto">${muscleInfo}</span>`:''}
+        </div>
+        <div id="gym-ex-${i}-a" style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:6px;border-left:3px solid #3b82f6">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#1e3a5f;color:#60a5fa;font-weight:700">A</span>
+            <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.a.name_ko}</span>
+            <span style="font-size:11px;color:var(--text3)">${pair.a.name_en||''}</span>
+            <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.15);color:#60a5fa">💪 근력</span>
+            <button onclick="showGymAlternatives(${i},'a')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
+          </div>
+          <div style="font-size:12px;color:var(--text2)">${aRx}</div>
+          ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
+        </div>
+        ${pair.b?`<div id="gym-ex-${i}-b" style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+            <span style="font-size:11px;padding:1px 6px;border-radius:4px;background:#3d2200;color:#fbbf24;font-weight:700">B</span>
+            <span style="font-size:14px;font-weight:700;color:var(--text)">${pair.b.name_ko}</span>
+            <span style="font-size:11px;color:var(--text3)">${pair.b.name_en||''}</span>
+            <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.15);color:#fbbf24">⚡ 파워</span>
+          </div>
+          <div style="font-size:12px;color:var(--text2)">${bRx}</div>
+          ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
+        </div>`:''}
+        <div style="font-size:11px;color:#fbbf24;margin-top:6px;padding:5px 10px;background:rgba(245,158,11,0.1);border-radius:4px;border-left:3px solid #f59e0b">⚡ A 완료 후 60–120초 이내 B 즉시 실시 — PAP(활성화 후 파워 증폭) 효과</div>
+      </div>`;
+    }).join('');
+
+    const flow=enabledParts.map(k=>GYM_PART_KOR[k]||k).join(' → ')+' 교차';
+    out.innerHTML=`
+      <div class="chips"><span class="chip">${mdL}</span>${multiChip}${purpChip}${methodChip}${playerChip}</div>
+      <div class="goal-box"><p><strong>세션 플로우:</strong> ${flow}<br><span style="font-size:12px;color:var(--text3)">🔥 컨트라스트 — 부위별 근력(A) → 즉시 파워(B) PAP</span></p></div>
+      <div class="slabel" style="margin-bottom:10px">멀티 컨트라스트 — ${seq.length}세트 (각 근력 + 파워)</div>
+      ${pairsHtml}
+      <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
+      <div class="coaching-box"><p>PAP 효과 극대화: A(근력) 세트 완료 후 60–120초 이내 반드시 B(파워) 실시. 부위 교차 배치로 국소 피로를 분산시켜 세트 품질을 유지. 세트 간 완전 회복 후 다음 세트 진행.</p></div>
+      ${expBar('gym-output')}`;
+    out.querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+  }catch(err){
+    out.innerHTML=`<p style="color:#ef4444;padding:1rem">오류: ${err.message}</p>`;
+  }
+}
+
 async function generateGym(){
   const md=document.getElementById('gym-md').value;
   const time=document.getElementById('gym-time').value;
@@ -5209,6 +5327,8 @@ async function generateGym(){
 
   // ── 멀티 운동 분기 ────────────────────────
   if(bp==='Multi'){
+    // 컨트라스트 방법: 부위별 근력→파워 페어 (Supabase 기반)
+    if(_currentGymMethod==='컨트라스트'){ await generateMultiContrast(); return; }
     const enabledParts=Object.entries(_multiConfig).filter(([,v])=>v.on);
     if(!enabledParts.length){document.getElementById('gym-output').innerHTML='<p style="color:var(--text3);padding:1rem">포함할 분류를 하나 이상 선택하세요.</p>';return;}
     let gi=1;
