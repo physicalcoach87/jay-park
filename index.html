@@ -4336,6 +4336,8 @@ let _gymAllExercises=[];         // 조회된 운동 전체 풀 (대체 운동 �
 let _gymPowerExercises=[];       // 컨트라스트 B슬롯 파워/점프 풀
 let _currentGymPurpT=null;       // 현재 운동 목적 템플릿
 let _currentGymSessionCfg={};   // 현재 세션 설정 (재렌더링용)
+let _currentMultiPicked=[];      // Multi 모드 현재 운동 [{ex, partKey, color}]
+let _gymMultiAltShown=[];        // Multi swap 패널 대체 운동 후보 (임시)
 
 // 멀티 운동 설정 (카테고리별 포함 여부 + 운동 수)
 let _multiConfig={
@@ -5197,6 +5199,8 @@ async function generateGym(){
     function shuffle(arr){const a=[...arr];for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
     let gi=1;
     let allTotal=0;
+    _currentMultiPicked=[];  // 초기화
+    _currentGymPurpT=purpT;  // swap용 저장
     const multiChip=`<span class="chip" style="color:#e879f9;border-color:#a21caf;background:rgba(232,121,249,0.12)">🔀 멀티 믹스</span>`;
     const purpBox=`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:15px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
@@ -5209,14 +5213,12 @@ async function generateGym(){
     const ORDER=['AB','LB','UB','Core'];
     let blockHtml='';
     const sortedParts=ORDER.filter(k=>_multiConfig[k]?.on);
-    // 포함 안된 것도 끝에 붙이기 (순서 안정)
     enabledParts.forEach(([k])=>{if(!sortedParts.includes(k))sortedParts.push(k);});
 
     sortedParts.forEach((partKey,bi)=>{
       const cfg=_multiConfig[partKey];
       if(!cfg||!cfg.on) return;
       const pool=GYM_POOL[partKey];
-      // 풀 전체에서 장비 필터 후 셔플 → cnt 개 선택
       const allAvail=[];
       Object.values(pool.subs).forEach(sub=>{
         sub.ex.filter(e=>gymEquipOk(e.equip)).forEach(e=>allAvail.push(e));
@@ -5224,11 +5226,24 @@ async function generateGym(){
       const picked=shuffle(allAvail).slice(0,cfg.cnt);
       if(!picked.length) return;
       allTotal+=picked.length;
-      const exWithProps=picked.map(e=>({...e,s:`${purpT.sets}×${purpT.reps}`,i:purpT.rpe,r:`${purpT.rest} 휴식`,p:e.p||'main'}));
       const blockLabel=bi===0&&ORDER.includes(partKey)&&partKey==='AB'?`① ${pool.label} — 파워 블록`:
                        partKey==='LB'?`${bi===0?'①':'②'} ${pool.label} — 주동근 블록`:
                        partKey==='UB'?`${bi===0?'①':bi===1?'②':'③'} ${pool.label} — 상체 블록`:
                        `마무리 — ${pool.label}`;
+      const cardsHtml=picked.map(ex=>{
+        const idx=gi;
+        _currentMultiPicked.push({ex, partKey, color:pool.color});
+        gi++;
+        return `<div id="gym-multi-ex-${idx}" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid ${pool.color}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <div style="width:20px;height:20px;border-radius:5px;background:${pool.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx}</div>
+            <span style="font-size:14px;font-weight:700;color:var(--text)">${ex.n}</span>
+            <button onclick="showMultiAlternatives(${idx},'${partKey}')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
+          </div>
+          <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+          ${ex.cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${ex.cue}</div>`:''}
+        </div>`;
+      }).join('');
       blockHtml+=`
         <div style="margin-bottom:18px">
           <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -5236,7 +5251,7 @@ async function generateGym(){
             <div style="font-size:13px;font-weight:700;color:${pool.color}">${blockLabel}</div>
             <div style="font-size:11px;color:var(--text3);background:var(--surface2);border-radius:4px;padding:2px 7px">${picked.length}개 운동</div>
           </div>
-          ${exWithProps.map(e=>buildCard(e,gi++,links)).join('')}
+          ${cardsHtml}
         </div>`;
     });
 
@@ -5482,6 +5497,72 @@ function cancelGymSwap(pairIdx, slot){
   if(!slotEl) return;
   const panel=slotEl.querySelector('.gym-alt-panel');
   if(panel) panel.remove();
+}
+
+// ── Multi 모드 swap 함수 ──────────────────────────────────
+function showMultiAlternatives(gi, partKey){
+  const slotEl=document.getElementById(`gym-multi-ex-${gi}`);
+  if(!slotEl) return;
+  // 이미 열려 있으면 닫기
+  const existing=slotEl.querySelector('.gym-alt-panel');
+  if(existing){existing.remove();return;}
+
+  const cur=_currentMultiPicked[gi-1];
+  if(!cur) return;
+  const pool=GYM_POOL[partKey];
+  if(!pool) return;
+
+  // 같은 부위 풀에서 현재 운동 제외 후 셔플
+  const allAvail=[];
+  Object.values(pool.subs).forEach(sub=>{
+    sub.ex.filter(e=>gymEquipOk(e.equip)&&e.n!==cur.ex.n).forEach(e=>allAvail.push(e));
+  });
+  for(let i=allAvail.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[allAvail[i],allAvail[j]]=[allAvail[j],allAvail[i]];}
+  _gymMultiAltShown=allAvail.slice(0,5);
+
+  const panel=document.createElement('div');
+  panel.className='gym-alt-panel';
+  panel.style.cssText='margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--bg2);border:1px dashed #3b82f6';
+  panel.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-size:11px;font-weight:700;color:#60a5fa">🔄 대체 운동 선택</span>
+      <button onclick="this.closest('.gym-alt-panel').remove()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1">✕</button>
+    </div>
+    ${_gymMultiAltShown.length?_gymMultiAltShown.map((ex,ai)=>`
+      <div onclick="doMultiSwap(${gi},${ai})"
+        style="cursor:pointer;padding:6px 8px;border-radius:5px;border:1px solid var(--border2);margin-bottom:3px;display:flex;align-items:center;gap:8px"
+        onmouseover="this.style.background='var(--surface)';this.style.borderColor='#3b82f6'"
+        onmouseout="this.style.background='transparent';this.style.borderColor='var(--border2)'">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ex.n}</div>
+        </div>
+        <span style="font-size:10px;padding:1px 7px;border-radius:3px;background:rgba(59,130,246,0.15);color:#60a5fa;flex-shrink:0">선택</span>
+      </div>`).join('')
+    :'<div style="font-size:12px;color:var(--text3);text-align:center;padding:4px">대체 운동 없음</div>'}
+  `;
+  slotEl.appendChild(panel);
+}
+
+function doMultiSwap(gi, altIdx){
+  const newEx=_gymMultiAltShown[altIdx];
+  if(!newEx) return;
+  const cur=_currentMultiPicked[gi-1];
+  if(!cur) return;
+  cur.ex=newEx; // 전역 업데이트
+
+  const slotEl=document.getElementById(`gym-multi-ex-${gi}`);
+  if(!slotEl) return;
+  const purpT=_currentGymPurpT;
+  slotEl.innerHTML=`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <div style="width:20px;height:20px;border-radius:5px;background:${cur.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${gi}</div>
+      <span style="font-size:14px;font-weight:700;color:var(--text)">${newEx.n}</span>
+      <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(74,222,128,0.15);color:#4ade80">✓ 변경됨</span>
+      <button onclick="showMultiAlternatives(${gi},'${cur.partKey}')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
+    </div>
+    <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+    ${newEx.cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${newEx.cue}</div>`:''}
+  `;
 }
 
 async function buildManualGym(){
