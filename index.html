@@ -10433,9 +10433,14 @@ async function loadTeamSummary(){
     const wf=parseFloat(w.fatigue)||0, ws2=parseFloat(w.sleep_quality)||0, wst=parseFloat(w.stress)||0, wm=parseFloat(w.muscle_soreness)||0;
     const hasWell = w.fatigue!=null||w.sleep_quality!=null||w.stress!=null||w.muscle_soreness!=null;
     const wellTotal = hasWell ? wf+ws2+wst+wm : null;
-    const wellAvg   = wellTotal!=null ? (wellTotal/4).toFixed(1) : null;
-    const wellColor = wellTotal==null?'var(--text3)':wellTotal>=17?'#22c55e':wellTotal>=13?'#86efac':wellTotal>=9?'#fbbf24':'#ef4444';
-    const wellDetail= hasWell ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">피${wf} 수${ws2} 스${wst} 근${wm}</div>` : '';
+    const wSC = v => v>=4?'#22c55e':v>=3?'#86efac':v>=2?'#eab308':'#ef4444';
+    const wFatC = hasWell&&wf ? wSC(wf) : 'var(--text3)';
+    const wSlpC = hasWell&&ws2 ? wSC(ws2) : 'var(--text3)';
+    const wStC  = hasWell&&wst ? wSC(wst) : 'var(--text3)';
+    const wMuC  = hasWell&&wm  ? wSC(wm)  : 'var(--text3)';
+    const wellStatus = wellTotal==null?'—':wellTotal>=17?'최상':wellTotal>=13?'양호':wellTotal>=9?'주의':'위험';
+    const wellStatusColor = wellTotal==null?'var(--text3)':wellTotal>=17?'#22c55e':wellTotal>=13?'#86efac':wellTotal>=9?'#f97316':'#ef4444';
+    const wellStatusDot = wellTotal==null?'':wellTotal>=13?' 🟢':wellTotal>=9?' 🟡':' 🔴';
     const wellTimeStr = toKSTHHMM(w.created_at);
     const rpeTimeStr  = toKSTHHMM(s1.created_at);
     // 상태 판정
@@ -10448,7 +10453,7 @@ async function loadTeamSummary(){
     const gpsDot = hasGpsP
       ? `<span style="color:#22c55e;font-size:10px">GPS✓</span>`
       : `<span style="color:#6b7280;font-size:10px">GPS-</span>`;
-    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe, wellAvg, wellColor, wellDetail, wellTimeStr, rpeTimeStr };
+    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe, wf, ws2, wst, wm, hasWell, wellTotal, wFatC, wSlpC, wStC, wMuC, wellStatus, wellStatusColor, wellStatusDot, wellTimeStr, rpeTimeStr };
   }).filter(r => {
     // GPS 있거나, RPE/wellness 입력한 선수만 표시
     return gpsMap[r.p.id] || sessMap[r.p.id] || wellMap[r.p.id];
@@ -10462,9 +10467,12 @@ async function loadTeamSummary(){
         <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
         <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
       </td>
-      <td style="padding:6px 8px;text-align:center">
-        ${r.wellAvg!=null ? `<div style="font-size:13px;font-weight:700;color:${r.wellColor}">${r.wellAvg}</div>${r.wellDetail}` : '<span style="color:var(--text3);font-size:11px">—</span>'}
-      </td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wFatC}">${r.hasWell?r.wf:'—'}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wSlpC}">${r.hasWell?r.ws2:'—'}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wStC}">${r.hasWell?r.wst:'—'}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wMuC}">${r.hasWell?r.wm:'—'}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:${r.wellStatusColor}">${r.wellTotal!=null?r.wellTotal+'/20':'—'}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:600;color:${r.wellStatusColor}">${r.wellStatus}${r.wellStatusDot}</td>
       <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.wellTimeStr}</td>
       <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
       <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
@@ -10596,7 +10604,12 @@ async function loadTeamSummary(){
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
-            <th style="padding:6px 8px;text-align:center;color:#22c55e">웰니스</th>
+            <th style="padding:6px 8px;text-align:center;color:#22c55e">🔋 피로도</th>
+            <th style="padding:6px 8px;text-align:center;color:#22c55e">😴 수면질</th>
+            <th style="padding:6px 8px;text-align:center;color:#22c55e">🧠 스트레스</th>
+            <th style="padding:6px 8px;text-align:center;color:#22c55e">💪 근육통</th>
+            <th style="padding:6px 8px;text-align:center;color:#22c55e">총점</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">상태</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>
             <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
             <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
