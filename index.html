@@ -1232,11 +1232,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div class="ctrl full"><label>특이사항</label><input type="text" id="gym-note" placeholder="예: 무릎 통증, 피로도 높음, 로테이션 선수"></div>
   </div>
 
-  <!-- STEP 2: 운동 분류 -->
+  <!-- STEP 2: 운동 부위 -->
   <div style="margin-bottom:12px">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
       <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 2</span>
-      <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">운동 분류</span>
+      <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">운동 부위</span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
 
@@ -1270,6 +1270,42 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div style="font-size:10px;line-height:1.5;opacity:.75">부위 직접 구성 — UB · LB · AB · Core 운동 수 개별 설정</div>
       </button>
 
+    </div>
+
+    <!-- 운동 수 선택 (개인 운동 + 단일 부위 선택 시) -->
+    <div id="gym-step3-num" style="display:none;margin-top:10px;border-top:1px solid var(--border2);padding-top:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;color:var(--text3)">운동 수</span>
+        <span style="font-size:10px;color:var(--text3);font-weight:400">선택된 부위 내 운동 개수</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
+        <button id="gym-numex-btn-2" onclick="setGymNumEx(2)"
+          style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
+          <div style="font-size:16px;font-weight:800;margin-bottom:2px">2</div>
+          <div style="font-size:9px;opacity:.7">가지</div>
+        </button>
+        <button id="gym-numex-btn-3" onclick="setGymNumEx(3)"
+          style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
+          <div style="font-size:16px;font-weight:800;margin-bottom:2px">3</div>
+          <div style="font-size:9px;opacity:.7">가지</div>
+        </button>
+        <button id="gym-numex-btn-4" onclick="setGymNumEx(4)"
+          style="padding:12px 6px;border-radius:9px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;text-align:center;font-weight:700;transition:all .15s">
+          <div style="font-size:16px;font-weight:800;margin-bottom:2px">4</div>
+          <div style="font-size:9px;opacity:.8">가지</div>
+        </button>
+        <button id="gym-numex-btn-5" onclick="setGymNumEx(5)"
+          style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
+          <div style="font-size:16px;font-weight:800;margin-bottom:2px">5</div>
+          <div style="font-size:9px;opacity:.7">가지</div>
+        </button>
+        <button id="gym-numex-btn-6" onclick="setGymNumEx(6)"
+          style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
+          <div style="font-size:16px;font-weight:800;margin-bottom:2px">6</div>
+          <div style="font-size:9px;opacity:.7">가지</div>
+        </button>
+      </div>
+      <input type="hidden" id="gym-num-ex" value="4">
     </div>
   </div>
 
@@ -1346,47 +1382,10 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="mcfg-summary" style="margin-top:10px;padding:8px 12px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)"></div>
   </div>
 
-  <!-- STEP 3: 운동 종류 수 (개인 운동만 표시) -->
-  <div id="gym-step3-num" style="margin-bottom:14px">
-    <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
-      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 3</span>
-      <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">운동 종류 수</span>
-      <span style="font-size:10px;color:var(--text3);font-weight:400">선택된 분류 내 운동 개수</span>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
-      <button id="gym-numex-btn-2" onclick="setGymNumEx(2)"
-        style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
-        <div style="font-size:16px;font-weight:800;margin-bottom:2px">2</div>
-        <div style="font-size:9px;opacity:.7">가지</div>
-      </button>
-      <button id="gym-numex-btn-3" onclick="setGymNumEx(3)"
-        style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
-        <div style="font-size:16px;font-weight:800;margin-bottom:2px">3</div>
-        <div style="font-size:9px;opacity:.7">가지</div>
-      </button>
-      <button id="gym-numex-btn-4" onclick="setGymNumEx(4)"
-        style="padding:12px 6px;border-radius:9px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;text-align:center;font-weight:700;transition:all .15s">
-        <div style="font-size:16px;font-weight:800;margin-bottom:2px">4</div>
-        <div style="font-size:9px;opacity:.8">가지</div>
-      </button>
-      <button id="gym-numex-btn-5" onclick="setGymNumEx(5)"
-        style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
-        <div style="font-size:16px;font-weight:800;margin-bottom:2px">5</div>
-        <div style="font-size:9px;opacity:.7">가지</div>
-      </button>
-      <button id="gym-numex-btn-6" onclick="setGymNumEx(6)"
-        style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s">
-        <div style="font-size:16px;font-weight:800;margin-bottom:2px">6</div>
-        <div style="font-size:9px;opacity:.7">가지</div>
-      </button>
-    </div>
-    <input type="hidden" id="gym-num-ex" value="4">
-  </div>
-
-  <!-- STEP 4: 운동 목적 -->
+  <!-- STEP 3: 운동 목적 -->
   <div style="margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 4</span>
+      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 3</span>
       <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">운동 목적</span>
       <span style="font-size:10px;color:var(--text3);font-weight:400">(MD 변경 시 자동 설정)</span>
     </div>
@@ -1430,7 +1429,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <!-- STEP 5: 운동 방법 -->
   <div style="margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 5</span>
+      <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 4</span>
       <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">운동 방법</span>
       <span style="font-size:10px;color:var(--text3);font-weight:400">(MD 추천 · 직접 선택 가능)</span>
     </div>
@@ -1472,7 +1471,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- STEP 6: 처방 생성 -->
   <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
-    <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 6</span>
+    <span style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.15);color:#818cf8;letter-spacing:.06em;flex-shrink:0">STEP 5</span>
     <span style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.04em">처방 생성</span>
     <div style="display:flex;gap:6px;margin-left:auto">
       <button id="gym-mode-rand" class="btn-exp" onclick="setGymMode('rand')" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2);font-size:12px;padding:4px 10px">🎲 랜덤</button>
@@ -4978,6 +4977,9 @@ function setGymBodyPart(part, silent){
   const mcfg=document.getElementById('gym-multi-config');
   if(mcfg) mcfg.style.display=(part==='Multi')?'':'none';
   if(part==='Multi') updateMultiConfig();
+  // 운동 수 행: 개인 모드 + 단일 부위 선택 시만 표시
+  const step3=document.getElementById('gym-step3-num');
+  if(step3) step3.style.display=(part!=='Multi'&&_currentGymSessionType==='individual')?'':'none';
   if(_currentGymMode==='manual'&&!silent)renderGymManualSelector();
 }
 
