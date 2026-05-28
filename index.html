@@ -2821,6 +2821,87 @@ const D={
 "Suitcase carry":["한 손에만 덤벨 또는 KB를 들고 걷기","측면 코어 안정화(Lateral stabilization) 훈련","반대쪽 기울어짐 없이 골반 수평 유지","Quadratus lumborum 및 복사근 활성화","CDM·CM 코어 안정화 보조"]
 };
 
+// GYM_POOL 운동 중 D에 없는 운동 추가 설명
+const GYM_EX_DESC={
+// ─ 상체: 가슴 ─
+"Push-up":["손을 어깨 너비보다 약간 넓게 바닥에 짚는다","복압 잡고 팔꿈치·무릎·발목 일직선 유지","팔꿈치 45–60도 각도로 굽히며 가슴이 바닥에 닿을 듯이 내린다","폭발적으로 밀어 올리며 팔꿈치 완전 신전","정점에서 견갑골 완전 외전(protraction)까지 밀기"],
+"Weighted Push-up":["등에 플레이트 또는 웨이티드 조끼 착용 후 어깨 너비 손 위치","복압·둔근 동시 수축으로 전신 일직선 유지","팔꿈치 45–60도 벌리며 흉부가 바닥에 가까이 내린다","추가 부하로 더 천천히 내리며 편심 강도 높임","완전히 밀어 올리며 견갑골 외전까지 push"],
+"Incline DB Press":["30–45° 인클라인 벤치 설정 후 덤벨을 어깨 선상에","견갑골을 뒤로 모아 arch 유지, 복압 준비","덤벨을 흉근 상부로 내리며 팔꿈치 약 75도 벌림","폭발적으로 밀어 올려 상부 흉근 수축 집중","최고점에서 완전 신전, 흉근 수축 1초 유지"],
+"Med Ball Explosive Push-up":["메디신볼 위에 양손 올리고 엎드린 자세로 시작","폭발적으로 밀어 양 손이 볼에서 떨어져 바닥에 착지","착지 즉시 다시 볼 위로 점프 — 클랩 변형 가능","상지 반응성·파워 개발 목적, 완전 push-up 범위 유지","피로 시 볼 없이 클랩 Push-up으로 대체"],
+"Landmine Press":["바벨 한쪽 끝을 바닥 고정(랜드마인) 후 직립 자세","어깨 너비 스탠스, 팔꿈치를 몸 앞으로 들고 바 끝을 잡는다","바를 대각선 위로 폭발적으로 밀어 올린다","어깨 친화적 경로 — 회전근개 부담 최소화","단측 변형: 한 손으로 실시하여 코어 안정화 강조"],
+// ─ 상체: 등 ─
+"Barbell Bent-over Row":["힙 힌지로 상체 45–60도 기울인 후 바 파지","어깨 너비 오버핸드 또는 언더핸드 그립 선택","팔꿈치를 몸 뒤로 당기며 바를 하복부 방향으로","견갑골 완전 후인(retraction)+하강(depression) 완료","1–2초 수축 유지 후 천천히 내리기"],
+"Pull-up":["바를 어깨 너비보다 약간 넓게 오버핸드 파지","어깨를 먼저 아래로 당겨 견갑골 하강 활성화","팔꿈치를 몸 쪽으로 당기며 턱이 바 위로 올라간다","정점에서 1초 유지, 광배근 수축 의식","천천히 팔꿈치 완전 신전까지 내리기"],
+"Chin-up":["바를 어깨 너비 언더핸드(역손잡이) 파지","이두근 보조를 활용해 더 깊은 ROM 확보","팔꿈치를 당기며 가슴이 바에 닿을 듯이 올라간다","정점에서 1초 유지, 이두·광배 동시 수축 의식","완전히 팔꿈치 신전까지 천천히 내리기"],
+"Inverted Row":["TRX 또는 고정 바를 가슴 높이에 설치","발을 앞으로 내밀어 몸 전체가 판자처럼 일직선","팔꿈치를 뒤로 당기며 바를 가슴으로 끌어당긴다","견갑골 완전 내전까지 등 수축 완료","각도 낮출수록 강도 증가 (발을 더 앞으로)"],
+"Landmine Row":["힙 힌지로 상체 기울이고 한 손으로 바 끝을 잡는다","반대 손은 무릎이나 벤치에 지지하여 코어 안정화","팔꿈치를 뒤로 당기며 광배근 수축","단측 부하로 좌우 불균형 교정에 효과적","상체 회전 최소화, 순수 수평 pulling 패턴"],
+"Band Pull-apart":["밴드를 양손으로 어깨 너비 파지, 팔을 앞으로 뻗기","밴드를 당겨 가슴 또는 어깨 높이에서 양손이 멀어진다","후방 삼각근, 능형근, 중하부 승모근 활성화","수축 끝에서 1–2초 유지 후 천천히 복귀","어깨 전방 안정화 및 자세 교정 필수 운동"],
+"DB Seal Row":["인클라인 벤치에 엎드려 양 덤벨 들고 시작","발은 공중에, 몸통만 벤치 위에 고정","팔꿈치를 뒤로 당기며 양쪽 견갑골 모아 수축","몸통 흔들림 없는 순수 상배근 수축 집중","광배근·능형근·후방 삼각근 강화"],
+// ─ 상체: 어깨 ─
+"Overhead Press":["바벨을 어깨 앞쪽에, 그립 어깨 너비 또는 약간 넓게","복압 잡고 고관절 중립 — 허리 꺾임 방지","바를 곧장 위로 밀어 귀 옆을 통과시킨다","정점에서 어깨 위로 바를 잠금 — 완전 신전","천천히 내리며 어깨 안정성 유지"],
+"DB Shoulder Press":["덤벨을 어깨 높이 양쪽에 위치, 중립 또는 전방 파지","코어 브레이싱 후 수직으로 밀어 올린다","최고점에서 완전 신전, 어깨 으쓱 없이","각 팔 독립 — 좌우 불균형 교정 가능","천천히 내리며 어깨 안정성 확인"],
+"DB Lateral Raise":["양손 덤벨을 허벅지 옆에서 시작","팔꿈치 약간 굽힌 채로 어깨 높이까지 횡방향으로 들어 올린다","소지 쪽이 약간 낮게(새 날개 모양) — 승모근 배제","정점에서 1초 유지 후 천천히 내리기","중·측면 삼각근 집중 강화"],
+"Band Face Pull":["케이블 또는 밴드를 얼굴 높이에 설치","팔꿈치를 귀 높이로 들어올리며 뒤로 당긴다","외회전 강조: 엄지손가락이 귀 뒤를 향하게","후방 삼각근+외회전근 활성화","어깨 안정성 및 자세 교정 필수 운동"],
+"KB Bottoms-up Press":["케틀벨을 밑면이 위를 향하게(바닥 위로) 들고 어깨 높이","손목 중립 유지하며 위로 밀어 올린다","불안정한 무게중심으로 회전근개 전체 동시 활성화","코어와 어깨 안정화 근육 통합 훈련","낮은 무게로 시작 — 폼 완성 우선"],
+"Arnold Press":["덤벨을 가슴 앞에서 손바닥이 자신을 향하게 시작","밀어 올리며 손목을 외회전하여 정면 향하게","정점에서 완전 신전, 삼각근 전·중·후 모두 자극","내리며 다시 내회전하여 시작 자세로","삼각근 다방향 균형 강화 운동"],
+// ─ 하체: 엉덩이 ─
+"Band Hip Extension":["밴드를 발목에 걸고 고정물에 연결","한 발로 서서 밴드 저항에 맞서 고관절 신전","뒤로 뻗은 다리 둔근 최대 수축","요추 과신전 없이 고관절만 신전","1–2초 등척성 수축 후 천천히 복귀"],
+"Cable Pull-through":["케이블을 두 다리 사이로 통과시켜 잡는다","발을 케이블 너머에 두고 힙 힌지 자세","폭발적 hip extension으로 케이블을 앞으로 통과시킨다","둔근과 햄스트링의 폭발적 신전 패턴","KB Swing의 케이블 변형 — 안정적 부하 훈련"],
+// ─ 하체: 햄스트링 ─
+"Glute-Ham Raise":["GHD에 무릎을 패드에 올려 고정, 상체를 앞으로 내린다","햄스트링으로만 상체를 위로 들어올린다","완전 ROM — 수평까지 내려가고 직립까지 올라온다","편심 수축(내려갈 때) 강조 — 천천히 하강","부상 예방 햄스트링 편심 강화 최고 수준 운동"],
+"Slider Leg Curl":["등 바닥에 누워 슬라이더 위에 발을 올린다","글루트 브릿지로 골반을 들어 올린 상태 유지","발을 밀어 무릎을 신전했다가 다시 당겨 굴곡","골반 높이 유지하며 햄스트링 굴곡력 훈련","장비 없이 맨바닥 양말로도 대체 가능"],
+"Good Morning":["바벨을 승모근 위에 올리고 어깨 너비 스탠스","무릎 약간 굽힌 채 힙 힌지로 상체를 앞으로 기울인다","등 평평하게 유지 — 요추 굴곡 절대 금지","햄스트링이 당기는 느낌까지 내려간다","둔근·햄스트링 수축으로 힙을 앞으로 밀어 기립"],
+"DB Leg Curl (Prone)":["벤치에 엎드려 덤벨을 두 발 사이에 단단히 고정","무릎을 굽히며 햄스트링 최대 수축","무릎 완전 굴곡(90도 이상)까지","정점 1–2초 등척성 수축 유지","천천히 내리며 편심 단계 강조"],
+// ─ 하체: 쿼드 ─
+"Goblet Squat":["KB 또는 DB를 가슴 앞에 수직으로 들고","발 어깨 너비, 발끝 15–30도 외회전","팔꿈치로 무릎을 안쪽에서 바깥으로 밀며 깊게 앉는다","흉추 직립 유지 — 상체 무너짐 방지","힙 크리즈가 무릎 아래로 내려가는 풀 스쿼트 목표"],
+"Reverse Lunge":["직립에서 한 발을 뒤로 크게 내딛는다","앞 무릎을 90도, 뒷 무릎은 바닥 가까이","앞 정강이 수직 유지 — 무릎이 발 앞으로 가지 않게","앞 발 뒤꿈치로 밀어 시작 자세로 복귀","포워드 런지 대비 무릎 부하 낮음 — 축구 선수 권장"],
+"Step-up":["벤치 또는 박스에 한 발을 완전히 올린다","올린 발로만 완전히 밀어 반대 발을 들어올린다","보조 없이 앞 발만으로 — 뒷 발 바닥 누르지 않기","정점에서 잠깐 유지 후 천천히 내리기","단측 쿼드+둔근 강화 및 균형 훈련"],
+"Landmine Squat":["랜드마인 바 끝을 양손으로 가슴 앞에 들고","발 어깨 너비, 상체 직립 유지","깊게 앉으며 바를 앞으로 밀지 않고 지지","코어 안정화 + 상체 직립으로 척추 친화적 스쿼트","전면 스쿼트 입문 또는 상체 부상 시 대체"],
+"Lateral Lunge":["직립에서 한 발을 크게 옆으로 내딛는다","내딛은 쪽 무릎을 90도 굽히며 체중 이동","반대 발은 곧게 뻗어 내전근 신장","엉덩이를 뒤로 빼는 힌지 패턴 유지","내전근 신장 + 쿼드·둔근 단측 강화"],
+// ─ 하체: 카프 ─
+"Standing Calf Raise":["계단 끝 또는 평지에서 발끝으로 서기","발뒤꿈치를 최대한 높이 들어올린다","최고점에서 1–2초 등척성 유지 (비복근 최대 수축)","천천히 내리며 발뒤꿈치가 바닥 아래까지","양발 또는 한발로 실시 가능"],
+"Single-leg Calf Raise":["한 발로 서서 반대 발을 들어올린다","발끝으로 최대한 높이 밀어 올린다","최고점 1–2초 유지 후 천천히 내리기","발가락 방향 0·15도로 바꿔 자극 변화 가능","단측 훈련으로 좌우 불균형 교정"],
+"Seated Calf Raise":["벤치에 앉아 무릎 위에 덤벨이나 바벨을 올린다","발끝만으로 밀어올려 가자미근(Soleus) 집중 자극","비복근은 무릎 굴곡으로 이완됨 — 가자미근 단독","최고점 2초 유지 후 천천히 내리기","서서 하는 카프 레이즈와 병행 권장"],
+"Eccentric Calf Raise":["양발 또는 한발로 발뒤꿈치를 최고점까지 올린다","4–5초에 걸쳐 천천히 발뒤꿈치를 아래로 내린다","편심 단계 집중 — 비복근·아킬레스건 강화","족저근막염 및 아킬레스건 부상 예방에 효과적","통증 없는 범위에서 실시"],
+// ─ 전신: 올림픽 리프트 ─
+"Hang Power Clean":["무릎 위 행 포지션에서 힙 힌지 자세로 시작","폭발적 triple extension (발목·무릎·고관절 동시 신전)","팔꿈치를 빠르게 앞으로 돌려 파워 랙 포지션으로 수용","바를 높이 당기고 수용 자세에서 무릎 살짝 굽혀 충격 흡수","상체 파워와 하체 폭발력의 연결 훈련"],
+"Hang Power Snatch":["와이드 그립으로 행 포지션 시작 (무릎 위)","폭발적 triple extension 후 팔을 쭉 펴 오버헤드로 잡는다","바를 가장 빠른 경로로 위로 잡아당기기","오버헤드 수용 자세: 팔꿈치 완전 신전, 코어 브레이싱","전신 폭발력과 협응 훈련"],
+"Clean Pull":["바닥에서 풀 클린의 첫 풀 동작만 훈련","바 경로: 신체 가까이 정강이→무릎→힙 순으로","폭발적 triple extension에서 발꿈치 들기","팔꿈치를 구부리지 않고 순수 하체 드라이브만 사용","파워 클린의 기초 리프팅 패턴 강화"],
+"KB Clean":["KB를 힙 힌지로 스윙 후 팔꿈치를 앞으로 회전","전완을 수직으로 세워 KB를 랙 포지션으로 부드럽게 수용","충격 없이 포어암에 안착","하체 폭발력과 상체 수용 협응 훈련","KB Press 또는 KB Front Squat와 연계 가능"],
+"DB Hang Clean":["DB를 무릎 높이에서 폭발적으로 당겨 올린다","팔꿈치를 빠르게 앞으로 회전하며 어깨에 DB 수용","파워 클린의 DB 변형 — 올림픽 리프트 입문","양 DB 동시 또는 교대로 실시","바벨 없는 환경에서의 파워 개발"],
+// ─ 전신: 파워 복합 ─
+"Barbell Squat + Jump":["30–40% 1RM 저부하 바벨로 스쿼트 후 즉시 최대 점프","countermovement squat 후 폭발적 triple extension","PAP 원리 활용 — 세트당 3–5회","완전 회복 후 반복 (세트 간 충분한 휴식)","무게보다 최대 점프 높이 의도가 중요"],
+"Trap Bar Jump Squat":["트랩바 30–40% 1RM으로 최대 수직 점프","중심이 낮아 척추 부담 줄이며 점프 트레이닝 가능","폭발적 triple extension + 착지 흡수","바벨보다 안전하게 점프 강도 높임","속도를 최우선으로 — 무게 욕심 금지"],
+"Landmine Clean to Press":["랜드마인 클린으로 어깨까지 들어올린 후 즉시 프레스","하체 폭발력에서 상체 프레스로 파워 전달 연습","코어가 하체와 상체를 연결하는 핵심 역할","연속 동작으로 전신 파워 체인 훈련","한 동작으로 클린+프레스 효율적 통합"],
+"DB Thruster":["DB 프론트 스쿼트 자세로 깊게 앉은 후 일어서며 즉시 오버헤드 프레스","하체 momentum을 상체 프레스로 연결","대사성 파워 훈련 — 빠른 반복 또는 고중량","깊은 스쿼트 + 완전 프레스 → 완전 ROM 확보","축구 선수의 폭발적 점프-슛 패턴과 유사"],
+"Deadlift + Broad Jump":["바벨 데드리프트(70–80% 1RM) 완료 직후 제자리 브로드 점프","PAP 활용: 데드리프트의 고강도 근신경 활성화로 점프 파워 향상","데드리프트 2–3회 후 즉시 3–5회 브로드 점프","착지 시 무릎 굴곡으로 충격 흡수","콤플렉스 트레이닝의 대표적 하체 조합"],
+"KB Goblet Squat + Press":["KB 고블렛 스쿼트 후 일어서며 KB를 오버헤드로 프레스","스쿼트의 수직 파워를 오버헤드 프레스로 연결","풀 스쿼트 깊이 확보 + 완전 오버헤드 신전","코어·어깨·하체 통합 훈련","KB 단일 동작으로 전신 효율적 자극"],
+// ─ 코어: Anti-Extension ─
+"Plank":["팔꿈치를 어깨 바로 아래에 위치","복압 잡고 골반을 약간 후방 경사 — 요추 과신전 방지","둔근을 조여 하체 일직선 유지","목을 중립으로 — 아래를 보며 척추 정렬","호흡 유지하며 전신 긴장 등척성 수축"],
+"Ab Wheel Rollout":["무릎 꿇고 시작, 코어 완전 수축 상태 유지","바퀴를 앞으로 밀어 요추 굴곡 없이 뻗어나간다","최대 신장까지 뻗은 후 복근 수축으로 복귀","요추 중립 — 배가 땅에 닿거나 허리 아치 금지","복근과 전거근의 반중력(anti-extension) 최고 운동"],
+"Stability Ball Rollout":["짐볼 위에 팔꿈치를 올리고 무릎 꿇고 시작","복압 잡고 볼을 앞으로 밀어 몸을 뻗어나간다","최대 신장 후 코어 수축으로 볼을 당겨 복귀","요추 과신전 없이 일직선 유지","Ab Wheel보다 안정적 — 초중급 Anti-Extension"],
+"Long Lever Plank":["일반 플랭크에서 팔꿈치를 앞으로 이동(머리 쪽으로)","중심이 앞으로 이동해 반중력 부하 증가","요추가 처지지 않도록 복압을 최대로","수정된 플랭크로 난이도 높임","롤아웃과 플랭크의 중간 단계"],
+"Hollow Body Hold":["등 바닥, 팔을 귀 옆으로 뻗고 다리도 펴기","허리가 바닥에서 떨어지지 않게 복압 최대로","발과 팔을 바닥에서 들어올려 바나나 형태","숨 내쉬며 요추를 바닥에 계속 압박","체조 기반 코어 훈련 — 전방 코어 최대 부하"],
+"Band Anti-Extension Press":["밴드를 흉부 높이에 걸어 몸 앞에서 잡는다","팔을 앞으로 뻗으며 밴드 저항에 맞서 코어 반중력 유지","팔이 완전히 뻗어진 상태에서 1–2초 유지","천천히 당겨 복귀 — 요추 중립 계속 유지","Pallof Press의 반중력 버전"],
+// ─ 코어: Anti-Rotation ─
+"Bird Dog":["사지 지지(4점 지지) 자세, 척추 중립","대측 팔과 다리를 동시에 수평으로 들어올린다","허리 회전이나 골반 기울기 없이 척추 중립 유지","정점에서 2–3초 유지 후 천천히 내리기","코어 안정화 기초 훈련 — 회전 저항"],
+"Half-kneeling Pallof Press":["한쪽 무릎을 꿇은 자세에서 밴드 또는 케이블 파지","팔을 앞으로 밀며 회전 저항 — 고관절 안정화 추가","골반이 회전하거나 기울지 않도록 유지","일어선 자세보다 고관절 안정성 동시 훈련","축구 선수의 킥·방향 전환 동작 기반 강화"],
+"Tall Kneeling Chop":["양 무릎 꿇고 수직 자세, 밴드 또는 케이블","어깨 높이에서 반대 골반 방향으로 대각선으로 당긴다","회전 파워 저항 훈련 — 복사근과 전거근의 사선 패턴","양 방향(Chop/Lift) 균등하게 훈련","축구 볼 컨트롤·킥 동작 기반 강화"],
+"Single-arm Farmer Carry":["한 손에만 덤벨 또는 KB를 들고 직립","반대쪽으로 기울거나 골반이 떨어지지 않도록 코어 안정","측방 굴곡 저항(anti-lateral flexion) 최고 운동","어깨 안정화 + 코어 측면 강화 동시","일상 및 스포츠 기능성 훈련의 핵심"],
+// ─ 코어: Anti-Lateral Flexion ─
+"Side Plank":["옆으로 누워 팔꿈치로 지지, 발 쌓기 또는 무릎 굴곡","엉덩이를 완전히 들어올려 몸 전체 일직선","측방 코어(Quadratus lumborum, 복사근) 등척성 훈련","골반이 앞뒤로 기울지 않도록 유지","위쪽 팔을 천장으로 뻗거나 Hip dip 추가 가능"],
+"Side Plank + Hip Abduction":["사이드 플랭크 유지 상태에서 위쪽 다리를 들어올린다","중둔근(Glute medius)와 측방 코어 동시 강화","다리 올린 상태에서 2–3초 유지 후 내리기","골반 안정화 + 고관절 외전 통합 훈련","무릎 부상 예방 및 골반 안정에 핵심"],
+"Single-leg RDL Anti-Lat":["한 발로 서서 고관절 힌지로 T자 형태 만들기","측방 코어 안정화에 집중 — 골반 회전 없이","지지 발 외전근이 골반 수평 유지하도록","느리게 내려가며 측방 안정 패턴 강화","일반 Single-leg RDL보다 측면 안정화 강조"],
+// ─ 코어: Rotational Power ─
+"Med Ball Rotational Throw":["벽을 향해 서서 메디신볼을 양손으로 들고","흉추 회전으로 볼을 최대 속도로 벽에 던진다","발 고정, 회전은 흉추와 복사근에서만","반동으로 볼을 잡아 반대 방향도 실시","축구 킥·탈취 동작의 회전 파워와 직결"],
+"Med Ball Scoop Toss":["메디신볼을 두 손으로 아래에서 잡는다","힙 힌지에서 고관절 신전과 동시에 볼을 위로 투척","하체 폭발력을 상체 투척으로 전달","최대 높이 목표 — 폭발적 신전 의도","KB Swing의 메디신볼 버전"],
+"Band Woodchop":["밴드나 케이블을 어깨 위에서 대각선 아래로 당긴다","회전은 흉추에서, 요추 회전 최소화","발 고정, 복사근 수축으로 대각 패턴 실시","반대 방향(아래서 위, Cable Lift)도 균등하게 훈련","축구 킥·헤딩 동작의 회전 패턴 강화"],
+"Side Med Ball Slam":["메디신볼을 한쪽 위로 들어올린 후 옆으로 강하게 슬램","복사근(Oblique) 폭발적 수축 훈련","발 고정, 최대 회전 속도로 바닥에 타격","양쪽 균등하게 실시","수비 압박·탈취 동작의 측면 파워 강화"],
+"Russian Twist":["등을 약간 뒤로 기울이고 발을 들어 불안정 자세 만들기","메디신볼 또는 양손을 모아 좌우로 회전","천천히 제어하며 복사근 편심-동심 수축","발이 땅에 닿지 않아 복근 지속 부하","회전 조절 능력(rotation control) 훈련"],
+"Cable Band Lift":["케이블 또는 밴드를 골반 아래에서 대각선 위로 당긴다","하체→코어→상체 방향의 반대 사선 패턴","전거근, 복사근, 광배근 사선 연결 강화","Woodchop 반대 방향으로 짝지어 훈련","축구 볼 컨트롤·드리블 패턴 보조"],
+"Med Ball Slam":["메디신볼을 양손으로 머리 위로 들어올린다","전신 신전 후 폭발적으로 바닥에 슬램(내리치기)","볼이 반동하면 잡아 즉시 반복","전신 굴곡 파워 + 복근 강화","스트레스 해소 + 근신경 폭발력 훈련"],
+};
+
 // ═══════════════════════════════════════════
 // CURRENT VARIANT STATE
 // ═══════════════════════════════════════════
@@ -3921,6 +4002,37 @@ function getVideoHtml(name, url){
   return `<a href="${url}" target="_blank" class="vid-btn saved">▶ 영상 보기</a>`;
 }
 
+// ── GYM 운동 설명 조회 (D → GYM_EX_DESC 순서로 검색, 접두어 제거 정규화)
+function getGymDesc(name){
+  if(!name) return null;
+  if(D[name]) return D[name];
+  const lc=name.toLowerCase();
+  let k=Object.keys(D).find(dk=>dk.toLowerCase()===lc);
+  if(k) return D[k];
+  // 접두어 제거 후 재검색
+  const stripped=name.replace(/^(Barbell |DB |Dumbbell |KB |Kettlebell |Single-leg |Single-arm |Bent-over |Sumo |Cable )/i,'').trim();
+  if(stripped!==name){
+    const r=getGymDesc(stripped);
+    if(r) return r;
+  }
+  if(GYM_EX_DESC[name]) return GYM_EX_DESC[name];
+  k=Object.keys(GYM_EX_DESC).find(dk=>dk.toLowerCase()===lc);
+  return k?GYM_EX_DESC[k]:null;
+}
+
+// ── GYM 카드용 YouTube 검색 + 운동 방법 HTML 반환
+function gymDescHtml(slotId,name,nameEn){
+  const searchName=(nameEn||name).replace(/\s*\([^)]*\)/g,'').trim();
+  const ytUrl=`https://www.youtube.com/results?search_query=${encodeURIComponent(searchName+' exercise tutorial')}`;
+  const desc=getGymDesc(name)||(nameEn?getGymDesc(nameEn):null);
+  const did=slotId+'_d';
+  return `<div style="margin-top:7px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+    <a href="${ytUrl}" target="_blank" style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(239,68,68,0.12);color:#f87171;border:1px solid rgba(239,68,68,0.3);text-decoration:none;display:inline-flex;align-items:center;gap:3px">▶ YouTube</a>
+    ${desc?`<button onclick="(function(){var e=document.getElementById('${did}');if(e)e.style.display=e.style.display==='none'?'block':'none';})()" style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(99,102,241,0.1);color:#a5b4fc;border:1px solid rgba(99,102,241,0.3);cursor:pointer">📋 운동 방법</button>`:''}
+  </div>
+  ${desc?`<div id="${did}" style="display:none;margin-top:6px;padding:8px 10px;background:var(--surface);border-radius:6px;border:1px solid var(--border2)"><ul style="margin:0;padding-left:14px;font-size:11px;color:var(--text2);line-height:1.8">${desc.map(s=>`<li>${s}</li>`).join('')}</ul></div>`:''}`;
+}
+
 function buildCard(ex,idx,links={}){
   const url=links[ex.n];
   const phase=ex.p||ex.phase||'main';
@@ -4928,6 +5040,7 @@ function renderGroupSession(pairs,purpT,cfg){
         </div>
         <div style="font-size:12px;color:var(--text2)">${rxText}</div>
         ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
+        ${gymDescHtml(`gym-ex-${i}-a`,pair.a.name_ko,pair.a.name_en)}
       </div>
       ${pair.b?`<div id="gym-ex-${i}-b" style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -4938,6 +5051,7 @@ function renderGroupSession(pairs,purpT,cfg){
         </div>
         <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
         ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
+        ${gymDescHtml(`gym-ex-${i}-b`,pair.b.name_ko,pair.b.name_en)}
       </div>`:''}
       ${contrastNote}
     </div>`;
@@ -5280,6 +5394,7 @@ async function generateMultiContrast(){
           </div>
           <div style="font-size:12px;color:var(--text2)">${aRx}</div>
           ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
+          ${gymDescHtml(`gym-ex-${i}-a`,pair.a.name_ko,pair.a.name_en)}
         </div>
         ${pair.b?`<div id="gym-ex-${i}-b" style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -5290,6 +5405,7 @@ async function generateMultiContrast(){
           </div>
           <div style="font-size:12px;color:var(--text2)">${bRx}</div>
           ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
+          ${gymDescHtml(`gym-ex-${i}-b`,pair.b.name_ko,pair.b.name_en)}
         </div>`:''}
         <div style="font-size:11px;color:#fbbf24;margin-top:6px;padding:5px 10px;background:rgba(245,158,11,0.1);border-radius:4px;border-left:3px solid #f59e0b">⚡ A 완료 후 60–120초 이내 B 즉시 실시 — PAP(활성화 후 파워 증폭) 효과</div>
       </div>`;
@@ -5403,6 +5519,7 @@ async function generateGym(){
         </div>
         <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
         ${item.ex.cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${item.ex.cue}</div>`:''}
+        ${gymDescHtml(`gym-multi-ex-${idx}`,item.ex.n,'')}
       </div>`;
     });
 
@@ -5517,6 +5634,7 @@ async function generateGym(){
           </div>
           <div style="font-size:12px;color:var(--text2)">${aRx}</div>
           ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
+          ${gymDescHtml(`gym-ex-${i}-a`,pair.a.name_ko,pair.a.name_en)}
         </div>
         ${pair.b?`<div id="gym-ex-${i}-b" style="background:var(--surface2);border-radius:8px;padding:10px;border-left:3px solid #f59e0b">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -5528,6 +5646,7 @@ async function generateGym(){
           </div>
           <div style="font-size:12px;color:var(--text2)">${bRx}</div>
           ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
+          ${gymDescHtml(`gym-ex-${i}-b`,pair.b.name_ko,pair.b.name_en)}
         </div>`:''}
         ${contrastNote}
       </div>`;
@@ -5640,6 +5759,7 @@ function doGymSwap(pairIdx, slot, exId){
     </div>
     <div style="font-size:12px;color:var(--text2)">${rx}</div>
     ${newEx.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${newEx.coaching_cue}</div>`:''}
+    ${gymDescHtml(`gym-ex-${pairIdx}-${slot}`,newEx.name_ko,newEx.name_en)}
   `;
 }
 
@@ -5714,6 +5834,7 @@ function doMultiSwap(gi, altIdx){
     </div>
     <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
     ${newEx.cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${newEx.cue}</div>`:''}
+    ${gymDescHtml(`gym-multi-ex-${gi}`,newEx.n,'')}
   `;
 }
 
