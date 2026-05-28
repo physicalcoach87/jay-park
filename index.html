@@ -1915,6 +1915,10 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <option value="V2">V2 — 프리미엄 (Catapult 19개 지표)</option>
         <option value="V1">V1 — 베이직 (범용 12개 지표)</option>
       </select>
+      <select id="sa-club-use-app" style="font-size:14px;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+        <option value="true">📱 선수 앱 사용 (ON)</option>
+        <option value="false">🚫 선수 앱 미사용 (GPS 전용, 코치 직접 RPE 입력)</option>
+      </select>
       <div style="display:flex;gap:8px">
         <button onclick="saAddClub()" style="flex:1;background:var(--accent);color:#fff;border:none;border-radius:8px;padding:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">추가</button>
         <button onclick="saHideAddClub()" style="flex:1;background:var(--surface);border:1px solid var(--border2);color:var(--text3);border-radius:8px;padding:10px;font-size:14px;cursor:pointer;font-family:inherit">취소</button>
@@ -2149,6 +2153,8 @@ let userPermissions = {};
 let currentClubId = null;
 let currentClubName = '';
 let currentGpsPlan = 'V2';   // 'V1' | 'V2'
+let currentUsePlayerApp = true; // 선수 앱 사용 여부
+let _lastGpsData = []; // 코치 RPE 입력 모달에서 GPS duration 참조용
 let currentClubPermissions = {}; // 슈퍼어드민이 설정한 팀 허용 탭
 
 // ── 역할 레이블 ───────────────────────────────
@@ -2300,10 +2306,11 @@ async function showApp(user, preloadedRole){
     isTeamAdmin  = (prof?.role === 'admin' || prof?.role === 'superadmin');
     if(prof?.club_id){
       currentClubId = prof.club_id;
-      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions').eq('id', prof.club_id).single();
+      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions,use_player_app').eq('id', prof.club_id).single();
       if(club){
         currentClubName = club.name;
         currentGpsPlan  = club.gps_plan || 'V2';
+        currentUsePlayerApp = club.use_player_app ?? true;
         currentClubPermissions = club.permissions || {};
       }
     }
@@ -10411,6 +10418,7 @@ async function loadTeamSummary(){
       .eq('record_date', date),
   ]);
 
+  _lastGpsData = gps||[]; // 코치 RPE 모달에서 GPS duration 참조용
   const hasGps  = (gps||[]).length > 0;
   const hasSess = (sessions||[]).length > 0;
   const hasWell = (wellness||[]).length > 0;
@@ -10476,13 +10484,17 @@ async function loadTeamSummary(){
       : `<span style="color:#6b7280;font-size:10px">GPS-</span>`;
     return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe, wf, ws2, wst, wm, hasWell, wellTotal, wFatC, wSlpC, wStC, wMuC, wellStatus, wellStatusColor, wellStatusDot, wellTimeStr, rpeTimeStr };
   }).filter(r => {
-    // GPS 있거나, RPE/wellness 입력한 선수만 표시
+    // GPS 없는 모드(선수앱 미사용)는 전체 선수 표시, 그 외는 데이터 있는 선수만
+    if(!currentUsePlayerApp) return true;
     return gpsMap[r.p.id] || sessMap[r.p.id] || wellMap[r.p.id];
   });
 
   const rpeEntered  = rpeStatusRows.filter(r=>r.hasRpe).length;
   const rpeTotal    = rpeStatusRows.length;
-  const rpeStatusHtml = rpeStatusRows.map(r=>`
+
+  // 선수앱 미사용 모드: 간소화 테이블 (RPE+GPS만 표시)
+  const rpeStatusHtml = currentUsePlayerApp
+    ? rpeStatusRows.map(r=>`
     <tr style="border-bottom:1px solid var(--border)">
       <td style="padding:6px 8px">
         <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
@@ -10503,6 +10515,23 @@ async function loadTeamSummary(){
         <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
       </td>
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
+    </tr>`).join('')
+    : rpeStatusRows.map(r=>`
+    <tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 8px">
+        <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
+      </td>
+      <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.rpeTimeStr}</td>
+      <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
+      <td style="padding:6px 4px;text-align:center">
+        <button onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}',${r.rpe||'null'},${r.sRPE||'null'})"
+          style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasRpe?'#fbbf24':'#4ade80'}">
+          ${r.hasRpe?'수정':'입력'}
+        </button>
+      </td>
     </tr>`).join('');
 
   // ── GPS 기반 팀 평균 / 테이블 (GPS 있을 때만) ──
@@ -10614,30 +10643,36 @@ async function loadTeamSummary(){
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">
-          📋 RPE / 체중 입력 현황
+          📋 RPE ${currentUsePlayerApp ? '/ 체중 입력' : '직접 입력'} 현황
+          ${!currentUsePlayerApp ? '<span style="font-size:10px;font-weight:400;color:#6b7280;text-transform:none;letter-spacing:0;margin-left:6px">선수 앱 미사용 · 코치 입력 모드</span>' : ''}
         </div>
-        <div style="font-size:12px;font-weight:600">
-          <span style="color:#22c55e">${rpeEntered}</span>
-          <span style="color:var(--text3)"> / ${rpeTotal}명 입력완료</span>
-          ${!hasGps ? '<span style="font-size:10px;color:#f59e0b;margin-left:8px">⏳ GPS 업로드 대기중</span>' : ''}
+        <div style="display:flex;align-items:center;gap:10px">
+          ${!currentUsePlayerApp ? `<button onclick="openCoachRpeBatchModal('${date}')" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid rgba(74,222,128,0.5);background:rgba(74,222,128,0.1);color:#4ade80;cursor:pointer;font-family:inherit;font-weight:600">✏️ RPE 일괄 입력</button>` : ''}
+          <div style="font-size:12px;font-weight:600">
+            <span style="color:#22c55e">${rpeEntered}</span>
+            <span style="color:var(--text3)"> / ${rpeTotal}명 입력완료</span>
+            ${!hasGps ? '<span style="font-size:10px;color:#f59e0b;margin-left:8px">⏳ GPS 업로드 대기중</span>' : ''}
+          </div>
         </div>
       </div>
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            ${currentUsePlayerApp ? `
             <th style="padding:6px 8px;text-align:center;color:#22c55e">🔋 피로도</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">😴 수면질</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">🧠 스트레스</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">💪 근육통</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">총점</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">상태</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>` : ''}
             <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
             <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE시간</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>
+            ${currentUsePlayerApp ? `<th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>` : ''}
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">GPS</th>
+            ${!currentUsePlayerApp ? `<th style="padding:6px 8px;text-align:center;color:var(--text3)">편집</th>` : ''}
           </tr>
           ${rpeStatusHtml}
         </table>
@@ -18762,21 +18797,28 @@ async function saLoadClubs(){
     const planBadge = isV1
       ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.4)">V1 베이직</span>`
       : `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4)">V2 프리미엄</span>`;
+    const useApp = c.use_player_app ?? true;
+    const appBadge = useApp
+      ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.3)">📱 선수앱 ON</span>`
+      : `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(156,163,175,0.1);color:#6b7280;border:1px solid rgba(156,163,175,0.3)">📱 선수앱 OFF</span>`;
     return `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:1rem;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:1rem">
       <div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
           <div style="font-size:14px;font-weight:600;color:var(--text)">${c.name}</div>
           ${planBadge}
+          ${appBadge}
         </div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px">
           선수: <span style="color:var(--accent)">${counts[c.id]||0}명</span>
           &nbsp;·&nbsp; ID: <span style="font-size:10px;opacity:.5">${c.id.slice(0,8)}...</span>
         </div>
       </div>
-      <div style="display:flex;gap:6px;flex-shrink:0">
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
         <button onclick="saChangePlan('${c.id}','${c.name}','${c.gps_plan||'V2'}')"
           style="background:transparent;border:1px solid #fbbf24;color:#fbbf24;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">플랜 변경</button>
+        <button onclick="saTogglePlayerApp('${c.id}','${c.name}',${useApp})"
+          style="background:transparent;border:1px solid ${useApp?'#4ade80':'#6b7280'};color:${useApp?'#4ade80':'#9ca3af'};border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">앱 ${useApp?'OFF':'ON'}</button>
         <button onclick="saEditClubPerms('${c.id}','${c.name}')"
           style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">탭 권한</button>
         <button onclick="saDeleteClub('${c.id}','${c.name}')"
@@ -18828,10 +18870,11 @@ async function saCreateCoach(){
 async function saAddClub(){
   const name = document.getElementById('sa-club-name').value.trim();
   const plan = document.getElementById('sa-club-plan').value;
+  const useApp = document.getElementById('sa-club-use-app').value === 'true';
   const errEl = document.getElementById('sa-club-err');
   errEl.textContent='';
   if(!name){ errEl.textContent='팀 이름을 입력하세요.'; return; }
-  const {error} = await supa.from('clubs').insert({name, gps_plan:plan});
+  const {error} = await supa.from('clubs').insert({name, gps_plan:plan, use_player_app:useApp});
   if(error){ errEl.textContent='오류: '+error.message; return; }
   document.getElementById('sa-club-name').value='';
   saHideAddClub();
@@ -18844,6 +18887,14 @@ async function saChangePlan(id, name, currentPlan){
   const curLabel = currentPlan === 'V1' ? 'V1 베이직' : 'V2 프리미엄';
   if(!confirm(`"${name}" 팀 플랜을\n${curLabel} → ${newLabel}으로 변경할까요?`)) return;
   const {error} = await supa.from('clubs').update({gps_plan: newPlan}).eq('id', id);
+  if(error){ alert('변경 실패: '+error.message); return; }
+  await saLoadClubs();
+}
+async function saTogglePlayerApp(id, name, currentVal){
+  const newVal = !currentVal;
+  const label = newVal ? '선수 앱 사용 ON' : '선수 앱 사용 OFF';
+  if(!confirm(`"${name}" 팀의\n선수 앱 사용을 [${label}]으로 변경할까요?\n\n⚠️ OFF 시: 코치가 직접 RPE를 입력하는 모드로 전환됩니다.`)) return;
+  const {error} = await supa.from('clubs').update({use_player_app: newVal}).eq('id', id);
   if(error){ alert('변경 실패: '+error.message); return; }
   await saLoadClubs();
 }
@@ -19222,6 +19273,221 @@ async function permsSaveCoach(profileId){
   if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='오류: '+error.message; return; }
   msgEl.style.color='var(--accent)'; msgEl.textContent='✅ 저장 완료';
 }
+
+// ── 코치 직접 RPE 입력 (선수 개별) ──────────────────────────────────
+let _coachRpeDate = null;
+let _coachRpePlayerId = null;
+
+function openCoachRpeModal(date, playerId, playerName, currentRpe, currentSRPE){
+  _coachRpeDate = date;
+  _coachRpePlayerId = playerId;
+  const modal = document.getElementById('coach-rpe-modal');
+  document.getElementById('coach-rpe-modal-date').textContent = date + ' · ' + playerName;
+  // 현재 GPS duration 찾기
+  const gpsRow = (_lastGpsData||[]).find(r=>r.player_id===playerId);
+  const gpsDur = gpsRow?.duration || '';
+  document.getElementById('coach-rpe-modal-body').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">RPE (0~10)</div>
+        <input id="crpe-rpe" type="number" min="0" max="10" step="0.5" value="${currentRpe||''}" placeholder="예: 7"
+          style="width:100%;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;font-family:inherit">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">운동시간 (분)</div>
+        <input id="crpe-dur" type="number" min="0" value="${gpsDur}" placeholder="예: 90"
+          style="width:100%;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:15px;text-align:center;box-sizing:border-box;font-family:inherit">
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">세션 구분</div>
+        <select id="crpe-sess" style="width:100%;padding:8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;box-sizing:border-box;font-family:inherit">
+          <option value="AM">AM 훈련</option>
+          <option value="PM">PM 훈련</option>
+          <option value="개인">개인운동</option>
+        </select>
+      </div>
+    </div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px;font-size:12px;color:var(--text3);margin-bottom:14px">
+      sRPE 예상: <span id="crpe-srpe-preview" style="color:#c084fc;font-weight:700">—</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="saveCoachRpe()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 저장</button>
+      <button onclick="closeCoachRpeModal()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit">취소</button>
+    </div>
+    <div id="crpe-msg" style="font-size:12px;margin-top:8px;min-height:14px"></div>`;
+  // sRPE 실시간 미리보기
+  const rpeIn = document.getElementById('crpe-rpe');
+  const durIn = document.getElementById('crpe-dur');
+  const updatePreview = ()=>{
+    const r=parseFloat(rpeIn.value)||0, d=parseFloat(durIn.value)||0;
+    document.getElementById('crpe-srpe-preview').textContent = r&&d ? Math.round(r*d)+' AU' : '—';
+  };
+  rpeIn.addEventListener('input', updatePreview);
+  durIn.addEventListener('input', updatePreview);
+  updatePreview();
+  modal.style.display='flex';
+}
+function closeCoachRpeModal(){
+  document.getElementById('coach-rpe-modal').style.display='none';
+}
+async function saveCoachRpe(){
+  const rpe = parseFloat(document.getElementById('crpe-rpe').value)||null;
+  const dur = parseFloat(document.getElementById('crpe-dur').value)||null;
+  const sess = document.getElementById('crpe-sess').value;
+  const msgEl = document.getElementById('crpe-msg');
+  if(!rpe){ msgEl.style.color='#ef4444'; msgEl.textContent='RPE를 입력해주세요 (0 초과)'; return; }
+  msgEl.style.color='var(--text3)'; msgEl.textContent='저장 중...';
+  const {error} = await supa.from('session_records').upsert({
+    record_date: _coachRpeDate,
+    player_id: _coachRpePlayerId,
+    rpe, duration: dur,
+    session_type: sess,
+    session_order: 1,
+  }, {onConflict:'record_date,player_id,session_order'});
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
+  closeCoachRpeModal();
+  loadTeamSummary(_coachRpeDate);
+}
+
+// ── 코치 RPE 일괄 입력 ────────────────────────────────────────────
+let _coachRpeBatchDate = null;
+
+async function openCoachRpeBatchModal(date){
+  _coachRpeBatchDate = date;
+  const modal = document.getElementById('coach-rpe-batch-modal');
+  document.getElementById('coach-rpe-batch-date').textContent = date;
+  document.getElementById('coach-rpe-batch-body').innerHTML = '<div style="color:var(--text3);padding:1rem;text-align:center">불러오는 중...</div>';
+  modal.style.display='flex';
+
+  // 기존 session_records 조회
+  const [{data:existing}, {data:gpsData}] = await Promise.all([
+    supa.from('session_records').select('player_id,rpe,duration,session_type,session_order').eq('record_date', date),
+    supa.from('gps_records').select('player_id,duration').eq('session_date', date),
+  ]);
+  _lastGpsData = gpsData||[];
+  const existMap = {};
+  (existing||[]).forEach(r=>{ existMap[r.player_id] = r; });
+  const gpsMap2 = {};
+  (gpsData||[]).forEach(r=>{ gpsMap2[r.player_id] = r; });
+
+  const players = (_players||[]);
+  if(!players.length){
+    document.getElementById('coach-rpe-batch-body').innerHTML = '<div style="color:var(--text3);text-align:center;padding:1rem">등록된 선수가 없습니다</div>';
+    return;
+  }
+
+  document.getElementById('coach-rpe-batch-body').innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="background:var(--surface2)">
+          <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+          <th style="padding:6px 8px;text-align:center;color:#fbbf24">RPE</th>
+          <th style="padding:6px 8px;text-align:center;color:var(--text3)">운동시간(분)</th>
+          <th style="padding:6px 8px;text-align:center;color:var(--text3)">세션</th>
+          <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
+        </tr>
+        ${players.map(p=>{
+          const ex = existMap[p.id]||{};
+          const gpsDur = gpsMap2[p.id]?.duration||'';
+          return `<tr style="border-bottom:1px solid var(--border)" data-pid="${p.id}">
+            <td style="padding:6px 8px">
+              <div style="font-weight:600;color:var(--text);font-size:12px">${p.name}</div>
+              <div style="font-size:10px;color:var(--text3)">${p.position||''}</div>
+            </td>
+            <td style="padding:4px 6px">
+              <input class="brpe-rpe" type="number" min="0" max="10" step="0.5" value="${ex.rpe||''}" placeholder="0~10"
+                style="width:60px;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:${ex.rpe?'#fbbf24':'var(--text)'};font-size:13px;font-weight:700;text-align:center;box-sizing:border-box;font-family:inherit"
+                oninput="updateBatchSRPE(this)">
+            </td>
+            <td style="padding:4px 6px">
+              <input class="brpe-dur" type="number" min="0" value="${ex.duration||gpsDur}" placeholder="90"
+                style="width:65px;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;text-align:center;box-sizing:border-box;font-family:inherit"
+                oninput="updateBatchSRPE(this)">
+            </td>
+            <td style="padding:4px 6px">
+              <select class="brpe-sess" style="padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">
+                <option value="AM" ${(ex.session_type||'AM')==='AM'?'selected':''}>AM</option>
+                <option value="PM" ${ex.session_type==='PM'?'selected':''}>PM</option>
+                <option value="개인" ${ex.session_type==='개인'?'selected':''}>개인</option>
+              </select>
+            </td>
+            <td class="brpe-srpe" style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px;font-weight:600">
+              ${ex.rpe&&ex.duration ? Math.round(ex.rpe*ex.duration)+' AU' : '—'}
+            </td>
+          </tr>`;
+        }).join('')}
+      </table>
+    </div>`;
+}
+function updateBatchSRPE(inp){
+  const row = inp.closest('tr');
+  const rpe = parseFloat(row.querySelector('.brpe-rpe').value)||0;
+  const dur = parseFloat(row.querySelector('.brpe-dur').value)||0;
+  row.querySelector('.brpe-srpe').textContent = rpe&&dur ? Math.round(rpe*dur)+' AU' : '—';
+  row.querySelector('.brpe-rpe').style.color = rpe ? '#fbbf24' : 'var(--text)';
+}
+function closeCoachRpeBatchModal(){
+  document.getElementById('coach-rpe-batch-modal').style.display='none';
+}
+async function saveCoachRpeBatch(){
+  const btn = document.getElementById('coach-rpe-batch-save-btn');
+  const msgEl = document.getElementById('coach-rpe-batch-msg');
+  btn.textContent='저장 중...'; btn.disabled=true;
+  msgEl.style.color='var(--text3)'; msgEl.textContent='';
+  const rows = document.querySelectorAll('#coach-rpe-batch-body tr[data-pid]');
+  const records = [];
+  rows.forEach(row=>{
+    const pid = row.dataset.pid;
+    const rpe = parseFloat(row.querySelector('.brpe-rpe').value)||null;
+    const dur = parseFloat(row.querySelector('.brpe-dur').value)||null;
+    const sess = row.querySelector('.brpe-sess').value;
+    if(rpe && rpe > 0){
+      records.push({ record_date: _coachRpeBatchDate, player_id: pid, rpe, duration: dur, session_type: sess, session_order: 1 });
+    }
+  });
+  if(!records.length){
+    btn.textContent='💾 전체 저장'; btn.disabled=false;
+    msgEl.style.color='#ef4444'; msgEl.textContent='입력된 RPE가 없습니다';
+    return;
+  }
+  const {error} = await supa.from('session_records').upsert(records, {onConflict:'record_date,player_id,session_order'});
+  btn.textContent='💾 전체 저장'; btn.disabled=false;
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
+  msgEl.style.color='#22c55e'; msgEl.textContent=`✅ ${records.length}명 저장 완료`;
+  setTimeout(()=>{ closeCoachRpeBatchModal(); loadTeamSummary(_coachRpeBatchDate); }, 1000);
+}
 </script>
+
+<!-- ── 코치 RPE 직접 입력 모달 (선수앱 미사용 팀용) ── -->
+<div id="coach-rpe-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;align-items:center;justify-content:center;padding:1rem;overflow-y:auto" onclick="if(event.target===this)closeCoachRpeModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:520px;margin:auto;border:1px solid var(--border2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">✏️ RPE 입력 <span id="coach-rpe-modal-date" style="font-size:12px;font-weight:400;color:var(--text3)"></span></div>
+      <button onclick="closeCoachRpeModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="coach-rpe-modal-body"></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">※ RPE: 0(휴식) ~ 10(최고강도) · 저장 후 훈련보고서에 즉시 반영됩니다</div>
+  </div>
+</div>
+
+<!-- ── 코치 RPE 일괄 입력 모달 ── -->
+<div id="coach-rpe-batch-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto" onclick="if(event.target===this)closeCoachRpeBatchModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:640px;margin:auto;border:1px solid var(--border2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text)">✏️ RPE 일괄 입력</div>
+        <div id="coach-rpe-batch-date" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <button onclick="closeCoachRpeBatchModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="coach-rpe-batch-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="saveCoachRpeBatch()" id="coach-rpe-batch-save-btn" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 전체 저장</button>
+      <button onclick="closeCoachRpeBatchModal()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit">취소</button>
+    </div>
+    <div id="coach-rpe-batch-msg" style="font-size:12px;margin-top:8px;min-height:14px;color:var(--text3)"></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">※ RPE 0 또는 비워두면 저장되지 않습니다 · 세션: AM·PM·개인운동</div>
+  </div>
+</div>
 </body>
 </html>
