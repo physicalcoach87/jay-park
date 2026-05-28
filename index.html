@@ -2153,9 +2153,10 @@ let currentRole = 'coach';
 let userPermissions = {};
 let currentClubId = null;
 let currentClubName = '';
-let currentGpsPlan = 'V2';      // 'V1' | 'V2'
-let currentUsePlayerApp = true; // 선수 앱 사용 여부 (웰니스 포함)
-let currentUseRpe = true;       // RPE 사용 여부 (false = GPS 전용)
+let currentGpsPlan = 'V2';        // 'V1' | 'V2'
+let currentUsePlayerApp = true;   // 선수 앱으로 자동 수집 여부
+let currentUseRpe = true;         // RPE 사용 여부
+let currentUseWellness = true;    // 웰니스 사용 여부
 let _lastGpsData = []; // 코치 RPE 입력 모달에서 GPS duration 참조용
 let currentClubPermissions = {}; // 슈퍼어드민이 설정한 팀 허용 탭
 
@@ -2308,12 +2309,13 @@ async function showApp(user, preloadedRole){
     isTeamAdmin  = (prof?.role === 'admin' || prof?.role === 'superadmin');
     if(prof?.club_id){
       currentClubId = prof.club_id;
-      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions,use_player_app,use_rpe').eq('id', prof.club_id).single();
+      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions,use_player_app,use_rpe,use_wellness').eq('id', prof.club_id).single();
       if(club){
-        currentClubName = club.name;
-        currentGpsPlan  = club.gps_plan || 'V2';
+        currentClubName     = club.name;
+        currentGpsPlan      = club.gps_plan || 'V2';
         currentUsePlayerApp = club.use_player_app ?? true;
         currentUseRpe       = club.use_rpe ?? true;
+        currentUseWellness  = club.use_wellness ?? currentUsePlayerApp;
         currentClubPermissions = club.permissions || {};
       }
     }
@@ -8465,20 +8467,22 @@ async function loadMorningReport(){
       const acwr = rd.acwrData?.acwr;
       if(acwr!=null){ if(acwr>1.5) score+=25; else if(acwr>1.3) score+=15; else if(acwr<0.8){ score+=10; flags.push('Underload — 자극 부족'); } }
     }
-    // 오늘 웰니스
-    const tw = todayWellAll.find(r=>r.player_id===pid);
-    if(!tw){ score+=5; flags.push('웰니스 미응답'); }
-    else {
-      const wt=(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0);
-      if(wt<8){ score+=20; flags.push(`웰니스 위험 ${wt}/20`); }
-      else if(wt<12){ score+=10; flags.push(`웰니스 주의 ${wt}/20`); }
-    }
-    // 웰니스 3일 트렌드
-    const pw7 = (well7||[]).filter(r=>r.player_id===pid).sort((a,b)=>b.record_date.localeCompare(a.record_date));
-    if(pw7.length>=3){
-      const t = pw7.slice(0,3).map(r=>(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0));
-      if(t[0]<t[1]&&t[1]<t[2]){ score+=10; flags.push('웰니스 3일 연속 하락'); }
-      else if(t[0]<t[1]){ score+=5; flags.push('웰니스 하락 추세'); }
+    // 오늘 웰니스 (웰니스 사용 모드에서만)
+    const tw = currentUseWellness ? todayWellAll.find(r=>r.player_id===pid) : null;
+    if(currentUseWellness){
+      if(!tw){ score+=5; flags.push('웰니스 미응답'); }
+      else {
+        const wt=(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0);
+        if(wt<8){ score+=20; flags.push(`웰니스 위험 ${wt}/20`); }
+        else if(wt<12){ score+=10; flags.push(`웰니스 주의 ${wt}/20`); }
+      }
+      // 웰니스 3일 트렌드
+      const pw7 = (well7||[]).filter(r=>r.player_id===pid).sort((a,b)=>b.record_date.localeCompare(a.record_date));
+      if(pw7.length>=3){
+        const t = pw7.slice(0,3).map(r=>(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0));
+        if(t[0]<t[1]&&t[1]<t[2]){ score+=10; flags.push('웰니스 3일 연속 하락'); }
+        else if(t[0]<t[1]){ score+=5; flags.push('웰니스 하락 추세'); }
+      }
     }
     if(score>0) _paList.push({player, score, flags:[...new Set(flags)], riskLevel: rd?.risk?.level||'yellow', acwr: rd?.acwrData?.acwr||null, wellTotal: tw?(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0):null});
   }
@@ -8664,9 +8668,11 @@ async function loadMorningReport(){
     <!-- 섹션4: 오늘 관리 우선순위 -->
     ${priorityAlertHtml}
 
-    <!-- 섹션5: 웰니스 + RPE 2열 -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px;align-items:start">
+    <!-- 섹션5: 웰니스 + RPE (모드에 따라 조건부 표시) -->
+    ${(currentUseWellness||currentUseRpe) ? `
+    <div style="display:grid;grid-template-columns:${(currentUseWellness&&currentUseRpe)?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;align-items:start">
 
+      ${currentUseWellness ? `
       <!-- 오늘 웰니스 -->
       <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
         <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">💚 오늘 웰니스 (${todayWellAll.length}/${_players.length}명)</div>
@@ -8685,27 +8691,28 @@ async function loadMorningReport(){
                 const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
                 const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
                 const chkTime=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-                return `<tr style="border-bottom:0.5px solid var(--border)">
+                return \`<tr style="border-bottom:0.5px solid var(--border)">
                   <td style="padding:5px 8px">
-                    <div style="font-weight:600">${wp?.name||'-'}</div>
-                    <div style="font-size:10px;color:var(--text3)">${wp?.position||''}</div>
+                    <div style="font-weight:600">\${wp?.name||'-'}</div>
+                    <div style="font-size:10px;color:var(--text3)">\${wp?.position||''}</div>
                   </td>
-                  <td style="padding:5px 6px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:10px">${status}</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:11px;color:var(--text2)">${(()=>{
+                  <td style="padding:5px 6px;text-align:center;font-weight:700;color:\${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">\${total}/20</td>
+                  <td style="padding:5px 6px;text-align:center;font-size:10px">\${status}</td>
+                  <td style="padding:5px 6px;text-align:center;font-size:11px;color:var(--text2)">\${(()=>{
                     const w7 = (well7||[]).filter(x=>x.player_id===r.player_id&&x.morning_weight&&x.record_date!==today);
                     const avg7 = w7.length ? (w7.reduce((a,x)=>a+(parseFloat(x.morning_weight)||0),0)/w7.length).toFixed(1) : null;
-                    return r.morning_weight ? (avg7?`${r.morning_weight}<span style="color:var(--text3);font-size:9px">/${avg7}</span>kg`:`${r.morning_weight}kg`) : '—';
+                    return r.morning_weight ? (avg7?\`\${r.morning_weight}<span style="color:var(--text3);font-size:9px">/\${avg7}</span>kg\`:\`\${r.morning_weight}kg\`) : '—';
                   })()}</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:10px;color:#4ade80">${chkTime}</td>
-                </tr>`;
+                  <td style="padding:5px 6px;text-align:center;font-size:10px;color:#4ade80">\${chkTime}</td>
+                </tr>\`;
               }).join('')}
             </table>
           </div>
-          ${noRespHtml}
-        ` : `<div style="font-size:12px;color:var(--text3)">오늘 웰니스 응답 없음</div>`}
-      </div>
+          \${noRespHtml}
+        \` : \`<div style="font-size:12px;color:var(--text3)">오늘 웰니스 응답 없음</div>\`}
+      </div>` : ''}
 
+      ${currentUseRpe ? `
       <!-- 오늘 RPE -->
       <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
         <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📋 오늘 RPE (${todayRpeRespondedIds.size}/${_players.length}명)</div>
@@ -8714,16 +8721,16 @@ async function loadMorningReport(){
             ${todayRpeRows.map(r=>{
               const rp=_players.find(p=>p.id===r.player_id);
               const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
-                <span style="color:var(--text);font-weight:500">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
-                <span style="color:#a78bfa;font-size:10px">RPE ${parseFloat(r.rpe)} · ✓ ${rt}</span>
-              </div>`;
+              return \`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
+                <span style="color:var(--text);font-weight:500">\${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">\${rp?.position||''}</span></span>
+                <span style="color:#a78bfa;font-size:10px">RPE \${parseFloat(r.rpe)} · ✓ \${rt}</span>
+              </div>\`;
             }).join('')}
           </div>` : ''}
         ${noRpeRespHtml}
-      </div>
+      </div>` : ''}
 
-    </div>`;
+    </div>` : ''}`;
 
   // 부상위험 상세 분석 자동 실행
   runInjuryRiskAnalysis();
@@ -10495,46 +10502,37 @@ async function loadTeamSummary(){
   const rpeEntered  = rpeStatusRows.filter(r=>r.hasRpe).length;
   const rpeTotal    = rpeStatusRows.length;
 
-  // 선수앱 미사용 모드: 간소화 테이블 (RPE+GPS만 표시)
-  const rpeStatusHtml = currentUsePlayerApp
-    ? rpeStatusRows.map(r=>`
+  // 통합 행 렌더 (currentUseWellness / currentUseRpe 플래그로 컬럼 제어)
+  const rpeStatusHtml = rpeStatusRows.map(r=>`
     <tr style="border-bottom:1px solid var(--border)">
       <td style="padding:6px 8px">
         <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
         <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
       </td>
+      ${currentUseWellness?`
       <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wFatC}">${r.hasWell?r.wf:'—'}</td>
       <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wSlpC}">${r.hasWell?r.ws2:'—'}</td>
       <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wStC}">${r.hasWell?r.wst:'—'}</td>
       <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wMuC}">${r.hasWell?r.wm:'—'}</td>
       <td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:${r.wellStatusColor}">${r.wellTotal!=null?r.wellTotal+'/20':'—'}</td>
       <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:600;color:${r.wellStatusColor}">${r.wellStatus}${r.wellStatusDot}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.wellTimeStr}</td>
-      <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
-      <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.rpeTimeStr}</td>
-      <td style="padding:6px 8px;text-align:right;font-size:11px">
+      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.wellTimeStr}</td>`:''}
+      ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>`:''}
+      ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>`:''}
+      ${currentUseRpe?`<td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.rpeTimeStr}</td>`:''}
+      ${currentUseWellness?`<td style="padding:6px 8px;text-align:right;font-size:11px">
         <div style="color:var(--text3)">${r.preW ? r.preW+' kg' : '—'}</div>
         <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
-      </td>
+      </td>`:''}
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
-    </tr>`).join('')
-    : rpeStatusRows.map(r=>`
-    <tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:6px 8px">
-        <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
-        <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
-      </td>
-      <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
-      <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.rpeTimeStr}</td>
-      <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
-      <td style="padding:6px 4px;text-align:center">
+      ${(!currentUsePlayerApp&&currentUseRpe)?`<td style="padding:6px 4px;text-align:center">
         <button onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}',${r.rpe||'null'},${r.sRPE||'null'})"
           style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasRpe?'#fbbf24':'#4ade80'}">
-          ${r.hasRpe?'수정':'입력'}
-        </button>
-      </td>
+          ${r.hasRpe?'수정':'입력'}</button></td>`:''}
+      ${(!currentUsePlayerApp&&currentUseWellness)?`<td style="padding:6px 4px;text-align:center">
+        <button onclick="openCoachWellnessModal('${date}','${r.p.id}','${r.p.name}')"
+          style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasWell?'rgba(34,197,94,0.4)':'rgba(96,165,250,0.4)'};background:${r.hasWell?'rgba(34,197,94,0.08)':'rgba(96,165,250,0.08)'};color:${r.hasWell?'#4ade80':'#60a5fa'}">
+          ${r.hasWell?'수정':'입력'}</button></td>`:''}
     </tr>`).join('');
 
   // ── GPS 기반 팀 평균 / 테이블 (GPS 있을 때만) ──
@@ -10616,7 +10614,7 @@ async function loadTeamSummary(){
       ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.player_load||'-'}${mmPct(r.player_load, mx.match_max_pl)}</td>`}
       ${currentUseRpe?`<td style="padding:7px 8px;text-align:right;color:#fbbf24;font-weight:600">${rpeVal||'—'}</td>`:''}
       ${currentUseRpe?`<td style="padding:7px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>`:''}
-      ${(currentUseRpe&&currentUsePlayerApp)?`<td style="padding:7px 8px;text-align:right">
+      ${(currentUseRpe&&currentUseWellness)?`<td style="padding:7px 8px;text-align:right">
         <div style="font-size:11px;color:var(--text3)">${preW||'—'}</div>
         <div style="font-size:10px;color:${wDiffColor}">${postW ? postW+(wDiff!==null?` (${parseFloat(wDiff)>0?'+':''}${wDiff})` : '') : '—'}</div>
       </td>`:''}
@@ -10635,7 +10633,7 @@ async function loadTeamSummary(){
       ${isV1plan?'':'<th style="padding:7px 8px;text-align:right;color:var(--text3)">P.Load</th>'}
       ${currentUseRpe?'<th style="padding:7px 8px;text-align:right;color:#fbbf24">RPE</th>':''}
       ${currentUseRpe?'<th style="padding:7px 8px;text-align:right;color:#c084fc">sRPE</th>':''}
-      ${(currentUseRpe&&currentUsePlayerApp)?'<th style="padding:7px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>':''}
+      ${(currentUseRpe&&currentUseWellness)?'<th style="padding:7px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>':''}
     </tr>`;
 
   const mRpeAvg  = calcAvgRpe(fullGps);
@@ -10646,11 +10644,12 @@ async function loadTeamSummary(){
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">
-          📋 RPE ${currentUsePlayerApp ? '/ 체중 입력' : '직접 입력'} 현황
-          ${!currentUsePlayerApp ? '<span style="font-size:10px;font-weight:400;color:#6b7280;text-transform:none;letter-spacing:0;margin-left:6px">선수 앱 미사용 · 코치 입력 모드</span>' : ''}
+          📋 ${[currentUseWellness?'웰니스':'', currentUseRpe?'RPE':''].filter(Boolean).join(' / ')} 현황
+          ${!currentUsePlayerApp ? '<span style="font-size:10px;font-weight:400;color:#6b7280;text-transform:none;letter-spacing:0;margin-left:6px">코치 입력 모드</span>' : ''}
         </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          ${!currentUsePlayerApp ? `<button onclick="openCoachRpeBatchModal('${date}')" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid rgba(74,222,128,0.5);background:rgba(74,222,128,0.1);color:#4ade80;cursor:pointer;font-family:inherit;font-weight:600">✏️ RPE 일괄 입력</button>` : ''}
+        <div style="display:flex;align-items:center;gap:8px">
+          ${(!currentUsePlayerApp&&currentUseRpe) ? `<button onclick="openCoachRpeBatchModal('${date}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(74,222,128,0.5);background:rgba(74,222,128,0.1);color:#4ade80;cursor:pointer;font-family:inherit;font-weight:600">✏️ RPE 일괄입력</button>` : ''}
+          ${(!currentUsePlayerApp&&currentUseWellness) ? `<button onclick="openCoachWellnessBatchModal('${date}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(96,165,250,0.5);background:rgba(96,165,250,0.1);color:#60a5fa;cursor:pointer;font-family:inherit;font-weight:600">💚 웰니스 일괄입력</button>` : ''}
           <div style="font-size:12px;font-weight:600">
             <span style="color:#22c55e">${rpeEntered}</span>
             <span style="color:var(--text3)"> / ${rpeTotal}명 입력완료</span>
@@ -10662,7 +10661,7 @@ async function loadTeamSummary(){
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
-            ${currentUsePlayerApp ? `
+            ${currentUseWellness ? `
             <th style="padding:6px 8px;text-align:center;color:#22c55e">🔋 피로도</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">😴 수면질</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">🧠 스트레스</th>
@@ -10670,12 +10669,13 @@ async function loadTeamSummary(){
             <th style="padding:6px 8px;text-align:center;color:#22c55e">총점</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">상태</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>` : ''}
-            <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
-            <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE시간</th>
-            ${currentUsePlayerApp ? `<th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>` : ''}
+            ${currentUseRpe?`<th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>`:''}
+            ${currentUseRpe?`<th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>`:''}
+            ${currentUseRpe?`<th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE시간</th>`:''}
+            ${currentUseWellness ? `<th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>` : ''}
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">GPS</th>
-            ${!currentUsePlayerApp ? `<th style="padding:6px 8px;text-align:center;color:var(--text3)">편집</th>` : ''}
+            ${(!currentUsePlayerApp&&currentUseRpe) ? `<th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE편집</th>` : ''}
+            ${(!currentUsePlayerApp&&currentUseWellness) ? `<th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스편집</th>` : ''}
           </tr>
           ${rpeStatusHtml}
         </table>
@@ -10977,7 +10977,7 @@ async function loadPlayerDashboard(){
         <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'—'}</td>
         ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:${rpeColor}">${rpeVal||'—'}</td>`:''}
         ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>`:''}
-        ${currentUsePlayerApp?`<td style="padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap">${wellTd}</td>`:''}
+        ${currentUseWellness?`<td style="padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap">${wellTd}</td>`:''}
         <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.opponent||'—'}</td>
       </tr>`;
   }).join('');
@@ -11005,7 +11005,7 @@ async function loadPlayerDashboard(){
       <div style="display:grid;grid-template-columns:repeat(${cards2.length||1},1fr);gap:6px">${statCardHtml(cards2)}</div>
     </div>
 
-    ${currentUsePlayerApp&&avgWellTotal ? `
+    ${currentUseWellness&&avgWellTotal ? `
     <div style="background:var(--surface);border:1px solid #15803d;border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:#86efac;letter-spacing:.05em;margin-bottom:10px">기간 평균 웰니스 <span style="font-weight:400;color:var(--text3)">(${(wellRows||[]).length}회 응답)</span></div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
@@ -11075,7 +11075,7 @@ async function loadPlayerDashboard(){
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
               ${currentUseRpe?'<th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>':''}
               ${currentUseRpe?'<th style="padding:6px 8px;text-align:right;color:var(--text3)">sRPE</th>':''}
-              ${currentUsePlayerApp?'<th style="padding:6px 8px;text-align:center;color:#86efac;font-weight:600">웰니스<span style="display:block;font-size:9px;font-weight:400;color:var(--text3)">피/수/스/근</span></th>':''}
+              ${currentUseWellness?'<th style="padding:6px 8px;text-align:center;color:#86efac;font-weight:600">웰니스<span style="display:block;font-size:9px;font-weight:400;color:var(--text3)">피/수/스/근</span></th>':''}
               <th style="padding:6px 8px;text-align:center;color:var(--text3)">주기화</th>
             </tr>
           </thead>
@@ -18800,15 +18800,19 @@ async function saLoadClubs(){
     const planBadge = isV1
       ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.12);color:#fbbf24;border:1px solid rgba(251,191,36,0.4)">V1 베이직</span>`
       : `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(139,92,246,0.12);color:#a78bfa;border:1px solid rgba(139,92,246,0.4)">V2 프리미엄</span>`;
-    const useApp = c.use_player_app ?? true;
-    const useRpe = c.use_rpe ?? true;
+    const useApp  = c.use_player_app ?? true;
+    const useRpe  = c.use_rpe ?? true;
+    const useWell = c.use_wellness ?? useApp;
     // 모드 배지: 풀 / 코치RPE / GPS전용
     const modeBadge = useApp
       ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(34,197,94,0.1);color:#4ade80;border:1px solid rgba(34,197,94,0.3)">📱 풀 모드</span>`
-      : useRpe
-        ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)">✏️ 코치 RPE</span>`
+      : useRpe||useWell
+        ? `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(251,191,36,0.1);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)">✏️ 코치 입력</span>`
         : `<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(96,165,250,0.1);color:#60a5fa;border:1px solid rgba(96,165,250,0.3)">📡 GPS 전용</span>`;
-    const modeDesc = useApp ? '웰니스+RPE 선수 입력' : useRpe ? '코치 직접 RPE 입력' : 'GPS 데이터만 사용';
+    const modeItems = [];
+    if(useWell) modeItems.push('웰니스');
+    if(useRpe)  modeItems.push('RPE');
+    const modeDesc = useApp ? '웰니스+RPE 선수 앱 입력' : modeItems.length ? `코치 직접 입력(${modeItems.join('+')})` : 'GPS 데이터만 사용';
     return `
     <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:1rem;margin-bottom:8px">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
@@ -18827,7 +18831,7 @@ async function saLoadClubs(){
         <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
           <button onclick="saChangePlan('${c.id}','${c.name}','${c.gps_plan||'V2'}')"
             style="background:transparent;border:1px solid #fbbf24;color:#fbbf24;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">플랜 변경</button>
-          <button onclick="saChangeMode('${c.id}','${c.name}',${useApp},${useRpe})"
+          <button onclick="saOpenModeModal('${c.id}','${c.name}',${useApp},${useRpe},${useWell})"
             style="background:transparent;border:1px solid #60a5fa;color:#60a5fa;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">모드 변경</button>
           <button onclick="saEditClubPerms('${c.id}','${c.name}')"
             style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">탭 권한</button>
@@ -18882,12 +18886,13 @@ async function saAddClub(){
   const name = document.getElementById('sa-club-name').value.trim();
   const plan = document.getElementById('sa-club-plan').value;
   const mode = document.getElementById('sa-club-mode').value;
-  const useApp = mode === 'full';
-  const useRpe = mode !== 'gps_only';
+  const useApp  = mode === 'full';
+  const useRpe  = mode !== 'gps_only';
+  const useWell = mode !== 'gps_only';
   const errEl = document.getElementById('sa-club-err');
   errEl.textContent='';
   if(!name){ errEl.textContent='팀 이름을 입력하세요.'; return; }
-  const {error} = await supa.from('clubs').insert({name, gps_plan:plan, use_player_app:useApp, use_rpe:useRpe});
+  const {error} = await supa.from('clubs').insert({name, gps_plan:plan, use_player_app:useApp, use_rpe:useRpe, use_wellness:useWell});
   if(error){ errEl.textContent='오류: '+error.message; return; }
   document.getElementById('sa-club-name').value='';
   saHideAddClub();
@@ -18903,22 +18908,68 @@ async function saChangePlan(id, name, currentPlan){
   if(error){ alert('변경 실패: '+error.message); return; }
   await saLoadClubs();
 }
-async function saChangeMode(id, name, useApp, useRpe){
-  // 3가지 모드 순환: 풀 → 코치RPE → GPS전용 → 풀
-  let newApp, newRpe, modeLabel;
+function saOpenModeModal(id, name, useApp, useRpe, useWell){
+  window._saModeTarget = {id, name};
+  document.getElementById('sa-mode-club-name').textContent = name;
+
   if(useApp){
-    // 풀 → 코치RPE
-    newApp=false; newRpe=true; modeLabel='✏️ 코치 RPE 입력 모드\n(선수앱 없이 코치가 직접 RPE 입력)';
-  } else if(useRpe){
-    // 코치RPE → GPS 전용
-    newApp=false; newRpe=false; modeLabel='📡 GPS 전용 모드\n(RPE·웰니스 없이 GPS 데이터만 사용)';
+    // 풀 모드: 선수앱 사용 중 → 선수앱 ON, RPE/웰니스 체크 비활성
+    document.getElementById('sa-mode-app').checked     = true;
+    document.getElementById('sa-mode-rpe').checked     = true;
+    document.getElementById('sa-mode-well').checked    = true;
+    document.getElementById('sa-mode-rpe').disabled    = true;
+    document.getElementById('sa-mode-well').disabled   = true;
   } else {
-    // GPS 전용 → 풀
-    newApp=true; newRpe=true; modeLabel='📱 풀 모드\n(선수앱 웰니스+RPE 모두 사용)';
+    document.getElementById('sa-mode-app').checked     = false;
+    document.getElementById('sa-mode-rpe').checked     = useRpe;
+    document.getElementById('sa-mode-well').checked    = useWell;
+    document.getElementById('sa-mode-rpe').disabled    = false;
+    document.getElementById('sa-mode-well').disabled   = false;
   }
-  if(!confirm(`"${name}" 팀 데이터 모드를\n[${modeLabel}]으로 변경할까요?`)) return;
-  const {error} = await supa.from('clubs').update({use_player_app:newApp, use_rpe:newRpe}).eq('id', id);
+  saModeUpdateDesc();
+  document.getElementById('sa-mode-modal').style.display = 'flex';
+}
+function saCloseModeModal(){
+  document.getElementById('sa-mode-modal').style.display = 'none';
+  window._saModeTarget = null;
+}
+function saModeToggleApp(){
+  const appOn = document.getElementById('sa-mode-app').checked;
+  document.getElementById('sa-mode-rpe').disabled  = appOn;
+  document.getElementById('sa-mode-well').disabled = appOn;
+  if(appOn){
+    document.getElementById('sa-mode-rpe').checked  = true;
+    document.getElementById('sa-mode-well').checked = true;
+  }
+  saModeUpdateDesc();
+}
+function saModeUpdateDesc(){
+  const appOn  = document.getElementById('sa-mode-app').checked;
+  const rpeOn  = !document.getElementById('sa-mode-rpe').disabled && document.getElementById('sa-mode-rpe').checked;
+  const wellOn = !document.getElementById('sa-mode-well').disabled && document.getElementById('sa-mode-well').checked;
+  let desc='', badge='';
+  if(appOn){
+    badge='📱 풀 모드'; desc='선수 앱으로 웰니스·RPE 자동 수집';
+  } else if(rpeOn||wellOn){
+    const items=[wellOn?'웰니스':'',rpeOn?'RPE':''].filter(Boolean).join('+');
+    badge=`✏️ 코치 입력 (${items})`; desc=`코치가 직접 ${items} 입력`;
+  } else {
+    badge='📡 GPS 전용'; desc='GPS 데이터만 사용 (RPE·웰니스 없음)';
+  }
+  document.getElementById('sa-mode-desc').innerHTML=`<b>${badge}</b> — ${desc}`;
+}
+async function saSaveMode(){
+  if(!window._saModeTarget) return;
+  const {id, name} = window._saModeTarget;
+  const appOn  = document.getElementById('sa-mode-app').checked;
+  const rpeOn  = document.getElementById('sa-mode-rpe').checked && !document.getElementById('sa-mode-rpe').disabled;
+  const wellOn = document.getElementById('sa-mode-well').checked && !document.getElementById('sa-mode-well').disabled;
+  const newApp  = appOn;
+  const newRpe  = appOn ? true : rpeOn;
+  const newWell = appOn ? true : wellOn;
+  const {error} = await supa.from('clubs').update({use_player_app:newApp, use_rpe:newRpe, use_wellness:newWell}).eq('id', id);
   if(error){ alert('변경 실패: '+error.message); return; }
+  saCloseModeModal();
   await saLoadClubs();
 }
 async function saDeleteClub(id, name){
@@ -19479,6 +19530,151 @@ async function saveCoachRpeBatch(){
   msgEl.style.color='#22c55e'; msgEl.textContent=`✅ ${records.length}명 저장 완료`;
   setTimeout(()=>{ closeCoachRpeBatchModal(); loadTeamSummary(_coachRpeBatchDate); }, 1000);
 }
+
+// ── 코치 웰니스 개별 입력 ──────────────────────────────────────────
+let _coachWellDate = '', _coachWellPlayerId = '';
+const WELL_LABELS = ['🔋 피로도','😴 수면질','🧠 스트레스','💪 근육통'];
+const WELL_KEYS   = ['fatigue','sleep_quality','stress','muscle_soreness'];
+
+async function openCoachWellnessModal(date, playerId, playerName){
+  _coachWellDate     = date;
+  _coachWellPlayerId = playerId;
+  const msgEl = document.getElementById('coach-wellness-modal-msg');
+  msgEl.textContent='';
+  document.getElementById('coach-wellness-modal-date').textContent = date + ' · ' + playerName;
+
+  // 기존 값 조회
+  const {data:existing} = await supa.from('wellness_records')
+    .select('fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
+    .eq('record_date', date).eq('player_id', playerId).single();
+
+  const bodyEl = document.getElementById('coach-wellness-modal-body');
+  bodyEl.innerHTML = `
+    <div style="display:grid;gap:10px">
+      ${WELL_KEYS.map((k,i)=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:var(--surface2);border-radius:8px">
+          <label style="font-size:13px;color:var(--text);white-space:nowrap">${WELL_LABELS[i]}</label>
+          <div style="display:flex;gap:6px">
+            ${[1,2,3,4,5].map(v=>`
+              <label style="display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer">
+                <input type="radio" name="cwell-${k}" value="${v}" ${existing?.[k]===v?'checked':''} style="accent-color:#22c55e;cursor:pointer">
+                <span style="font-size:11px;color:var(--text3)">${v}</span>
+              </label>`).join('')}
+          </div>
+        </div>`).join('')}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 10px;background:var(--surface2);border-radius:8px">
+        <label style="font-size:13px;color:var(--text)">⚖️ 아침 체중(kg)</label>
+        <input id="cwell-weight" type="number" step="0.1" min="30" max="150" value="${existing?.morning_weight||''}"
+          placeholder="예: 75.5"
+          style="width:90px;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px;text-align:right">
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <button onclick="saveCoachWellness()" style="width:100%;padding:10px;border-radius:8px;border:none;background:#22c55e;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 저장</button>
+    </div>`;
+  document.getElementById('coach-wellness-modal').style.display = 'flex';
+}
+function closeCoachWellnessModal(){
+  document.getElementById('coach-wellness-modal').style.display = 'none';
+}
+async function saveCoachWellness(){
+  const msgEl = document.getElementById('coach-wellness-modal-msg');
+  msgEl.style.color='var(--text3)'; msgEl.textContent='저장 중...';
+  const rec = { record_date: _coachWellDate, player_id: _coachWellPlayerId };
+  WELL_KEYS.forEach(k=>{
+    const sel = document.querySelector(`input[name="cwell-${k}"]:checked`);
+    rec[k] = sel ? parseInt(sel.value) : null;
+  });
+  const w = parseFloat(document.getElementById('cwell-weight').value)||null;
+  rec.morning_weight = w;
+  const {error} = await supa.from('wellness_records').upsert(rec, {onConflict:'record_date,player_id'});
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
+  msgEl.style.color='#22c55e'; msgEl.textContent='✅ 저장 완료';
+  setTimeout(()=>{ closeCoachWellnessModal(); loadTeamSummary(_coachWellDate); }, 800);
+}
+
+// ── 코치 웰니스 일괄 입력 ────────────────────────────────────────────
+let _coachWellBatchDate = '';
+async function openCoachWellnessBatchModal(date){
+  _coachWellBatchDate = date;
+  const msgEl = document.getElementById('coach-wellness-batch-msg');
+  msgEl.textContent='';
+  document.getElementById('coach-wellness-batch-date').textContent = date + ' 웰니스 일괄 입력';
+
+  // 기존 웰니스 조회
+  const {data:existing} = await supa.from('wellness_records')
+    .select('player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
+    .eq('record_date', date).in('player_id', _players.map(p=>p.id));
+  const wellMap = {};
+  (existing||[]).forEach(r=>{ wellMap[r.player_id]=r; });
+
+  const bodyEl = document.getElementById('coach-wellness-batch-body');
+  bodyEl.innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">
+        <thead>
+          <tr style="background:var(--surface2)">
+            <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:500;white-space:nowrap">선수</th>
+            ${WELL_LABELS.map(l=>`<th style="padding:6px 4px;text-align:center;color:var(--text3);font-weight:500;font-size:11px;white-space:nowrap">${l}</th>`).join('')}
+            <th style="padding:6px 4px;text-align:center;color:var(--text3);font-weight:500;font-size:11px">체중</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${_players.map(p=>{
+            const ex = wellMap[p.id]||{};
+            const cells = WELL_KEYS.map(k=>`
+              <td style="padding:4px 2px;text-align:center">
+                <select data-key="${k}" style="width:52px;padding:3px;border-radius:4px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;text-align:center">
+                  <option value="">-</option>
+                  ${[1,2,3,4,5].map(v=>`<option value="${v}" ${ex[k]===v?'selected':''}>${v}</option>`).join('')}
+                </select>
+              </td>`).join('');
+            return `<tr data-pid="${p.id}" style="border-bottom:0.5px solid var(--border)">
+              <td style="padding:5px 8px;font-weight:600;white-space:nowrap">${p.name}<span style="color:var(--text3);font-size:10px;margin-left:4px">${p.position||''}</span></td>
+              ${cells}
+              <td style="padding:4px 2px;text-align:center">
+                <input type="number" step="0.1" min="30" max="150" value="${ex.morning_weight||''}" placeholder="-" class="bwell-weight"
+                  style="width:60px;padding:3px 4px;border-radius:4px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;text-align:center">
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  document.getElementById('coach-wellness-batch-modal').style.display = 'flex';
+}
+function closeCoachWellnessBatchModal(){
+  document.getElementById('coach-wellness-batch-modal').style.display = 'none';
+}
+async function saveCoachWellnessBatch(){
+  const msgEl = document.getElementById('coach-wellness-batch-msg');
+  msgEl.style.color='var(--text3)'; msgEl.textContent='저장 중...';
+  const rows = document.querySelectorAll('#coach-wellness-batch-body tr[data-pid]');
+  const records = [];
+  rows.forEach(row=>{
+    const pid = row.dataset.pid;
+    const rec = { record_date: _coachWellBatchDate, player_id: pid };
+    let hasVal = false;
+    WELL_KEYS.forEach(k=>{
+      const sel = row.querySelector(`select[data-key="${k}"]`);
+      const v = sel ? (parseInt(sel.value)||null) : null;
+      rec[k] = v;
+      if(v) hasVal = true;
+    });
+    const w = parseFloat(row.querySelector('.bwell-weight')?.value)||null;
+    rec.morning_weight = w;
+    if(w) hasVal = true;
+    if(hasVal) records.push(rec);
+  });
+  if(!records.length){
+    msgEl.style.color='#ef4444'; msgEl.textContent='입력된 웰니스가 없습니다';
+    return;
+  }
+  const {error} = await supa.from('wellness_records').upsert(records, {onConflict:'record_date,player_id'});
+  if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
+  msgEl.style.color='#22c55e'; msgEl.textContent=`✅ ${records.length}명 저장 완료`;
+  setTimeout(()=>{ closeCoachWellnessBatchModal(); loadTeamSummary(_coachWellBatchDate); }, 1000);
+}
 </script>
 
 <!-- ── 코치 RPE 직접 입력 모달 (선수앱 미사용 팀용) ── -->
@@ -19510,6 +19706,86 @@ async function saveCoachRpeBatch(){
     </div>
     <div id="coach-rpe-batch-msg" style="font-size:12px;margin-top:8px;min-height:14px;color:var(--text3)"></div>
     <div style="font-size:11px;color:var(--text3);margin-top:6px">※ RPE 0 또는 비워두면 저장되지 않습니다 · 세션: AM·PM·개인운동</div>
+  </div>
+</div>
+
+<!-- ── 코치 웰니스 개별 입력 모달 ── -->
+<div id="coach-wellness-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;align-items:center;justify-content:center;padding:1rem;overflow-y:auto" onclick="if(event.target===this)closeCoachWellnessModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:480px;margin:auto;border:1px solid var(--border2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">💚 웰니스 입력 <span id="coach-wellness-modal-date" style="font-size:12px;font-weight:400;color:var(--text3)"></span></div>
+      <button onclick="closeCoachWellnessModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="coach-wellness-modal-body"></div>
+    <div id="coach-wellness-modal-msg" style="font-size:12px;margin-top:8px;min-height:14px;color:var(--text3)"></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">※ 각 항목 1(최악) ~ 5(최고) · 저장 후 Morning Report에 즉시 반영됩니다</div>
+  </div>
+</div>
+
+<!-- ── 코치 웰니스 일괄 입력 모달 ── -->
+<div id="coach-wellness-batch-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;align-items:flex-start;justify-content:center;padding:1rem;overflow-y:auto" onclick="if(event.target===this)closeCoachWellnessBatchModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:20px;width:100%;max-width:700px;margin:auto;border:1px solid var(--border2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div style="font-size:15px;font-weight:700;color:var(--text)">💚 웰니스 일괄 입력</div>
+        <div id="coach-wellness-batch-date" style="font-size:12px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <button onclick="closeCoachWellnessBatchModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="coach-wellness-batch-body"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="saveCoachWellnessBatch()" style="flex:2;padding:10px;border-radius:8px;border:none;background:#22c55e;color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 전체 저장</button>
+      <button onclick="closeCoachWellnessBatchModal()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit">취소</button>
+    </div>
+    <div id="coach-wellness-batch-msg" style="font-size:12px;margin-top:8px;min-height:14px;color:var(--text3)"></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">※ 각 항목 1~5 · 비워두면 해당 선수는 저장되지 않습니다</div>
+  </div>
+</div>
+
+<!-- ── 슈퍼어드민 모드 변경 모달 ── -->
+<div id="sa-mode-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:99999;align-items:center;justify-content:center;padding:1rem" onclick="if(event.target===this)saCloseModeModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:100%;max-width:420px;margin:auto;border:1px solid var(--border2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">⚙️ 데이터 모드 변경</div>
+      <button onclick="saCloseModeModal()" style="background:none;border:none;color:var(--text3);font-size:22px;cursor:pointer;line-height:1">×</button>
+    </div>
+    <div id="sa-mode-club-name" style="font-size:13px;color:var(--accent);margin-bottom:18px;font-weight:600"></div>
+
+    <!-- 선수앱 사용 토글 -->
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface2);border-radius:10px;cursor:pointer;margin-bottom:10px;border:1px solid var(--border)">
+      <input type="checkbox" id="sa-mode-app" onchange="saModeToggleApp()" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">📱 선수 앱 사용 (풀 모드)</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">선수가 앱으로 웰니스·RPE를 직접 입력</div>
+      </div>
+    </label>
+
+    <!-- 코치 입력 옵션 (선수앱 미사용 시) -->
+    <div style="padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:10px">✏️ 코치 직접 입력 항목 (선수앱 미사용 시)</div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px">
+        <input type="checkbox" id="sa-mode-well" onchange="saModeUpdateDesc()" style="width:16px;height:16px;accent-color:#22c55e;cursor:pointer">
+        <div>
+          <div style="font-size:13px;color:var(--text)">💚 웰니스 입력</div>
+          <div style="font-size:11px;color:var(--text3)">피로·수면·스트레스·근육통 코치 기입</div>
+        </div>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+        <input type="checkbox" id="sa-mode-rpe" onchange="saModeUpdateDesc()" style="width:16px;height:16px;accent-color:#a78bfa;cursor:pointer">
+        <div>
+          <div style="font-size:13px;color:var(--text)">📋 RPE 입력</div>
+          <div style="font-size:11px;color:var(--text3)">운동자각도(RPE) 코치 기입 → sRPE 자동계산</div>
+        </div>
+      </label>
+    </div>
+
+    <!-- 현재 모드 설명 -->
+    <div id="sa-mode-desc" style="font-size:12px;color:var(--accent2);background:rgba(139,92,246,0.08);padding:10px 12px;border-radius:8px;margin-bottom:16px;line-height:1.5"></div>
+
+    <div style="display:flex;gap:8px">
+      <button onclick="saSaveMode()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 저장</button>
+      <button onclick="saCloseModeModal()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:13px;cursor:pointer;font-family:inherit">취소</button>
+    </div>
   </div>
 </div>
 </body>
