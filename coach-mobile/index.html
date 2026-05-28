@@ -1084,14 +1084,18 @@ async function loadRpe(){
     const missingBadge=missing.length?'<div style="font-size:10px;color:#ef4444;font-weight:600;margin-top:1px">⚠️ '+missing.join('/')+'미입력</div>':'';
     const rows=sessions.map((r,i)=>{
       const rv=parseFloat(r.rpe),dur=parseFloat(r.duration)||0,sRPE=rv&&dur?Math.round(rv*dur):null;
+      const delBtn=sessions.length>1
+        ?'<button onclick="mobileDeleteRpe(\''+r.id+'\',\''+p.name+'\')" style="font-size:11px;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.3);color:#ef4444;border-radius:5px;padding:2px 7px;cursor:pointer;font-family:inherit">삭제</button>'
+        :'';
       return '<tr>'
         +'<td style="padding:4px 8px">'+(i===0?'<div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div>'+missingBadge:'')+'</td>'
         +'<td style="padding:4px 8px"><select onchange="mobileUpdateRpeType(this,\''+r.id+'\')" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:1px 3px;font-family:inherit">'+typeOpts(r.session_type)+'</select></td>'
         +'<td style="padding:4px 8px"><span style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+'">'+rv+'</span></td>'
         +'<td style="padding:4px 8px;color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
-        +'<td style="padding:4px 8px;color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td></tr>';
+        +'<td style="padding:4px 8px;color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td>'
+        +'<td style="padding:4px 8px;text-align:center">'+delBtn+'</td></tr>';
     }).join('');
-    const totalRow=sessions.length>1?'<tr style="background:rgba(167,139,250,.08)"><td colspan="2" style="padding:2px 8px;font-size:10px;color:var(--text3)">합산</td><td></td><td></td><td style="padding:2px 8px;color:#a78bfa;font-weight:700;font-size:12px">'+Math.round(totalSRPE)+'</td></tr>':'';
+    const totalRow=sessions.length>1?'<tr style="background:rgba(167,139,250,.08)"><td colspan="2" style="padding:2px 8px;font-size:10px;color:var(--text3)">합산</td><td></td><td></td><td style="padding:2px 8px;color:#a78bfa;font-weight:700;font-size:12px">'+Math.round(totalSRPE)+'</td><td></td></tr>':'';
     return rows+totalRow;
   }).join('');
 
@@ -1136,7 +1140,7 @@ async function loadRpe(){
 
     +'<div class="card" style="padding:12px 0"><div class="card-title" style="padding:0 16px 8px">✅ 응답 완료 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+responded.length+'명</span></div>'
     +(responded.length
-      ?'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>구분</th><th>RPE</th><th>시간</th><th>sRPE</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>'
+      ?'<div style="overflow-x:auto;padding:0 16px"><table class="data-table"><thead><tr><th>선수</th><th>구분</th><th>RPE</th><th>시간</th><th>sRPE</th><th>삭제</th></tr></thead><tbody>'+tableRows+'</tbody></table></div>'
       :'<div style="padding:0 16px"><div class="empty-state"><p>오늘 RPE 입력 없음</p></div></div>')
     +'</div>'
 
@@ -1156,6 +1160,12 @@ async function mobileUpdateRpeType(sel, recordId){
   sel.disabled=false;
   if(error){showToast('수정 실패',true);sel.value=sel.dataset.orig||'AM';}
   else{showToast('✅ '+newType+'으로 변경');sel.style.color='var(--accent2)';setTimeout(()=>sel.style.color='',1500);}
+}
+async function mobileDeleteRpe(recordId, playerName){
+  if(!confirm('이 RPE 기록을 삭제할까요?\n'+playerName+' · 선택한 항목')) return;
+  const {error}=await supa.from('session_records').delete().eq('id',recordId);
+  if(error){showToast('삭제 실패',true);}
+  else{showToast('✅ 삭제됨');_loadedPages['rpe']=false;loadRpe();}
 }
 
 async function sendRpeReminder(id,name){
