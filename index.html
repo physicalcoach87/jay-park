@@ -10462,18 +10462,17 @@ async function loadTeamSummary(){
         <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
         <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
       </td>
-      <td style="padding:6px 8px;text-align:center">${r.statusDot}</td>
-      <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
-      <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
-      <td style="padding:6px 8px;text-align:right;font-size:11px">
-        <div style="color:var(--text3)">${r.preW ? r.preW+' kg' : '—'}</div>
-        <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
-      </td>
       <td style="padding:6px 8px;text-align:center">
         ${r.wellAvg!=null ? `<div style="font-size:13px;font-weight:700;color:${r.wellColor}">${r.wellAvg}</div>${r.wellDetail}` : '<span style="color:var(--text3);font-size:11px">—</span>'}
       </td>
       <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.wellTimeStr}</td>
+      <td style="padding:6px 8px;text-align:right;color:#fbbf24;font-weight:600;font-size:13px">${r.rpe||'—'}</td>
+      <td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>
       <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.rpeTimeStr}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px">
+        <div style="color:var(--text3)">${r.preW ? r.preW+' kg' : '—'}</div>
+        <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
+      </td>
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
     </tr>`).join('');
 
@@ -10597,13 +10596,12 @@ async function loadTeamSummary(){
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <tr style="background:var(--surface2)">
             <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE입력</th>
-            <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
-            <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
-            <th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>
             <th style="padding:6px 8px;text-align:center;color:#22c55e">웰니스</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>
+            <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
+            <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE시간</th>
+            <th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">GPS</th>
           </tr>
           ${rpeStatusHtml}
