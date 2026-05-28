@@ -737,7 +737,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <!-- Tab 1: GPS 파일 업로드 (훈련 + 경기 통합) -->
     <div id="uv-gps">
       <div class="coaching-box" style="margin-bottom:1rem">
-        <p>훈련(AM/PM) 및 경기(Match) GPS xlsx 파일을 업로드합니다.<br>
+        <p id="upload-format-guide">훈련(AM/PM) 및 경기(Match) GPS xlsx 파일을 업로드합니다.<br>
         <strong style="color:var(--accent2)">세션구분</strong> 컬럼값으로 자동 분리 — 훈련 → gps_records / 경기 → match_records<br>
         선수명이 <strong style="color:var(--accent2)">player_profiles</strong>에 등록된 이름과 일치해야 합니다.</p>
       </div>
@@ -7049,7 +7049,16 @@ function setPlayerView(view){
   }
   if(view==='roster') loadRosterList();
   if(view==='wellness') initWellnessView();
-  if(view==='upload'){ setUploadTab('gps'); loadGpsHistory(); loadMatchHistory(); loadMinuteHistory(); loadTrainMinuteHistory(); }
+  if(view==='upload'){
+    setUploadTab('gps'); loadGpsHistory(); loadMatchHistory(); loadMinuteHistory(); loadTrainMinuteHistory();
+    // V1/V2 업로드 안내 텍스트 업데이트
+    const uploadGuide = document.getElementById('upload-format-guide');
+    if(uploadGuide){
+      uploadGuide.innerHTML = currentGpsPlan==='V1'
+        ? '훈련(AM/PM) 및 경기(Match) GPS xlsx 파일을 업로드합니다.<br><strong style="color:var(--accent2)">세션구분</strong> 컬럼값으로 자동 분리 — 훈련 → gps_records / 경기 → match_records<br>선수명이 <strong style="color:var(--accent2)">player_profiles</strong>에 등록된 이름과 일치해야 합니다.<br><span style="color:#fbbf24">V1 베이직: TD·HSR·Sprint·가속·최고속도·시간 기준 (RHIE·P.Load·FMP 미사용)</span>'
+        : '훈련(AM/PM) 및 경기(Match) GPS xlsx 파일을 업로드합니다.<br><strong style="color:var(--accent2)">세션구분</strong> 컬럼값으로 자동 분리 — 훈련 → gps_records / 경기 → match_records<br>선수명이 <strong style="color:var(--accent2)">player_profiles</strong>에 등록된 이름과 일치해야 합니다.';
+    }
+  }
   if(view==='match'){
     setMatchTab('list');
     loadMatchList();
@@ -10123,7 +10132,7 @@ async function renderTwoWeekDetail(idx){
     {label:'HSR',     val: mHSR    ? Math.round(mHSR)+'m'          : '—'},
     {label:'Sprint',  val: mSprint ? Math.round(mSprint)+'m'       : '—'},
     {label:'가속',    val: mAccel  ? mAccel.toFixed(1)+'회'        : '—'},
-    {label:'RHIE',    val: mRHIE   ? mRHIE.toFixed(1)+'회'        : '—'},
+    ...(currentGpsPlan==='V1'?[]:[{label:'RHIE', val: mRHIE ? mRHIE.toFixed(1)+'회' : '—'}]),
     {label:'sRPE',    val: mSRPE   ? mSRPE+' AU'                   : '—'},
   ].map(m => `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 6px;text-align:center">
@@ -10155,7 +10164,7 @@ async function renderTwoWeekDetail(idx){
         <td style="padding:8px;text-align:right;color:#f59e0b">${r.running_high ? Math.round(r.running_high).toLocaleString() : '—'}</td>
         <td style="padding:8px;text-align:right;color:#ef4444">${r.sprint ? Math.round(r.sprint).toLocaleString() : '—'}</td>
         <td style="padding:8px;text-align:right;color:#fb923c">${r.accel||'—'}</td>
-        <td style="padding:8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
+        ${currentGpsPlan==='V1'?'': `<td style="padding:8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>`}
         <td style="padding:8px;text-align:right;color:#a78bfa">${sRPE}</td>
       </tr>`;
   };
@@ -10171,7 +10180,7 @@ async function renderTwoWeekDetail(idx){
       <td style="padding:8px;text-align:right;color:#f59e0b">${mHSR ? Math.round(mHSR).toLocaleString() : '—'}</td>
       <td style="padding:8px;text-align:right;color:#ef4444">${mSprint ? Math.round(mSprint).toLocaleString() : '—'}</td>
       <td style="padding:8px;text-align:right;color:#fb923c">${mAccel!=null?mAccel.toFixed(1):'—'}</td>
-      <td style="padding:8px;text-align:right;color:#34d399">${mRHIE!=null?mRHIE.toFixed(1):'—'}</td>
+      ${currentGpsPlan==='V1'?'': `<td style="padding:8px;text-align:right;color:#34d399">${mRHIE!=null?mRHIE.toFixed(1):'—'}</td>`}
       <td style="padding:8px;text-align:right;color:#a78bfa">${mSRPE||'—'}</td>
     </tr>`;
 
@@ -10182,7 +10191,7 @@ async function renderTwoWeekDetail(idx){
         <div style="font-size:12px;color:var(--accent2);margin-top:2px;font-weight:600">${s.topic||'—'}</div>
         <div style="font-size:11px;color:var(--text3);margin-top:2px">주전(M) ${teamGps.length}명 기준 평균 · 서브(S) ${indGps.length}명</div>
         ${oppHtml}
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:10px">
+        <div style="display:grid;grid-template-columns:repeat(${currentGpsPlan==='V1'?6:7},1fr);gap:5px;margin-top:10px">
           ${avgCards}
         </div>
       </div>
@@ -10196,7 +10205,7 @@ async function renderTwoWeekDetail(idx){
               <th style="padding:8px;text-align:right;color:var(--text3)">HSR (m)</th>
               <th style="padding:8px;text-align:right;color:var(--text3)">Sprint (m)</th>
               <th style="padding:8px;text-align:right;color:var(--text3)">가속</th>
-              <th style="padding:8px;text-align:right;color:var(--text3)">RHIE</th>
+              ${currentGpsPlan==='V1'?'':'<th style="padding:8px;text-align:right;color:var(--text3)">RHIE</th>'}
               <th style="padding:8px;text-align:right;color:var(--text3)">sRPE</th>
             </tr>
           </thead>
@@ -10315,7 +10324,7 @@ async function buildWeeklyLoadHtml(forDate){
         <td style="padding:6px 8px;text-align:right">${mHSR?`<span style="color:#f59e0b">${Math.round(mHSR)}</span>`:'—'}</td>
         <td style="padding:6px 8px;text-align:right">${mSP?`<span style="color:#ef4444">${Math.round(mSP)}</span>`:'—'}</td>
         <td style="padding:6px 8px;text-align:right">${mAc?`<span style="color:#fb923c">${Math.round(mAc)}</span>`:'—'}</td>
-        <td style="padding:6px 8px;text-align:right">${mRH?`<span style="color:#34d399">${parseFloat(mRH.toFixed(1))}</span>`:'—'}</td>
+        ${currentGpsPlan==='V1'?'': `<td style="padding:6px 8px;text-align:right">${mRH?'<span style="color:#34d399">'+parseFloat(mRH.toFixed(1))+'</span>':'—'}</td>`}
         <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
       </tr>`;
     })():'';
@@ -10329,7 +10338,7 @@ async function buildWeeklyLoadHtml(forDate){
       <td style="padding:7px 8px;text-align:right">${hsrCell}</td>
       <td style="padding:7px 8px;text-align:right">${spCell}</td>
       <td style="padding:7px 8px;text-align:right">${accelCell}</td>
-      <td style="padding:7px 8px;text-align:right">${rhieCell}</td>
+      ${currentGpsPlan==='V1'?'': `<td style="padding:7px 8px;text-align:right">${rhieCell}</td>`}
       <td style="padding:7px 8px;text-align:right">${sRPECell}</td>
     </tr>`;
     return (dayMatchRows.length&&isPast) ? matchRowHtml : (dayRow.length||!isPast?trainRowHtml:'');
@@ -10356,7 +10365,7 @@ async function buildWeeklyLoadHtml(forDate){
         <span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${wkHSR}m</strong></span>
         <span style="font-size:11px;color:var(--text3)">Sprint <strong style="color:#ef4444">${wkSP}m</strong></span>
         <span style="font-size:11px;color:var(--text3)">가속 <strong style="color:#fb923c">${wkAc}회</strong></span>
-        <span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">${wkRH}회</strong></span>
+        ${currentGpsPlan==='V1'?'':'<span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">'+wkRH+'회</strong></span>'}
         <span style="font-size:11px;color:var(--text3)">sRPE <strong style="color:#a78bfa">${wkSRPE} AU</strong></span>
       </div>
     </div>
@@ -10372,7 +10381,7 @@ async function buildWeeklyLoadHtml(forDate){
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">HSR</th>
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">Sprint</th>
           <th style="padding:6px 8px;text-align:right;color:var(--fb923c);font-weight:500;border-bottom:0.5px solid var(--border)">가속</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">RHIE</th>
+          ${currentGpsPlan==='V1'?'':'<th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">RHIE</th>'}
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">sRPE</th>
         </tr></thead>
         <tbody>${weekRowsHtml}</tbody>
@@ -10497,6 +10506,7 @@ async function loadTeamSummary(){
     </tr>`).join('');
 
   // ── GPS 기반 팀 평균 / 테이블 (GPS 있을 때만) ──
+  const isV1plan = currentGpsPlan === 'V1';
   const fullGps = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
   const indGps  = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
   const ssGps   = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS');
@@ -10569,9 +10579,9 @@ async function loadTeamSummary(){
       <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr)}</td>
       <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint)}</td>
       <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie)}</td>
+      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie)}</td>`}
       <td style="padding:7px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}${mmPct(r.max_speed, mx.match_max_speed)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.player_load||'-'}${mmPct(r.player_load, mx.match_max_pl)}</td>
+      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.player_load||'-'}${mmPct(r.player_load, mx.match_max_pl)}</td>`}
       <td style="padding:7px 8px;text-align:right;color:#fbbf24;font-weight:600">${rpeVal||'—'}</td>
       <td style="padding:7px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>
       <td style="padding:7px 8px;text-align:right">
@@ -10588,9 +10598,9 @@ async function loadTeamSummary(){
       <th style="padding:7px 8px;text-align:right;color:var(--text3)" title="HSR% = (HSR+Sprint)/경기Max">HSR (m)</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">Sprint (m)</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속</th>
-      <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE</th>
+      ${isV1plan?'':'<th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE</th>'}
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도</th>
-      <th style="padding:7px 8px;text-align:right;color:var(--text3)">P.Load</th>
+      ${isV1plan?'':'<th style="padding:7px 8px;text-align:right;color:var(--text3)">P.Load</th>'}
       <th style="padding:7px 8px;text-align:right;color:#fbbf24">RPE</th>
       <th style="padding:7px 8px;text-align:right;color:#c084fc">sRPE</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>
@@ -10861,11 +10871,11 @@ async function loadPlayerDashboard(){
     {label:'가속',    val:avgAcc, unit:'회',  color:'#fb923c',        mx:player.match_max_accel!=null?Math.round(player.match_max_accel):null},
   ];
   const cards2 = [
-    {label:'RHIE',    val:avgRHIE,unit:'회',  color:'#34d399', mx:player.match_max_rhie!=null?Math.round(player.match_max_rhie):null},
+    ...(currentGpsPlan==='V1'?[]:[{label:'RHIE',val:avgRHIE,unit:'회',color:'#34d399',mx:player.match_max_rhie!=null?Math.round(player.match_max_rhie):null}]),
     {label:'최고속도',val:avgMS,  unit:'km/h',color:'#60a5fa', mx:player.match_max_speed!=null?parseFloat(player.match_max_speed).toFixed(1):null},
     {label:'RPE',     val:avgRPE, unit:'',    color:'#f87171', mx:null},
     {label:'sRPE',    val:avgSRPE,unit:'AU',  color:'#c084fc', mx:null},
-    {label:'P.Load',  val:avgPL,  unit:'',    color:'#a78bfa', mx:player.match_max_pl!=null?parseFloat(player.match_max_pl).toFixed(1):null},
+    ...(currentGpsPlan==='V1'?[]:[{label:'P.Load',val:avgPL,unit:'',color:'#a78bfa',mx:player.match_max_pl!=null?parseFloat(player.match_max_pl).toFixed(1):null}]),
   ];
 
   const sessionRows = sessions.map(r=>{
@@ -10905,7 +10915,7 @@ async function loadPlayerDashboard(){
           <td style="padding:6px 8px;text-align:right;color:#f59e0b">${r.running_high?Math.round(r.running_high).toLocaleString():'—'}</td>
           <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.sprint?Math.round(r.sprint).toLocaleString():'—'}</td>
           <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.accel||'—'}</td>
-          <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
+          ${currentGpsPlan==='V1'?'': `<td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>`}
           <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'—'}</td>
           <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
           <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
@@ -10925,7 +10935,7 @@ async function loadPlayerDashboard(){
         <td style="padding:6px 8px;text-align:right;color:#f59e0b">${r.running_high?Math.round(r.running_high).toLocaleString():'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.sprint?Math.round(r.sprint).toLocaleString():'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.accel||'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>
+        ${currentGpsPlan==='V1'?'': `<td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>`}
         <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:${rpeColor}">${rpeVal||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>
@@ -10954,7 +10964,7 @@ async function loadPlayerDashboard(){
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">기간 평균 GPS</div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:6px">${statCardHtml(cards1)}</div>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">${statCardHtml(cards2)}</div>
+      <div style="display:grid;grid-template-columns:repeat(${currentGpsPlan==='V1'?3:5},1fr);gap:6px">${statCardHtml(cards2)}</div>
     </div>
 
     ${avgWellTotal ? `
@@ -10984,7 +10994,7 @@ async function loadPlayerDashboard(){
       </div>
     </div>` : ''}
 
-    ${(avgFmpRM||avgFmpRH||avgFmpDM||avgFmpDH) ? `
+    ${currentGpsPlan!=='V1'&&(avgFmpRM||avgFmpRH||avgFmpDM||avgFmpDH) ? `
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">FMP (Fatigue &amp; Movement Profile) — 기간 평균</div>
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px">
@@ -11023,7 +11033,7 @@ async function loadPlayerDashboard(){
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">HSR</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">Sprint</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>
+              ${currentGpsPlan==='V1'?'':'<th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>'}
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">sRPE</th>
@@ -11187,8 +11197,9 @@ async function parseGpsFile(file){
       const table = document.getElementById('upload-preview-table');
       const trainCount = _gpsParseData.filter(r=>!r._isMatch).length;
       const matchCount = _gpsParseData.filter(r=>r._isMatch).length;
-      const cols = ['player_name','session_date','session_label','session_type2','time_type','td','running_high','sprint','max_speed','player_load','rhie','accel','duration'];
-      const colLabels = ['선수','날짜','세션','타입(훈련)','구간(경기)','TD(m)','HSR(m)','Sprint(m)','최고속도','P.Load','RHIE','가속','시간'];
+      const _isV1up = currentGpsPlan === 'V1';
+      const cols = ['player_name','session_date','session_label','session_type2','time_type','td','running_high','sprint','max_speed',...(_isV1up?[]:['player_load','rhie']),'accel','duration'];
+      const colLabels = ['선수','날짜','세션','타입(훈련)','구간(경기)','TD(m)','HSR(m)','Sprint(m)','최고속도',...(_isV1up?[]:['P.Load','RHIE']),'가속','시간'];
       table.innerHTML = `
         <tr style="background:var(--surface2)">${colLabels.map(l=>`<th style="padding:6px 8px;font-size:11px;color:var(--text3);white-space:nowrap">${l}</th>`).join('')}</tr>
         ${_gpsParseData.map(r=>`<tr style="border-bottom:1px solid var(--border);background:${r._isMatch?'rgba(251,191,36,0.06)':'inherit'}">${cols.map(c=>`<td style="padding:6px 8px;font-size:11px;color:var(--text2);white-space:nowrap">${r[c]??'-'}</td>`).join('')}</tr>`).join('')}`;
