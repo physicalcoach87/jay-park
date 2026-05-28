@@ -10383,10 +10383,10 @@ async function loadTeamSummary(){
       .eq('session_date', date)
       .order('td', {ascending:false}),
     supa.from('session_records')
-      .select('player_id,rpe,post_weight,session_order')
+      .select('player_id,rpe,post_weight,session_order,duration,created_at')
       .eq('record_date', date),
     supa.from('wellness_records')
-      .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness')
+      .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', date),
   ]);
 
@@ -10412,6 +10412,11 @@ async function loadTeamSummary(){
 
   // ── RPE/체중 입력 현황 패널 (항상 렌더, GPS 업로드 전후 모두) ──
   // 전체 등록 선수 기준으로 입력 여부 표시
+  const toKSTHHMM = iso => {
+    if(!iso) return '—';
+    const d = new Date(new Date(iso).getTime() + 9*3600*1000);
+    return d.toISOString().substr(11,5);
+  };
   const rpeStatusRows = (_players||[]).map(p=>{
     const ss = sessMap[p.id]||[];
     const s1 = ss.find(s=>s.session_order===1)||ss[0]||{};
@@ -10424,6 +10429,15 @@ async function loadTeamSummary(){
     const wDiffColor = wDiff===null?'var(--text3)':parseFloat(wDiff)<=-1?'#ef4444':parseFloat(wDiff)<0?'#f59e0b':'#34d399';
     const dur    = parseFloat(s1.duration)||parseFloat(g?.duration)||null;
     const sRPE   = rpe&&dur ? Math.round(rpe*dur) : null;
+    // 웰니스 점수 계산
+    const wf=parseFloat(w.fatigue)||0, ws2=parseFloat(w.sleep_quality)||0, wst=parseFloat(w.stress)||0, wm=parseFloat(w.muscle_soreness)||0;
+    const hasWell = w.fatigue!=null||w.sleep_quality!=null||w.stress!=null||w.muscle_soreness!=null;
+    const wellTotal = hasWell ? wf+ws2+wst+wm : null;
+    const wellAvg   = wellTotal!=null ? (wellTotal/4).toFixed(1) : null;
+    const wellColor = wellTotal==null?'var(--text3)':wellTotal>=17?'#22c55e':wellTotal>=13?'#86efac':wellTotal>=9?'#fbbf24':'#ef4444';
+    const wellDetail= hasWell ? `<div style="font-size:9px;color:var(--text3);margin-top:1px">피${wf} 수${ws2} 스${wst} 근${wm}</div>` : '';
+    const wellTimeStr = toKSTHHMM(w.created_at);
+    const rpeTimeStr  = toKSTHHMM(s1.created_at);
     // 상태 판정
     const hasRpe  = !!rpe;
     const hasPreW = !!preW;
@@ -10434,7 +10448,7 @@ async function loadTeamSummary(){
     const gpsDot = hasGpsP
       ? `<span style="color:#22c55e;font-size:10px">GPS✓</span>`
       : `<span style="color:#6b7280;font-size:10px">GPS-</span>`;
-    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe };
+    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe, wellAvg, wellColor, wellDetail, wellTimeStr, rpeTimeStr };
   }).filter(r => {
     // GPS 있거나, RPE/wellness 입력한 선수만 표시
     return gpsMap[r.p.id] || sessMap[r.p.id] || wellMap[r.p.id];
@@ -10455,6 +10469,11 @@ async function loadTeamSummary(){
         <div style="color:var(--text3)">${r.preW ? r.preW+' kg' : '—'}</div>
         <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
       </td>
+      <td style="padding:6px 8px;text-align:center">
+        ${r.wellAvg!=null ? `<div style="font-size:13px;font-weight:700;color:${r.wellColor}">${r.wellAvg}</div>${r.wellDetail}` : '<span style="color:var(--text3);font-size:11px">—</span>'}
+      </td>
+      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.wellTimeStr}</td>
+      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.rpeTimeStr}</td>
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
     </tr>`).join('');
 
@@ -10582,6 +10601,9 @@ async function loadTeamSummary(){
             <th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE</th>
             <th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>
             <th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>
+            <th style="padding:6px 8px;text-align:center;color:#22c55e">웰니스</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>
+            <th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE시간</th>
             <th style="padding:6px 8px;text-align:center;color:var(--text3)">GPS</th>
           </tr>
           ${rpeStatusHtml}
