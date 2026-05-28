@@ -9020,6 +9020,13 @@ async function renderWellnessDetail(idx){
 
   if(!records?.length){ detEl.innerHTML=''; return; }
 
+  // 달력 상세: 위험→주의→양호→최상 (상태 나쁜 순)
+  records.sort((a,b)=>{
+    const ta=(a.fatigue||0)+(a.sleep_quality||0)+(a.stress||0)+(a.muscle_soreness||0);
+    const tb=(b.fatigue||0)+(b.sleep_quality||0)+(b.stress||0)+(b.muscle_soreness||0);
+    return ta-tb;
+  });
+
   const avgScore = field => (records.reduce((a,r)=>a+(r[field]||0),0)/records.length).toFixed(1);
   const teamAvg  = (parseFloat(avgScore('fatigue'))+parseFloat(avgScore('sleep_quality'))+parseFloat(avgScore('stress'))+parseFloat(avgScore('muscle_soreness')))/4;
   const scoreColor = v => parseFloat(v)>=4?'#22c55e':parseFloat(v)>=3?'#eab308':parseFloat(v)>=2?'#f97316':'#ef4444';
@@ -9154,17 +9161,8 @@ async function loadTeamWellness(){
     return;
   }
 
-  // 오늘 날짜: 상태 나쁜 순(위험→주의→양호→최상), 날짜 조회: 체크시간 빠른 순
-  const _todayStr = getKSTDateStr();
-  if(date === _todayStr){
-    records.sort((a,b)=>{
-      const ta=(a.fatigue||0)+(a.sleep_quality||0)+(a.stress||0)+(a.muscle_soreness||0);
-      const tb=(b.fatigue||0)+(b.sleep_quality||0)+(b.stress||0)+(b.muscle_soreness||0);
-      return ta-tb; // 낮을수록(나쁠수록) 먼저
-    });
-  } else {
-    records.sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
-  }
+  // 날짜 조회: 체크시간 빠른 순 (created_at 오름차순)
+  records.sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
 
   const avgScore = field => (records.reduce((s,r)=>s+(r[field]||0),0)/records.length).toFixed(1);
   const teamAvg = (parseFloat(avgScore('fatigue'))+parseFloat(avgScore('sleep_quality'))+parseFloat(avgScore('stress'))+parseFloat(avgScore('muscle_soreness')))/4;
