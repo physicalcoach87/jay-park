@@ -9226,9 +9226,9 @@ async function renderWellnessDetail(idx){
           const rv = parseFloat(row.rpe)||0;
           const sess = (row.session_type||'').trim().toUpperCase()||'?';
           const cl = rv>=8?'#ef4444':rv>=6?'#f97316':rv>=4?'#eab308':'#22c55e';
-          return `<span onclick="wellnessEditRpe('${row.id}','${pname}','${sess}',${rv})" style="display:inline-block;cursor:pointer;background:rgba(167,139,250,0.1);border:1px dashed ${cl};border-radius:4px;padding:1px 6px;margin:1px;font-size:11px;font-weight:700;color:${cl}" title="클릭하여 수정">${sess}:${rv||'?'}</span>`;
+          return `<span onclick="wellnessOpenRpeModal('${row.id}','${r.player_id}','${pname}','${sess}',${rv},'${s.ymd}')" style="display:inline-block;cursor:pointer;background:rgba(167,139,250,0.1);border:1px dashed ${cl};border-radius:4px;padding:1px 6px;margin:1px;font-size:11px;font-weight:700;color:${cl}" title="클릭하여 수정">${sess}:${rv||'?'}</span>`;
         }).join('')
-      : '<span style="color:var(--text3)">—</span>';
+      : `<button onclick="wellnessOpenRpeModal(null,'${r.player_id}','${pname}','AM','','${s.ymd}')" style="font-size:10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#818cf8;border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">+ 추가</button>`;
     const srpeTxt = (rp && rp.srpe) ? rp.srpe : '—';
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:8px">
@@ -9282,14 +9282,93 @@ async function renderWellnessDetail(idx){
 }
 
 // ── 웰니스 탭 RPE 수정 ─────────────────────────────────────────────
-async function wellnessEditRpe(recordId, playerName, sessionType, curRpe){
-  const input = prompt(`${playerName} (${sessionType}) RPE 수정 (1~10)\n현재: ${curRpe||'없음'}`, curRpe||'');
-  if(input===null) return;
-  const val = parseFloat(input);
-  if(isNaN(val)||val<1||val>10){ alert('1~10 사이 숫자를 입력하세요'); return; }
-  const {error} = await supa.from('session_records').update({rpe:val}).eq('id',recordId);
-  if(error){ alert('수정 실패: '+error.message); return; }
-  // 현재 선택된 날짜 인덱스로 새로고침
+// ── 웰니스 탭 RPE 수정/추가 모달 ─────────────────────────────────
+function wellnessOpenRpeModal(id, playerId, name, sess, rpe, date){
+  window._wrpeOpts = {id, playerId, name, sess:sess||'AM', rpe, date};
+  let m = document.getElementById('wellness-rpe-modal');
+  if(!m){
+    m = document.createElement('div');
+    m.id = 'wellness-rpe-modal';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:none;align-items:center;justify-content:center';
+    m.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 22px;width:300px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.5)">
+        <div id="wrpe-title" style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:14px"></div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 (잘못된 날짜면 여기서 수정)</div>
+          <input id="wrpe-date" type="date" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px 10px;font-size:13px;font-family:inherit">
+        </div>
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:6px">세션 선택</div>
+          <div style="display:flex;gap:8px">
+            <button id="wrpe-am" onclick="wellnessRpeSess('AM')" style="flex:1;padding:9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer">AM</button>
+            <button id="wrpe-pm" onclick="wellnessRpeSess('PM')" style="flex:1;padding:9px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer">PM</button>
+          </div>
+        </div>
+        <div style="margin-bottom:16px">
+          <div style="font-size:11px;color:var(--text3);margin-bottom:5px">RPE (1~10)</div>
+          <input id="wrpe-val" type="number" min="1" max="10" step="0.5" placeholder="숫자 입력" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px 10px;font-size:20px;font-family:inherit;text-align:center">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="wellnessSaveRpe()" style="flex:2;padding:9px;background:var(--accent2);border:none;color:#fff;border-radius:7px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">저장</button>
+          <button id="wrpe-del" onclick="wellnessDeleteRpe()" style="flex:1;padding:9px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:7px;font-size:13px;font-family:inherit;cursor:pointer">삭제</button>
+          <button onclick="wellnessCloseRpeModal()" style="flex:1;padding:9px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:7px;font-size:13px;font-family:inherit;cursor:pointer">취소</button>
+        </div>
+      </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click', e=>{ if(e.target===m) wellnessCloseRpeModal(); });
+  }
+  document.getElementById('wrpe-title').textContent = id ? `${name} RPE 수정` : `${name} RPE 추가`;
+  document.getElementById('wrpe-date').value = date||'';
+  document.getElementById('wrpe-val').value  = rpe||'';
+  document.getElementById('wrpe-del').style.display = id ? '' : 'none';
+  wellnessRpeSess(sess||'AM');
+  m.style.display = 'flex';
+  setTimeout(()=>document.getElementById('wrpe-val').focus(), 80);
+}
+function wellnessRpeSess(sess){
+  if(!window._wrpeOpts) return;
+  window._wrpeOpts.sess = sess;
+  const am=document.getElementById('wrpe-am'), pm=document.getElementById('wrpe-pm');
+  if(!am||!pm) return;
+  am.style.background = sess==='AM'?'var(--accent2)':'var(--surface2)';
+  am.style.color       = sess==='AM'?'#fff':'var(--text)';
+  pm.style.background  = sess==='PM'?'var(--accent2)':'var(--surface2)';
+  pm.style.color       = sess==='PM'?'#fff':'var(--text)';
+}
+function wellnessCloseRpeModal(){
+  const m=document.getElementById('wellness-rpe-modal');
+  if(m) m.style.display='none';
+}
+async function wellnessSaveRpe(){
+  const opts = window._wrpeOpts||{};
+  const date = document.getElementById('wrpe-date').value;
+  const val  = parseFloat(document.getElementById('wrpe-val').value);
+  const sess = opts.sess||'AM';
+  if(!date){ alert('날짜를 입력하세요'); return; }
+  if(isNaN(val)||val<1||val>10){ alert('RPE는 1~10 사이로 입력하세요'); return; }
+  let error;
+  if(opts.id){
+    ({error} = await supa.from('session_records')
+      .update({rpe:val, session_type:sess, session_order:sess==='AM'?1:2, record_date:date})
+      .eq('id',opts.id));
+  } else {
+    ({error} = await supa.from('session_records').insert({
+      player_id:opts.playerId, record_date:date, rpe:val,
+      session_type:sess, session_order:sess==='AM'?1:2
+    }));
+  }
+  if(error){ alert('저장 실패: '+error.message); return; }
+  wellnessCloseRpeModal();
+  const idx = _wellnessSessions.findIndex(s=>s.ymd===window._wellnessDetailYmd);
+  if(idx>=0) renderWellnessDetail(idx);
+}
+async function wellnessDeleteRpe(){
+  const opts = window._wrpeOpts||{};
+  if(!opts.id) return;
+  if(!confirm(`${opts.name} (${opts.sess}) RPE 기록을 삭제할까요?`)) return;
+  const {error} = await supa.from('session_records').delete().eq('id',opts.id);
+  if(error){ alert('삭제 실패: '+error.message); return; }
+  wellnessCloseRpeModal();
   const idx = _wellnessSessions.findIndex(s=>s.ymd===window._wellnessDetailYmd);
   if(idx>=0) renderWellnessDetail(idx);
 }
