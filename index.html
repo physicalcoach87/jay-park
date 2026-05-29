@@ -2163,6 +2163,25 @@ function getKSTNow() {
   const now = new Date();
   return new Date(now.getTime() + 9 * 60 * 60 * 1000);
 }
+// ── 포지션 정렬 (공격→미드→수비→GK) ─────────────────────────────
+const _POS_RANK = {
+  ST:0, CF:0, FW:0,
+  WG:1, LW:1, RW:1,
+  CAM:2, AM:2, SS:2,
+  CM:3, MF:3,
+  CDM:4, DM:4,
+  LB:5, RB:5, SB:5, WB:5, LWB:5, RWB:5,
+  CB:6, LCB:6, RCB:6, SW:6,
+  GK:99
+};
+function posRank(pos){ return _POS_RANK[(pos||'').trim().toUpperCase()] ?? 50; }
+// players: [{position, name, ...}] 형태 배열 정렬
+function sortByPos(arr){ return [...arr].sort((a,b)=>{ const d=posRank(a.position)-posRank(b.position); return d!==0?d:(a.name||'').localeCompare(b.name||''); }); }
+// GPS/wellness records 정렬: player_id를 _players 기준으로 순서 결정
+function sortRecordsByPos(records, idKey='player_id'){
+  const order={}; sortByPos(_players).forEach((p,i)=>{ order[p.id]=i; });
+  return [...records].sort((a,b)=>(order[a[idKey]]??99)-(order[b[idKey]]??99));
+}
 
 let currentUser = null;
 let isAdmin = false;
@@ -8707,7 +8726,7 @@ async function loadMorningReport(){
                 <th style="padding:5px 6px;text-align:center;color:var(--text3);font-weight:500">체중</th>
                 <th style="padding:5px 6px;text-align:center;color:var(--text3);font-weight:500">시간</th>
               </tr>
-              ${todayWellAll.map(r=>{
+              ${sortRecordsByPos(todayWellAll).map(r=>{
                 const wp=_players.find(p=>p.id===r.player_id);
                 const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
                 const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
@@ -8739,7 +8758,7 @@ async function loadMorningReport(){
         <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📋 오늘 RPE (${todayRpeRespondedIds.size}/${_players.length}명)</div>
         ${todayRpeRows.length ? `
           <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
-            ${todayRpeRows.map(r=>{
+            ${sortRecordsByPos(todayRpeRows).map(r=>{
               const rp=_players.find(p=>p.id===r.player_id);
               const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
               return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
@@ -9215,8 +9234,10 @@ async function renderWellnessDetail(idx){
   });
   window._wellnessDetailYmd = s.ymd; // 수정 후 새로고침용
 
-  // 달력 상세: 위험→주의→양호→최상 (상태 나쁜 순)
+  // 포지션 순서 정렬 (공격→미드→수비→GK), 같은 포지션 내에선 상태 나쁜 순
   records.sort((a,b)=>{
+    const pa=posRank(a.player_profiles?.position), pb=posRank(b.player_profiles?.position);
+    if(pa!==pb) return pa-pb;
     const ta=(a.fatigue||0)+(a.sleep_quality||0)+(a.stress||0)+(a.muscle_soreness||0);
     const tb=(b.fatigue||0)+(b.sleep_quality||0)+(b.stress||0)+(b.muscle_soreness||0);
     return ta-tb;
@@ -9488,7 +9509,7 @@ async function loadWellnessRpeView(){
     return `<td style="padding:8px;text-align:center"><span onclick="wellnessOpenRpeModal('${row.id}','${playerId}','${playerName}','${sess}',${rv},'${date}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px" title="클릭하여 수정"><span style="font-size:15px;font-weight:700;color:${cl}">${rv||'?'}</span>${t?`<span style="font-size:10px;color:var(--text3)">${t}</span>`:''}</span></td><td style="padding:8px;text-align:center;color:#a78bfa;font-size:12px">${sRPE||'—'}</td>`;
   };
 
-  const rows = _players.map(p=>{
+  const rows = sortByPos(_players).map(p=>{
     const pname=(p.name||'').replace(/'/g,"\\'");
     const d=byPlayer[p.id]||{};
     const amRv=parseFloat(d.am?.rpe)||0, amDur=parseFloat(d.am?.duration)||0;
@@ -10419,8 +10440,8 @@ async function renderTwoWeekDetail(idx){
       </tr>`;
   };
 
-  const teamRows = teamGps.map(r => makeRow(r, false)).join('');
-  const indRows  = indGps.map(r => makeRow(r, true)).join('');
+  const teamRows = sortRecordsByPos(teamGps).map(r => makeRow(r, false)).join('');
+  const indRows  = sortRecordsByPos(indGps).map(r => makeRow(r, true)).join('');
 
   const avgRow = `
     <tr style="background:var(--surface2)">
@@ -10689,7 +10710,7 @@ async function loadTeamSummary(){
     const d = new Date(new Date(iso).getTime() + 9*3600*1000);
     return d.toISOString().substr(11,5);
   };
-  const rpeStatusRows = (_players||[]).map(p=>{
+  const rpeStatusRows = sortByPos(_players||[]).map(p=>{
     const ss = sessMap[p.id]||[];
     const s1 = ss.find(s=>s.session_order===1)||ss[0]||{};
     const w  = wellMap[p.id]||{};
