@@ -9485,7 +9485,7 @@ async function loadWellnessRpeView(){
     const sRPE=rv&&dur?Math.round(rv*dur):null;
     const cl=rpeColor(rv);
     const t=row.created_at?new Date(row.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'';
-    return `<td style="padding:8px;text-align:center"><span onclick="wellnessOpenRpeModal('${row.id}','${playerId}','${playerName}','${sess}',${rv},'${date}')" style="cursor:pointer;font-size:15px;font-weight:700;color:${cl};border-bottom:1px dashed ${cl}" title="${t} 입력 · 클릭하여 수정">${rv||'?'}</span><div style="font-size:9px;color:var(--text3);margin-top:2px">${t}</div></td><td style="padding:8px;text-align:center;color:#a78bfa;font-size:12px">${sRPE||'—'}</td>`;
+    return `<td style="padding:8px;text-align:center"><span onclick="wellnessOpenRpeModal('${row.id}','${playerId}','${playerName}','${sess}',${rv},'${date}')" style="cursor:pointer;display:inline-flex;align-items:center;gap:5px" title="클릭하여 수정"><span style="font-size:15px;font-weight:700;color:${cl};border-bottom:1px dashed ${cl}">${rv||'?'}</span>${t?`<span style="font-size:10px;color:var(--text3)">${t}</span>`:''}</span></td><td style="padding:8px;text-align:center;color:#a78bfa;font-size:12px">${sRPE||'—'}</td>`;
   };
 
   const rows = _players.map(p=>{
