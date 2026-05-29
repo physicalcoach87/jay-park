@@ -8693,25 +8693,25 @@ async function loadMorningReport(){
                 const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
                 const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
                 const chkTime=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-                return \`<tr style="border-bottom:0.5px solid var(--border)">
+                return `<tr style="border-bottom:0.5px solid var(--border)">
                   <td style="padding:5px 8px">
-                    <div style="font-weight:600">\${wp?.name||'-'}</div>
-                    <div style="font-size:10px;color:var(--text3)">\${wp?.position||''}</div>
+                    <div style="font-weight:600">${wp?.name||'-'}</div>
+                    <div style="font-size:10px;color:var(--text3)">${wp?.position||''}</div>
                   </td>
-                  <td style="padding:5px 6px;text-align:center;font-weight:700;color:\${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">\${total}/20</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:10px">\${status}</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:11px;color:var(--text2)">\${(()=>{
+                  <td style="padding:5px 6px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
+                  <td style="padding:5px 6px;text-align:center;font-size:10px">${status}</td>
+                  <td style="padding:5px 6px;text-align:center;font-size:11px;color:var(--text2)">${(()=>{
                     const w7 = (well7||[]).filter(x=>x.player_id===r.player_id&&x.morning_weight&&x.record_date!==today);
                     const avg7 = w7.length ? (w7.reduce((a,x)=>a+(parseFloat(x.morning_weight)||0),0)/w7.length).toFixed(1) : null;
-                    return r.morning_weight ? (avg7?\`\${r.morning_weight}<span style="color:var(--text3);font-size:9px">/\${avg7}</span>kg\`:\`\${r.morning_weight}kg\`) : '—';
+                    return r.morning_weight ? (avg7?`${r.morning_weight}<span style="color:var(--text3);font-size:9px">/${avg7}</span>kg`:`${r.morning_weight}kg`) : '—';
                   })()}</td>
-                  <td style="padding:5px 6px;text-align:center;font-size:10px;color:#4ade80">\${chkTime}</td>
-                </tr>\`;
+                  <td style="padding:5px 6px;text-align:center;font-size:10px;color:#4ade80">${chkTime}</td>
+                </tr>`;
               }).join('')}
             </table>
           </div>
-          \${noRespHtml}
-        \` : \`<div style="font-size:12px;color:var(--text3)">오늘 웰니스 응답 없음</div>\`}
+          ${noRespHtml}
+        ` : `<div style="font-size:12px;color:var(--text3)">오늘 웰니스 응답 없음</div>`}
       </div>` : ''}
 
       ${currentUseRpe ? `
@@ -8723,10 +8723,10 @@ async function loadMorningReport(){
             ${todayRpeRows.map(r=>{
               const rp=_players.find(p=>p.id===r.player_id);
               const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-              return \`<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
-                <span style="color:var(--text);font-weight:500">\${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">\${rp?.position||''}</span></span>
-                <span style="color:#a78bfa;font-size:10px">RPE \${parseFloat(r.rpe)} · ✓ \${rt}</span>
-              </div>\`;
+              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
+                <span style="color:var(--text);font-weight:500">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
+                <span style="color:#a78bfa;font-size:10px">RPE ${parseFloat(r.rpe)} · ✓ ${rt}</span>
+              </div>`;
             }).join('')}
           </div>` : ''}
         ${noRpeRespHtml}
