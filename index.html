@@ -525,7 +525,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">팀 요약</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">👤 선수 개인데이터</button>
-      <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스</button>
+      <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스 / RPE</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('match')" id="pvbtn-match">🏟️ 경기 데이터</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
@@ -555,22 +555,41 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
     <!-- 관리자용: 팀 웰니스 현황 -->
     <div id="wellness-admin-view" style="display:none">
-      <!-- 최근 2주 웰니스 달력 -->
-      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px" id="wellness-two-week-label">최근 2주 웰니스 현황 — 날짜 클릭 시 하단 상세 표시</div>
-      <div id="wellness-two-week-cal"></div>
-      <div id="wellness-two-week-detail" style="display:none;margin-top:12px"></div>
-      <!-- 날짜 조회 (하단) -->
-      <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
-      <div class="ctrls g2" style="margin-bottom:12px">
-        <div class="ctrl">
-          <label>날짜 조회</label>
-          <input type="date" id="wellness-view-date" style="width:100%" onchange="loadTeamWellness()">
-        </div>
-        <div class="ctrl" style="display:flex;align-items:flex-end">
-          <button class="btn-gen" style="margin:0;padding:10px 20px;width:100%" onclick="loadTeamWellness()">조회</button>
-        </div>
+      <!-- 서브탭 버튼 -->
+      <div style="display:flex;gap:6px;margin-bottom:14px">
+        <button id="wtab-well" onclick="switchWellTab('well')" style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2)">💚 웰니스</button>
+        <button id="wtab-rpe"  onclick="switchWellTab('rpe')"  style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2)">💢 RPE</button>
       </div>
-      <div id="team-wellness-output"></div>
+
+      <!-- 웰니스 패널 -->
+      <div id="wpanel-well">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px" id="wellness-two-week-label">최근 2주 웰니스 현황 — 날짜 클릭 시 하단 상세 표시</div>
+        <div id="wellness-two-week-cal"></div>
+        <div id="wellness-two-week-detail" style="display:none;margin-top:12px"></div>
+        <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
+        <div class="ctrls g2" style="margin-bottom:12px">
+          <div class="ctrl">
+            <label>날짜 조회</label>
+            <input type="date" id="wellness-view-date" style="width:100%" onchange="loadTeamWellness()">
+          </div>
+          <div class="ctrl" style="display:flex;align-items:flex-end">
+            <button class="btn-gen" style="margin:0;padding:10px 20px;width:100%" onclick="loadTeamWellness()">조회</button>
+          </div>
+        </div>
+        <div id="team-wellness-output"></div>
+      </div>
+
+      <!-- RPE 패널 -->
+      <div id="wpanel-rpe" style="display:none">
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px">
+          <div class="ctrl" style="flex:1">
+            <label style="font-size:11px;color:var(--text3)">날짜 조회</label>
+            <input type="date" id="rpe-view-date" style="width:100%" onchange="loadWellnessRpeView()">
+          </div>
+          <button class="btn-gen" style="margin:0;padding:10px 20px" onclick="loadWellnessRpeView()">조회</button>
+        </div>
+        <div id="rpe-view-output"></div>
+      </div>
     </div>
   </div>
 
@@ -9219,17 +9238,6 @@ async function renderWellnessDetail(idx){
   const rows = records.map(r=>{
     const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
     const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
-    const rp = rpeByPlayer[r.player_id];
-    const pname = (r.player_profiles?.name||'').replace(/'/g,"\\'");
-    const rpeCells = (rp && rp.rows.length)
-      ? rp.rows.map(row=>{
-          const rv = parseFloat(row.rpe)||0;
-          const sess = (row.session_type||'').trim().toUpperCase()||'?';
-          const cl = rv>=8?'#ef4444':rv>=6?'#f97316':rv>=4?'#eab308':'#22c55e';
-          return `<span onclick="wellnessOpenRpeModal('${row.id}','${r.player_id}','${pname}','${sess}',${rv},'${s.ymd}')" style="display:inline-block;cursor:pointer;background:rgba(167,139,250,0.1);border:1px dashed ${cl};border-radius:4px;padding:1px 6px;margin:1px;font-size:11px;font-weight:700;color:${cl}" title="클릭하여 수정">${sess}:${rv||'?'}</span>`;
-        }).join('')
-      : `<button onclick="wellnessOpenRpeModal(null,'${r.player_id}','${pname}','AM','','${s.ymd}')" style="font-size:10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#818cf8;border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">+ 추가</button>`;
-    const srpeTxt = (rp && rp.srpe) ? rp.srpe : '—';
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:8px">
         <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'—'}</div>
@@ -9243,8 +9251,6 @@ async function renderWellnessDetail(idx){
         </td>`).join('')}
       <td style="padding:8px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
       <td style="padding:8px;text-align:center;font-size:12px">${status}</td>
-      <td style="padding:8px;text-align:center">${rpeCells}</td>
-      <td style="padding:8px;text-align:center;color:var(--text3)">${srpeTxt}</td>
       <td style="padding:8px;text-align:center;color:var(--text3)">${r.morning_weight||'—'}</td>
     </tr>`;
   }).join('');
@@ -9259,15 +9265,13 @@ async function renderWellnessDetail(idx){
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:10px">${avgCards}</div>
       </div>
       <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:480px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
               ${WELLNESS_ITEMS.map(i=>`<th style="padding:8px;text-align:center;color:var(--text3)">${i.icon} ${i.label}</th>`).join('')}
               <th style="padding:8px;text-align:center;color:var(--text3)">총점</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">상태</th>
-              <th style="padding:8px;text-align:center;color:var(--text3)">RPE</th>
-              <th style="padding:8px;text-align:center;color:var(--text3)">sRPE</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">체중</th>
             </tr>
           </thead>
@@ -9426,6 +9430,111 @@ async function downloadDashboardExcel(){
   URL.revokeObjectURL(url);
 }
 
+
+// ── 웰니스 / RPE 서브탭 전환 ──────────────────────────────────────
+function switchWellTab(tab){
+  const panels = {well:'wpanel-well', rpe:'wpanel-rpe'};
+  const btns   = {well:'wtab-well',   rpe:'wtab-rpe'};
+  Object.entries(panels).forEach(([k,id])=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display = k===tab ? '' : 'none';
+  });
+  Object.entries(btns).forEach(([k,id])=>{
+    const btn=document.getElementById(id);
+    if(!btn) return;
+    if(k===tab){
+      btn.style.background='var(--accent-bg)'; btn.style.color='var(--accent2)'; btn.style.borderColor='var(--accent)';
+    } else {
+      btn.style.background='transparent'; btn.style.color='var(--text2)'; btn.style.borderColor='var(--border)';
+    }
+  });
+  if(tab==='rpe'){
+    const el=document.getElementById('rpe-view-date');
+    if(el && !el.value){ const d=new Date(); el.value=d.toISOString().split('T')[0]; }
+    loadWellnessRpeView();
+  }
+}
+
+// ── RPE 패널 조회 ─────────────────────────────────────────────────
+async function loadWellnessRpeView(){
+  const date = document.getElementById('rpe-view-date')?.value;
+  const out  = document.getElementById('rpe-view-output');
+  if(!out||!date) return;
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+
+  const {data:rpeRows} = await supa.from('session_records')
+    .select('id,player_id,rpe,duration,session_type,session_order,created_at')
+    .eq('record_date',date)
+    .order('session_order');
+
+  const rpeColor = v=>!v?'var(--text3)':v>=8?'#ef4444':v>=6?'#f97316':v>=4?'#eab308':'#22c55e';
+  window._wellnessDetailYmd = date; // 수정 후 새로고침용
+
+  // 선수별 AM/PM 집계
+  const byPlayer = {};
+  (rpeRows||[]).forEach(r=>{
+    if(!byPlayer[r.player_id]) byPlayer[r.player_id]={am:null,pm:null};
+    const s=(r.session_type||'').trim().toUpperCase();
+    if(s==='PM') byPlayer[r.player_id].pm=r;
+    else byPlayer[r.player_id].am=r; // AM 또는 기타
+  });
+
+  const makeCell = (row, playerId, playerName, sess)=>{
+    if(!row) return `<td style="padding:8px;text-align:center"><button onclick="wellnessOpenRpeModal(null,'${playerId}','${playerName}','${sess}','','${date}')" style="font-size:10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#818cf8;border-radius:5px;padding:2px 8px;cursor:pointer;font-family:inherit">+ 추가</button></td><td style="padding:8px;text-align:center;color:var(--text3)">—</td>`;
+    const rv=parseFloat(row.rpe)||0, dur=parseFloat(row.duration)||0;
+    const sRPE=rv&&dur?Math.round(rv*dur):null;
+    const cl=rpeColor(rv);
+    const t=row.created_at?new Date(row.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'';
+    return `<td style="padding:8px;text-align:center"><span onclick="wellnessOpenRpeModal('${row.id}','${playerId}','${playerName}','${sess}',${rv},'${date}')" style="cursor:pointer;font-size:15px;font-weight:700;color:${cl};border-bottom:1px dashed ${cl}" title="${t} 입력 · 클릭하여 수정">${rv||'?'}</span><div style="font-size:9px;color:var(--text3);margin-top:2px">${t}</div></td><td style="padding:8px;text-align:center;color:#a78bfa;font-size:12px">${sRPE||'—'}</td>`;
+  };
+
+  const rows = _players.map(p=>{
+    const pname=(p.name||'').replace(/'/g,"\\'");
+    const d=byPlayer[p.id]||{};
+    const amRv=parseFloat(d.am?.rpe)||0, amDur=parseFloat(d.am?.duration)||0;
+    const pmRv=parseFloat(d.pm?.rpe)||0, pmDur=parseFloat(d.pm?.duration)||0;
+    const totalSRPE=Math.round((amRv*amDur)+(pmRv*pmDur))||null;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px"><div style="font-weight:600;color:var(--text)">${p.name}</div><div style="font-size:10px;color:var(--text3)">${p.position||''}</div></td>
+      ${makeCell(d.am,p.id,pname,'AM')}
+      ${makeCell(d.pm,p.id,pname,'PM')}
+      <td style="padding:8px;text-align:center;font-weight:700;color:#a78bfa">${totalSRPE||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const responded=_players.filter(p=>byPlayer[p.id]);
+  const teamSRPEs=_players.map(p=>{
+    const d=byPlayer[p.id]||{};
+    const v=Math.round((parseFloat(d.am?.rpe)||0)*(parseFloat(d.am?.duration)||0)+(parseFloat(d.pm?.rpe)||0)*(parseFloat(d.pm?.duration)||0));
+    return v;
+  }).filter(v=>v>0);
+  const avgSRPE=teamSRPEs.length?Math.round(teamSRPEs.reduce((a,b)=>a+b,0)/teamSRPEs.length):null;
+
+  out.innerHTML=`
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+      <div style="padding:10px 14px;background:var(--surface2);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${date} RPE 현황</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px">${responded.length}/${_players.length}명 입력${avgSRPE?` · 팀 평균 sRPE ${avgSRPE}`:''}</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">AM RPE</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">AM sRPE</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">PM RPE</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">PM sRPE</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">총 sRPE</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
 
 async function loadTeamWellness(){
   const date = document.getElementById('wellness-view-date')?.value;
