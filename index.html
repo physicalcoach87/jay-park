@@ -9180,20 +9180,21 @@ async function renderWellnessDetail(idx){
       .eq('record_date',s.ymd)
       .order('created_at'),
     supa.from('session_records')
-      .select('player_id,rpe,duration,session_type,session_order')
+      .select('id,player_id,rpe,duration,session_type,session_order')
       .eq('record_date',s.ymd)
       .order('session_order')
   ]);
 
   if(!records?.length){ detEl.innerHTML=''; return; }
 
-  // 선수별 RPE 집계 (여러 세션 → RPE 나열, sRPE 합산)
+  // 선수별 RPE 집계 (rows: 세션별 전체 레코드, srpe: 합산)
   const rpeByPlayer = {};
   (rpeRows||[]).forEach(r=>{
-    if(!rpeByPlayer[r.player_id]) rpeByPlayer[r.player_id] = {rpes:[], srpe:0};
-    if(r.rpe!=null) rpeByPlayer[r.player_id].rpes.push(parseFloat(r.rpe));
+    if(!rpeByPlayer[r.player_id]) rpeByPlayer[r.player_id] = {rows:[], srpe:0};
+    rpeByPlayer[r.player_id].rows.push(r);
     if(r.rpe!=null && r.duration!=null) rpeByPlayer[r.player_id].srpe += Math.round(parseFloat(r.duration)*parseFloat(r.rpe));
   });
+  window._wellnessDetailYmd = s.ymd; // 수정 후 새로고침용
 
   // 달력 상세: 위험→주의→양호→최상 (상태 나쁜 순)
   records.sort((a,b)=>{
@@ -9219,7 +9220,15 @@ async function renderWellnessDetail(idx){
     const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
     const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
     const rp = rpeByPlayer[r.player_id];
-    const rpeTxt  = (rp && rp.rpes.length) ? rp.rpes.join(', ') : '—';
+    const pname = (r.player_profiles?.name||'').replace(/'/g,"\\'");
+    const rpeCells = (rp && rp.rows.length)
+      ? rp.rows.map(row=>{
+          const rv = parseFloat(row.rpe)||0;
+          const sess = (row.session_type||'').trim().toUpperCase()||'?';
+          const cl = rv>=8?'#ef4444':rv>=6?'#f97316':rv>=4?'#eab308':'#22c55e';
+          return `<span onclick="wellnessEditRpe('${row.id}','${pname}','${sess}',${rv})" style="display:inline-block;cursor:pointer;background:rgba(167,139,250,0.1);border:1px dashed ${cl};border-radius:4px;padding:1px 6px;margin:1px;font-size:11px;font-weight:700;color:${cl}" title="클릭하여 수정">${sess}:${rv||'?'}</span>`;
+        }).join('')
+      : '<span style="color:var(--text3)">—</span>';
     const srpeTxt = (rp && rp.srpe) ? rp.srpe : '—';
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:8px">
@@ -9234,7 +9243,7 @@ async function renderWellnessDetail(idx){
         </td>`).join('')}
       <td style="padding:8px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
       <td style="padding:8px;text-align:center;font-size:12px">${status}</td>
-      <td style="padding:8px;text-align:center;font-weight:600;color:var(--text)">${rpeTxt}</td>
+      <td style="padding:8px;text-align:center">${rpeCells}</td>
       <td style="padding:8px;text-align:center;color:var(--text3)">${srpeTxt}</td>
       <td style="padding:8px;text-align:center;color:var(--text3)">${r.morning_weight||'—'}</td>
     </tr>`;
@@ -9270,6 +9279,19 @@ async function renderWellnessDetail(idx){
         ⚠️ 미응답 (${noResp.length}명): ${noResp.map(p=>p.name).join(', ')}
       </div>`:''}
     </div>`;
+}
+
+// ── 웰니스 탭 RPE 수정 ─────────────────────────────────────────────
+async function wellnessEditRpe(recordId, playerName, sessionType, curRpe){
+  const input = prompt(`${playerName} (${sessionType}) RPE 수정 (1~10)\n현재: ${curRpe||'없음'}`, curRpe||'');
+  if(input===null) return;
+  const val = parseFloat(input);
+  if(isNaN(val)||val<1||val>10){ alert('1~10 사이 숫자를 입력하세요'); return; }
+  const {error} = await supa.from('session_records').update({rpe:val}).eq('id',recordId);
+  if(error){ alert('수정 실패: '+error.message); return; }
+  // 현재 선택된 날짜 인덱스로 새로고침
+  const idx = _wellnessSessions.findIndex(s=>s.ymd===window._wellnessDetailYmd);
+  if(idx>=0) renderWellnessDetail(idx);
 }
 
 // ── 선수 대시보드 엑셀 다운로드 ────────────────────────────────────
