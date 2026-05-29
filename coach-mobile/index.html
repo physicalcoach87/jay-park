@@ -1090,7 +1090,7 @@ async function loadRpe(){
       return '<tr>'
         +'<td style="padding:4px 8px">'+(i===0?'<div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div>'+missingBadge:'')+'</td>'
         +'<td style="padding:4px 8px"><select onchange="mobileUpdateRpeType(this,\''+r.id+'\')" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:1px 3px;font-family:inherit">'+typeOpts(r.session_type)+'</select></td>'
-        +'<td style="padding:4px 8px"><span style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+'">'+rv+'</span></td>'
+        +'<td style="padding:4px 8px"><span onclick="mobileEditRpe(\''+r.id+'\',\''+p.name+'\','+(rv||0)+')" style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+';cursor:pointer;border-bottom:1px dashed '+rpeColor(rv)+';padding-bottom:1px">'+rv+'</span></td>'
         +'<td style="padding:4px 8px;color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
         +'<td style="padding:4px 8px;color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td>'
         +'<td style="padding:4px 8px;text-align:center">'+delBtn+'</td></tr>';
@@ -1160,6 +1160,15 @@ async function mobileUpdateRpeType(sel, recordId){
   sel.disabled=false;
   if(error){showToast('수정 실패',true);sel.value=sel.dataset.orig||'AM';}
   else{showToast('✅ '+newType+'으로 변경');sel.style.color='var(--accent2)';setTimeout(()=>sel.style.color='',1500);}
+}
+async function mobileEditRpe(recordId, playerName, curRpe){
+  const input=prompt(playerName+' RPE 수정 (1~10)\n현재: '+(curRpe||'없음'), curRpe||'');
+  if(input===null) return;
+  const val=parseFloat(input);
+  if(isNaN(val)||val<1||val>10){ showToast('1~10 사이 숫자를 입력하세요',true); return; }
+  const {error}=await supa.from('session_records').update({rpe:val}).eq('id',recordId);
+  if(error){showToast('수정 실패',true);}
+  else{showToast('✅ RPE '+val+'(으)로 변경');_loadedPages['rpe']=false;loadRpe();}
 }
 async function mobileDeleteRpe(recordId, playerName){
   if(!confirm('이 RPE 기록을 삭제할까요?\n'+playerName+' · 선택한 항목')) return;

@@ -9174,12 +9174,26 @@ async function renderWellnessDetail(idx){
   detEl.style.display='block';
   detEl.innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
 
-  const {data:records} = await supa.from('wellness_records')
-    .select('*, player_profiles(name,position)')
-    .eq('record_date',s.ymd)
-    .order('created_at');
+  const [{data:records}, {data:rpeRows}] = await Promise.all([
+    supa.from('wellness_records')
+      .select('*, player_profiles(name,position)')
+      .eq('record_date',s.ymd)
+      .order('created_at'),
+    supa.from('session_records')
+      .select('player_id,rpe,duration,session_type,session_order')
+      .eq('record_date',s.ymd)
+      .order('session_order')
+  ]);
 
   if(!records?.length){ detEl.innerHTML=''; return; }
+
+  // 선수별 RPE 집계 (여러 세션 → RPE 나열, sRPE 합산)
+  const rpeByPlayer = {};
+  (rpeRows||[]).forEach(r=>{
+    if(!rpeByPlayer[r.player_id]) rpeByPlayer[r.player_id] = {rpes:[], srpe:0};
+    if(r.rpe!=null) rpeByPlayer[r.player_id].rpes.push(parseFloat(r.rpe));
+    if(r.rpe!=null && r.duration!=null) rpeByPlayer[r.player_id].srpe += Math.round(parseFloat(r.duration)*parseFloat(r.rpe));
+  });
 
   // 달력 상세: 위험→주의→양호→최상 (상태 나쁜 순)
   records.sort((a,b)=>{
@@ -9204,6 +9218,9 @@ async function renderWellnessDetail(idx){
   const rows = records.map(r=>{
     const total=(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
     const status=total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
+    const rp = rpeByPlayer[r.player_id];
+    const rpeTxt  = (rp && rp.rpes.length) ? rp.rpes.join(', ') : '—';
+    const srpeTxt = (rp && rp.srpe) ? rp.srpe : '—';
     return `<tr style="border-bottom:1px solid var(--border)">
       <td style="padding:8px">
         <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'—'}</div>
@@ -9217,6 +9234,8 @@ async function renderWellnessDetail(idx){
         </td>`).join('')}
       <td style="padding:8px;text-align:center;font-weight:700;color:${total>=16?'#22c55e':total>=12?'#eab308':'#ef4444'}">${total}/20</td>
       <td style="padding:8px;text-align:center;font-size:12px">${status}</td>
+      <td style="padding:8px;text-align:center;font-weight:600;color:var(--text)">${rpeTxt}</td>
+      <td style="padding:8px;text-align:center;color:var(--text3)">${srpeTxt}</td>
       <td style="padding:8px;text-align:center;color:var(--text3)">${r.morning_weight||'—'}</td>
     </tr>`;
   }).join('');
@@ -9231,13 +9250,15 @@ async function renderWellnessDetail(idx){
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:10px">${avgCards}</div>
       </div>
       <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:480px">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:560px">
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
               ${WELLNESS_ITEMS.map(i=>`<th style="padding:8px;text-align:center;color:var(--text3)">${i.icon} ${i.label}</th>`).join('')}
               <th style="padding:8px;text-align:center;color:var(--text3)">총점</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">상태</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">RPE</th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">sRPE</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">체중</th>
             </tr>
           </thead>
