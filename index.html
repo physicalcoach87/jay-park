@@ -9384,8 +9384,12 @@ async function wellnessSaveRpe(){
   }
   if(error){ alert('저장 실패: '+error.message); return; }
   wellnessCloseRpeModal();
+  // 저장된 날짜에 대해 GPS duration 동기화
+  await syncRpeDurationsForDate(date);
   const idx = _wellnessSessions.findIndex(s=>s.ymd===window._wellnessDetailYmd);
   if(idx>=0) renderWellnessDetail(idx);
+  // RPE 탭도 열려있으면 새로고침
+  if(window._wellnessDetailYmd===date) loadWellnessRpeView();
 }
 async function wellnessDeleteRpe(){
   const opts = window._wrpeOpts||{};
@@ -9477,11 +9481,48 @@ function switchWellTab(tab){
 }
 
 // ── RPE 패널 조회 ─────────────────────────────────────────────────
+// ── GPS duration 자동 동기화 ──────────────────────────────────────
+// session_records에 duration이 없는 RPE 행을 gps_records에서 채워줌
+async function syncRpeDurationsForDate(date){
+  const {data:rpeRecs} = await supa.from('session_records')
+    .select('id,player_id,rpe,duration,session_type')
+    .eq('record_date', date);
+  const needSync = (rpeRecs||[]).filter(r=>!r.duration && parseFloat(r.rpe)>0);
+  if(!needSync.length) return 0;
+
+  const pids = [...new Set(needSync.map(r=>r.player_id))];
+  const {data:gpsRecs} = await supa.from('gps_records')
+    .select('player_id,session_label,duration')
+    .eq('session_date', date)
+    .in('player_id', pids);
+
+  let synced = 0;
+  for(const rec of needSync){
+    const pg = (gpsRecs||[]).filter(g=>g.player_id===rec.player_id && parseFloat(g.duration)>0);
+    if(!pg.length) continue;
+    const sess = (rec.session_type||'AM').trim().toUpperCase();
+    // 1) 세션 레이블 일치 우선
+    let g = pg.find(g=>(g.session_label||'').trim().toUpperCase()===sess);
+    // 2) 없으면 단일 GPS 레코드 fallback
+    if(!g && pg.length===1) g = pg[0];
+    // 3) 복수일 때 첫번째 레코드 사용 (GK 등 별도 세션)
+    if(!g) g = pg[0];
+    if(g?.duration){
+      await supa.from('session_records').update({duration:parseFloat(g.duration)}).eq('id',rec.id);
+      synced++;
+    }
+  }
+  return synced;
+}
+
 async function loadWellnessRpeView(){
   const date = document.getElementById('rpe-view-date')?.value;
   const out  = document.getElementById('rpe-view-output');
   if(!out||!date) return;
   out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+
+  // GPS duration 자동 동기화 (날짜 수정 케이스 등)
+  await syncRpeDurationsForDate(date);
 
   const {data:rpeRows} = await supa.from('session_records')
     .select('id,player_id,rpe,duration,session_type,session_order,created_at')

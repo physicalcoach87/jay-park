@@ -1047,15 +1047,19 @@ async function loadRpe(){
     supa.from('session_records').select('id,player_id,rpe,duration,session_type,created_at').eq('record_date',today).order('created_at'),
     supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',today)
   ]);
-  // GPS duration 자동 동기화 (선수는 GPS 업로드 전에 RPE 입력 → 로드 시 자동 보정)
+  // GPS duration 자동 동기화 (날짜 수정 케이스·GK 포함 강화)
   const rpeNullDur=(todayRpe||[]).filter(r=>parseFloat(r.rpe)>0&&!r.duration);
   if(rpeNullDur.length&&(todayGps||[]).length){
     for(const rec of rpeNullDur){
-      let g=(todayGps||[]).find(g=>g.player_id===rec.player_id&&(g.session_label||'').trim().toUpperCase()===(rec.session_type||'').trim().toUpperCase());
-      if(!g){const pg=(todayGps||[]).filter(g=>g.player_id===rec.player_id);if(pg.length===1)g=pg[0];}
+      const pg=(todayGps||[]).filter(g=>g.player_id===rec.player_id&&parseFloat(g.duration)>0);
+      if(!pg.length) continue;
+      const sess=(rec.session_type||'AM').trim().toUpperCase();
+      let g=pg.find(g=>(g.session_label||'').trim().toUpperCase()===sess); // 1) 세션 레이블 일치
+      if(!g&&pg.length===1) g=pg[0];  // 2) 단일 GPS fallback
+      if(!g) g=pg[0];                  // 3) 복수일 때 첫번째 (GK 등)
       if(g?.duration){
-        await supa.from('session_records').update({duration:g.duration,session_type:g.session_label||rec.session_type}).eq('id',rec.id);
-        rec.duration=g.duration; rec.session_type=g.session_label||rec.session_type;
+        await supa.from('session_records').update({duration:parseFloat(g.duration)}).eq('id',rec.id);
+        rec.duration=parseFloat(g.duration);
       }
     }
   }
@@ -1256,7 +1260,24 @@ async function mobileSaveRpe(){
   if(error){showToast('저장 실패',true);return;}
   showToast('✅ 저장됨');
   mobileCloseRpeModal();
+  await syncRpeDurationsForDate(date);
   _loadedPages['rpe']=false;loadRpe();
+}
+async function syncRpeDurationsForDate(date){
+  const {data:rpeRecs}=await supa.from('session_records').select('id,player_id,rpe,duration,session_type').eq('record_date',date);
+  const needSync=(rpeRecs||[]).filter(r=>!r.duration&&parseFloat(r.rpe)>0);
+  if(!needSync.length) return;
+  const pids=[...new Set(needSync.map(r=>r.player_id))];
+  const {data:gpsRecs}=await supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',date).in('player_id',pids);
+  for(const rec of needSync){
+    const pg=(gpsRecs||[]).filter(g=>g.player_id===rec.player_id&&parseFloat(g.duration)>0);
+    if(!pg.length) continue;
+    const sess=(rec.session_type||'AM').trim().toUpperCase();
+    let g=pg.find(g=>(g.session_label||'').trim().toUpperCase()===sess);
+    if(!g&&pg.length===1) g=pg[0];
+    if(!g) g=pg[0];
+    if(g?.duration) await supa.from('session_records').update({duration:parseFloat(g.duration)}).eq('id',rec.id);
+  }
 }
 async function mobileDeleteRpeMod(){
   const opts=window._mRpeOpts||{};
