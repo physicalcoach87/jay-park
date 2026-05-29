@@ -11063,7 +11063,7 @@ async function loadTeamSummary(){
     <div style="overflow-x:auto;margin-bottom:14px">
       <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
         ${tableHeader}
-        ${renderTable(fullGps)}
+        ${renderTable(sortRecordsByPos(fullGps))}
       </table>
     </div>
 
@@ -11079,7 +11079,7 @@ async function loadTeamSummary(){
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
-          ${renderTable(indGps)}
+          ${renderTable(sortRecordsByPos(indGps))}
         </table>
       </div>
     </div>` : ''}` : ''}`;
