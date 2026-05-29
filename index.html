@@ -2165,13 +2165,13 @@ function getKSTNow() {
 }
 // ── 포지션 정렬 (공격→미드→수비→GK) ─────────────────────────────
 const _POS_RANK = {
-  ST:0, CF:0, FW:0,
-  WG:1, LW:1, RW:1,
-  CAM:2, AM:2, SS:2,
+  CB:0, LCB:0, RCB:0, SW:0,
+  LB:1, RB:1, SB:1, WB:1, LWB:1, RWB:1,
+  CDM:2, DM:2,
   CM:3, MF:3,
-  CDM:4, DM:4,
-  LB:5, RB:5, SB:5, WB:5, LWB:5, RWB:5,
-  CB:6, LCB:6, RCB:6, SW:6,
+  CAM:4, AM:4, SS:4,
+  WG:5, LW:5, RW:5,
+  ST:6, CF:6, FW:6,
   GK:99
 };
 function posRank(pos){ return _POS_RANK[(pos||'').trim().toUpperCase()] ?? 50; }
