@@ -398,6 +398,7 @@ let _schedEditDate = null;
 let _schedTouchX = 0;
 let _wellnessTab = 'today';
 let _rpeTab = 'today';
+let _rpeViewDate = null; // null=오늘, 'YYYY-MM-DD'=선택 날짜
 let _trainingTab = 'team';
 let _wellnessWeekLoaded = false;
 let _rpeWeekLoaded = false;
@@ -1027,10 +1028,21 @@ async function sendWellnessReminder(id,name){
 // ══════════════════════════════════════════════════════
 // 3. RPE
 // ══════════════════════════════════════════════════════
+function mobileRpeChangeDate(delta){
+  const base=_rpeViewDate||getKSTDateStr();
+  const d=new Date(base+'T00:00:00');
+  d.setDate(d.getDate()+delta);
+  const next=d.toISOString().split('T')[0];
+  if(next>getKSTDateStr()) return; // 미래 차단
+  _rpeViewDate=(next===getKSTDateStr())?null:next;
+  _loadedPages['rpe']=false;loadRpe();
+}
 async function loadRpe(){
   const el=document.getElementById('rpe-content');
   el.innerHTML='<div class="loading"><span class="spinner">⏳</span> 로딩 중...</div>';
-  const today=getKSTDateStr();
+  const kstToday=getKSTDateStr();
+  const today=_rpeViewDate||kstToday;
+  const isToday=today===kstToday;
   const [{data:todayRpe},{data:todayGps}]=await Promise.all([
     supa.from('session_records').select('id,player_id,rpe,duration,session_type,created_at').eq('record_date',today).order('created_at'),
     supa.from('gps_records').select('player_id,session_label,duration').eq('session_date',today)
@@ -1090,7 +1102,7 @@ async function loadRpe(){
       return '<tr>'
         +'<td style="padding:4px 8px">'+(i===0?'<div style="font-size:12px;font-weight:500">'+p.name+'</div><div style="font-size:10px;color:var(--text3)">'+(p.position||'—')+'</div>'+missingBadge:'')+'</td>'
         +'<td style="padding:4px 8px"><select onchange="mobileUpdateRpeType(this,\''+r.id+'\')" style="font-size:10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:4px;padding:1px 3px;font-family:inherit">'+typeOpts(r.session_type)+'</select></td>'
-        +'<td style="padding:4px 8px"><span onclick="mobileEditRpe(\''+r.id+'\',\''+p.name+'\','+(rv||0)+')" style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+';cursor:pointer;border-bottom:1px dashed '+rpeColor(rv)+';padding-bottom:1px">'+rv+'</span></td>'
+        +'<td style="padding:4px 8px"><span onclick="mobileOpenRpeModal(\''+r.id+'\',\''+p.id+'\',\''+p.name.replace(/'/g,"\\'")+'\',\''+(r.session_type||'AM').trim().toUpperCase()+'\','+(rv||0)+',\''+today+'\')" style="font-size:15px;font-weight:700;color:'+rpeColor(rv)+';cursor:pointer;border-bottom:1px dashed '+rpeColor(rv)+';padding-bottom:1px">'+rv+'</span></td>'
         +'<td style="padding:4px 8px;color:var(--text2)">'+(dur?Math.round(dur)+'min':'—')+'</td>'
         +'<td style="padding:4px 8px;color:#a78bfa;font-weight:500">'+(sRPE||'—')+'</td>'
         +'<td style="padding:4px 8px;text-align:center">'+delBtn+'</td></tr>';
@@ -1100,9 +1112,18 @@ async function loadRpe(){
   }).join('');
 
   el.innerHTML=
-    '<div style="padding:12px 16px 4px;display:flex;justify-content:space-between;align-items:center">'
-    +'<div style="font-size:13px;color:var(--text3)">'+today+' RPE ('+responded.length+'/'+_players.length+'명)</div>'
-    +'<button class="refresh-btn" onclick="_loadedPages[\'rpe\']=false;loadRpe()">🔄</button></div>'
+    // 날짜 네비게이션 바
+    '<div style="padding:10px 16px 4px;display:flex;align-items:center;gap:8px">'
+    +'<button onclick="mobileRpeChangeDate(-1)" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit">◀</button>'
+    +'<div style="flex:1;text-align:center">'
+    +(isToday?'<span style="font-size:10px;font-weight:600;color:var(--accent2);display:block;margin-bottom:1px">오늘</span>':'')
+    +'<span style="font-size:13px;font-weight:700;color:var(--text)">'+today+'</span>'
+    +'<span style="font-size:11px;color:var(--text3);margin-left:6px">RPE '+responded.length+'/'+_players.length+'명</span>'
+    +'</div>'
+    +(isToday
+      ?'<button class="refresh-btn" onclick="_loadedPages[\'rpe\']=false;loadRpe()">🔄</button>'
+      :'<button onclick="mobileRpeChangeDate(1)" style="width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:inherit">▶</button>')
+    +'</div>'
 
     // GPS 기준 세션 현황 카드
     +(hasGps
@@ -1147,9 +1168,13 @@ async function loadRpe(){
     +(noResp.length?'<div class="card"><div class="card-title">❌ 미응답 <span style="font-size:11px;font-weight:400;color:var(--text3)">'+noResp.length+'명</span></div>'
       +noResp.map(p=>{
         const missingStr=hasGps?expectedSessions.join('+')+' 미입력':'미입력';
+        const pname=(p.name||'').replace(/'/g,"\\'");
         return '<div class="player-row"><div><div class="player-name">'+p.name+'</div>'
           +(hasGps?'<div style="font-size:10px;color:#ef4444">'+missingStr+'</div>':'<div class="player-pos">'+(p.position||'—')+'</div>')+'</div>'
-          +'<button onclick="sendRpeReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button></div>';
+          +'<div style="display:flex;gap:6px">'
+          +'<button onclick="mobileOpenRpeModal(null,\''+p.id+'\',\''+pname+'\',\'AM\',\'\',\''+today+'\')" style="font-size:11px;padding:5px 10px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);color:#818cf8;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">+ 추가</button>'
+          +(isToday?'<button onclick="sendRpeReminder(\''+p.id+'\',\''+p.name+'\')" style="font-size:11px;padding:5px 10px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap">📨 알림</button>':'')
+          +'</div></div>';
       }).join('')
       +'</div>':'');
 }
@@ -1161,14 +1186,87 @@ async function mobileUpdateRpeType(sel, recordId){
   if(error){showToast('수정 실패',true);sel.value=sel.dataset.orig||'AM';}
   else{showToast('✅ '+newType+'으로 변경');sel.style.color='var(--accent2)';setTimeout(()=>sel.style.color='',1500);}
 }
-async function mobileEditRpe(recordId, playerName, curRpe){
-  const input=prompt(playerName+' RPE 수정 (1~10)\n현재: '+(curRpe||'없음'), curRpe||'');
-  if(input===null) return;
-  const val=parseFloat(input);
-  if(isNaN(val)||val<1||val>10){ showToast('1~10 사이 숫자를 입력하세요',true); return; }
-  const {error}=await supa.from('session_records').update({rpe:val}).eq('id',recordId);
-  if(error){showToast('수정 실패',true);}
-  else{showToast('✅ RPE '+val+'(으)로 변경');_loadedPages['rpe']=false;loadRpe();}
+function mobileOpenRpeModal(id, playerId, name, sess, rpe, date){
+  window._mRpeOpts={id,playerId,name,sess:sess||'AM',rpe,date};
+  let m=document.getElementById('mobile-rpe-modal');
+  if(!m){
+    m=document.createElement('div');
+    m.id='mobile-rpe-modal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:none;align-items:flex-end;justify-content:center';
+    m.innerHTML=`<div style="background:var(--surface);border-radius:18px 18px 0 0;padding:20px 20px 32px;width:100%;max-width:480px;box-shadow:0 -4px 24px rgba(0,0,0,.4)">
+      <div style="width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px"></div>
+      <div id="mrpe-title" style="font-size:15px;font-weight:700;color:var(--text);margin-bottom:16px"></div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:6px">날짜 (잘못된 날짜면 여기서 수정)</div>
+        <input id="mrpe-date" type="date" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit">
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">세션</div>
+        <div style="display:flex;gap:10px">
+          <button id="mrpe-am" onclick="mobileRpeSess('AM')" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">AM</button>
+          <button id="mrpe-pm" onclick="mobileRpeSess('PM')" style="flex:1;padding:11px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:15px;font-weight:700;font-family:inherit;cursor:pointer">PM</button>
+        </div>
+      </div>
+      <div style="margin-bottom:20px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:8px">RPE (1~10)</div>
+        <input id="mrpe-val" type="number" min="1" max="10" step="0.5" placeholder="숫자 입력" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:10px;padding:12px;font-size:24px;font-family:inherit;text-align:center">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="mobileSaveRpe()" style="flex:2;padding:13px;background:var(--accent2);border:none;color:#fff;border-radius:10px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer">저장</button>
+        <button id="mrpe-del" onclick="mobileDeleteRpeMod()" style="flex:1;padding:13px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer">삭제</button>
+        <button onclick="mobileCloseRpeModal()" style="flex:1;padding:13px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:10px;font-size:13px;font-family:inherit;cursor:pointer">취소</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    m.addEventListener('click',e=>{if(e.target===m)mobileCloseRpeModal();});
+  }
+  document.getElementById('mrpe-title').textContent=id?name+' RPE 수정':name+' RPE 추가';
+  document.getElementById('mrpe-date').value=date||'';
+  document.getElementById('mrpe-val').value=rpe||'';
+  document.getElementById('mrpe-del').style.display=id?'':'none';
+  mobileRpeSess(sess||'AM');
+  m.style.display='flex';
+  setTimeout(()=>document.getElementById('mrpe-val').focus(),80);
+}
+function mobileRpeSess(sess){
+  if(!window._mRpeOpts) return;
+  window._mRpeOpts.sess=sess;
+  const am=document.getElementById('mrpe-am'),pm=document.getElementById('mrpe-pm');
+  if(!am||!pm) return;
+  am.style.background=sess==='AM'?'var(--accent2)':'var(--surface2)';am.style.color=sess==='AM'?'#fff':'var(--text)';
+  pm.style.background=sess==='PM'?'var(--accent2)':'var(--surface2)';pm.style.color=sess==='PM'?'#fff':'var(--text)';
+}
+function mobileCloseRpeModal(){
+  const m=document.getElementById('mobile-rpe-modal');
+  if(m) m.style.display='none';
+}
+async function mobileSaveRpe(){
+  const opts=window._mRpeOpts||{};
+  const date=document.getElementById('mrpe-date').value;
+  const val=parseFloat(document.getElementById('mrpe-val').value);
+  const sess=opts.sess||'AM';
+  if(!date){showToast('날짜를 입력하세요',true);return;}
+  if(isNaN(val)||val<1||val>10){showToast('RPE는 1~10 사이로 입력하세요',true);return;}
+  let error;
+  if(opts.id){
+    ({error}=await supa.from('session_records').update({rpe:val,session_type:sess,session_order:sess==='AM'?1:2,record_date:date}).eq('id',opts.id));
+  } else {
+    ({error}=await supa.from('session_records').insert({player_id:opts.playerId,record_date:date,rpe:val,session_type:sess,session_order:sess==='AM'?1:2}));
+  }
+  if(error){showToast('저장 실패',true);return;}
+  showToast('✅ 저장됨');
+  mobileCloseRpeModal();
+  _loadedPages['rpe']=false;loadRpe();
+}
+async function mobileDeleteRpeMod(){
+  const opts=window._mRpeOpts||{};
+  if(!opts.id) return;
+  if(!confirm(opts.name+' ('+opts.sess+') RPE 기록을 삭제할까요?')) return;
+  const {error}=await supa.from('session_records').delete().eq('id',opts.id);
+  if(error){showToast('삭제 실패',true);return;}
+  showToast('✅ 삭제됨');
+  mobileCloseRpeModal();
+  _loadedPages['rpe']=false;loadRpe();
 }
 async function mobileDeleteRpe(recordId, playerName){
   if(!confirm('이 RPE 기록을 삭제할까요?\n'+playerName+' · 선택한 항목')) return;
