@@ -2315,6 +2315,8 @@ async function showApp(user, preloadedRole){
         currentGpsPlan      = club.gps_plan || 'V2';
         currentUsePlayerApp = club.use_player_app ?? true;
         currentUseRpe       = club.use_rpe ?? true;
+        // 웰니스 서베이(4항목)는 선수앱 모드에서만 사용
+        // use_wellness DB값이 있으면 사용, 없으면 use_player_app과 동일하게
         currentUseWellness  = club.use_wellness ?? currentUsePlayerApp;
         currentClubPermissions = club.permissions || {};
       }
@@ -10649,7 +10651,7 @@ async function loadTeamSummary(){
         </div>
         <div style="display:flex;align-items:center;gap:8px">
           ${(!currentUsePlayerApp&&currentUseRpe) ? `<button onclick="openCoachRpeBatchModal('${date}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(74,222,128,0.5);background:rgba(74,222,128,0.1);color:#4ade80;cursor:pointer;font-family:inherit;font-weight:600">✏️ RPE 일괄입력</button>` : ''}
-          ${(!currentUsePlayerApp&&currentUseWellness) ? `<button onclick="openCoachWellnessBatchModal('${date}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(96,165,250,0.5);background:rgba(96,165,250,0.1);color:#60a5fa;cursor:pointer;font-family:inherit;font-weight:600">💚 웰니스 일괄입력</button>` : ''}
+          ${(currentUseWellness&&!currentUsePlayerApp) ? `<button onclick="openCoachWellnessBatchModal('${date}')" style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid rgba(96,165,250,0.5);background:rgba(96,165,250,0.1);color:#60a5fa;cursor:pointer;font-family:inherit;font-weight:600">💚 웰니스 일괄입력</button>` : ''}
           <div style="font-size:12px;font-weight:600">
             <span style="color:#22c55e">${rpeEntered}</span>
             <span style="color:var(--text3)"> / ${rpeTotal}명 입력완료</span>
@@ -11221,7 +11223,9 @@ async function parseGpsFile(file){
           max_speed: getVal('maxSpeed'), player_load: getVal('pload'), rhie: getVal('rhie'),
           fmp_run_medium: getVal('fmpRunMed'), fmp_run_high: getVal('fmpRunHigh'),
           fmp_dyn_medium: getVal('fmpDynMed'), fmp_dyn_high: getVal('fmpDynHigh'),
-          // rpe, body_weight 는 선수 앱에서 수집 → GPS 파일 값 무시
+          // 코치 RPE 모드에서만 Excel의 RPE·체중 파싱 (선수앱 모드에서는 앱이 수집)
+          _rpe:    (!currentUsePlayerApp && currentUseRpe) ? (parseFloat(getVal('rpe'))||null)    : null,
+          _weight: (!currentUsePlayerApp && currentUseRpe) ? (parseFloat(getVal('weight'))||null) : null,
           hr_140_plus: getVal('hr140'), hr_120_140: getVal('hr120'), hr_100_120: getVal('hr100'),
           hr_80_100: getVal('hr80'), hr_60_80: getVal('hr60'), hr_40_60: getVal('hr40'), hr_20_40: getVal('hr20'),
           session_topic: getVal('topic'),
@@ -11236,10 +11240,11 @@ async function parseGpsFile(file){
       const trainCount = _gpsParseData.filter(r=>!r._isMatch).length;
       const matchCount = _gpsParseData.filter(r=>r._isMatch).length;
       const _isV1up = currentGpsPlan === 'V1';
-      const cols = ['player_name','session_date','session_label','session_type2','time_type','td','running_high','sprint','max_speed',...(_isV1up?[]:['player_load','rhie']),'accel','duration'];
-      const colLabels = ['선수','날짜','세션','타입(훈련)','구간(경기)','TD(m)','HSR(m)','Sprint(m)','최고속도',...(_isV1up?[]:['P.Load','RHIE']),'가속','시간'];
+      const _isCoachRpe = !currentUsePlayerApp && currentUseRpe;
+      const cols = ['player_name','session_date','session_label','session_type2','time_type','td','running_high','sprint','max_speed',...(_isV1up?[]:['player_load','rhie']),'accel','duration',...(_isCoachRpe?['_rpe','_weight']:[])];
+      const colLabels = ['선수','날짜','세션','타입(훈련)','구간(경기)','TD(m)','HSR(m)','Sprint(m)','최고속도',...(_isV1up?[]:['P.Load','RHIE']),'가속','시간',...(_isCoachRpe?['RPE','체중(kg)']:[])];
       table.innerHTML = `
-        <tr style="background:var(--surface2)">${colLabels.map(l=>`<th style="padding:6px 8px;font-size:11px;color:var(--text3);white-space:nowrap">${l}</th>`).join('')}</tr>
+        <tr style="background:var(--surface2)">${colLabels.map((l,i)=>`<th style="padding:6px 8px;font-size:11px;color:${i>=colLabels.length-(_isCoachRpe?2:0)?'#a78bfa':'var(--text3)'};white-space:nowrap">${l}</th>`).join('')}</tr>
         ${_gpsParseData.map(r=>`<tr style="border-bottom:1px solid var(--border);background:${r._isMatch?'rgba(251,191,36,0.06)':'inherit'}">${cols.map(c=>`<td style="padding:6px 8px;font-size:11px;color:var(--text2);white-space:nowrap">${r[c]??'-'}</td>`).join('')}</tr>`).join('')}`;
 
       document.getElementById('upload-preview-title').textContent =
@@ -11261,7 +11266,8 @@ async function saveGpsData(){
 
   // _isMatch 플래그로 훈련/경기 분리
   const allRecords = _gpsParseData.map(({player_name, _isMatch, time_type, ...rest})=>({...rest, _isMatch, time_type}));
-  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, ...r})=>r);
+  // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
+  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>r);
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, time_type, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
@@ -11295,14 +11301,51 @@ async function saveGpsData(){
     if(error) errors.push('훈련: '+error.message);
     else {
       trainSaved = trainRecords.length;
-      // GPS duration → session_records 백필
-      for(const r of trainRecords){
-        if(r.duration && r.player_id && r.session_date){
-          await supa.from('session_records')
-            .update({duration: r.duration})
-            .eq('player_id', r.player_id)
-            .eq('record_date', r.session_date)
-            .is('duration', null);
+
+      if(!currentUsePlayerApp && currentUseRpe){
+        // ── 코치 RPE 모드: Excel RPE → session_records, 체중 → wellness_records ──
+        // session_order: AM=1, PM=2, 기타=1
+        const labelToOrder = {'AM':1,'PM':2,'DOUBLE':1,'TRAINING':1};
+        const rpeRecs   = [];
+        const weightMap = {}; // player_id → {record_date, morning_weight}
+        for(const raw of _gpsParseData.filter(r=>!r._isMatch)){
+          const label = (raw.session_label||'AM').toUpperCase();
+          const order = labelToOrder[label] || 1;
+          if(raw._rpe != null){
+            rpeRecs.push({
+              record_date: raw.session_date, player_id: raw.player_id,
+              rpe: raw._rpe, duration: raw.duration, session_order: order
+            });
+          }
+          if(raw._weight != null){
+            // 하루 1개 체중 (AM 기준, 중복 시 PM 덮어쓰지 않음)
+            const key = raw.player_id + '_' + raw.session_date;
+            if(!weightMap[key] || order === 1){
+              weightMap[key] = { record_date: raw.session_date, player_id: raw.player_id, morning_weight: raw._weight };
+            }
+          }
+        }
+        if(rpeRecs.length){
+          const {error:re} = await supa.from('session_records')
+            .upsert(rpeRecs, {onConflict:'record_date,player_id,session_order'});
+          if(re) errors.push('RPE 저장: '+re.message);
+        }
+        const weightRecs = Object.values(weightMap);
+        if(weightRecs.length){
+          const {error:we} = await supa.from('wellness_records')
+            .upsert(weightRecs, {onConflict:'record_date,player_id'});
+          if(we) errors.push('체중 저장: '+we.message);
+        }
+      } else {
+        // ── 선수앱 모드: GPS duration → session_records duration 백필 ──
+        for(const r of trainRecords){
+          if(r.duration && r.player_id && r.session_date){
+            await supa.from('session_records')
+              .update({duration: r.duration})
+              .eq('player_id', r.player_id)
+              .eq('record_date', r.session_date)
+              .is('duration', null);
+          }
         }
       }
     }
@@ -11344,6 +11387,12 @@ async function saveGpsData(){
     const parts = [];
     if(trainSaved) parts.push(`훈련 ${trainSaved}개`);
     if(matchSaved) parts.push(`경기 ${matchSaved}개`);
+    if(!currentUsePlayerApp && currentUseRpe){
+      const rpeCount = _gpsParseData.filter(r=>!r._isMatch && r._rpe!=null).length;
+      const wCount   = _gpsParseData.filter(r=>!r._isMatch && r._weight!=null).length;
+      if(rpeCount) parts.push(`RPE ${rpeCount}명`);
+      if(wCount)   parts.push(`체중 ${wCount}명`);
+    }
     toast.textContent = `✅ ${parts.join(' / ')} 저장 완료! 다음 파일을 업로드하세요.`;
     dropZone.parentNode.insertBefore(toast, dropZone);
     setTimeout(()=>{ if(toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
@@ -18888,7 +18937,7 @@ async function saAddClub(){
   const mode = document.getElementById('sa-club-mode').value;
   const useApp  = mode === 'full';
   const useRpe  = mode !== 'gps_only';
-  const useWell = mode !== 'gps_only';
+  const useWell = useApp; // 웰니스 서베이는 선수앱 모드에서만
   const errEl = document.getElementById('sa-club-err');
   errEl.textContent='';
   if(!name){ errEl.textContent='팀 이름을 입력하세요.'; return; }
@@ -18911,21 +18960,9 @@ async function saChangePlan(id, name, currentPlan){
 function saOpenModeModal(id, name, useApp, useRpe, useWell){
   window._saModeTarget = {id, name};
   document.getElementById('sa-mode-club-name').textContent = name;
-
-  if(useApp){
-    // 풀 모드: 선수앱 사용 중 → 선수앱 ON, RPE/웰니스 체크 비활성
-    document.getElementById('sa-mode-app').checked     = true;
-    document.getElementById('sa-mode-rpe').checked     = true;
-    document.getElementById('sa-mode-well').checked    = true;
-    document.getElementById('sa-mode-rpe').disabled    = true;
-    document.getElementById('sa-mode-well').disabled   = true;
-  } else {
-    document.getElementById('sa-mode-app').checked     = false;
-    document.getElementById('sa-mode-rpe').checked     = useRpe;
-    document.getElementById('sa-mode-well').checked    = useWell;
-    document.getElementById('sa-mode-rpe').disabled    = false;
-    document.getElementById('sa-mode-well').disabled   = false;
-  }
+  document.getElementById('sa-mode-app').checked  = useApp;
+  document.getElementById('sa-mode-rpe').checked  = useApp ? true : useRpe;
+  document.getElementById('sa-mode-rpe').disabled = useApp;
   saModeUpdateDesc();
   document.getElementById('sa-mode-modal').style.display = 'flex';
 }
@@ -18935,38 +18972,35 @@ function saCloseModeModal(){
 }
 function saModeToggleApp(){
   const appOn = document.getElementById('sa-mode-app').checked;
-  document.getElementById('sa-mode-rpe').disabled  = appOn;
-  document.getElementById('sa-mode-well').disabled = appOn;
-  if(appOn){
-    document.getElementById('sa-mode-rpe').checked  = true;
-    document.getElementById('sa-mode-well').checked = true;
-  }
+  document.getElementById('sa-mode-rpe').disabled = appOn;
+  if(appOn) document.getElementById('sa-mode-rpe').checked = true;
   saModeUpdateDesc();
 }
 function saModeUpdateDesc(){
-  const appOn  = document.getElementById('sa-mode-app').checked;
-  const rpeOn  = !document.getElementById('sa-mode-rpe').disabled && document.getElementById('sa-mode-rpe').checked;
-  const wellOn = !document.getElementById('sa-mode-well').disabled && document.getElementById('sa-mode-well').checked;
-  let desc='', badge='';
+  const appOn = document.getElementById('sa-mode-app').checked;
+  const rpeOn = !document.getElementById('sa-mode-rpe').disabled && document.getElementById('sa-mode-rpe').checked;
+  let badge='', desc='';
   if(appOn){
-    badge='📱 풀 모드'; desc='선수 앱으로 웰니스·RPE 자동 수집';
-  } else if(rpeOn||wellOn){
-    const items=[wellOn?'웰니스':'',rpeOn?'RPE':''].filter(Boolean).join('+');
-    badge=`✏️ 코치 입력 (${items})`; desc=`코치가 직접 ${items} 입력`;
+    badge='📱 풀 모드';
+    desc='선수 앱으로 웰니스·RPE·GYM 세션 부하 자동 수집';
+  } else if(rpeOn){
+    badge='✏️ 코치 RPE 모드';
+    desc='GPS 업로드 엑셀에 RPE·체중 기입 → 필드 세션 부하 관리 (GYM 제외)';
   } else {
-    badge='📡 GPS 전용'; desc='GPS 데이터만 사용 (RPE·웰니스 없음)';
+    badge='📡 GPS 전용';
+    desc='GPS 데이터만 사용 (RPE·웰니스 없음)';
   }
-  document.getElementById('sa-mode-desc').innerHTML=`<b>${badge}</b> — ${desc}`;
+  document.getElementById('sa-mode-desc').innerHTML=`<b>${badge}</b><br><span style="font-weight:400">${desc}</span>`;
 }
 async function saSaveMode(){
   if(!window._saModeTarget) return;
   const {id, name} = window._saModeTarget;
-  const appOn  = document.getElementById('sa-mode-app').checked;
-  const rpeOn  = document.getElementById('sa-mode-rpe').checked && !document.getElementById('sa-mode-rpe').disabled;
-  const wellOn = document.getElementById('sa-mode-well').checked && !document.getElementById('sa-mode-well').disabled;
+  const appOn = document.getElementById('sa-mode-app').checked;
+  const rpeOn = document.getElementById('sa-mode-rpe').checked && !document.getElementById('sa-mode-rpe').disabled;
+  // use_wellness = use_player_app (웰니스 서베이는 선수앱 전용)
   const newApp  = appOn;
   const newRpe  = appOn ? true : rpeOn;
-  const newWell = appOn ? true : wellOn;
+  const newWell = appOn; // 항상 use_player_app과 동일
   const {error} = await supa.from('clubs').update({use_player_app:newApp, use_rpe:newRpe, use_wellness:newWell}).eq('id', id);
   if(error){ alert('변경 실패: '+error.message); return; }
   saCloseModeModal();
@@ -19756,31 +19790,22 @@ async function saveCoachWellnessBatch(){
       <input type="checkbox" id="sa-mode-app" onchange="saModeToggleApp()" style="width:18px;height:18px;accent-color:var(--accent);cursor:pointer">
       <div>
         <div style="font-size:13px;font-weight:600;color:var(--text)">📱 선수 앱 사용 (풀 모드)</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">선수가 앱으로 웰니스·RPE를 직접 입력</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">웰니스 서베이 + RPE + GYM 세션 부하 관리 가능</div>
       </div>
     </label>
 
-    <!-- 코치 입력 옵션 (선수앱 미사용 시) -->
-    <div style="padding:12px;background:var(--surface2);border-radius:10px;border:1px solid var(--border);margin-bottom:10px">
-      <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:10px">✏️ 코치 직접 입력 항목 (선수앱 미사용 시)</div>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:8px">
-        <input type="checkbox" id="sa-mode-well" onchange="saModeUpdateDesc()" style="width:16px;height:16px;accent-color:#22c55e;cursor:pointer">
-        <div>
-          <div style="font-size:13px;color:var(--text)">💚 웰니스 입력</div>
-          <div style="font-size:11px;color:var(--text3)">피로·수면·스트레스·근육통 코치 기입</div>
-        </div>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-        <input type="checkbox" id="sa-mode-rpe" onchange="saModeUpdateDesc()" style="width:16px;height:16px;accent-color:#a78bfa;cursor:pointer">
-        <div>
-          <div style="font-size:13px;color:var(--text)">📋 RPE 입력</div>
-          <div style="font-size:11px;color:var(--text3)">운동자각도(RPE) 코치 기입 → sRPE 자동계산</div>
-        </div>
-      </label>
-    </div>
+    <!-- RPE 옵션 (선수앱 미사용 시) -->
+    <label style="display:flex;align-items:center;gap:10px;padding:12px;background:var(--surface2);border-radius:10px;cursor:pointer;margin-bottom:10px;border:1px solid var(--border)">
+      <input type="checkbox" id="sa-mode-rpe" onchange="saModeUpdateDesc()" style="width:18px;height:18px;accent-color:#a78bfa;cursor:pointer">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text)">✏️ 코치 RPE 모드 (선수앱 미사용 시)</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">GPS 업로드 엑셀에 RPE·체중 기입 → 필드 세션만 부하 관리</div>
+        <div style="font-size:11px;color:var(--text3)">체크 해제 시 📡 GPS 전용 (RPE 없음)</div>
+      </div>
+    </label>
 
     <!-- 현재 모드 설명 -->
-    <div id="sa-mode-desc" style="font-size:12px;color:var(--accent2);background:rgba(139,92,246,0.08);padding:10px 12px;border-radius:8px;margin-bottom:16px;line-height:1.5"></div>
+    <div id="sa-mode-desc" style="font-size:12px;color:var(--accent2);background:rgba(139,92,246,0.08);padding:10px 12px;border-radius:8px;margin-bottom:16px;line-height:1.7"></div>
 
     <div style="display:flex;gap:8px">
       <button onclick="saSaveMode()" style="flex:2;padding:10px;border-radius:8px;border:none;background:var(--accent);color:#000;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">💾 저장</button>
