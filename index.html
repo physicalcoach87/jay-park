@@ -11190,7 +11190,7 @@ async function loadPlayerDashboard(){
   since.setDate(since.getDate()-days);
   const sinceStr = since.toISOString().split('T')[0];
 
-  const [{data:gps},{data:matchGps},{data:rpeRows},{data:wellRows},{data:injuries}] = await Promise.all([
+  const [{data:gps},{data:matchGps},{data:rpeRows},{data:wellRows},{data:injuries},{data:fitnessData}] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2')
       .eq('player_id',playerId)
@@ -11215,8 +11215,35 @@ async function loadPlayerDashboard(){
     supa.from('injury_records')
       .select('*').eq('player_id',playerId)
       .in('status',['치료중','재활중','부분 참여','복귀'])
-      .order('injury_date',{ascending:false})
+      .order('injury_date',{ascending:false}),
+    supa.from('fitness_records')
+      .select('record_date,weight,muscle_mass,body_fat_pct')
+      .eq('player_id',playerId)
+      .order('record_date',{ascending:false})
+      .limit(10)
   ]);
+  const fitnessRows = fitnessData||[];
+  const latestFit   = fitnessRows[0]||null;
+  const prevFit     = fitnessRows[1]||null;
+  const fitDiff = (cur, prev, field, dec=1) => {
+    const c=parseFloat(cur?.[field]), p=parseFloat(prev?.[field]);
+    if(!cur?.[field]||!prev?.[field]||isNaN(c)||isNaN(p)) return '';
+    const d=(c-p), up=d>0;
+    return `<div style="font-size:10px;color:${up?'#f59e0b':'#4ade80'}">${up?'▲':'▼'} ${Math.abs(d).toFixed(dec)}</div>`;
+  };
+  const fitDiffFat = (cur, prev) => {
+    const c=parseFloat(cur?.body_fat_pct), p=parseFloat(prev?.body_fat_pct);
+    if(!cur?.body_fat_pct||!prev?.body_fat_pct||isNaN(c)||isNaN(p)) return '';
+    const d=(c-p), up=d>0;
+    // 체지방은 줄어드는 게 좋음 → 반전
+    return `<div style="font-size:10px;color:${up?'#ef4444':'#4ade80'}">${up?'▲':'▼'} ${Math.abs(d).toFixed(1)} %</div>`;
+  };
+  const fitMuscDiff = (cur, prev) => {
+    const c=parseFloat(cur?.muscle_mass), p=parseFloat(prev?.muscle_mass);
+    if(!cur?.muscle_mass||!prev?.muscle_mass||isNaN(c)||isNaN(p)) return '';
+    const d=(c-p), up=d>0;
+    return `<div style="font-size:10px;color:${up?'#4ade80':'#ef4444'}">${up?'▲':'▼'} ${Math.abs(d).toFixed(1)} kg</div>`;
+  };
 
   const hasInjury = injuries?.length > 0;
 
@@ -11464,6 +11491,53 @@ async function loadPlayerDashboard(){
           </div>
         </div>
       </div>
+    </div>` : ''}
+
+    ${latestFit ? `
+    <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#c4b5fd;letter-spacing:.05em;margin-bottom:10px">
+        💪 체성분 (인바디) <span style="font-weight:400;color:var(--text3)">최근 ${fitnessRows.length}회 측정</span>
+        <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">최신: ${latestFit.record_date}</span>
+      </div>
+      <!-- 최신값 카드 -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px">
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">체중</div>
+          <div style="font-size:16px;font-weight:700;color:var(--text2)">${latestFit.weight!=null?latestFit.weight:'—'}<span style="font-size:10px;color:var(--text3)"> kg</span></div>
+          ${fitDiff(latestFit,prevFit,'weight')}
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">근육량</div>
+          <div style="font-size:16px;font-weight:700;color:#4ade80">${latestFit.muscle_mass!=null?latestFit.muscle_mass:'—'}<span style="font-size:10px;color:var(--text3)"> kg</span></div>
+          ${fitMuscDiff(latestFit,prevFit)}
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">체지방률</div>
+          <div style="font-size:16px;font-weight:700;color:#f59e0b">${latestFit.body_fat_pct!=null?latestFit.body_fat_pct:'—'}<span style="font-size:10px;color:var(--text3)"> %</span></div>
+          ${fitDiffFat(latestFit,prevFit)}
+        </div>
+      </div>
+      <!-- 기록 테이블 -->
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:5px 8px;text-align:left;color:var(--text3)">날짜</th>
+            <th style="padding:5px 8px;text-align:right;color:var(--text3)">체중(kg)</th>
+            <th style="padding:5px 8px;text-align:right;color:#4ade80">근육량(kg)</th>
+            <th style="padding:5px 8px;text-align:right;color:#f59e0b">체지방(%)</th>
+          </tr></thead>
+          <tbody>
+            ${fitnessRows.map(r=>`
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:5px 8px;color:var(--text2)">${r.record_date}</td>
+                <td style="padding:5px 8px;text-align:right;color:var(--text2)">${r.weight!=null?r.weight:'—'}</td>
+                <td style="padding:5px 8px;text-align:right;color:#4ade80;font-weight:600">${r.muscle_mass!=null?r.muscle_mass:'—'}</td>
+                <td style="padding:5px 8px;text-align:right;color:#f59e0b;font-weight:600">${r.body_fat_pct!=null?r.body_fat_pct+' %':'—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px">선수 앱에서 인바디 측정 후 입력 · 기간 필터 미적용 (전체 최근 10회)</div>
     </div>` : ''}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
