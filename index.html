@@ -967,6 +967,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <button id="extab-preact" class="btn-exp" onclick="switchExerciseTab('preact')">⚡ Pre-activation</button>
     <button id="extab-cardio" class="btn-exp" onclick="switchExerciseTab('cardio')">🏃 유산소 운동</button>
     <button id="extab-test" class="btn-exp admin-only" onclick="switchExerciseTab('test')">🧪 체력 테스트</button>
+    <button id="extab-breakplan" class="btn-exp admin-only" onclick="switchExerciseTab('breakplan')">🏖️ 휴식기 플랜</button>
     <button id="extab-progmgmt" class="btn-exp admin-only" onclick="switchExerciseTab('progmgmt')">📋 프로그램 관리</button>
   </div>
 
@@ -1841,6 +1842,59 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 </div>
 
+<!-- 휴식기 플랜 서브탭 -->
+<div id="tab-breakplan" style="display:none;padding:4px 0">
+  <!-- 목록 뷰 -->
+  <div id="bp-list-view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:15px;font-weight:700;color:var(--text)">🏖️ 휴식기 플랜</div>
+      <button onclick="bpShowCreateForm()" style="padding:7px 14px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ 새 플랜</button>
+    </div>
+    <!-- 생성 폼 -->
+    <div id="bp-create-form" style="display:none;background:var(--surface2);border:1px solid var(--border2);border-radius:12px;padding:1.25rem;margin-bottom:1rem">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">새 플랜 만들기</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">플랜 제목</label>
+          <input id="bp-plan-title" type="text" placeholder="예: 비시즌 홈트 프로그램"
+            style="width:100%;box-sizing:border-box;font-size:14px;padding:10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:130px">
+            <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">시작일</label>
+            <input id="bp-start-date" type="date" style="width:100%;box-sizing:border-box;font-size:14px;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+          </div>
+          <div style="flex:1;min-width:130px">
+            <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">종료일</label>
+            <input id="bp-end-date" type="date" style="width:100%;box-sizing:border-box;font-size:14px;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+          </div>
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:6px">대상</label>
+          <div style="display:flex;gap:14px;align-items:center">
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="bp-target" value="all" checked onchange="bpTogglePlayerSel()"> 전체팀</label>
+            <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer"><input type="radio" name="bp-target" value="player" onchange="bpTogglePlayerSel()"> 개인</label>
+          </div>
+          <div id="bp-player-wrap" style="display:none;margin-top:8px">
+            <select id="bp-target-player" style="width:100%;font-size:13px;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none;cursor:pointer">
+              <option value="">선수 선택</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="bpCreatePlan()" style="flex:2;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">만들기</button>
+          <button onclick="bpHideCreateForm()" style="flex:1;padding:10px;background:var(--surface);border:1px solid var(--border2);color:var(--text3);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">취소</button>
+        </div>
+        <div id="bp-create-msg" style="font-size:12px;min-height:16px"></div>
+      </div>
+    </div>
+    <!-- 플랜 목록 -->
+    <div id="bp-plans-list"></div>
+  </div>
+  <!-- 편집기 뷰 (JS로 렌더링) -->
+  <div id="bp-editor-view" style="display:none"></div>
+</div>
+
 <!-- 체력 테스트 서브탭 -->
 <div id="tab-test" style="display:none;padding:4px 0">
   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
@@ -2264,28 +2318,28 @@ const ROLE_PERMISSIONS = {
     report:1, players:1, exercise:1, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
-    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-progmgmt':1
+    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-breakplan':1,'extab-progmgmt':1
   },
   // 코치: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
   coach: {
     report:1, players:1, exercise:0, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
-    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-progmgmt':0
+    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-breakplan':0,'extab-progmgmt':0
   },
   // 피지컬코치: 전체 권한
   physical: {
     report:1, players:1, exercise:1, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
-    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-progmgmt':1
+    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-breakplan':1,'extab-progmgmt':1
   },
   // 의무팀: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
   medical: {
     report:1, players:1, exercise:0, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
-    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-progmgmt':0
+    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-breakplan':0,'extab-progmgmt':0
   }
 };
 
@@ -2296,7 +2350,7 @@ const TAB_LABELS = {
   'pvbtn-wellness':'웰니스', 'pvbtn-roster':'선수 명단',
   'pvbtn-match':'경기 데이터', 'pvbtn-upload':'GPS 업로드',
   'extab-gym':'근력 운동', 'extab-preact':'Pre-activation',
-  'extab-cardio':'유산소 운동', 'extab-test':'체력 테스트', 'extab-progmgmt':'프로그램 관리'
+  'extab-cardio':'유산소 운동', 'extab-test':'체력 테스트', 'extab-breakplan':'휴식기 플랜', 'extab-progmgmt':'프로그램 관리'
 };
 
 // ── 사용자 권한 로드 (role 기본값 → 팀 역할 오버라이드 → 클럽 최종 게이트) ──
@@ -2361,7 +2415,7 @@ function applyTabPermissions(){
   });
 
   // ④ 운동처방 서브탭 → 권한 기준으로 덮어쓰기
-  ['extab-gym','extab-preact','extab-cardio','extab-test','extab-progmgmt'].forEach(id=>{
+  ['extab-gym','extab-preact','extab-cardio','extab-test','extab-breakplan','extab-progmgmt'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = userPermissions[id] ? '' : 'none';
   });
@@ -2833,7 +2887,7 @@ async function openPermModal(idx){
   const tabGroups = [
     { label:'메인 탭', keys:['report','players','exercise','notify'] },
     { label:'선수관리 서브탭', keys:['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'] },
-    { label:'운동처방 서브탭', keys:['extab-gym','extab-preact','extab-cardio','extab-test','extab-progmgmt'] }
+    { label:'운동처방 서브탭', keys:['extab-gym','extab-preact','extab-cardio','extab-test','extab-breakplan','extab-progmgmt'] }
   ];
 
   const rowsHtml = tabGroups.map(g=>`
@@ -19264,7 +19318,7 @@ function switchTab(tab,el){
 }
 
 function switchExerciseTab(sub){
-  const subs = ['gym','preact','cardio','test','progmgmt'];
+  const subs = ['gym','preact','cardio','test','breakplan','progmgmt'];
   subs.forEach(id=>{
     const el = document.getElementById('tab-'+id);
     if(el) el.style.display = id===sub ? 'block' : 'none';
@@ -19284,8 +19338,492 @@ function switchExerciseTab(sub){
   if(sub==='gym') initGymTab();
   if(sub==='cardio') loadCardioPlayers();
   if(sub==='test') loadTestTab();
+  if(sub==='breakplan') loadBreakPlanTab();
   if(sub==='progmgmt') setProgTab('videos');
 }
+// ══════════════════════════════════════════════════════════════════
+// 🏖️ 휴식기 플랜 (Break Period Plan)
+// ══════════════════════════════════════════════════════════════════
+let _bpPlan=null, _bpSessions={}, _bpEditDate=null;
+const BP_LABELS={rest:'🛌 휴식',cardio:'🏃 유산소',gym:'💪 근력',mixed:'🔄 복합(AM+PM)'};
+const BP_COLORS={rest:'#64748b',cardio:'#f59e0b',gym:'#a78bfa',mixed:'#4ade80'};
+
+async function loadBreakPlanTab(){
+  document.getElementById('bp-editor-view').style.display='none';
+  document.getElementById('bp-list-view').style.display='';
+  await bpLoadPlanList();
+}
+async function bpLoadPlanList(){
+  const el=document.getElementById('bp-plans-list');
+  el.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">불러오는 중...</div>';
+  const {data:plans}=await supa.from('break_plans').select('*,player_profiles(name)').eq('club_id',currentClubId).order('created_at',{ascending:false});
+  if(!plans?.length){el.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">등록된 플랜이 없습니다<br><span style="font-size:11px">+ 새 플랜 버튼으로 만들어보세요</span></div>';return;}
+  el.innerHTML=plans.map(p=>{
+    const days=Math.round((new Date(p.end_date)-new Date(p.start_date))/86400000)+1;
+    const target=p.target_type==='all'?'전체팀':(p.player_profiles?.name||'개인');
+    const pub=p.status==='published';
+    return `<div style="background:var(--surface);border:1px solid ${pub?'rgba(74,222,128,.4)':'var(--border2)'};border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap">
+        <div><div style="display:flex;align-items:center;gap:8px;margin-bottom:3px">
+          <span style="font-size:14px;font-weight:700;color:var(--text)">${p.title}</span>
+          <span style="font-size:10px;padding:2px 7px;border-radius:4px;${pub?'background:rgba(74,222,128,.15);color:#4ade80;border:1px solid rgba(74,222,128,.3)':'background:var(--surface2);color:var(--text3);border:1px solid var(--border)'}">${pub?'📱 발송됨':'초안'}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text3)">${p.start_date} ~ ${p.end_date} · ${days}일 · ${target}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button onclick="bpOpenEditor('${p.id}')" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">✏️ 편집</button>
+          ${!pub?`<button onclick="bpPublish('${p.id}','${p.title.replace(/'/g,'')}')" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #4ade80;background:rgba(74,222,128,.1);color:#4ade80;cursor:pointer;font-family:inherit">📱 발송</button>`:''}
+          <button onclick="bpViewCompletion('${p.id}','${p.title.replace(/'/g,'')}')" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">📊 현황</button>
+          <button onclick="bpDelete('${p.id}','${p.title.replace(/'/g,'')}')" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid #ef4444;background:rgba(239,68,68,.1);color:#ef4444;cursor:pointer;font-family:inherit">삭제</button>
+        </div>
+      </div></div>`;
+  }).join('');
+}
+function bpShowCreateForm(){
+  document.getElementById('bp-create-form').style.display='';
+  document.getElementById('bp-plan-title').value='';
+  document.getElementById('bp-create-msg').textContent='';
+  const today=getKSTDateStr();
+  document.getElementById('bp-start-date').value=today;
+  const e=new Date(today+'T12:00:00'); e.setDate(e.getDate()+9);
+  document.getElementById('bp-end-date').value=e.toISOString().split('T')[0];
+  const sel=document.getElementById('bp-target-player');
+  sel.innerHTML='<option value="">선수 선택</option>'+sortByPos(_players||[]).map(p=>`<option value="${p.id}">${p.name} · ${p.position||''}</option>`).join('');
+  bpTogglePlayerSel();
+}
+function bpHideCreateForm(){ document.getElementById('bp-create-form').style.display='none'; }
+function bpTogglePlayerSel(){
+  const t=document.querySelector('input[name="bp-target"]:checked')?.value||'all';
+  document.getElementById('bp-player-wrap').style.display=t==='player'?'':'none';
+}
+async function bpCreatePlan(){
+  const title=document.getElementById('bp-plan-title').value.trim();
+  const s=document.getElementById('bp-start-date').value;
+  const e=document.getElementById('bp-end-date').value;
+  const tt=document.querySelector('input[name="bp-target"]:checked')?.value||'all';
+  const tpid=tt==='player'?document.getElementById('bp-target-player').value:null;
+  const msg=document.getElementById('bp-create-msg');
+  if(!title){msg.textContent='제목을 입력하세요';msg.style.color='#ef4444';return;}
+  if(!s||!e||s>e){msg.textContent='기간을 확인하세요';msg.style.color='#ef4444';return;}
+  if(tt==='player'&&!tpid){msg.textContent='선수를 선택하세요';msg.style.color='#ef4444';return;}
+  msg.textContent='생성 중...';msg.style.color='var(--text3)';
+  const {data,error}=await supa.from('break_plans').insert({
+    club_id:currentClubId,title,start_date:s,end_date:e,
+    target_type:tt,target_player_id:tpid||null,
+    created_by:currentUser?.email||'coach',status:'draft'
+  }).select().single();
+  if(error){msg.textContent='오류: '+error.message;msg.style.color='#ef4444';return;}
+  bpHideCreateForm(); await bpOpenEditor(data.id);
+}
+async function bpOpenEditor(planId){
+  const {data:plan}=await supa.from('break_plans').select('*,player_profiles(name)').eq('id',planId).single();
+  if(!plan) return;
+  _bpPlan=plan; _bpSessions={};
+  const {data:sess}=await supa.from('break_plan_sessions').select('*').eq('plan_id',planId);
+  (sess||[]).forEach(s=>{ _bpSessions[s.session_date]=s; });
+  document.getElementById('bp-list-view').style.display='none';
+  document.getElementById('bp-editor-view').style.display='';
+  bpRenderEditor();
+}
+function bpRenderEditor(){
+  const plan=_bpPlan;
+  const days=[];
+  let cur=new Date(plan.start_date+'T12:00:00');
+  const end=new Date(plan.end_date+'T12:00:00');
+  while(cur<=end){ days.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate()+1); }
+  const target=plan.target_type==='all'?'전체팀':(plan.player_profiles?.name||'개인');
+  const pub=plan.status==='published';
+  const masVals=(_players||[]).map(p=>parseFloat(p.mas)||0).filter(v=>v>0);
+  const firstDow=new Date(days[0]+'T12:00:00').getDay();
+  const offset=firstDow===0?6:firstDow-1;
+  const cells=days.map(date=>{
+    const sess=_bpSessions[date]; const d=new Date(date+'T12:00:00');
+    const isWk=d.getDay()===0||d.getDay()===6;
+    const lbl=`${d.getMonth()+1}/${d.getDate()} (${['일','월','화','수','목','금','토'][d.getDay()]})`;
+    let body='';
+    if(sess){
+      const col=BP_COLORS[sess.session_type]||'var(--text2)';
+      const tl=BP_LABELS[sess.session_type]||sess.session_type;
+      let det='';
+      if(sess.session_type==='cardio'&&sess.am_program?.intervals?.length) det=`<div style="font-size:10px;color:var(--text3)">${sess.am_program.intervals.length}구간 인터벌</div>`;
+      else if(sess.session_type==='gym'&&sess.am_program?.exercises?.length) det=`<div style="font-size:10px;color:var(--text3)">${sess.am_program.exercises.length}종목</div>`;
+      else if(sess.session_type==='mixed') det=`<div style="font-size:10px;color:var(--text3)">AM+PM</div>`;
+      if(sess.notes) det+=`<div style="font-size:10px;color:var(--text3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sess.notes}</div>`;
+      body=`<div style="font-size:13px;color:${col};font-weight:600;margin:4px 0">${tl}</div>${det}`;
+    } else body='<div style="font-size:11px;color:var(--text3);margin-top:10px;text-align:center">+ 추가</div>';
+    return `<div onclick="bpOpenSessionModal('${date}')" style="background:${sess?'var(--surface)':'var(--surface2)'};border:1px solid ${sess?(BP_COLORS[sess.session_type]+'44'):'var(--border)'};border-radius:8px;padding:8px 6px;cursor:pointer;min-height:85px;color:${isWk?'#f87171':'var(--text)'}">
+      <div style="font-size:11px;font-weight:600">${lbl}</div>${body}</div>`;
+  });
+  document.getElementById('bp-editor-view').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div>
+        <div style="font-size:16px;font-weight:700;color:var(--text)">${plan.title}</div>
+        <div style="font-size:12px;color:var(--text3)">${plan.start_date} ~ ${plan.end_date} · ${days.length}일 · ${target}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="bpLoadPlanList()" style="font-size:13px;padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">← 목록</button>
+        ${!pub?`<button onclick="bpPublish('${plan.id}','${plan.title.replace(/'/g,'')}')" style="font-size:13px;padding:7px 16px;border-radius:7px;border:none;background:#4ade80;color:#052e16;font-weight:700;cursor:pointer;font-family:inherit">📱 발송</button>`:'<span style="font-size:12px;color:#4ade80;padding:7px">✅ 발송 완료</span>'}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px">
+      ${['월','화','수','목','금','토','일'].map(d=>`<div style="text-align:center;font-size:11px;color:var(--text3);font-weight:600;padding:4px">${d}</div>`).join('')}
+      ${Array(offset).fill('<div></div>').join('')}
+      ${cells.join('')}
+    </div>
+    <div style="font-size:10px;color:var(--text3)">셀을 클릭해서 세션을 추가/편집하세요</div>`;
+}
+
+// ── 세션 편집 모달 ───────────────────────────────────
+function bpOpenSessionModal(date){
+  _bpEditDate=date;
+  const sess=_bpSessions[date]||null;
+  const d=new Date(date+'T12:00:00');
+  const title=`${d.getMonth()+1}/${d.getDate()} (${['일','월','화','수','목','금','토'][d.getDay()]}) 세션`;
+  let m=document.getElementById('bp-sess-modal');
+  if(!m){m=document.createElement('div');m.id='bp-sess-modal';
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+    m.addEventListener('click',e=>{if(e.target===m)bpCloseSessionModal();});
+    document.body.appendChild(m);}
+  const type=sess?.session_type||'rest';
+  m.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:100%;max-width:580px;max-height:88vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="font-size:15px;font-weight:700">${title}</div>
+      <button onclick="bpCloseSessionModal()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:20px;line-height:1">×</button>
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
+      ${Object.entries(BP_LABELS).map(([k,v])=>`<button id="bptype-${k}" onclick="bpSetType('${k}')"
+        style="padding:7px 12px;border-radius:8px;border:1px solid ${type===k?BP_COLORS[k]:'var(--border2)'};background:${type===k?BP_COLORS[k]+'22':'transparent'};color:${type===k?BP_COLORS[k]:'var(--text2)'};cursor:pointer;font-family:inherit;font-size:13px;font-weight:${type===k?'700':'400'}">${v}</button>`).join('')}
+    </div>
+    <div id="bp-sess-body"></div>
+    <div id="bp-sess-actions" style="display:flex;gap:8px;margin-top:1rem">
+      <button onclick="bpSaveSession()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">💾 저장</button>
+      ${sess?`<button onclick="bpDeleteSession()" style="flex:1;padding:11px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);color:#ef4444;border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">삭제</button>`:''}
+      <button onclick="bpCloseSessionModal()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">취소</button>
+    </div>
+  </div>`;
+  m.style.display='flex';
+  bpSetType(type,sess);
+}
+function bpCloseSessionModal(){ const m=document.getElementById('bp-sess-modal');if(m)m.style.display='none'; }
+
+function bpSetType(type,sessData){
+  Object.keys(BP_LABELS).forEach(k=>{
+    const btn=document.getElementById('bptype-'+k); if(!btn) return;
+    const on=k===type;
+    btn.style.borderColor=on?BP_COLORS[k]:'var(--border2)';
+    btn.style.background=on?BP_COLORS[k]+'22':'transparent';
+    btn.style.color=on?BP_COLORS[k]:'var(--text2)';
+    btn.style.fontWeight=on?'700':'400';
+  });
+  const data=sessData||_bpSessions[_bpEditDate]||null;
+  const body=document.getElementById('bp-sess-body'); if(!body) return;
+  if(type==='rest') body.innerHTML=bpRestHtml(data);
+  else if(type==='cardio'){const p=data?.session_type==='cardio'?data.am_program:null;body.innerHTML=bpCardioHtml(p,'am');bpUpdateDist('am');}
+  else if(type==='gym'){const p=data?.session_type==='gym'?data.am_program:null;body.innerHTML=bpGymHtml(p,'am');}
+  else if(type==='mixed'){
+    const amProg=data?.session_type==='mixed'?data.am_program:null;
+    const pmProg=data?.session_type==='mixed'?data.pm_program:null;
+    body.innerHTML=`
+      <div style="font-size:12px;font-weight:600;color:var(--text3);margin-bottom:8px;padding:4px 8px;background:var(--surface2);border-radius:6px">AM 세션</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button id="bpam-cardio" onclick="bpMixType('am','cardio')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">🏃 유산소</button>
+        <button id="bpam-gym" onclick="bpMixType('am','gym')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">💪 근력</button>
+      </div>
+      <div id="bpam-body"></div>
+      <div style="font-size:12px;font-weight:600;color:var(--text3);margin:12px 0 8px;padding:4px 8px;background:var(--surface2);border-radius:6px">PM 세션</div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <button id="bppm-cardio" onclick="bpMixType('pm','cardio')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">🏃 유산소</button>
+        <button id="bppm-gym" onclick="bpMixType('pm','gym')" style="flex:1;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">💪 근력</button>
+      </div>
+      <div id="bppm-body"></div>
+      <div style="margin-top:10px">
+        <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">전체 메모</label>
+        <textarea id="bpsess-notes" rows="2" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:13px;font-family:inherit;resize:vertical">${data?.notes||''}</textarea>
+      </div>`;
+    bpMixType('am',amProg?.type||'cardio',amProg);
+    bpMixType('pm',pmProg?.type||'gym',pmProg);
+  }
+  window._bpCurType=type;
+}
+function bpMixType(prefix,type,prog){
+  ['cardio','gym'].forEach(t=>{
+    const btn=document.getElementById(`bp${prefix}-${t}`); if(!btn) return;
+    const on=t===type;
+    btn.style.borderColor=on?BP_COLORS[t]:'var(--border2)';
+    btn.style.background=on?BP_COLORS[t]+'22':'var(--surface2)';
+    btn.style.color=on?BP_COLORS[t]:'var(--text2)';
+  });
+  const el=document.getElementById(`bp${prefix}-body`); if(!el) return;
+  if(type==='cardio'){el.innerHTML=bpCardioHtml(prog,prefix);bpUpdateDist(prefix);}
+  else el.innerHTML=bpGymHtml(prog,prefix);
+  window['_bp'+prefix+'Type']=type;
+}
+
+function bpRestHtml(data){
+  return `<div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">메모</label>
+    <textarea id="bpsess-notes" rows="3" placeholder="선수들에게 전달할 내용 (충분한 수면, 스트레칭 권장 등)" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:13px;font-family:inherit;resize:vertical">${data?.notes||''}</textarea></div>`;
+}
+
+function bpCardioHtml(prog,prefix){
+  const wu=prog?.warmup||{}; const cd=prog?.cooldown||{};
+  const ivs=prog?.intervals||[{intensity_pct:75,duration_min:5,rest_min:3}];
+  const notes=prog?.notes||'';
+  const masVals=(_players||[]).map(p=>parseFloat(p.mas)||0).filter(v=>v>0);
+  const masMin=masVals.length?Math.min(...masVals):0; const masMax=masVals.length?Math.max(...masVals):0;
+  const rows=ivs.map((iv,i)=>{
+    const dMin=masMin>0?Math.round(masMin*iv.intensity_pct/100*iv.duration_min/60*1000):0;
+    const dMax=masMax>0?Math.round(masMax*iv.intensity_pct/100*iv.duration_min/60*1000):0;
+    const dist=(dMin&&dMax)?`${dMin.toLocaleString()}~${dMax.toLocaleString()}m`:'—';
+    return `<tr><td style="padding:4px 6px;font-size:12px;color:var(--text3);white-space:nowrap">${i+1}구간</td>
+      <td style="padding:4px 3px"><input type="number" class="bp-iv-pct" value="${iv.intensity_pct}" min="50" max="120" oninput="bpUpdateDist('${prefix}')" style="width:52px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">%</td>
+      <td style="padding:4px 3px"><input type="number" class="bp-iv-dur" value="${iv.duration_min}" min="1" max="90" oninput="bpUpdateDist('${prefix}')" style="width:42px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">분</td>
+      <td style="padding:4px 3px"><input type="number" class="bp-iv-rest" value="${iv.rest_min}" min="0" max="20" style="width:42px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">분</td>
+      <td style="padding:4px 6px;font-size:11px;color:#60a5fa;white-space:nowrap" class="bp-iv-dist">${dist}</td>
+      <td><button onclick="bpRmIv(this,'${prefix}')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:2px 5px">×</button></td></tr>`;
+  }).join('');
+  return `
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">웜업</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="${prefix}-wu-dur" value="${wu.duration_min||10}" min="0" max="60" style="width:52px;text-align:center;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit"> 분
+        <input type="text" id="${prefix}-wu-notes" value="${wu.notes||''}" placeholder="웜업 내용" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <label style="font-size:11px;color:var(--text3)">인터벌 구간</label>
+        <span style="font-size:10px;color:var(--text3)">${masMin>0?`팀 MAS ${masMin.toFixed(1)}~${masMax.toFixed(1)} km/h`:'MAS 미등록'}</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:var(--surface2)">
+            <th style="padding:4px 6px;font-size:11px;color:var(--text3);text-align:left"></th>
+            <th style="padding:4px 6px;font-size:11px;color:var(--text3)">강도</th>
+            <th style="padding:4px 6px;font-size:11px;color:var(--text3)">시간</th>
+            <th style="padding:4px 6px;font-size:11px;color:var(--text3)">휴식</th>
+            <th style="padding:4px 6px;font-size:11px;color:#60a5fa">팀 거리범위</th>
+            <th></th>
+          </tr></thead>
+          <tbody id="${prefix}-iv-body">${rows}</tbody>
+        </table>
+      </div>
+      <button onclick="bpAddIv('${prefix}')" style="margin-top:6px;font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">+ 구간 추가</button>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">쿨다운</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="number" id="${prefix}-cd-dur" value="${cd.duration_min||10}" min="0" max="60" style="width:52px;text-align:center;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit"> 분
+        <input type="text" id="${prefix}-cd-notes" value="${cd.notes||''}" placeholder="쿨다운 내용" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">
+      </div>
+    </div>
+    <div>
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">메모</label>
+      <textarea id="${prefix}-c-notes" rows="2" placeholder="페이스 유지, 호흡 등" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:13px;font-family:inherit;resize:vertical">${notes}</textarea>
+    </div>`;
+}
+
+function bpGymHtml(prog,prefix){
+  const exs=prog?.exercises||[{name:'',sets:3,reps:10,coaching:''}];
+  const dur=prog?.duration_min||60; const notes=prog?.notes||'';
+  const rows=exs.map((ex,i)=>`<tr>
+    <td style="padding:4px 4px;font-size:12px;color:var(--text3)">${i+1}</td>
+    <td style="padding:4px 3px"><input type="text" class="bp-ex-name" value="${ex.name||''}" placeholder="운동명" style="width:110px;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit"></td>
+    <td style="padding:4px 3px"><input type="number" class="bp-ex-sets" value="${ex.sets||3}" min="1" max="10" style="width:38px;text-align:center;padding:5px 3px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">×</td>
+    <td style="padding:4px 3px"><input type="number" class="bp-ex-reps" value="${ex.reps||10}" min="1" max="50" style="width:38px;text-align:center;padding:5px 3px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">회</td>
+    <td style="padding:4px 3px"><input type="text" class="bp-ex-coaching" value="${ex.coaching||''}" placeholder="코칭 포인트" style="width:110px;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit"></td>
+    <td><button onclick="bpRmEx(this,'${prefix}')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:2px 5px">×</button></td></tr>`).join('');
+  return `
+    <div style="overflow-x:auto;margin-bottom:10px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:4px 6px;font-size:11px;color:var(--text3)">#</th>
+          <th style="padding:4px 6px;font-size:11px;color:var(--text3);text-align:left">운동명</th>
+          <th style="padding:4px 6px;font-size:11px;color:var(--text3)">세트</th>
+          <th style="padding:4px 6px;font-size:11px;color:var(--text3)">횟수</th>
+          <th style="padding:4px 6px;font-size:11px;color:var(--text3);text-align:left">코칭 포인트</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="${prefix}-ex-body">${rows}</tbody>
+      </table>
+    </div>
+    <button onclick="bpAddEx('${prefix}')" style="font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">+ 운동 추가</button>
+    <div style="display:flex;gap:10px;align-items:center;margin:10px 0">
+      <label style="font-size:11px;color:var(--text3);white-space:nowrap">예상 시간</label>
+      <input type="number" id="${prefix}-gym-dur" value="${dur}" min="10" max="180" style="width:58px;text-align:center;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit"> 분
+    </div>
+    <div>
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">메모</label>
+      <textarea id="${prefix}-g-notes" rows="2" placeholder="세트 간 휴식, 자세 주의사항 등" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:13px;font-family:inherit;resize:vertical">${notes}</textarea>
+    </div>`;
+}
+
+function bpAddIv(prefix){
+  const tb=document.getElementById(prefix+'-iv-body'); if(!tb) return;
+  const i=tb.rows.length;
+  const tr=document.createElement('tr');
+  tr.innerHTML=`<td style="padding:4px 6px;font-size:12px;color:var(--text3);white-space:nowrap">${i+1}구간</td>
+    <td style="padding:4px 3px"><input type="number" class="bp-iv-pct" value="75" min="50" max="120" oninput="bpUpdateDist('${prefix}')" style="width:52px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">%</td>
+    <td style="padding:4px 3px"><input type="number" class="bp-iv-dur" value="5" min="1" max="90" oninput="bpUpdateDist('${prefix}')" style="width:42px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">분</td>
+    <td style="padding:4px 3px"><input type="number" class="bp-iv-rest" value="3" min="0" max="20" style="width:42px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">분</td>
+    <td style="padding:4px 6px;font-size:11px;color:#60a5fa;white-space:nowrap" class="bp-iv-dist">—</td>
+    <td><button onclick="bpRmIv(this,'${prefix}')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:2px 5px">×</button></td>`;
+  tb.appendChild(tr); bpUpdateDist(prefix);
+}
+function bpRmIv(btn,prefix){
+  btn.closest('tr').remove();
+  const tb=document.getElementById(prefix+'-iv-body');
+  if(tb) Array.from(tb.rows).forEach((r,i)=>{const td=r.cells[0];if(td)td.textContent=`${i+1}구간`;});
+  bpUpdateDist(prefix);
+}
+function bpUpdateDist(prefix){
+  const tb=document.getElementById(prefix+'-iv-body'); if(!tb) return;
+  const masVals=(_players||[]).map(p=>parseFloat(p.mas)||0).filter(v=>v>0);
+  const masMin=masVals.length?Math.min(...masVals):0; const masMax=masVals.length?Math.max(...masVals):0;
+  Array.from(tb.rows).forEach(r=>{
+    const pct=parseFloat(r.querySelector('.bp-iv-pct')?.value)||0;
+    const dur=parseFloat(r.querySelector('.bp-iv-dur')?.value)||0;
+    const el=r.querySelector('.bp-iv-dist'); if(!el) return;
+    if(masMin>0&&pct>0&&dur>0){
+      const dMin=Math.round(masMin*pct/100*dur/60*1000);
+      const dMax=Math.round(masMax*pct/100*dur/60*1000);
+      el.textContent=`${dMin.toLocaleString()}~${dMax.toLocaleString()}m`;
+    } else el.textContent='—';
+  });
+}
+function bpAddEx(prefix){
+  const tb=document.getElementById(prefix+'-ex-body'); if(!tb) return;
+  const i=tb.rows.length; const tr=document.createElement('tr');
+  tr.innerHTML=`<td style="padding:4px 4px;font-size:12px;color:var(--text3)">${i+1}</td>
+    <td style="padding:4px 3px"><input type="text" class="bp-ex-name" placeholder="운동명" style="width:110px;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit"></td>
+    <td style="padding:4px 3px"><input type="number" class="bp-ex-sets" value="3" min="1" max="10" style="width:38px;text-align:center;padding:5px 3px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">×</td>
+    <td style="padding:4px 3px"><input type="number" class="bp-ex-reps" value="10" min="1" max="50" style="width:38px;text-align:center;padding:5px 3px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">회</td>
+    <td style="padding:4px 3px"><input type="text" class="bp-ex-coaching" placeholder="코칭 포인트" style="width:110px;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit"></td>
+    <td><button onclick="bpRmEx(this,'${prefix}')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:2px 5px">×</button></td>`;
+  tb.appendChild(tr);
+}
+function bpRmEx(btn,prefix){
+  btn.closest('tr').remove();
+  const tb=document.getElementById(prefix+'-ex-body');
+  if(tb) Array.from(tb.rows).forEach((r,i)=>{const td=r.cells[0];if(td)td.textContent=i+1;});
+}
+
+function bpReadCardio(prefix){
+  const wuDur=parseFloat(document.getElementById(prefix+'-wu-dur')?.value)||0;
+  const wuN=document.getElementById(prefix+'-wu-notes')?.value||'';
+  const cdDur=parseFloat(document.getElementById(prefix+'-cd-dur')?.value)||0;
+  const cdN=document.getElementById(prefix+'-cd-notes')?.value||'';
+  const notes=document.getElementById(prefix+'-c-notes')?.value||'';
+  const tb=document.getElementById(prefix+'-iv-body');
+  const intervals=tb?Array.from(tb.rows).map(r=>({
+    intensity_pct:parseFloat(r.querySelector('.bp-iv-pct')?.value)||75,
+    duration_min:parseFloat(r.querySelector('.bp-iv-dur')?.value)||5,
+    rest_min:parseFloat(r.querySelector('.bp-iv-rest')?.value)||3
+  })):[];
+  return {type:'cardio',warmup:{duration_min:wuDur,notes:wuN},intervals,cooldown:{duration_min:cdDur,notes:cdN},notes};
+}
+function bpReadGym(prefix){
+  const tb=document.getElementById(prefix+'-ex-body');
+  const exercises=tb?Array.from(tb.rows).map(r=>({
+    name:r.querySelector('.bp-ex-name')?.value||'',
+    sets:parseInt(r.querySelector('.bp-ex-sets')?.value)||3,
+    reps:parseInt(r.querySelector('.bp-ex-reps')?.value)||10,
+    coaching:r.querySelector('.bp-ex-coaching')?.value||''
+  })).filter(ex=>ex.name):[];
+  const dur=parseFloat(document.getElementById(prefix+'-gym-dur')?.value)||60;
+  const notes=document.getElementById(prefix+'-g-notes')?.value||'';
+  return {type:'gym',exercises,duration_min:dur,notes};
+}
+
+async function bpSaveSession(){
+  const type=window._bpCurType||'rest';
+  const date=_bpEditDate;
+  let amProg=null,pmProg=null,notes='';
+  if(type==='rest') notes=document.getElementById('bpsess-notes')?.value||'';
+  else if(type==='cardio'){amProg=bpReadCardio('am');notes=amProg.notes;}
+  else if(type==='gym'){amProg=bpReadGym('am');notes=amProg.notes;}
+  else if(type==='mixed'){
+    const amT=window._bpamType||'cardio'; const pmT=window._bppmType||'gym';
+    amProg=amT==='cardio'?bpReadCardio('am'):bpReadGym('am');
+    pmProg=pmT==='cardio'?bpReadCardio('pm'):bpReadGym('pm');
+    notes=document.getElementById('bpsess-notes')?.value||'';
+  }
+  const existing=_bpSessions[date];
+  const payload={plan_id:_bpPlan.id,session_date:date,session_type:type,am_program:amProg,pm_program:pmProg,notes};
+  let error;
+  if(existing?.id){
+    ({error}=await supa.from('break_plan_sessions').update(payload).eq('id',existing.id));
+    if(!error) _bpSessions[date]={...existing,...payload};
+  } else {
+    const {data,error:e}=await supa.from('break_plan_sessions').insert(payload).select().single();
+    error=e; if(!error&&data) _bpSessions[date]=data;
+  }
+  if(error){alert('저장 실패: '+error.message);return;}
+  bpCloseSessionModal(); bpRenderEditor();
+}
+async function bpDeleteSession(){
+  const sess=_bpSessions[_bpEditDate];
+  if(!sess?.id||!confirm('이 날의 세션을 삭제할까요?')) return;
+  await supa.from('break_plan_sessions').delete().eq('id',sess.id);
+  delete _bpSessions[_bpEditDate];
+  bpCloseSessionModal(); bpRenderEditor();
+}
+async function bpPublish(planId,title){
+  if(!confirm(`"${title}"을 선수들에게 발송할까요?`)) return;
+  const plan=_bpPlan||{};
+  let targets=_players||[];
+  if(plan.target_type==='player'&&plan.target_player_id)
+    targets=targets.filter(p=>p.id===plan.target_player_id);
+  await Promise.all(targets.map(p=>supa.from('notifications').insert({
+    title:`🏖️ ${title}`,
+    body:`${plan.start_date}~${plan.end_date} 휴식기 운동 프로그램이 등록됐어요!\n앱에서 날짜별 운동을 확인하세요 💪`,
+    target_type:'player',target_value:p.id,created_by:currentUser?.email||'coach'
+  })));
+  await supa.from('break_plans').update({status:'published'}).eq('id',planId);
+  if(_bpPlan) _bpPlan.status='published';
+  alert('✅ 발송 완료!'); bpRenderEditor(); await bpLoadPlanList();
+}
+async function bpDelete(planId,title){
+  if(!confirm(`"${title}" 플랜을 삭제할까요?`)) return;
+  await supa.from('break_plans').delete().eq('id',planId);
+  await bpLoadPlanList();
+}
+async function bpViewCompletion(planId,title){
+  const [{data:sessions},{data:completions}]=await Promise.all([
+    supa.from('break_plan_sessions').select('*').eq('plan_id',planId).order('session_date'),
+    supa.from('break_plan_completions').select('*').eq('plan_id',planId)
+  ]);
+  const compMap={};
+  (completions||[]).forEach(c=>{if(!compMap[c.session_date])compMap[c.session_date]=[];compMap[c.session_date].push(c.player_id);});
+  const today=getKSTDateStr();
+  const rows=(sessions||[]).map(s=>{
+    const cnt=(compMap[s.session_date]||[]).length;
+    const total=(_players||[]).length;
+    const isPast=s.session_date<=today;
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px">${s.session_date}</td>
+      <td style="padding:8px">${BP_LABELS[s.session_type]||s.session_type}</td>
+      <td style="padding:8px;text-align:center">${isPast?`<span style="color:${cnt>=total*0.8?'#4ade80':'#f59e0b'}">${cnt}</span>/${total}명`:'<span style="color:var(--text3)">예정</span>'}</td>
+    </tr>`;
+  }).join('');
+  const div=document.createElement('div');
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem';
+  div.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:1.5rem;width:100%;max-width:480px;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div style="font-size:15px;font-weight:700">📊 완료 현황 — ${title}</div>
+      <button onclick="this.closest('[style*=fixed]').remove()" style="background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:20px">×</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--surface2)">
+        <th style="padding:8px;text-align:left;color:var(--text3)">날짜</th>
+        <th style="padding:8px;text-align:left;color:var(--text3)">세션</th>
+        <th style="padding:8px;text-align:center;color:var(--text3)">완료</th>
+      </tr></thead>
+      <tbody>${rows||'<tr><td colspan="3" style="padding:1rem;text-align:center;color:var(--text3)">세션 없음</td></tr>'}</tbody>
+    </table>
+  </div>`;
+  div.addEventListener('click',e=>{if(e.target===div)div.remove();});
+  document.body.appendChild(div);
+}
+
 // ══════════════════════════════════════════════════════════════════
 // 체력 테스트 탭 (1500m / 직접 입력)
 // ══════════════════════════════════════════════════════════════════
@@ -19859,7 +20397,7 @@ let _saEditingClubId = null;
 const SA_TAB_TREE = [
   { id:'report',   label:'📋 데일리 브리핑',  subs:[] },
   { id:'players',  label:'📊 선수 통합관리',   subs:['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'] },
-  { id:'exercise', label:'🏋️ 운동 처방',       subs:['extab-gym','extab-preact','extab-cardio','extab-test','extab-progmgmt'] },
+  { id:'exercise', label:'🏋️ 운동 처방',       subs:['extab-gym','extab-preact','extab-cardio','extab-test','extab-breakplan','extab-progmgmt'] },
   { id:'notify',   label:'🔔 알림/메시지',     subs:[] },
 ];
 
