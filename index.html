@@ -19311,7 +19311,7 @@ function loadTestTab(){
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:var(--surface2)">
           <th style="padding:8px 10px;text-align:left;color:var(--text3)">선수</th>
-          <th style="padding:8px 10px;text-align:center;color:var(--text3)">${is1500?'1500m 기록 (MM:SS)':'MAS (km/h)'}</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text3)">${is1500?'기록 (분 · 초)':'MAS (km/h)'}</th>
           <th style="padding:8px 10px;text-align:center;color:var(--accent2)">계산된 MAS</th>
           <th style="padding:8px 10px;text-align:center;color:var(--text3)">현재 MAS</th>
         </tr></thead>
@@ -19324,10 +19324,15 @@ function loadTestTab(){
               </td>
               <td style="padding:6px 10px;text-align:center">
                 ${is1500
-                  ? `<input type="text" id="test-input-${p.id}" placeholder="05:30"
-                       maxlength="5" pattern="[0-9]{1,2}:[0-9]{2}"
-                       oninput="testCalcRow('${p.id}')"
-                       style="width:80px;text-align:center;font-size:14px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">`
+                  ? `<div style="display:inline-flex;align-items:center;gap:4px">
+                       <input type="number" id="test-mm-${p.id}" placeholder="05" min="0" max="99"
+                         oninput="testAutoAdvance(this,'${p.id}')"
+                         style="width:48px;text-align:center;font-size:15px;font-weight:600;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;-moz-appearance:textfield">
+                       <span style="font-size:13px;color:var(--text3);font-weight:600">:</span>
+                       <input type="number" id="test-ss-${p.id}" placeholder="30" min="0" max="59"
+                         oninput="testClampSS(this,'${p.id}')"
+                         style="width:48px;text-align:center;font-size:15px;font-weight:600;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;-moz-appearance:textfield">
+                     </div>`
                   : `<input type="number" id="test-input-${p.id}" placeholder="15.0" step="0.1" min="8" max="25"
                        oninput="testCalcRow('${p.id}')"
                        style="width:80px;text-align:center;font-size:14px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">`
@@ -19346,25 +19351,38 @@ function loadTestTab(){
   loadTestHistory();
 }
 
+function testAutoAdvance(el, pid){
+  // 분 입력: 2자리 입력되면 초 칸으로 포커스 이동
+  if(el.value.length >= 2){
+    const ss = document.getElementById('test-ss-'+pid);
+    if(ss){ ss.focus(); ss.select(); }
+  }
+  testCalcRow(pid);
+}
+function testClampSS(el, pid){
+  // 초 범위 0~59 제한
+  const v = parseInt(el.value);
+  if(!isNaN(v) && v > 59) el.value = 59;
+  if(!isNaN(v) && v < 0)  el.value = 0;
+  testCalcRow(pid);
+}
 function testCalcRow(pid){
   const type  = document.getElementById('test-type')?.value || '1500m';
-  const input = document.getElementById('test-input-'+pid);
   const resEl = document.getElementById('test-result-'+pid);
-  if(!input||!resEl) return;
-  const val = input.value.trim();
+  if(!resEl) return;
   let mas = null;
   if(type==='1500m'){
-    // MM:SS → seconds → MAS
-    const m = val.match(/^(\d{1,2}):(\d{2})$/);
-    if(m){
-      const secs = parseInt(m[1])*60 + parseInt(m[2]);
-      if(secs>0) mas = Math.round((1500/secs)*36)/10; // 소수점 1자리
+    const mm = parseInt(document.getElementById('test-mm-'+pid)?.value);
+    const ss = parseInt(document.getElementById('test-ss-'+pid)?.value);
+    if(!isNaN(mm) && !isNaN(ss) && ss >= 0 && ss <= 59){
+      const secs = mm*60 + ss;
+      if(secs > 0) mas = Math.round((1500/secs)*36)/10;
     }
   } else {
-    const v = parseFloat(val);
-    if(v>=8&&v<=25) mas = Math.round(v*10)/10;
+    const v = parseFloat(document.getElementById('test-input-'+pid)?.value);
+    if(v >= 8 && v <= 25) mas = Math.round(v*10)/10;
   }
-  if(mas!==null){
+  if(mas !== null){
     const p = (_players||[]).find(p=>p.id===pid);
     const cur = parseFloat(p?.mas)||0;
     const isNew = mas > cur;
@@ -19385,14 +19403,17 @@ async function saveTestResults(){
 
   const records = [];
   (_players||[]).forEach(p=>{
-    const input = document.getElementById('test-input-'+p.id);
     const resEl = document.getElementById('test-result-'+p.id);
-    if(!input||!resEl) return;
-    const masText = resEl.textContent;
-    const mas = parseFloat(masText);
+    if(!resEl) return;
+    const mas = parseFloat(resEl.textContent);
     if(isNaN(mas)||mas<=0) return;
-    const rawInput = input.value.trim();
-    records.push({ pid:p.id, name:p.name, mas, rawInput, oldMas:parseFloat(p.mas)||0 });
+    let timeSecs = null;
+    if(type==='1500m'){
+      const mm = parseInt(document.getElementById('test-mm-'+p.id)?.value);
+      const ss = parseInt(document.getElementById('test-ss-'+p.id)?.value);
+      if(!isNaN(mm)&&!isNaN(ss)) timeSecs = mm*60+ss;
+    }
+    records.push({ pid:p.id, name:p.name, mas, timeSecs, oldMas:parseFloat(p.mas)||0 });
   });
 
   if(!records.length){ if(msgEl){msgEl.textContent='입력된 기록이 없습니다';msgEl.style.color='#f59e0b';} return; }
@@ -19403,7 +19424,7 @@ async function saveTestResults(){
     player_id: r.pid,
     test_date: date,
     test_type: type,
-    time_seconds: type==='1500m' ? (() => { const m=r.rawInput.match(/^(\d{1,2}):(\d{2})$/); return m?parseInt(m[1])*60+parseInt(m[2]):null; })() : null,
+    time_seconds: r.timeSecs||null,
     mas: r.mas,
     created_by: currentUser?.email||'coach'
   }));
