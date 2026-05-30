@@ -19563,23 +19563,39 @@ function bpRestHtml(data){
     <textarea id="bpsess-notes" rows="3" placeholder="선수들에게 전달할 내용 (충분한 수면, 스트레칭 권장 등)" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:13px;font-family:inherit;resize:vertical">${data?.notes||''}</textarea></div>`;
 }
 
+function bpFindEx(exId){
+  for(const loc of Object.values(CARDIO_EX_DATA||{})){
+    for(const cat of Object.values(loc)){
+      const ex=(cat.exercises||[]).find(e=>e.id===exId);
+      if(ex) return ex;
+    }
+  }
+  return null;
+}
+
 function bpCardioHtml(prog,prefix){
   const wu=prog?.warmup||{}; const cd=prog?.cooldown||{};
-  const ivs=prog?.intervals||[{intensity_pct:75,duration_min:5,rest_min:3}];
   const notes=prog?.notes||'';
   const masVals=(_players||[]).map(p=>parseFloat(p.mas)||0).filter(v=>v>0);
   const masMin=masVals.length?Math.min(...masVals):0; const masMax=masVals.length?Math.max(...masVals):0;
-  const rows=ivs.map((iv,i)=>{
-    const dMin=masMin>0?Math.round(masMin*iv.intensity_pct/100*iv.duration_min/60*1000):0;
-    const dMax=masMax>0?Math.round(masMax*iv.intensity_pct/100*iv.duration_min/60*1000):0;
-    const dist=(dMin&&dMax)?`${dMin.toLocaleString()}~${dMax.toLocaleString()}m`:'—';
-    return `<tr><td style="padding:4px 6px;font-size:12px;color:var(--text3);white-space:nowrap">${i+1}구간</td>
-      <td style="padding:4px 3px"><input type="number" class="bp-iv-pct" value="${iv.intensity_pct}" min="50" max="120" oninput="bpUpdateDist('${prefix}')" style="width:52px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">%</td>
-      <td style="padding:4px 3px"><input type="number" class="bp-iv-dur" value="${iv.duration_min}" min="1" max="90" oninput="bpUpdateDist('${prefix}')" style="width:42px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">분</td>
-      <td style="padding:4px 3px"><input type="number" class="bp-iv-rest" value="${iv.rest_min}" min="0" max="20" style="width:42px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">분</td>
-      <td style="padding:4px 6px;font-size:11px;color:#60a5fa;white-space:nowrap" class="bp-iv-dist">${dist}</td>
-      <td><button onclick="bpRmIv(this,'${prefix}')" style="background:transparent;border:none;color:#ef4444;cursor:pointer;font-size:16px;padding:2px 5px">×</button></td></tr>`;
+  const cats=Object.entries((CARDIO_EX_DATA||{}).outdoor||{});
+  const selCat=prog?.category_name||(cats[2]?.[0]||'');
+  const selExId=prog?.exercise_id||'';
+
+  const catBtns=cats.map(([name,def])=>{
+    const on=name===selCat;
+    return `<button onclick="bpCatSel('${prefix}','${name.replace(/'/g,'\'')}')"
+      style="padding:5px 10px;border-radius:7px;border:1px solid ${on?def.border:'var(--border2)'};background:${on?def.bg:'transparent'};color:${on?def.color:'var(--text3)'};cursor:pointer;font-family:inherit;font-size:11px;font-weight:${on?'700':'400'};white-space:nowrap">${name}</button>`;
   }).join('');
+
+  // Initial exercise list
+  const initCatDef=cats.find(([n])=>n===selCat)?.[1]||cats[0]?.[1]||{};
+  const exBtns=(initCatDef.exercises||[]).map(ex=>{
+    const on=ex.id===selExId;
+    return `<button onclick="bpExSel('${prefix}','${ex.id}')"
+      style="padding:6px 12px;border-radius:7px;border:1px solid ${on?'var(--accent)':'var(--border2)'};background:${on?'var(--accent-bg)':'transparent'};color:${on?'var(--accent2)':'var(--text2)'};cursor:pointer;font-family:inherit;font-size:12px;font-weight:${on?'700':'400'}">${ex.name}</button>`;
+  }).join('');
+
   return `
     <div style="margin-bottom:10px">
       <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">웜업</label>
@@ -19588,25 +19604,16 @@ function bpCardioHtml(prog,prefix){
         <input type="text" id="${prefix}-wu-notes" value="${wu.notes||''}" placeholder="웜업 내용" style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">
       </div>
     </div>
+    <div style="margin-bottom:8px">
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:6px">카테고리</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap" id="${prefix}-cat-btns">${catBtns}</div>
+    </div>
     <div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <label style="font-size:11px;color:var(--text3)">인터벌 구간</label>
-        <span style="font-size:10px;color:var(--text3)">${masMin>0?`팀 MAS ${masMin.toFixed(1)}~${masMax.toFixed(1)} km/h`:'MAS 미등록'}</span>
-      </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:var(--surface2)">
-            <th style="padding:4px 6px;font-size:11px;color:var(--text3);text-align:left"></th>
-            <th style="padding:4px 6px;font-size:11px;color:var(--text3)">강도</th>
-            <th style="padding:4px 6px;font-size:11px;color:var(--text3)">시간</th>
-            <th style="padding:4px 6px;font-size:11px;color:var(--text3)">휴식</th>
-            <th style="padding:4px 6px;font-size:11px;color:#60a5fa">팀 거리범위</th>
-            <th></th>
-          </tr></thead>
-          <tbody id="${prefix}-iv-body">${rows}</tbody>
-        </table>
-      </div>
-      <button onclick="bpAddIv('${prefix}')" style="margin-top:6px;font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">+ 구간 추가</button>
+      <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:6px">종목</label>
+      <div style="display:flex;gap:5px;flex-wrap:wrap" id="${prefix}-ex-btns">${exBtns}</div>
+    </div>
+    <div id="${prefix}-param-form" style="margin-bottom:10px">
+      ${selExId?bpRenderParam(prefix,bpFindEx(selExId),prog):'<div style="font-size:12px;color:var(--text3)">종목을 선택하세요</div>'}
     </div>
     <div style="margin-bottom:10px">
       <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">쿨다운</label>
@@ -19619,6 +19626,186 @@ function bpCardioHtml(prog,prefix){
       <label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px">메모</label>
       <textarea id="${prefix}-c-notes" rows="2" placeholder="페이스 유지, 호흡 등" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:13px;font-family:inherit;resize:vertical">${notes}</textarea>
     </div>`;
+}
+
+function bpCatSel(prefix,catName){
+  const cats=Object.entries((CARDIO_EX_DATA||{}).outdoor||{});
+  const catDef=cats.find(([n])=>n===catName)?.[1]||{};
+  // Update cat buttons
+  const catBtnsEl=document.getElementById(prefix+'-cat-btns');
+  if(catBtnsEl) catBtnsEl.querySelectorAll('button').forEach(btn=>{
+    const on=btn.textContent.trim()===catName;
+    const def=cats.find(([n])=>n===btn.textContent.trim())?.[1]||{};
+    btn.style.borderColor=on?def.border:'var(--border2)';
+    btn.style.background=on?def.bg:'transparent';
+    btn.style.color=on?def.color:'var(--text3)';
+    btn.style.fontWeight=on?'700':'400';
+  });
+  // Render exercise buttons
+  const exBtnsEl=document.getElementById(prefix+'-ex-btns');
+  if(exBtnsEl) exBtnsEl.innerHTML=(catDef.exercises||[]).map(ex=>
+    `<button onclick="bpExSel('${prefix}','${ex.id}')"
+      style="padding:6px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;font-size:12px">${ex.name}</button>`
+  ).join('');
+  // Clear param form
+  const pf=document.getElementById(prefix+'-param-form');
+  if(pf) pf.innerHTML='<div style="font-size:12px;color:var(--text3)">종목을 선택하세요</div>';
+  window['_bpExId_'+prefix]=null;
+}
+
+function bpExSel(prefix,exId){
+  const ex=bpFindEx(exId); if(!ex) return;
+  // Update ex buttons
+  const exBtnsEl=document.getElementById(prefix+'-ex-btns');
+  if(exBtnsEl) exBtnsEl.querySelectorAll('button').forEach(btn=>{
+    const myId=btn.getAttribute('onclick')?.match(/bpExSel\([^,]+,'([^']+)'/)?.[1];
+    const on=myId===exId;
+    btn.style.borderColor=on?'var(--accent)':'var(--border2)';
+    btn.style.background=on?'var(--accent-bg)':'transparent';
+    btn.style.color=on?'var(--accent2)':'var(--text2)';
+    btn.style.fontWeight=on?'700':'400';
+  });
+  // Render param form
+  const pf=document.getElementById(prefix+'-param-form');
+  if(pf) pf.innerHTML=bpRenderParam(prefix,ex,null);
+  window['_bpExId_'+prefix]=exId;
+}
+
+function bpRenderParam(prefix,ex,prog){
+  if(!ex) return '';
+  const INP=(id,val,min,max,w,step)=>`<input type="number" id="${prefix}-${id}" value="${val}" min="${min}" max="${max}" step="${step||1}" oninput="bpUpdateParamPreview('${prefix}')" style="width:${w||50}px;text-align:center;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">`;
+  const masVals=(_players||[]).map(p=>parseFloat(p.mas)||0).filter(v=>v>0);
+  const masMin=masVals.length?Math.min(...masVals):0; const masMax=masVals.length?Math.max(...masVals):0;
+  const rangeStr=masMin>0?`(팀 MAS ${masMin.toFixed(1)}~${masMax.toFixed(1)} km/h)`:'';
+
+  let html=`<div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">
+    <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:2px">${ex.name}</div>
+    <div style="font-size:11px;color:var(--text3)">${ex.desc||''}</div>
+  </div>`;
+
+  const p=prog||{};
+  const defInt=p.intensity||(ex.intensityRange?Math.round((ex.intensityRange[0]+ex.intensityRange[1])/2):90);
+
+  if(ex.paramType==='time_only'){
+    html+=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">강도 (% MAS)</label>${INP('p-intensity',defInt,50,130)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">시간 (분)</label>${INP('p-duration',p.duration_min||20,5,120)}</div>
+    </div>`;
+  } else if(ex.paramType==='set_time_rest'){
+    html+=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">강도 (% MAS)</label>${INP('p-intensity',defInt,50,130)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트수</label>${INP('p-sets',p.sets||4,1,20)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">작업 (분)</label>${INP('p-work-min',p.work_min||8,1,30)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">휴식 (분)</label>${INP('p-rest-min',p.rest_min||3,0,15)}</div>
+    </div>`;
+  } else if(ex.paramType==='set_time_rest_perset'){
+    const sets=p.sets||4;
+    const perSets=p.per_set_intensities||Array(sets).fill(defInt);
+    html+=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트수</label><input type="number" id="${prefix}-p-sets" value="${sets}" min="1" max="20" oninput="bpRebuildPerSet('${prefix}',${defInt})" style="width:50px;text-align:center;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit"></div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">작업 (분)</label>${INP('p-work-min',p.work_min||4,1,20)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트간 휴식 (분)</label>${INP('p-rest-min',p.rest_min||3,0,15)}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:4px">세트별 강도 (% MAS) ${rangeStr}</div>
+    <div id="${prefix}-perset-body" style="display:flex;gap:8px;flex-wrap:wrap">
+      ${perSets.map((pct,i)=>`<div style="text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:2px">${i+1}세트</div>
+        <input type="number" class="bp-perset-pct" value="${pct}" min="50" max="130" oninput="bpUpdateParamPreview('${prefix}')" style="width:52px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">%</div>`).join('')}
+    </div>`;
+  } else if(ex.paramType==='set_rep_rest'){
+    const ws=ex.workSec||30;
+    html+=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">강도 (% MAS)</label>${INP('p-intensity',defInt,80,140)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트수</label>${INP('p-sets',p.sets||3,1,10)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">반복수 (rep)</label>${INP('p-reps',p.reps||8,1,30)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트휴식 (분)</label>${INP('p-set-rest',p.set_rest_min||3,1,10)}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">작업: ${ws}초 · 휴식: ${ws}초 (Work:Rest 1:1)</div>`;
+  } else if(ex.paramType==='dist_rep_rest'){
+    html+=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">강도 (% Vmax)</label>${INP('p-intensity',defInt,80,100)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트수</label>${INP('p-sets',p.sets||4,1,10)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">거리 (m)</label>${INP('p-distance',p.distance||200,20,400,60)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">회복 (분)</label>${INP('p-rep-rest',p.rep_rest_min||3,1,10)}</div>
+    </div>`;
+  } else if(ex.paramType==='rhie_sprint'){
+    const ws=ex.workSec||5;
+    html+=`<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">강도 (% MSS)</label>${INP('p-intensity',defInt,85,100)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">세트수</label>${INP('p-sets',p.sets||4,1,10)}</div>
+      <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:3px">반복 (rep)</label>${INP('p-reps',p.reps||6,1,20)}</div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-top:6px">스프린트: ${ws}초 · 완전 회복 후 반복</div>`;
+  }
+
+  html+=`<div id="${prefix}-param-preview" style="margin-top:10px;padding:8px;background:rgba(96,165,250,0.08);border:1px solid rgba(96,165,250,0.2);border-radius:8px;font-size:11px;color:#60a5fa;min-height:20px"></div>`;
+  return html;
+}
+
+function bpRebuildPerSet(prefix,defInt){
+  const sets=parseInt(document.getElementById(prefix+'-p-sets')?.value)||4;
+  const body=document.getElementById(prefix+'-perset-body'); if(!body) return;
+  // preserve existing values
+  const existing=Array.from(body.querySelectorAll('.bp-perset-pct')).map(el=>el.value);
+  body.innerHTML=Array.from({length:sets},(_,i)=>`<div style="text-align:center">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:2px">${i+1}세트</div>
+    <input type="number" class="bp-perset-pct" value="${existing[i]||defInt}" min="50" max="130" oninput="bpUpdateParamPreview('${prefix}')" style="width:52px;text-align:center;padding:5px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:13px;font-family:inherit">%</div>`).join('');
+  bpUpdateParamPreview(prefix);
+}
+
+function bpUpdateParamPreview(prefix){
+  const el=document.getElementById(prefix+'-param-preview'); if(!el) return;
+  const exId=window['_bpExId_'+prefix]; if(!exId) return;
+  const ex=bpFindEx(exId); if(!ex) return;
+  const masVals=(_players||[]).map(p=>parseFloat(p.mas)||0).filter(v=>v>0);
+  const masMin=masVals.length?Math.min(...masVals):0; const masMax=masVals.length?Math.max(...masVals):0;
+  if(!masMin){el.textContent='MAS 미등록 — 속도 계산 불가';return;}
+  const intensity=parseFloat(document.getElementById(prefix+'-p-intensity')?.value)||90;
+  let preview='';
+  if(ex.paramType==='time_only'){
+    const dur=parseFloat(document.getElementById(prefix+'-p-duration')?.value)||20;
+    const sMin=(masMin*intensity/100).toFixed(1); const sMax=(masMax*intensity/100).toFixed(1);
+    const dMin=Math.round(masMin*intensity/100*dur/60*1000); const dMax=Math.round(masMax*intensity/100*dur/60*1000);
+    preview=`속도: ${sMin}~${sMax} km/h · ${dur}분 · 거리: ${dMin.toLocaleString()}~${dMax.toLocaleString()}m`;
+  } else if(ex.paramType==='set_time_rest'||ex.paramType==='set_time_rest_perset'){
+    const sets=parseInt(document.getElementById(prefix+'-p-sets')?.value)||4;
+    const wm=parseFloat(document.getElementById(prefix+'-p-work-min')?.value)||4;
+    const rm=parseFloat(document.getElementById(prefix+'-p-rest-min')?.value)||3;
+    if(ex.paramType==='set_time_rest_perset'){
+      const pcts=Array.from(document.querySelectorAll(`#${prefix}-perset-body .bp-perset-pct`)).map(e=>parseFloat(e.value)||intensity);
+      const lines=pcts.map((pct,i)=>{
+        const sMin=(masMin*pct/100).toFixed(1); const sMax=(masMax*pct/100).toFixed(1);
+        const dMin=Math.round(masMin*pct/100*wm/60*1000); const dMax=Math.round(masMax*pct/100*wm/60*1000);
+        return `${i+1}세트: ${pct}% → ${sMin}~${sMax}km/h · ${dMin.toLocaleString()}~${dMax.toLocaleString()}m`;
+      });
+      preview=`${wm}분×${sets}세트 · 휴식 ${rm}분\n${lines.join('\n')}`;
+    } else {
+      const sMin=(masMin*intensity/100).toFixed(1); const sMax=(masMax*intensity/100).toFixed(1);
+      const dMin=Math.round(masMin*intensity/100*wm/60*1000); const dMax=Math.round(masMax*intensity/100*wm/60*1000);
+      preview=`${sets}세트×${wm}분 · 속도: ${sMin}~${sMax}km/h · 세트거리: ${dMin.toLocaleString()}~${dMax.toLocaleString()}m`;
+    }
+  } else if(ex.paramType==='set_rep_rest'){
+    const sets=parseInt(document.getElementById(prefix+'-p-sets')?.value)||3;
+    const reps=parseInt(document.getElementById(prefix+'-p-reps')?.value)||8;
+    const ws=ex.workSec||30;
+    const sMin=(masMin*intensity/100).toFixed(1); const sMax=(masMax*intensity/100).toFixed(1);
+    const dMin=Math.round(masMin*intensity/100*ws/3600*1000); const dMax=Math.round(masMax*intensity/100*ws/3600*1000);
+    preview=`${sets}세트×${reps}rep · ${ws}s · 속도: ${sMin}~${sMax}km/h · 1rep: ${dMin}~${dMax}m`;
+  } else if(ex.paramType==='dist_rep_rest'){
+    const sets=parseInt(document.getElementById(prefix+'-p-sets')?.value)||4;
+    const dist=parseInt(document.getElementById(prefix+'-p-distance')?.value)||200;
+    preview=`${sets}세트×${dist}m · ${intensity}% Vmax`;
+  } else if(ex.paramType==='rhie_sprint'){
+    const sets=parseInt(document.getElementById(prefix+'-p-sets')?.value)||4;
+    const reps=parseInt(document.getElementById(prefix+'-p-reps')?.value)||6;
+    const ws=ex.workSec||5;
+    const mssVals=(_players||[]).map(p=>parseFloat(p.mss)||0).filter(v=>v>0);
+    const mssMin=mssVals.length?Math.min(...mssVals):0; const mssMax=mssVals.length?Math.max(...mssVals):0;
+    if(mssMin>0){
+      const sMin=(mssMin*intensity/100).toFixed(1); const sMax=(mssMax*intensity/100).toFixed(1);
+      preview=`${sets}세트×${reps}rep · ${ws}s · 속도: ${sMin}~${sMax}km/h`;
+    } else preview=`${sets}세트×${reps}rep · ${ws}s · ${intensity}% MSS`;
+  }
+  el.innerHTML=preview.replace(/\n/g,'<br>');
 }
 
 function bpGymHtml(prog,prefix){
@@ -19712,13 +19899,31 @@ function bpReadCardio(prefix){
   const cdDur=parseFloat(document.getElementById(prefix+'-cd-dur')?.value)||0;
   const cdN=document.getElementById(prefix+'-cd-notes')?.value||'';
   const notes=document.getElementById(prefix+'-c-notes')?.value||'';
-  const tb=document.getElementById(prefix+'-iv-body');
-  const intervals=tb?Array.from(tb.rows).map(r=>({
-    intensity_pct:parseFloat(r.querySelector('.bp-iv-pct')?.value)||75,
-    duration_min:parseFloat(r.querySelector('.bp-iv-dur')?.value)||5,
-    rest_min:parseFloat(r.querySelector('.bp-iv-rest')?.value)||3
-  })):[];
-  return {type:'cardio',warmup:{duration_min:wuDur,notes:wuN},intervals,cooldown:{duration_min:cdDur,notes:cdN},notes};
+  const exId=window['_bpExId_'+prefix];
+  const ex=exId?bpFindEx(exId):null;
+  const warmup={duration_min:wuDur,notes:wuN};
+  const cooldown={duration_min:cdDur,notes:cdN};
+  if(!ex) return {type:'cardio',warmup,cooldown,notes,exercise_id:null};
+  const intensity=parseFloat(document.getElementById(prefix+'-p-intensity')?.value)||90;
+  const sets=parseInt(document.getElementById(prefix+'-p-sets')?.value)||4;
+  const workMin=parseFloat(document.getElementById(prefix+'-p-work-min')?.value)||4;
+  const restMin=parseFloat(document.getElementById(prefix+'-p-rest-min')?.value)||3;
+  const reps=parseInt(document.getElementById(prefix+'-p-reps')?.value)||8;
+  const duration=parseFloat(document.getElementById(prefix+'-p-duration')?.value)||20;
+  const distance=parseInt(document.getElementById(prefix+'-p-distance')?.value)||200;
+  const repRest=parseFloat(document.getElementById(prefix+'-p-rep-rest')?.value)||3;
+  const setRest=parseFloat(document.getElementById(prefix+'-p-set-rest')?.value)||3;
+  const perSetPcts=Array.from(document.querySelectorAll(`#${prefix}-perset-body .bp-perset-pct`)).map(e=>parseFloat(e.value)||intensity);
+  // Find category name
+  let categoryName='';
+  for(const [catN,catD] of Object.entries((CARDIO_EX_DATA||{}).outdoor||{})){
+    if((catD.exercises||[]).find(e=>e.id===exId)){categoryName=catN;break;}
+  }
+  return {type:'cardio',exercise_id:exId,category_name:categoryName,param_type:ex.paramType,
+    intensity,sets,work_min:workMin,rest_min:restMin,reps,duration_min:duration,
+    distance,rep_rest_min:repRest,set_rest_min:setRest,per_set_intensities:perSetPcts,
+    work_sec:ex.workSec||null,intensity_unit:ex.intensityUnit||'% MAS',
+    warmup,cooldown,notes};
 }
 function bpReadGym(prefix){
   const tb=document.getElementById(prefix+'-ex-body');
@@ -19769,18 +19974,107 @@ async function bpDeleteSession(){
 async function bpPublish(planId,title){
   if(!confirm(`"${title}"을 선수들에게 발송할까요?`)) return;
   const plan=_bpPlan||{};
+  // 플랜의 모든 세션 로드
+  const {data:sessions}=await supa.from('break_plan_sessions').select('*').eq('plan_id',planId).order('session_date');
   let targets=_players||[];
   if(plan.target_type==='player'&&plan.target_player_id)
     targets=targets.filter(p=>p.id===plan.target_player_id);
-  await Promise.all(targets.map(p=>supa.from('notifications').insert({
-    title:`🏖️ ${title}`,
-    body:`${plan.start_date}~${plan.end_date} 휴식기 운동 프로그램이 등록됐어요!\n앱에서 날짜별 운동을 확인하세요 💪`,
-    target_type:'player',target_value:p.id,created_by:currentUser?.email||'coach'
-  })));
+  // 선수별 개인화 발송
+  await Promise.all(targets.map(p=>{
+    const body=bpBuildPersonalBody(p,sessions||[],plan);
+    return supa.from('notifications').insert({
+      title:`🏖️ ${title}`,body,
+      target_type:'player',target_value:p.id,created_by:currentUser?.email||'coach'
+    });
+  }));
   await supa.from('break_plans').update({status:'published'}).eq('id',planId);
   if(_bpPlan) _bpPlan.status='published';
-  alert('✅ 발송 완료!'); bpRenderEditor(); await bpLoadPlanList();
+  alert('✅ 개인화 발송 완료!'); bpRenderEditor(); await bpLoadPlanList();
 }
+
+function bpBuildPersonalBody(player,sessions,plan){
+  const mas=parseFloat(player.mas)||0;
+  const mss=parseFloat(player.mss)||0;
+  const lines=[];
+  lines.push(`${plan.start_date}~${plan.end_date} (${sessions.length}일 플랜)`);
+  lines.push('─────────────────');
+  sessions.forEach(sess=>{
+    const d=new Date(sess.session_date+'T12:00:00');
+    const dl=`${d.getMonth()+1}/${d.getDate()}(${['일','월','화','수','목','금','토'][d.getDay()]})`;
+    if(sess.session_type==='rest'){
+      lines.push(`${dl} 🛌 완전 휴식${sess.notes?' — '+sess.notes:''}`);
+    } else if(sess.session_type==='cardio'){
+      lines.push(`${dl} `+bpCardioPersonalText(sess.am_program,mas,mss));
+    } else if(sess.session_type==='gym'){
+      const cnt=sess.am_program?.exercises?.length||0;
+      lines.push(`${dl} 💪 근력 ${cnt}종목${sess.notes?' — '+sess.notes:''}`);
+    } else if(sess.session_type==='mixed'){
+      const amT=sess.am_program?.type||'cardio';
+      const pmT=sess.pm_program?.type||'gym';
+      const amLine=amT==='cardio'?bpCardioPersonalText(sess.am_program,mas,mss):`💪 근력`;
+      const pmLine=pmT==='cardio'?bpCardioPersonalText(sess.pm_program,mas,mss):`💪 근력`;
+      lines.push(`${dl} AM ${amLine}`);
+      lines.push(`     PM ${pmLine}`);
+    }
+  });
+  lines.push('─────────────────');
+  lines.push('앱에서 날짜별 운동 확인 💪');
+  return lines.join('\n');
+}
+
+function bpCardioPersonalText(prog,mas,mss){
+  if(!prog) return '🏃 유산소';
+  const ex=prog.exercise_id?bpFindEx(prog.exercise_id):null;
+  const pType=prog.param_type;
+  const useVmax=prog.intensity_unit?.includes('Vmax')||prog.intensity_unit?.includes('MSS');
+  const baseMas=useVmax?mss:mas;
+  if(!baseMas||!pType) {
+    // 구버전 intervals 포맷 호환
+    if(prog.intervals?.length){
+      const lines=prog.intervals.map(iv=>{
+        if(!mas) return `  · ${iv.intensity_pct}% MAS`;
+        const spd=(mas*iv.intensity_pct/100).toFixed(1);
+        const dist=Math.round(mas*iv.intensity_pct/100*iv.duration_min/60*1000);
+        return `  · ${iv.intensity_pct}%→${spd}km/h ${dist.toLocaleString()}m/${iv.duration_min}분`;
+      });
+      return `🏃 유산소\n${lines.join('\n')}`;
+    }
+    return '🏃 유산소';
+  }
+  const name=ex?.name||prog.category_name||'유산소';
+  const int=prog.intensity||90;
+  if(pType==='time_only'){
+    const spd=(baseMas*int/100).toFixed(1);
+    const dist=Math.round(baseMas*int/100*prog.duration_min/60*1000);
+    return `🏃 ${name}\n  ${int}% → ${spd}km/h · ${prog.duration_min}분 · ${dist.toLocaleString()}m`;
+  } else if(pType==='set_time_rest'){
+    const spd=(baseMas*int/100).toFixed(1);
+    const sDist=Math.round(baseMas*int/100*prog.work_min/60*1000);
+    return `🏃 ${name}\n  ${prog.sets}세트×${prog.work_min}분 · ${int}%→${spd}km/h · 세트${sDist.toLocaleString()}m · 휴식${prog.rest_min}분`;
+  } else if(pType==='set_time_rest_perset'){
+    const pcts=prog.per_set_intensities?.length?prog.per_set_intensities:Array(prog.sets||4).fill(int);
+    const lines=pcts.map((pct,i)=>{
+      const spd=(baseMas*pct/100).toFixed(1);
+      const dist=Math.round(baseMas*pct/100*(prog.work_min||4)/60*1000);
+      return `  ${i+1}세트: ${pct}%→${spd}km/h · ${dist.toLocaleString()}m`;
+    });
+    return `🏃 ${name} (${prog.work_min}분×${pcts.length}세트)\n${lines.join('\n')} · 세트휴식 ${prog.rest_min}분`;
+  } else if(pType==='set_rep_rest'){
+    const ws=prog.work_sec||ex?.workSec||30;
+    const spd=(baseMas*int/100).toFixed(1);
+    const rDist=Math.round(baseMas*int/100*ws/3600*1000);
+    return `🏃 ${name}\n  ${prog.sets}세트×${prog.reps}rep · ${ws}s · ${int}%→${spd}km/h · 1rep ${rDist}m`;
+  } else if(pType==='dist_rep_rest'){
+    return `🏃 ${name}\n  ${prog.sets}세트×${prog.distance}m · ${int}% · 회복 ${prog.rep_rest_min}분`;
+  } else if(pType==='rhie_sprint'){
+    const ws=prog.work_sec||ex?.workSec||5;
+    const spd=(baseMas*int/100).toFixed(1);
+    return `🏃 ${name}\n  ${prog.sets}세트×${prog.reps}rep · ${ws}s · ${int}%→${spd}km/h`;
+  }
+  return `🏃 ${name}`;
+}
+
+
 async function bpDelete(planId,title){
   if(!confirm(`"${title}" 플랜을 삭제할까요?`)) return;
   await supa.from('break_plans').delete().eq('id',planId);
