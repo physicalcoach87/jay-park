@@ -9591,7 +9591,9 @@ async function downloadDashboardExcel(){
       .eq('player_id',playerId).gte('session_date',sinceStr).order('session_date',{ascending:true}),
     supa.from('match_records')
       .select('match_date,opponent,home_away,time_type,duration,td,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,max_speed,player_load,rhie,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h,result,score')
-      .eq('player_id',playerId).gte('match_date',sinceStr).order('match_date',{ascending:true}),
+      .eq('player_id',playerId).gte('match_date',sinceStr)
+      .in('time_type',['FT','Top-up'])
+      .order('match_date',{ascending:true}),
     supa.from('session_records')
       .select('record_date,rpe,duration')
       .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true}),
@@ -9648,8 +9650,9 @@ async function downloadDashboardExcel(){
   const matchRows=(matchData||[]).map(r=>{
     const well = wellMap[r.match_date];
     const ha = (r.home_away||'').toUpperCase()==='HOME'?'홈':(r.home_away||'').toUpperCase()==='AWAY'?'원정':'';
+    const isTopUp = r.time_type==='Top-up';
     const resultLabel = {W:'승',D:'무',L:'패'}[r.result]||r.result||'';
-    const resultStr = [resultLabel, r.score].filter(Boolean).join(' ');
+    const resultStr = isTopUp ? 'Top-up' : [resultLabel, r.score].filter(Boolean).join(' ');
     const hsrTotal = r.hir_sprint!=null ? Math.round(r.hir_sprint)
       : ((parseFloat(r.band4_td)||0)+(parseFloat(r.band5_td)||0)) || '';
     return [
