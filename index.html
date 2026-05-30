@@ -9513,7 +9513,8 @@ async function downloadDashboardExcel(){
     '날짜','주기화(상대)','주기','훈련제목','시간(분)','TD(m)',
     '고강도+스프린트(m)','중강도러닝(m)','고강도러닝(m)','스프린트(m)',
     '고강도러닝횟수(n)','스프린트횟수(n)','가속횟수(n)','감속횟수(n)',
-    '최고속도(km/h)','운동량(AU)','RHIE(n)','FMP(sec)',
+    '최고속도(km/h)','운동량(AU)','RHIE(n)',
+    'FMP Run Medium(sec)','FMP Run High(sec)','FMP Dyn Medium(sec)','FMP Dyn High(sec)',
     'RPE','sRPE','체중(kg)'
   ];
 
@@ -9527,9 +9528,6 @@ async function downloadDashboardExcel(){
     const hsrTotal = r.hsr_total!=null
       ? Math.round(r.hsr_total)
       : ((parseFloat(r.running_high)||0)+(parseFloat(r.sprint)||0)) || '';
-    // FMP: 4개 항목 합산 (sec)
-    const fmp = [r.fmp_run_medium,r.fmp_run_high,r.fmp_dyn_medium,r.fmp_dyn_high]
-      .reduce((a,v)=>a+(parseFloat(v)||0),0) || '';
     return [
       r.session_date,
       r.opponent||'',
@@ -9548,7 +9546,10 @@ async function downloadDashboardExcel(){
       r.max_speed||'',
       r.player_load||'',
       r.rhie||'',
-      fmp,
+      r.fmp_run_medium||'',
+      r.fmp_run_high||'',
+      r.fmp_dyn_medium||'',
+      r.fmp_dyn_high||'',
       rpeVal,
       sRPE,
       well?.morning_weight||''
