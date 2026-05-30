@@ -11996,21 +11996,33 @@ async function autoUpdateMSS(gpsData){
       await supa.from('player_profiles').update({ mss: newMSS }).eq('id', pid);
       // 메모리 갱신
       player.mss = newMSS;
-      updated.push({ name: player.name, old: currentMSS, new: newMSS });
+      updated.push({ pid, name: player.name, old: currentMSS, new: newMSS });
     }
   }
 
-  // 갱신된 선수 있으면 코치에게 알림 저장
   if(updated.length > 0){
-    const body = updated.map(u =>
+    // 코치 알림 (통합)
+    const coachBody = updated.map(u =>
       `${u.name}: ${u.old > 0 ? u.old.toFixed(1) : '미등록'} → ${u.new.toFixed(1)} km/h`
     ).join('\n');
     await supa.from('notifications').insert({
       title: `🏃 MSS 자동 갱신 (${updated.length}명)`,
-      body,
+      body: coachBody,
       target_type: 'admin',
       created_by: 'system',
     });
+
+    // 선수 개인 알림 (각각)
+    await Promise.all(updated.map(u =>
+      supa.from('notifications').insert({
+        title: '🏃 새 최고속도 기록!',
+        body: `${u.name}님의 최고속도가 갱신됐어요!\n${u.old > 0 ? u.old.toFixed(1)+' → ' : ''}${u.new.toFixed(1)} km/h 🎉`,
+        target_type: 'player',
+        target_value: u.pid,
+        created_by: 'system',
+      })
+    ));
+
     console.log('MSS 갱신:', updated);
   }
 }
