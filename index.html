@@ -11854,8 +11854,9 @@ async function saveGpsData(){
     return;
   }
 
-  // MSS 자동 갱신 + 부상위험 분석
+  // MSS 자동 갱신 + 부상위험 분석 (훈련 + 경기 모두 반영)
   if(trainSaved) await autoUpdateMSS(_gpsParseData.filter(r=>!r._isMatch));
+  if(matchSaved) await autoUpdateMSS(_gpsParseData.filter(r=>r._isMatch));
   runInjuryRiskAnalysis();
   loadGpsHistory();
 
