@@ -9585,10 +9585,13 @@ async function downloadDashboardExcel(){
   const since  = new Date(); since.setDate(since.getDate()-days);
   const sinceStr = since.toISOString().split('T')[0];
 
-  const [{data:gps},{data:rpeRows},{data:wellRows}] = await Promise.all([
+  const [{data:gps},{data:matchData},{data:rpeRows},{data:wellRows}] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,opponent,cycle,periodization,session_topic,duration,td,hsr_total,running_medium,running_high,sprint,running_high_n,sprint_n,accel,decel,max_speed,player_load,rhie,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high')
       .eq('player_id',playerId).gte('session_date',sinceStr).order('session_date',{ascending:true}),
+    supa.from('match_records')
+      .select('match_date,opponent,home_away,time_type,duration,td,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,max_speed,player_load,rhie,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h,result,score')
+      .eq('player_id',playerId).gte('match_date',sinceStr).order('match_date',{ascending:true}),
     supa.from('session_records')
       .select('record_date,rpe,duration')
       .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true}),
@@ -9603,7 +9606,7 @@ async function downloadDashboardExcel(){
   (wellRows||[]).forEach(r=>{ wellMap[r.record_date]=r; });
 
   const header=[
-    '날짜','주기화(상대)','주기','훈련제목','시간(분)','TD(m)',
+    '날짜','구분','주기화(상대)','홈/어웨이','주기/구간','훈련제목/결과','시간(분)','TD(m)',
     '고강도+스프린트(m)','중강도러닝(m)','고강도러닝(m)','스프린트(m)',
     '고강도러닝횟수(n)','스프린트횟수(n)','가속횟수(n)','감속횟수(n)',
     '최고속도(km/h)','운동량(AU)','RHIE(n)',
@@ -9611,42 +9614,68 @@ async function downloadDashboardExcel(){
     'RPE','sRPE','체중(kg)'
   ];
 
-  const rows=(gps||[]).map(r=>{
+  // 훈련 rows
+  const trainRows=(gps||[]).map(r=>{
     const rpe  = rpeMap[r.session_date];
     const well = wellMap[r.session_date];
     const rpeVal = parseFloat(rpe?.rpe)||'';
     const dur    = parseFloat(r.duration)||parseFloat(rpe?.duration)||'';
     const sRPE   = (rpeVal&&dur) ? Math.round(dur*rpeVal) : '';
-    // 고강도+스프린트: hsr_total 우선, 없으면 running_high+sprint 합산
     const hsrTotal = r.hsr_total!=null
       ? Math.round(r.hsr_total)
       : ((parseFloat(r.running_high)||0)+(parseFloat(r.sprint)||0)) || '';
     return [
-      r.session_date,
-      r.opponent||'',
-      r.cycle||r.periodization||'',
-      r.session_topic||'',
+      r.session_date, '훈련',
+      r.opponent||'', '',
+      r.cycle||r.periodization||'', r.session_topic||'',
       dur,
       r.td ? Math.round(r.td) : '',
       hsrTotal,
       r.running_medium ? Math.round(r.running_medium) : '',
       r.running_high   ? Math.round(r.running_high)   : '',
       r.sprint         ? Math.round(r.sprint)          : '',
-      r.running_high_n||'',
-      r.sprint_n||'',
-      r.accel||'',
-      r.decel||'',
-      r.max_speed||'',
-      r.player_load||'',
-      r.rhie||'',
-      r.fmp_run_medium||'',
-      r.fmp_run_high||'',
-      r.fmp_dyn_medium||'',
-      r.fmp_dyn_high||'',
-      rpeVal,
-      sRPE,
+      r.running_high_n||'', r.sprint_n||'',
+      r.accel||'', r.decel||'',
+      r.max_speed||'', r.player_load||'', r.rhie||'',
+      r.fmp_run_medium||'', r.fmp_run_high||'',
+      r.fmp_dyn_medium||'', r.fmp_dyn_high||'',
+      rpeVal, sRPE,
       well?.morning_weight||''
     ];
+  });
+
+  // 경기 rows
+  const matchRows=(matchData||[]).map(r=>{
+    const well = wellMap[r.match_date];
+    const ha = (r.home_away||'').toUpperCase()==='HOME'?'홈':(r.home_away||'').toUpperCase()==='AWAY'?'원정':'';
+    const resultLabel = {W:'승',D:'무',L:'패'}[r.result]||r.result||'';
+    const resultStr = [resultLabel, r.score].filter(Boolean).join(' ');
+    const hsrTotal = r.hir_sprint!=null ? Math.round(r.hir_sprint)
+      : ((parseFloat(r.band4_td)||0)+(parseFloat(r.band5_td)||0)) || '';
+    return [
+      r.match_date, '경기',
+      r.opponent||'', ha,
+      r.time_type||'FT', resultStr,
+      parseFloat(r.duration)||'',
+      r.td ? Math.round(r.td) : '',
+      hsrTotal,
+      r.band3_td ? Math.round(r.band3_td) : '',
+      r.band4_td ? Math.round(r.band4_td) : '',
+      r.band5_td ? Math.round(r.band5_td) : '',
+      r.band4_n||'', r.band5_n||'',
+      r.accel||'', r.decel||'',
+      r.max_speed||'', r.player_load||'', r.rhie||'',
+      r.fmp_run_m||'', r.fmp_run_h||'',
+      r.fmp_dyn_m||'', r.fmp_dyn_h||'',
+      '', '',  // RPE·sRPE (경기는 해당 없음)
+      well?.morning_weight||''
+    ];
+  });
+
+  // 날짜순 정렬 병합 (같은 날 훈련→경기 순)
+  const rows = [...trainRows, ...matchRows].sort((a,b)=>{
+    if(a[0]!==b[0]) return a[0]<b[0]?-1:1;
+    return a[1]==='훈련'?-1:1;
   });
 
   const csvLines=[header,...rows].map(row=>
