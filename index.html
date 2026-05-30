@@ -966,6 +966,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">💪 근력 운동</button>
     <button id="extab-preact" class="btn-exp" onclick="switchExerciseTab('preact')">⚡ Pre-activation</button>
     <button id="extab-cardio" class="btn-exp" onclick="switchExerciseTab('cardio')">🏃 유산소 운동</button>
+    <button id="extab-test" class="btn-exp admin-only" onclick="switchExerciseTab('test')">🧪 체력 테스트</button>
     <button id="extab-progmgmt" class="btn-exp admin-only" onclick="switchExerciseTab('progmgmt')">📋 프로그램 관리</button>
   </div>
 
@@ -1840,6 +1841,27 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 </div>
 
+<!-- 체력 테스트 서브탭 -->
+<div id="tab-test" style="display:none;padding:4px 0">
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px">
+    <input type="date" id="test-date"
+      style="font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">
+    <select id="test-type" onchange="loadTestTab()"
+      style="font-size:13px;padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;cursor:pointer">
+      <option value="1500m">🏃 1500m 달리기</option>
+      <option value="direct">✏️ 직접 입력 (MAS)</option>
+    </select>
+    <span id="test-type-desc" style="font-size:12px;color:var(--text3)"></span>
+  </div>
+  <div id="test-player-table"></div>
+  <div style="margin-top:12px;display:flex;gap:8px;align-items:center">
+    <button onclick="saveTestResults()"
+      style="padding:10px 20px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">💾 MAS 저장</button>
+    <span id="test-save-msg" style="font-size:12px;min-height:16px"></span>
+  </div>
+  <div id="test-history" style="margin-top:20px"></div>
+</div>
+
 </div><!-- /tab-exercise 래퍼 끝 -->
 
 <div id="tab-notify" style="display:none">
@@ -2242,28 +2264,28 @@ const ROLE_PERMISSIONS = {
     report:1, players:1, exercise:1, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
-    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-progmgmt':1
+    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-progmgmt':1
   },
   // 코치: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
   coach: {
     report:1, players:1, exercise:0, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
-    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-progmgmt':0
+    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-progmgmt':0
   },
   // 피지컬코치: 전체 권한
   physical: {
     report:1, players:1, exercise:1, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
-    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-progmgmt':1
+    'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-progmgmt':1
   },
   // 의무팀: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
   medical: {
     report:1, players:1, exercise:0, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
     'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
-    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-progmgmt':0
+    'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-progmgmt':0
   }
 };
 
@@ -2274,7 +2296,7 @@ const TAB_LABELS = {
   'pvbtn-wellness':'웰니스', 'pvbtn-roster':'선수 명단',
   'pvbtn-match':'경기 데이터', 'pvbtn-upload':'GPS 업로드',
   'extab-gym':'근력 운동', 'extab-preact':'Pre-activation',
-  'extab-cardio':'유산소 운동', 'extab-progmgmt':'프로그램 관리'
+  'extab-cardio':'유산소 운동', 'extab-test':'체력 테스트', 'extab-progmgmt':'프로그램 관리'
 };
 
 // ── 사용자 권한 로드 (role 기본값 → 팀 역할 오버라이드 → 클럽 최종 게이트) ──
@@ -2339,7 +2361,7 @@ function applyTabPermissions(){
   });
 
   // ④ 운동처방 서브탭 → 권한 기준으로 덮어쓰기
-  ['extab-gym','extab-preact','extab-cardio','extab-progmgmt'].forEach(id=>{
+  ['extab-gym','extab-preact','extab-cardio','extab-test','extab-progmgmt'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.style.display = userPermissions[id] ? '' : 'none';
   });
@@ -2811,7 +2833,7 @@ async function openPermModal(idx){
   const tabGroups = [
     { label:'메인 탭', keys:['report','players','exercise','notify'] },
     { label:'선수관리 서브탭', keys:['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'] },
-    { label:'운동처방 서브탭', keys:['extab-gym','extab-preact','extab-cardio','extab-progmgmt'] }
+    { label:'운동처방 서브탭', keys:['extab-gym','extab-preact','extab-cardio','extab-test','extab-progmgmt'] }
   ];
 
   const rowsHtml = tabGroups.map(g=>`
@@ -19242,7 +19264,7 @@ function switchTab(tab,el){
 }
 
 function switchExerciseTab(sub){
-  const subs = ['gym','preact','cardio','progmgmt'];
+  const subs = ['gym','preact','cardio','test','progmgmt'];
   subs.forEach(id=>{
     const el = document.getElementById('tab-'+id);
     if(el) el.style.display = id===sub ? 'block' : 'none';
@@ -19261,8 +19283,205 @@ function switchExerciseTab(sub){
   });
   if(sub==='gym') initGymTab();
   if(sub==='cardio') loadCardioPlayers();
+  if(sub==='test') loadTestTab();
   if(sub==='progmgmt') setProgTab('videos');
 }
+// ══════════════════════════════════════════════════════════════════
+// 체력 테스트 탭 (1500m / 직접 입력)
+// ══════════════════════════════════════════════════════════════════
+function loadTestTab(){
+  // 오늘 날짜 기본값
+  const dateEl = document.getElementById('test-date');
+  if(dateEl && !dateEl.value) dateEl.value = getKSTDateStr();
+
+  const type = document.getElementById('test-type')?.value || '1500m';
+  const desc = document.getElementById('test-type-desc');
+  if(desc) desc.textContent = type==='1500m'
+    ? 'MAS = 1500 ÷ 기록(초) × 3.6 — 입력 시 자동 계산'
+    : 'MAS 값을 km/h 단위로 직접 입력';
+
+  const el = document.getElementById('test-player-table');
+  if(!el) return;
+
+  const sorted = sortByPos(_players||[]);
+  const is1500 = type === '1500m';
+
+  el.innerHTML = `
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:var(--surface2)">
+          <th style="padding:8px 10px;text-align:left;color:var(--text3)">선수</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text3)">${is1500?'1500m 기록 (MM:SS)':'MAS (km/h)'}</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--accent2)">계산된 MAS</th>
+          <th style="padding:8px 10px;text-align:center;color:var(--text3)">현재 MAS</th>
+        </tr></thead>
+        <tbody>
+          ${sorted.map(p=>`
+            <tr style="border-bottom:1px solid var(--border)" id="test-row-${p.id}">
+              <td style="padding:8px 10px">
+                <div style="font-weight:600;color:var(--text)">${p.name}</div>
+                <div style="font-size:10px;color:var(--text3)">${p.position||''}</div>
+              </td>
+              <td style="padding:6px 10px;text-align:center">
+                ${is1500
+                  ? `<input type="text" id="test-input-${p.id}" placeholder="05:30"
+                       maxlength="5" pattern="[0-9]{1,2}:[0-9]{2}"
+                       oninput="testCalcRow('${p.id}')"
+                       style="width:80px;text-align:center;font-size:14px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">`
+                  : `<input type="number" id="test-input-${p.id}" placeholder="15.0" step="0.1" min="8" max="25"
+                       oninput="testCalcRow('${p.id}')"
+                       style="width:80px;text-align:center;font-size:14px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none">`
+                }
+              </td>
+              <td style="padding:8px 10px;text-align:center">
+                <span id="test-result-${p.id}" style="font-size:14px;font-weight:700;color:var(--accent2)">—</span>
+              </td>
+              <td style="padding:8px 10px;text-align:center;font-size:13px;color:var(--text3)">
+                ${p.mas ? p.mas+' km/h' : '—'}
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  loadTestHistory();
+}
+
+function testCalcRow(pid){
+  const type  = document.getElementById('test-type')?.value || '1500m';
+  const input = document.getElementById('test-input-'+pid);
+  const resEl = document.getElementById('test-result-'+pid);
+  if(!input||!resEl) return;
+  const val = input.value.trim();
+  let mas = null;
+  if(type==='1500m'){
+    // MM:SS → seconds → MAS
+    const m = val.match(/^(\d{1,2}):(\d{2})$/);
+    if(m){
+      const secs = parseInt(m[1])*60 + parseInt(m[2]);
+      if(secs>0) mas = Math.round((1500/secs)*36)/10; // 소수점 1자리
+    }
+  } else {
+    const v = parseFloat(val);
+    if(v>=8&&v<=25) mas = Math.round(v*10)/10;
+  }
+  if(mas!==null){
+    const p = (_players||[]).find(p=>p.id===pid);
+    const cur = parseFloat(p?.mas)||0;
+    const isNew = mas > cur;
+    resEl.textContent = mas.toFixed(1)+' km/h';
+    resEl.style.color = isNew ? '#4ade80' : 'var(--accent2)';
+    resEl.title = isNew ? '▲ 기존보다 빠름 — 저장 시 갱신됩니다' : '';
+  } else {
+    resEl.textContent = '—';
+    resEl.style.color = 'var(--text3)';
+  }
+}
+
+async function saveTestResults(){
+  const date  = document.getElementById('test-date')?.value;
+  const type  = document.getElementById('test-type')?.value || '1500m';
+  const msgEl = document.getElementById('test-save-msg');
+  if(!date){ if(msgEl){msgEl.textContent='날짜를 선택하세요';msgEl.style.color='#ef4444';} return; }
+
+  const records = [];
+  (_players||[]).forEach(p=>{
+    const input = document.getElementById('test-input-'+p.id);
+    const resEl = document.getElementById('test-result-'+p.id);
+    if(!input||!resEl) return;
+    const masText = resEl.textContent;
+    const mas = parseFloat(masText);
+    if(isNaN(mas)||mas<=0) return;
+    const rawInput = input.value.trim();
+    records.push({ pid:p.id, name:p.name, mas, rawInput, oldMas:parseFloat(p.mas)||0 });
+  });
+
+  if(!records.length){ if(msgEl){msgEl.textContent='입력된 기록이 없습니다';msgEl.style.color='#f59e0b';} return; }
+  if(msgEl){msgEl.textContent='저장 중...';msgEl.style.color='var(--text3)';}
+
+  // test_records에 이력 저장
+  const insertRows = records.map(r=>({
+    player_id: r.pid,
+    test_date: date,
+    test_type: type,
+    time_seconds: type==='1500m' ? (() => { const m=r.rawInput.match(/^(\d{1,2}):(\d{2})$/); return m?parseInt(m[1])*60+parseInt(m[2]):null; })() : null,
+    mas: r.mas,
+    created_by: currentUser?.email||'coach'
+  }));
+  await supa.from('test_records').upsert(insertRows, {onConflict:'player_id,test_date,test_type'});
+
+  // player_profiles.mas 갱신 (더 높을 때만)
+  const updated = [];
+  for(const r of records){
+    if(r.mas > r.oldMas){
+      await supa.from('player_profiles').update({mas:r.mas}).eq('id',r.pid);
+      const p = (_players||[]).find(p=>p.id===r.pid);
+      if(p) p.mas = r.mas;
+      updated.push(r);
+    }
+  }
+
+  // 선수 개인 알림 + 코치 알림
+  if(updated.length){
+    await Promise.all(updated.map(r=>
+      supa.from('notifications').insert({
+        title:'💨 MAS 갱신!',
+        body:`${r.name}님의 MAS가 갱신됐어요!\n${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h 🎉`,
+        target_type:'player', target_value:r.pid, created_by:'system'
+      })
+    ));
+    await supa.from('notifications').insert({
+      title:`💨 MAS 갱신 (${updated.length}명)`,
+      body: updated.map(r=>`${r.name}: ${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h`).join('\n'),
+      target_type:'admin', created_by:'system'
+    });
+  }
+
+  const saved = records.length, upd = updated.length;
+  if(msgEl){
+    msgEl.textContent=`✅ ${saved}명 저장 완료${upd?` · MAS 갱신 ${upd}명`:''}`;
+    msgEl.style.color='#4ade80';
+  }
+  loadTestHistory();
+  loadTestTab(); // 현재 MAS 값 새로고침
+}
+
+async function loadTestHistory(){
+  const el = document.getElementById('test-history');
+  if(!el) return;
+  // 최근 5회 테스트 이력
+  const {data} = await supa.from('test_records')
+    .select('test_date,test_type,time_seconds,mas,player_id')
+    .order('test_date',{ascending:false})
+    .limit(50);
+  if(!data?.length){ el.innerHTML=''; return; }
+
+  // 날짜별 그룹
+  const byDate = {};
+  data.forEach(r=>{
+    if(!byDate[r.test_date]) byDate[r.test_date]=[];
+    byDate[r.test_date].push(r);
+  });
+
+  el.innerHTML = `
+    <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">📋 테스트 이력</div>
+    ${Object.entries(byDate).slice(0,5).map(([date,rows])=>`
+      <div style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:10px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px">
+          ${date} &nbsp;·&nbsp; <span style="color:var(--text3)">${rows[0].test_type==='1500m'?'🏃 1500m':'✏️ 직접 입력'}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:4px">${rows.length}명</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          ${sortRecordsByPos(rows,'player_id').map(r=>{
+            const p=(_players||[]).find(p=>p.id===r.player_id);
+            const timeStr=r.time_seconds?`${Math.floor(r.time_seconds/60)}:${String(r.time_seconds%60).padStart(2,'0')}`:'';
+            return `<span style="font-size:11px;padding:3px 8px;border-radius:5px;background:var(--surface2);color:var(--text2)">
+              ${p?.name||'?'} <strong style="color:var(--accent2)">${r.mas} km/h</strong>${timeStr?` <span style="color:var(--text3)">(${timeStr})</span>`:''}
+            </span>`;
+          }).join('')}
+        </div>
+      </div>`).join('')}`;
+}
+
 const __PL__={};try{if(Object.keys(__PL__).length){const _s=JSON.parse(localStorage.getItem(SK)||'{}');Object.assign(_s,__PL__);localStorage.setItem(SK,JSON.stringify(_s));}}catch(e){}
 const __CX__={};try{if(Object.keys(__CX__).length){const _c=JSON.parse(localStorage.getItem(CX_KEY)||'{}');Object.assign(_c,__CX__);localStorage.setItem(CX_KEY,JSON.stringify(_c));}}catch(e){}
 initCustomEx();
@@ -19619,7 +19838,7 @@ let _saEditingClubId = null;
 const SA_TAB_TREE = [
   { id:'report',   label:'📋 데일리 브리핑',  subs:[] },
   { id:'players',  label:'📊 선수 통합관리',   subs:['pvbtn-team','pvbtn-dashboard','pvbtn-wellness','pvbtn-roster','pvbtn-match','pvbtn-upload'] },
-  { id:'exercise', label:'🏋️ 운동 처방',       subs:['extab-gym','extab-preact','extab-cardio','extab-progmgmt'] },
+  { id:'exercise', label:'🏋️ 운동 처방',       subs:['extab-gym','extab-preact','extab-cardio','extab-test','extab-progmgmt'] },
   { id:'notify',   label:'🔔 알림/메시지',     subs:[] },
 ];
 
