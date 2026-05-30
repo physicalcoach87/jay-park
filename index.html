@@ -19327,11 +19327,11 @@ function loadTestTab(){
                   ? `<div style="display:inline-flex;align-items:center;gap:4px">
                        <input type="number" id="test-mm-${p.id}" placeholder="05" min="0" max="99"
                          oninput="testAutoAdvance(this,'${p.id}')"
-                         style="width:48px;text-align:center;font-size:15px;font-weight:600;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;-moz-appearance:textfield">
+                         style="width:48px;text-align:center;font-size:15px;font-weight:600;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;-moz-appearance:textfield;-webkit-appearance:none;appearance:none">
                        <span style="font-size:13px;color:var(--text3);font-weight:600">:</span>
                        <input type="number" id="test-ss-${p.id}" placeholder="30" min="0" max="59"
                          oninput="testClampSS(this,'${p.id}')"
-                         style="width:48px;text-align:center;font-size:15px;font-weight:600;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;-moz-appearance:textfield">
+                         style="width:48px;text-align:center;font-size:15px;font-weight:600;padding:6px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;outline:none;-moz-appearance:textfield;-webkit-appearance:none;appearance:none">
                      </div>`
                   : `<input type="number" id="test-input-${p.id}" placeholder="15.0" step="0.1" min="8" max="25"
                        oninput="testCalcRow('${p.id}')"
