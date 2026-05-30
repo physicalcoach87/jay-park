@@ -9492,45 +9492,78 @@ async function downloadDashboardExcel(){
   const since  = new Date(); since.setDate(since.getDate()-days);
   const sinceStr = since.toISOString().split('T')[0];
 
-  const [{data:gps},{data:rpeRows}] = await Promise.all([
+  const [{data:gps},{data:rpeRows},{data:wellRows}] = await Promise.all([
     supa.from('gps_records')
-      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2')
+      .select('session_date,opponent,cycle,periodization,session_topic,duration,td,hsr_total,running_medium,running_high,sprint,running_high_n,sprint_n,accel,decel,max_speed,player_load,rhie,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high')
       .eq('player_id',playerId).gte('session_date',sinceStr).order('session_date',{ascending:true}),
     supa.from('session_records')
       .select('record_date,rpe,duration')
+      .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true}),
+    supa.from('wellness_records')
+      .select('record_date,morning_weight')
       .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true})
   ]);
 
   const rpeMap={};
   (rpeRows||[]).forEach(r=>{ rpeMap[r.record_date]=r; });
+  const wellMap={};
+  (wellRows||[]).forEach(r=>{ wellMap[r.record_date]=r; });
 
-  // 헤더
-  const header=['날짜','주기','훈련주제','시간(분)','TD(m)','HSR(m)','Sprint(m)','가속','RHIE','최고속도(km/h)','RPE','sRPE','주기화(상대)','P.Load','FMP Run Medium','FMP Run High','FMP Dyn Medium','FMP Dyn High'];
+  const header=[
+    '날짜','주기화(상대)','주기','훈련제목','시간(분)','TD(m)',
+    '고강도+스프린트(m)','중강도러닝(m)','고강도러닝(m)','스프린트(m)',
+    '고강도러닝횟수(n)','스프린트횟수(n)','가속횟수(n)','감속횟수(n)',
+    '최고속도(km/h)','운동량(AU)','RHIE(n)','FMP(sec)',
+    'RPE','sRPE','체중(kg)'
+  ];
+
   const rows=(gps||[]).map(r=>{
-    const rpe=rpeMap[r.session_date];
-    const rpeVal=parseFloat(rpe?.rpe)||'';
-    const dur=parseFloat(r.duration)||parseFloat(rpe?.duration)||'';
-    const sRPE=(rpeVal&&dur)?Math.round(dur*rpeVal):'';
+    const rpe  = rpeMap[r.session_date];
+    const well = wellMap[r.session_date];
+    const rpeVal = parseFloat(rpe?.rpe)||'';
+    const dur    = parseFloat(r.duration)||parseFloat(rpe?.duration)||'';
+    const sRPE   = (rpeVal&&dur) ? Math.round(dur*rpeVal) : '';
+    // 고강도+스프린트: hsr_total 우선, 없으면 running_high+sprint 합산
+    const hsrTotal = r.hsr_total!=null
+      ? Math.round(r.hsr_total)
+      : ((parseFloat(r.running_high)||0)+(parseFloat(r.sprint)||0)) || '';
+    // FMP: 4개 항목 합산 (sec)
+    const fmp = [r.fmp_run_medium,r.fmp_run_high,r.fmp_dyn_medium,r.fmp_dyn_high]
+      .reduce((a,v)=>a+(parseFloat(v)||0),0) || '';
     return [
-      r.session_date, r.cycle||r.periodization||'', r.session_topic||'',
-      r.duration||'', r.td?Math.round(r.td):'', r.running_high?Math.round(r.running_high):'',
-      r.sprint?Math.round(r.sprint):'', r.accel||'', r.rhie||'',
-      r.max_speed||'', rpeVal, sRPE,
-      r.opponent||'', r.player_load||'',
-      r.fmp_run_medium||'', r.fmp_run_high||'', r.fmp_dyn_medium||'', r.fmp_dyn_high||''
+      r.session_date,
+      r.opponent||'',
+      r.cycle||r.periodization||'',
+      r.session_topic||'',
+      dur,
+      r.td ? Math.round(r.td) : '',
+      hsrTotal,
+      r.running_medium ? Math.round(r.running_medium) : '',
+      r.running_high   ? Math.round(r.running_high)   : '',
+      r.sprint         ? Math.round(r.sprint)          : '',
+      r.running_high_n||'',
+      r.sprint_n||'',
+      r.accel||'',
+      r.decel||'',
+      r.max_speed||'',
+      r.player_load||'',
+      r.rhie||'',
+      fmp,
+      rpeVal,
+      sRPE,
+      well?.morning_weight||''
     ];
   });
 
-  // CSV 생성 (SheetJS 없이 순수 CSV)
   const csvLines=[header,...rows].map(row=>
-    row.map(v=>typeof v==='string'&&(v.includes(','))?`"${v}"`:v).join(',')
+    row.map(v=>typeof v==='string'&&v.includes(',')?`"${v}"`:v).join(',')
   );
   const bom='\uFEFF';
   const blob=new Blob([bom+csvLines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;
-  a.download=`${player?.name||'선수'}_대시보드_${sinceStr}_${days}일.csv`;
+  a.download=`${player?.name||'선수'}_${sinceStr}_${days}일.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
