@@ -9835,7 +9835,7 @@ async function loadRosterList(){
               <span style="font-size:11px;color:var(--text3)">${p.position}</span>
             </div>
             <div style="display:flex;gap:12px;font-size:12px;color:var(--text2);flex-wrap:wrap">
-              ${p.mas?`<span>MAS <strong style="color:var(--accent2)">${p.mas}</strong></span>`:''}
+              ${p.mas?`<span>MAS <strong style="color:var(--accent2)">${p.mas}</strong>${p.mas_updated?`<span style="font-size:10px;color:var(--text3);margin-left:3px">(${p.mas_updated})</span>`:''}</span>`:''}
               ${p.mss?`<span>MSS <strong style="color:#93c5fd">${p.mss}</strong></span>`:''}
               ${p.mas&&p.mss?`<span>ASR <strong style="color:#fbbf24">${(p.mss-p.mas).toFixed(1)}</strong></span>`:''}
               ${p.height?`<span>${p.height}cm</span>`:''}
@@ -11447,7 +11447,7 @@ async function loadPlayerDashboard(){
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <div>
           <div style="font-size:17px;font-weight:700;color:var(--text)">${player.name}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:3px">${player.position} &nbsp;·&nbsp; MAS ${player.mas||'—'} &nbsp;·&nbsp; MSS ${player.mss||'—'} &nbsp;·&nbsp; ASR ${player.mas&&player.mss?(parseFloat(player.mss)-parseFloat(player.mas)).toFixed(1):'—'} km/h</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">${player.position} &nbsp;·&nbsp; MAS ${player.mas||'—'}${player.mas_updated?` <span style="font-size:10px;color:var(--text3)">(${player.mas_updated})</span>`:''} &nbsp;·&nbsp; MSS ${player.mss||'—'} &nbsp;·&nbsp; ASR ${player.mas&&player.mss?(parseFloat(player.mss)-parseFloat(player.mas)).toFixed(1):'—'} km/h</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
           <span style="font-size:11px;padding:3px 9px;border-radius:6px;background:var(--surface2);color:var(--text3);border:1px solid var(--border)">최근 ${days}일 · 훈련 ${gpsSessions.length}세션${matchSessions.length?` · 경기 ${matchSessions.length}경기`:''}</span>
@@ -19430,30 +19430,30 @@ async function saveTestResults(){
   }));
   await supa.from('test_records').upsert(insertRows, {onConflict:'player_id,test_date,test_type'});
 
-  // player_profiles.mas 갱신 (더 높을 때만)
+  // player_profiles.mas 항상 최신 테스트 결과로 갱신 + 측정일 기록
   const updated = [];
   for(const r of records){
-    if(r.mas > r.oldMas){
-      await supa.from('player_profiles').update({mas:r.mas}).eq('id',r.pid);
-      const p = (_players||[]).find(p=>p.id===r.pid);
-      if(p) p.mas = r.mas;
-      updated.push(r);
-    }
+    await supa.from('player_profiles').update({mas: r.mas, mas_updated: date}).eq('id', r.pid);
+    const p = (_players||[]).find(p=>p.id===r.pid);
+    if(p){ p.mas = r.mas; p.mas_updated = date; }
+    updated.push(r);
   }
 
-  // 선수 개인 알림 + 코치 알림
-  if(updated.length){
-    await Promise.all(updated.map(r=>
-      supa.from('notifications').insert({
-        title:'💨 MAS 갱신!',
-        body:`${r.name}님의 MAS가 갱신됐어요!\n${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h 🎉`,
-        target_type:'player', target_value:r.pid, created_by:'system'
-      })
-    ));
+  // 선수 개인 알림 + 코치 알림 (MAS 값이 바뀐 선수만)
+  const changed = updated.filter(r => r.mas !== r.oldMas);
+  if(changed.length){
+    await Promise.all(changed.map(r=>{
+      const dir = r.mas > r.oldMas ? '📈 올랐어요' : '📉 내려갔어요';
+      return supa.from('notifications').insert({
+        title: '💨 MAS 업데이트',
+        body: `${r.name}님의 MAS가 ${dir}!\n${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h (${date} 측정)`,
+        target_type: 'player', target_value: r.pid, created_by: 'system'
+      });
+    }));
     await supa.from('notifications').insert({
-      title:`💨 MAS 갱신 (${updated.length}명)`,
-      body: updated.map(r=>`${r.name}: ${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h`).join('\n'),
-      target_type:'admin', created_by:'system'
+      title: `💨 MAS 업데이트 (${changed.length}명)`,
+      body: changed.map(r=>`${r.name}: ${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h`).join('\n'),
+      target_type: 'admin', created_by: 'system'
     });
   }
 
