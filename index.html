@@ -19354,6 +19354,10 @@ async function loadBreakPlanTab(){
   await bpLoadPlanList();
 }
 async function bpLoadPlanList(){
+  // 뷰 전환
+  document.getElementById('bp-editor-view').style.display='none';
+  document.getElementById('bp-list-view').style.display='';
+  bpHideCreateForm();
   const el=document.getElementById('bp-plans-list');
   el.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:1rem">불러오는 중...</div>';
   const {data:plans}=await supa.from('break_plans').select('*,player_profiles(name)').eq('club_id',currentClubId).order('created_at',{ascending:false});
@@ -19453,23 +19457,79 @@ function bpRenderEditor(){
     return `<div onclick="bpOpenSessionModal('${date}')" style="background:${sess?'var(--surface)':'var(--surface2)'};border:1px solid ${sess?(BP_COLORS[sess.session_type]+'44'):'var(--border)'};border-radius:8px;padding:8px 6px;cursor:pointer;min-height:85px;color:${isWk?'#f87171':'var(--text)'}">
       <div style="font-size:11px;font-weight:600">${lbl}</div>${body}</div>`;
   });
+  // 선수 목록 (개인 선택용)
+  const playerOpts=sortByPos(_players||[]).map(p=>`<option value="${p.id}"${p.id===plan.target_player_id?' selected':''}>${p.name} · ${p.position||''}</option>`).join('');
+
   document.getElementById('bp-editor-view').innerHTML=`
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-      <div>
-        <div style="font-size:16px;font-weight:700;color:var(--text)">${plan.title}</div>
-        <div style="font-size:12px;color:var(--text3)">${plan.start_date} ~ ${plan.end_date} · ${days.length}일 · ${target}</div>
+    <!-- 플랜 정보 편집 영역 -->
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;font-weight:600;color:var(--text2)">플랜 정보</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="bpLoadPlanList()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">← 목록</button>
+          ${!pub?`<button onclick="bpPublish('${plan.id}','${plan.title.replace(/'/g,'')}')" style="font-size:12px;padding:6px 14px;border-radius:7px;border:none;background:#4ade80;color:#052e16;font-weight:700;cursor:pointer;font-family:inherit">📱 발송</button>`:'<span style="font-size:12px;color:#4ade80;padding:6px">✅ 발송 완료</span>'}
+        </div>
       </div>
-      <div style="display:flex;gap:8px">
-        <button onclick="bpLoadPlanList()" style="font-size:13px;padding:7px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">← 목록</button>
-        ${!pub?`<button onclick="bpPublish('${plan.id}','${plan.title.replace(/'/g,'')}')" style="font-size:13px;padding:7px 16px;border-radius:7px;border:none;background:#4ade80;color:#052e16;font-weight:700;cursor:pointer;font-family:inherit">📱 발송</button>`:'<span style="font-size:12px;color:#4ade80;padding:7px">✅ 발송 완료</span>'}
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="flex:2;min-width:140px">
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">제목</label>
+            <input id="bp-edit-title" type="text" value="${plan.title}" style="width:100%;box-sizing:border-box;font-size:13px;padding:7px 9px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+          </div>
+          <div style="flex:1;min-width:110px">
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">시작일</label>
+            <input id="bp-edit-start" type="date" value="${plan.start_date}" style="width:100%;box-sizing:border-box;font-size:13px;padding:7px 6px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+          </div>
+          <div style="flex:1;min-width:110px">
+            <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:3px">종료일</label>
+            <input id="bp-edit-end" type="date" value="${plan.end_date}" style="width:100%;box-sizing:border-box;font-size:13px;padding:7px 6px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none">
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+            <input type="radio" name="bp-edit-target" value="all" ${plan.target_type==='all'?'checked':''} onchange="document.getElementById('bp-edit-player-wrap').style.display='none'"> 전체팀
+          </label>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer">
+            <input type="radio" name="bp-edit-target" value="player" ${plan.target_type==='player'?'checked':''} onchange="document.getElementById('bp-edit-player-wrap').style.display=''"> 개인
+          </label>
+          <div id="bp-edit-player-wrap" style="display:${plan.target_type==='player'?'':'none'};flex:1;min-width:140px">
+            <select id="bp-edit-player" style="width:100%;font-size:12px;padding:7px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;outline:none;cursor:pointer">
+              <option value="">선수 선택</option>${playerOpts}
+            </select>
+          </div>
+          <button onclick="bpSavePlanInfo()" style="font-size:12px;padding:7px 14px;border-radius:7px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap">저장</button>
+          <span id="bp-edit-msg" style="font-size:11px;color:#4ade80;min-width:40px"></span>
+        </div>
       </div>
     </div>
+    <!-- 날짜 그리드 -->
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:8px">
       ${['월','화','수','목','금','토','일'].map(d=>`<div style="text-align:center;font-size:11px;color:var(--text3);font-weight:600;padding:4px">${d}</div>`).join('')}
       ${Array(offset).fill('<div></div>').join('')}
       ${cells.join('')}
     </div>
     <div style="font-size:10px;color:var(--text3)">셀을 클릭해서 세션을 추가/편집하세요</div>`;
+}
+
+async function bpSavePlanInfo(){
+  const title=document.getElementById('bp-edit-title')?.value.trim();
+  const start=document.getElementById('bp-edit-start')?.value;
+  const end=document.getElementById('bp-edit-end')?.value;
+  const ttype=document.querySelector('input[name="bp-edit-target"]:checked')?.value||'all';
+  const tpid=ttype==='player'?document.getElementById('bp-edit-player')?.value:null;
+  const msg=document.getElementById('bp-edit-msg');
+  if(!title||!start||!end||start>end){
+    if(msg){msg.textContent='입력 확인';msg.style.color='#ef4444';}return;
+  }
+  const {error}=await supa.from('break_plans').update({
+    title,start_date:start,end_date:end,
+    target_type:ttype,target_player_id:tpid||null
+  }).eq('id',_bpPlan.id);
+  if(error){if(msg){msg.textContent='오류';msg.style.color='#ef4444';}return;}
+  // 로컬 갱신 후 그리드 재렌더
+  _bpPlan={..._bpPlan,title,start_date:start,end_date:end,target_type:ttype,target_player_id:tpid||null};
+  if(msg){msg.textContent='✅ 저장됨';msg.style.color='#4ade80';setTimeout(()=>{if(msg)msg.textContent='';},2000);}
+  bpRenderEditor();
 }
 
 // ── 세션 편집 모달 ───────────────────────────────────
