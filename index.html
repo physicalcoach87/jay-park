@@ -2130,8 +2130,34 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="dm-training-area">
       <!-- MD 라벨 -->
       <div style="margin-bottom:14px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨 <span style="font-size:10px">(예: MD-4, MD-3, D-1)</span></div>
-        <input id="dm-day-label" type="text" placeholder="예) MD-4, D-1" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨 <span style="font-size:10px">(선택 또는 직접 입력)</span></div>
+        <input id="dm-day-label" type="text" list="dm-day-label-list" placeholder="예) MD-4, D-1, W1..." style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <datalist id="dm-day-label-list">
+          <option value="MD-5"></option>
+          <option value="MD-4"></option>
+          <option value="MD-3"></option>
+          <option value="MD-2"></option>
+          <option value="MD-1"></option>
+          <option value="MD"></option>
+          <option value="MD+1"></option>
+          <option value="MD+2"></option>
+          <option value="REST"></option>
+          <option value="D-1"></option>
+          <option value="D-2"></option>
+          <option value="D-3"></option>
+          <option value="D-4"></option>
+          <option value="D-5"></option>
+          <option value="W1"></option>
+          <option value="W2"></option>
+          <option value="W3"></option>
+          <option value="W4"></option>
+          <option value="W1-D1"></option>
+          <option value="W1-D2"></option>
+          <option value="W1-D3"></option>
+          <option value="W2-D1"></option>
+          <option value="W2-D2"></option>
+          <option value="W2-D3"></option>
+        </datalist>
       </div>
       <!-- AM 세션 -->
       <div style="margin-bottom:12px">
