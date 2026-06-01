@@ -2146,59 +2146,19 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     </div>
     <!-- 게이지 영역 (REST 시 숨김) -->
     <div id="dm-gauge-area">
-    <!-- 팀 Match 평균 참조 -->
-    <div style="margin-bottom:14px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:11px;color:var(--text3)">
-      <span style="font-weight:600;color:var(--text2)">팀 경기 평균 (FT)</span>
+    <!-- 팀 경기 평균 참조 -->
+    <div style="margin-bottom:12px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:11px;color:var(--text3)">
+      <span style="font-weight:600;color:var(--text2)">팀 경기 평균 (최근 3경기 FT)</span>
       <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap">
         <span>TD: <b id="dm-avg-td" style="color:var(--text)">—</b>m</span>
         <span>HSR: <b id="dm-avg-hsr" style="color:var(--text)">—</b>m</span>
-        <span>Sprint: <b id="dm-avg-sprint" style="color:var(--text)">—</b>m</span>
-        <span>Accel: <b id="dm-avg-accel" style="color:var(--text)">—</b>회</span>
+        <span>SPR: <b id="dm-avg-sprint" style="color:var(--text)">—</b>m</span>
+        <span>ACC: <b id="dm-avg-accel" style="color:var(--text)">—</b>회</span>
         <span>RHIE: <b id="dm-avg-rhie" style="color:var(--text)">—</b>회</span>
       </div>
     </div>
-    <!-- 볼륨 게이지 -->
-    <div style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <span style="font-size:11px;font-weight:600;color:#60a5fa">볼륨</span>
-        <span style="font-size:12px;font-weight:700;color:#60a5fa"><span id="dm-vol-label">70</span>%</span>
-      </div>
-      <div style="height:8px;border-radius:4px;background:var(--border);margin-bottom:5px">
-        <div id="dm-vol-gauge" style="height:100%;border-radius:4px;background:linear-gradient(90deg,#3b82f6,#60a5fa);width:70%;transition:width .15s"></div>
-      </div>
-      <input id="dm-vol-slider" type="range" min="0" max="100" value="70" oninput="updateDmGauge('vol',this.value)" style="width:100%;accent-color:#60a5fa;cursor:pointer">
-      <div style="font-size:10px;color:var(--text3);margin-top:2px">TD 목표: <b id="dm-vol-td" style="color:#60a5fa">—</b>m</div>
-    </div>
-    <!-- 대사 게이지 -->
-    <div style="margin-bottom:14px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <span style="font-size:11px;font-weight:600;color:#f97316">대사강도 <span style="font-weight:400;font-size:10px">(HSR·Sprint)</span></span>
-        <span style="font-size:12px;font-weight:700;color:#f97316"><span id="dm-met-label">60</span>%</span>
-      </div>
-      <div style="height:8px;border-radius:4px;background:var(--border);margin-bottom:5px">
-        <div id="dm-met-gauge" style="height:100%;border-radius:4px;background:linear-gradient(90deg,#ea580c,#f97316);width:60%;transition:width .15s"></div>
-      </div>
-      <input id="dm-met-slider" type="range" min="0" max="100" value="60" oninput="updateDmGauge('met',this.value)" style="width:100%;accent-color:#f97316;cursor:pointer">
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:2px">
-        <span>HSR: <b id="dm-met-hsr" style="color:#f97316">—</b>m</span>
-        <span>Sprint: <b id="dm-met-sprint" style="color:#f97316">—</b>m</span>
-      </div>
-    </div>
-    <!-- 근신경 게이지 -->
-    <div style="margin-bottom:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
-        <span style="font-size:11px;font-weight:600;color:#a855f7">근신경강도 <span style="font-weight:400;font-size:10px">(Accel·RHIE)</span></span>
-        <span style="font-size:12px;font-weight:700;color:#a855f7"><span id="dm-neu-label">75</span>%</span>
-      </div>
-      <div style="height:8px;border-radius:4px;background:var(--border);margin-bottom:5px">
-        <div id="dm-neu-gauge" style="height:100%;border-radius:4px;background:linear-gradient(90deg,#9333ea,#a855f7);width:75%;transition:width .15s"></div>
-      </div>
-      <input id="dm-neu-slider" type="range" min="0" max="100" value="75" oninput="updateDmGauge('neu',this.value)" style="width:100%;accent-color:#a855f7;cursor:pointer">
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:2px">
-        <span>Accel: <b id="dm-neu-accel" style="color:#a855f7">—</b>회</span>
-        <span>RHIE: <b id="dm-neu-rhie" style="color:#a855f7">—</b>회</span>
-      </div>
-    </div>
+    <!-- 항목별 슬라이더 + 절대값 (JS 렌더링) -->
+    <div id="dm-metrics-area" style="margin-bottom:18px"></div>
     </div><!-- /dm-gauge-area -->
     <div style="display:flex;gap:8px">
       <button onclick="saveDayPlan()" style="flex:1;padding:11px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">저장</button>
@@ -22471,11 +22431,11 @@ function renderPeriodCalendar() {
           if(getBlockForDate(ds)?.id!==block.id) return;
           const d=_daysData[ds];
           if(d.day_label?.trim().toUpperCase()==='MD') return;
-          sumTD  += avg.td?     Math.round(avg.td    *(d.volume??0)/100):0;
-          sumHSR += avg.hsr?    Math.round(avg.hsr   *(d.metabolic??0)/100):0;
-          sumSPR += avg.sprint? Math.round(avg.sprint *(d.metabolic??0)/100):0;
-          sumACC += avg.accel?  Math.round(avg.accel  *(d.neuromuscular??0)/100):0;
-          sumRHI += avg.rhie?   Math.round(avg.rhie   *(d.neuromuscular??0)/100):0;
+          sumTD  += d.td_target   ||0;
+          sumHSR += d.hsr_target  ||0;
+          sumSPR += d.spr_target  ||0;
+          sumACC += d.acc_target  ||0;
+          sumRHI += d.rhie_target ||0;
           dayCnt++;
         });
         blockSums[block.id]={sumTD,sumHSR,sumSPR,sumACC,sumRHI,hasSums:dayCnt>0&&avg.td>0};
@@ -22561,7 +22521,7 @@ function renderPeriodCalendar() {
 
         // 게이지 (색 + % + 수치)
         const mgRow=(label,pct,color,val)=>{
-          const w=Math.min(100,Math.max(0,pct??0));
+          const w=Math.min(100,Math.max(0,(pct??0)/200*100));
           const valStr=val?`<span style="font-size:9px;font-weight:600;color:var(--text2)">${val}</span>`:'';
           const pctStr=pct!=null?`<span style="font-size:9px;font-weight:700;color:${color}">${pct}%</span>`:'';
           return `<div style="display:flex;align-items:center;gap:3px;margin-top:2px">
@@ -22572,13 +22532,14 @@ function renderPeriodCalendar() {
             </div>
           </div>`;
         };
-        const hasGauge=dayRow?.volume!=null||dayRow?.metabolic!=null||dayRow?.neuromuscular!=null;
+        const hasGauge=dayRow?.td_target!=null||dayRow?.hsr_target!=null;
+        const getPct=(val,base)=>val!=null&&base?Math.round(val/base*100):null;
         const gauges=hasGauge?`<div style="margin-top:4px">
-          ${mgRow('TD', dayRow.volume,      '#60a5fa', avg.td?     Math.round(avg.td*(dayRow.volume??0)/100).toLocaleString()+'m':null)}
-          ${mgRow('HSR',dayRow.metabolic,   '#f97316', avg.hsr?    Math.round(avg.hsr*(dayRow.metabolic??0)/100).toLocaleString()+'m':null)}
-          ${mgRow('SPR',dayRow.metabolic,   '#fb923c', avg.sprint? Math.round(avg.sprint*(dayRow.metabolic??0)/100).toLocaleString()+'m':null)}
-          ${mgRow('ACC',dayRow.neuromuscular,'#a855f7', avg.accel?  Math.round(avg.accel*(dayRow.neuromuscular??0)/100)+'회':null)}
-          ${mgRow('RHIE',dayRow.neuromuscular,'#c084fc', avg.rhie?   Math.round(avg.rhie*(dayRow.neuromuscular??0)/100)+'회':null)}
+          ${mgRow('TD',  getPct(dayRow.td_target,avg.td),  '#60a5fa', dayRow.td_target!=null?dayRow.td_target.toLocaleString()+'m':null)}
+          ${mgRow('HSR', getPct(dayRow.hsr_target,avg.hsr),'#f97316', dayRow.hsr_target!=null?dayRow.hsr_target.toLocaleString()+'m':null)}
+          ${mgRow('SPR', getPct(dayRow.spr_target,avg.sprint),'#fb923c',dayRow.spr_target!=null?dayRow.spr_target.toLocaleString()+'m':null)}
+          ${mgRow('ACC', getPct(dayRow.acc_target,avg.accel),'#a855f7',dayRow.acc_target!=null?dayRow.acc_target+'회':null)}
+          ${mgRow('RHIE',getPct(dayRow.rhie_target,avg.rhie),'#c084fc',dayRow.rhie_target!=null?dayRow.rhie_target+'회':null)}
         </div>`:'';
 
         const bg=block?block.color+'15':(isToday?'rgba(99,102,241,0.07)':'var(--surface)');
@@ -22690,25 +22651,71 @@ async function deleteBlockFromList(blockId){
 }
 
 // ── 날짜 세션 모달 ──
-function updateDmGauge(type,val){
-  val=parseInt(val);
+// 지표 설정 정의
+const DM_METRICS = [
+  {id:'td',   label:'TD',   color:'#60a5fa', unit:'m',  avgKey:'td'},
+  {id:'hsr',  label:'HSR',  color:'#f97316', unit:'m',  avgKey:'hsr'},
+  {id:'spr',  label:'SPR',  color:'#fb923c', unit:'m',  avgKey:'sprint'},
+  {id:'acc',  label:'ACC',  color:'#a855f7', unit:'회', avgKey:'accel'},
+  {id:'rhie', label:'RHIE', color:'#c084fc', unit:'회', avgKey:'rhie'},
+];
+
+function renderDmMetrics(dayRow){
   const avg=_periodMatchAvg;
-  if(type==='vol'){
-    document.getElementById('dm-vol-gauge').style.width=val+'%';
-    document.getElementById('dm-vol-label').textContent=val;
-    document.getElementById('dm-vol-td').textContent=avg.td?Math.round(avg.td*val/100).toLocaleString():'—';
-  } else if(type==='met'){
-    document.getElementById('dm-met-gauge').style.width=val+'%';
-    document.getElementById('dm-met-label').textContent=val;
-    document.getElementById('dm-met-hsr').textContent=avg.hsr?Math.round(avg.hsr*val/100).toLocaleString():'—';
-    document.getElementById('dm-met-sprint').textContent=avg.sprint?Math.round(avg.sprint*val/100).toLocaleString():'—';
-  } else {
-    document.getElementById('dm-neu-gauge').style.width=val+'%';
-    document.getElementById('dm-neu-label').textContent=val;
-    document.getElementById('dm-neu-accel').textContent=avg.accel?Math.round(avg.accel*val/100):'—';
-    document.getElementById('dm-neu-rhie').textContent=avg.rhie?Math.round(avg.rhie*val/100):'—';
-  }
+  const area=document.getElementById('dm-metrics-area');
+  if(!area) return;
+  area.innerHTML=DM_METRICS.map(m=>{
+    const absVal=dayRow?.[m.id+'_target']??null;
+    const avgVal=avg[m.avgKey]||0;
+    const pct=absVal!=null&&avgVal?Math.round(absVal/avgVal*100):null;
+    const sliderPct=pct!=null?Math.min(200,pct):0;
+    const gaugeW=Math.min(100,sliderPct/200*100);
+    return `<div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:11px;font-weight:700;color:${m.color};width:32px;flex-shrink:0">${m.label}</span>
+      <div style="flex:1;position:relative">
+        <div style="height:6px;border-radius:3px;background:var(--border);margin-bottom:3px">
+          <div id="dm-gauge-${m.id}" style="height:100%;border-radius:3px;background:${m.color};width:${gaugeW}%;transition:width .15s"></div>
+        </div>
+        <input id="dm-slider-${m.id}" type="range" min="0" max="200" value="${sliderPct}"
+          oninput="onDmSlider('${m.id}',this.value)"
+          style="width:100%;accent-color:${m.color};cursor:pointer;height:16px">
+      </div>
+      <span id="dm-pct-${m.id}" style="font-size:11px;font-weight:700;color:${m.color};width:38px;text-align:right;flex-shrink:0">${pct!=null?pct+'%':'—'}</span>
+      <input id="dm-abs-${m.id}" type="number" value="${absVal??''}" min="0"
+        oninput="onDmAbs('${m.id}',this.value)"
+        placeholder="—"
+        style="width:72px;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;text-align:right;flex-shrink:0">
+      <span style="font-size:11px;color:var(--text3);flex-shrink:0">${m.unit}</span>
+    </div>`;
+  }).join('');
 }
+
+function onDmSlider(id, pctVal){
+  pctVal=parseInt(pctVal);
+  const avg=_periodMatchAvg;
+  const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
+  const avgVal=avg[m.avgKey]||0;
+  const absVal=avgVal?Math.round(avgVal*pctVal/100):0;
+  const gaugeW=Math.min(100,pctVal/200*100);
+  document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
+  document.getElementById('dm-pct-'+id).textContent=pctVal+'%';
+  document.getElementById('dm-abs-'+id).value=absVal||'';
+}
+
+function onDmAbs(id, absVal){
+  absVal=parseInt(absVal)||0;
+  const avg=_periodMatchAvg;
+  const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
+  const avgVal=avg[m.avgKey]||0;
+  const pct=avgVal?Math.round(absVal/avgVal*100):0;
+  const sliderPct=Math.min(200,pct);
+  const gaugeW=Math.min(100,sliderPct/200*100);
+  document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
+  document.getElementById('dm-pct-'+id).textContent=pct+'%';
+  document.getElementById('dm-slider-'+id).value=sliderPct;
+}
+
+function updateDmGauge(){} // 하위호환 더미
 
 function toggleDmRest(isRest){
   const slider = document.getElementById('dm-rest-slider');
@@ -22734,9 +22741,9 @@ function openDayModal(dateStr){
   document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})`;
   document.getElementById('day-modal-block').textContent=block?`${block.context||''} · ${block.label||''}`:'';
 
-  // REST 여부 판단 (day_label이 REST 이거나 am/pm 없고 volume null)
+  // REST 여부
   const isRest = dayRow.day_label?.trim().toUpperCase()==='REST'
-    || (!dayRow.am_session && !dayRow.pm_session && dayRow.volume==null && dayRow.id);
+    || (!dayRow.am_session && !dayRow.pm_session && dayRow.td_target==null && dayRow.id);
   document.getElementById('dm-rest').checked = isRest;
   toggleDmRest(isRest);
 
@@ -22744,18 +22751,17 @@ function openDayModal(dateStr){
   document.getElementById('dm-am').value = dayRow.am_session||'';
   document.getElementById('dm-pm').value = dayRow.pm_session||'';
 
-  const vol=dayRow.volume??70, met=dayRow.metabolic??60, neu=dayRow.neuromuscular??75;
-  document.getElementById('dm-vol-slider').value=vol;
-  document.getElementById('dm-met-slider').value=met;
-  document.getElementById('dm-neu-slider').value=neu;
-  updateDmGauge('vol',vol); updateDmGauge('met',met); updateDmGauge('neu',neu);
-
+  // 팀 평균 표시
   const avg=_periodMatchAvg;
   document.getElementById('dm-avg-td').textContent=avg.td?avg.td.toLocaleString():'—';
   document.getElementById('dm-avg-hsr').textContent=avg.hsr?avg.hsr.toLocaleString():'—';
   document.getElementById('dm-avg-sprint').textContent=avg.sprint?avg.sprint.toLocaleString():'—';
   document.getElementById('dm-avg-accel').textContent=avg.accel||'—';
   document.getElementById('dm-avg-rhie').textContent=avg.rhie||'—';
+
+  // 항목별 슬라이더+절대값 렌더링
+  renderDmMetrics(dayRow);
+
   document.getElementById('dm-delete-btn').style.display=dayRow.id?'block':'none';
   document.getElementById('day-modal').style.display='flex';
 }
@@ -22766,15 +22772,21 @@ async function saveDayPlan(){
   if(!_dmEditDate) return;
   const block=getBlockForDate(_dmEditDate);
   const isRest=document.getElementById('dm-rest').checked;
+  const getAbs = id => {
+    const el=document.getElementById('dm-abs-'+id);
+    return el&&el.value!==''?parseInt(el.value):null;
+  };
   const row={
     plan_date:_dmEditDate,
     block_id:block?.id||null,
     day_label:isRest?'REST':(document.getElementById('dm-day-label').value.trim()||null),
     am_session:isRest?null:(document.getElementById('dm-am').value.trim()||null),
     pm_session:isRest?null:(document.getElementById('dm-pm').value.trim()||null),
-    volume:    isRest?null:parseInt(document.getElementById('dm-vol-slider').value),
-    metabolic: isRest?null:parseInt(document.getElementById('dm-met-slider').value),
-    neuromuscular:isRest?null:parseInt(document.getElementById('dm-neu-slider').value),
+    td_target:   isRest?null:getAbs('td'),
+    hsr_target:  isRest?null:getAbs('hsr'),
+    spr_target:  isRest?null:getAbs('spr'),
+    acc_target:  isRest?null:getAbs('acc'),
+    rhie_target: isRest?null:getAbs('rhie'),
   };
   let error;
   if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
@@ -22830,11 +22842,11 @@ async function openWeekDetail(blockId) {
     const d=dayMap[ds]; if(!d) return;
     const lbl=d.day_label?.trim().toUpperCase();
     if(lbl==='MD'||lbl==='REST') return;
-    totTD   += calc(d.volume,       avg.td)     ||0;
-    totHSR  += calc(d.metabolic,    avg.hsr)    ||0;
-    totSPR  += calc(d.metabolic,    avg.sprint) ||0;
-    totACC  += calc(d.neuromuscular,avg.accel)  ||0;
-    totRHIE += calc(d.neuromuscular,avg.rhie)   ||0;
+    totTD   += d.td_target   ||0;
+    totHSR  += d.hsr_target  ||0;
+    totSPR  += d.spr_target  ||0;
+    totACC  += d.acc_target  ||0;
+    totRHIE += d.rhie_target ||0;
   });
 
   // 테이블 스타일
@@ -22884,24 +22896,25 @@ async function openWeekDetail(blockId) {
   });
 
   // 지표 행
-  const metRow = (label,color,field,pctField,base,unit) => {
+  const pctOf2=(val,base)=>val!=null&&base?Math.round(val/base*100):null;
+  const metRow = (label,color,targetKey,avgKey,unit) => {
     let row=rowLabel(label,color);
     dates.forEach(ds=>{
       const dr=dayMap[ds];
       const isRest=dr?.day_label?.trim().toUpperCase()==='REST';
       if(isRest||!dr){ row+=td('—','color:var(--text3);text-align:center'); return; }
-      const pct=dr?.[pctField]??null;
-      const v=calc(pct,avg[base]);
-      const w=Math.min(100,Math.max(0,pct??0));
+      const absVal=dr?.[targetKey]??null;
+      const pct=pctOf2(absVal,avg[avgKey]);
+      const w=Math.min(100,Math.max(0,(pct??0)/200*100));
       row+=td(
         `<div style="display:flex;align-items:baseline;justify-content:center;gap:4px">
-          <span style="font-weight:700;color:var(--text);font-size:11px">${fmtV(v,unit)}</span>
+          <span style="font-weight:700;color:var(--text);font-size:11px">${absVal!=null?(absVal>999?absVal.toLocaleString():absVal)+unit:'—'}</span>
           <span style="font-size:10px;color:${color};font-weight:700">${pct!=null?pct+'%':''}</span>
         </div>
         <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.1);margin-top:4px">
           <div style="height:100%;border-radius:2px;background:${color};width:${w}%"></div>
         </div>`,
-        `text-align:center;background:${pct!=null&&pct>=80?color+'10':pct!=null&&pct>=50?'transparent':'rgba(239,68,68,0.05)'}`
+        `text-align:center;background:${pct!=null&&pct>=80?color+'10':pct!=null&&pct>=100?color+'20':'transparent'}`
       );
     });
     return row;
@@ -22912,11 +22925,11 @@ async function openWeekDetail(blockId) {
     <tbody>
       <tr>${amRow}</tr>
       <tr>${pmRow}</tr>
-      <tr style="border-top:2px solid var(--border)">${metRow('TD','#60a5fa','td','volume','td','m')}</tr>
-      <tr>${metRow('HSR','#f97316','hsr','metabolic','hsr','m')}</tr>
-      <tr>${metRow('SPR','#fb923c','sprint','metabolic','sprint','m')}</tr>
-      <tr>${metRow('ACC','#a855f7','accel','neuromuscular','accel','회')}</tr>
-      <tr>${metRow('RHIE','#c084fc','rhie','neuromuscular','rhie','회')}</tr>
+      <tr style="border-top:2px solid var(--border)">${metRow('TD',  '#60a5fa','td_target',  'td',    'm')}</tr>
+      <tr>${metRow('HSR','#f97316','hsr_target', 'hsr',   'm')}</tr>
+      <tr>${metRow('SPR','#fb923c','spr_target', 'sprint','m')}</tr>
+      <tr>${metRow('ACC','#a855f7','acc_target', 'accel', '회')}</tr>
+      <tr>${metRow('RHIE','#c084fc','rhie_target','rhie',  '회')}</tr>
     </tbody>
   </table>`;
   document.getElementById('wd-table').outerHTML = tableHtml;
