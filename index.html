@@ -353,6 +353,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 <div class="tabs" id="main-tabs">
   <button class="tab admin-only active" onclick="switchTab('report',this)">📋 데일리 브리핑</button>
   <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
+  <button class="tab" onclick="switchTab('period',this)">📅 주기화</button>
   <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)" id="tab-btn-notify" style="position:relative">🔔 알림/메시지<span id="notify-tab-badge" style="display:none;position:absolute;top:4px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button>
   <button class="tab" id="tab-btn-perms" onclick="switchTab('perms',this)" style="display:none">⚙️ 권한 설정</button>
@@ -1968,6 +1969,245 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 </div>
 
 </div><!-- /tab-exercise 래퍼 끝 -->
+
+<!-- ===== 주기화 탭 ===== -->
+<div id="tab-period" style="display:none">
+  <div class="vm-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <h3>📅 주기화 플랜</h3>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button onclick="periodPrevMonth()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">◀</button>
+      <span id="period-month-label" style="font-weight:600;font-size:15px;min-width:110px;text-align:center"></span>
+      <button onclick="periodNextMonth()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);cursor:pointer;font-size:14px">▶</button>
+    </div>
+  </div>
+
+  <!-- 관리 버튼 -->
+  <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px 0 8px">
+    <button onclick="openBlockModal()" style="padding:6px 14px;border-radius:7px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600">＋ 블록 추가</button>
+    <button onclick="openBlockListModal()" style="padding:6px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">📋 블록 목록</button>
+  </div>
+
+  <!-- 범례 -->
+  <div style="display:flex;gap:12px;flex-wrap:wrap;padding:4px 0 10px;font-size:11px;align-items:center;color:var(--text3)">
+    <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:#60a5fa"></span>볼륨</span>
+    <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:#f97316"></span>대사강도</span>
+    <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:#a855f7"></span>근신경강도</span>
+  </div>
+
+  <!-- 달력 -->
+  <div style="overflow-x:auto">
+    <table id="period-calendar" style="width:100%;border-collapse:collapse;min-width:700px;table-layout:fixed">
+      <thead>
+        <tr>
+          <th style="padding:8px;text-align:center;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);width:14.28%">월</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);width:14.28%">화</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);width:14.28%">수</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);width:14.28%">목</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);width:14.28%">금</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:#60a5fa;font-weight:500;border-bottom:1px solid var(--border);width:14.28%">토</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:#f87171;font-weight:500;border-bottom:1px solid var(--border);width:14.28%">일</th>
+        </tr>
+      </thead>
+      <tbody id="period-calendar-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ===== 블록 설정 모달 ===== -->
+<div id="block-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)closeBlockModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(440px,92vw);border:1px solid var(--border2);margin:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+      <h4 id="block-modal-title" style="margin:0;font-size:15px;font-weight:700">📅 블록 추가</h4>
+      <button onclick="closeBlockModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <!-- 날짜 구간 -->
+    <div style="display:flex;gap:10px;margin-bottom:14px">
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">시작일</div>
+        <input id="bm-start" type="date" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+      <div style="flex:1">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">종료일</div>
+        <input id="bm-end" type="date" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+    </div>
+    <!-- 상위 맥락 -->
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">상위 맥락 <span style="font-size:10px">(예: 충남아산 R1, 1차 전지훈련 1 Week)</span></div>
+      <input id="bm-context" type="text" placeholder="예) 충남아산 R1" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+    </div>
+    <!-- 주기화 라벨 -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">주기화 라벨 <span style="font-size:10px">(예: 1R-4DAY, Rest Week 1)</span></div>
+      <input id="bm-label" type="text" placeholder="예) 1R-4DAY" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+    </div>
+    <!-- 색상 -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">색상</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <span class="bm-color" data-v="#818cf8" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#818cf8;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#4ade80" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#4ade80;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#fbbf24" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#fbbf24;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#f87171" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#f87171;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#38bdf8" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#38bdf8;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#fb923c" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#fb923c;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#c084fc" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#c084fc;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#f472b6" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#f472b6;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#2dd4bf" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#2dd4bf;cursor:pointer;border:3px solid transparent"></span>
+        <span class="bm-color" data-v="#a3e635" onclick="selectBmColor(this)" style="width:28px;height:28px;border-radius:50%;background:#a3e635;cursor:pointer;border:3px solid transparent"></span>
+      </div>
+    </div>
+    <!-- 합계 표시 여부 -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border2)">
+      <input type="checkbox" id="bm-show-totals" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
+      <label for="bm-show-totals" style="font-size:12px;color:var(--text);cursor:pointer">색띠에 합계 데이터 표시 <span style="font-size:10px;color:var(--text3)">(TD · HSR · SPR · ACC · RHIE)</span></label>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="saveBlock()" style="flex:1;padding:11px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">저장</button>
+      <button onclick="deleteBlock()" id="bm-delete-btn" style="padding:11px 16px;border-radius:8px;border:1px solid #ef4444;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;display:none">삭제</button>
+      <button onclick="closeBlockModal()" style="padding:11px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:13px">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 주간 상세 뷰 모달 ===== -->
+<div id="week-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)closeWeekDetail()">
+  <div style="background:var(--surface);border-radius:14px;width:min(1200px,98vw);border:1px solid var(--border2);margin:auto;overflow:hidden">
+    <!-- 헤더 -->
+    <div id="wd-header" style="padding:14px 20px;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div id="wd-title" style="font-size:15px;font-weight:700"></div>
+        <div id="wd-period" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="printWeekDetail()" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">🖨️ 인쇄</button>
+        <button onclick="closeWeekDetail();openBlockModal(_wdBlockId)" style="padding:5px 12px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">✏️ 편집</button>
+        <button onclick="closeWeekDetail()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px">✕</button>
+      </div>
+    </div>
+    <!-- 테이블 -->
+    <div style="overflow-x:auto;padding:0 20px 20px">
+      <table id="wd-table" style="width:100%;border-collapse:collapse;min-width:500px"></table>
+    </div>
+    <!-- 합계 -->
+    <div id="wd-totals" style="padding:10px 20px 16px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)"></div>
+  </div>
+</div>
+
+<!-- ===== 블록 목록 모달 ===== -->
+<div id="block-list-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeBlockListModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(480px,92vw);max-height:85vh;overflow-y:auto;border:1px solid var(--border2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h4 style="margin:0;font-size:15px">📋 블록 목록</h4>
+      <button onclick="closeBlockListModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <div id="block-list-body"></div>
+  </div>
+</div>
+
+<!-- ===== 날짜별 세션 편집 모달 ===== -->
+<div id="day-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)closeDayModal()">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(420px,92vw);border:1px solid var(--border2);margin:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div>
+        <div id="day-modal-title" style="font-size:15px;font-weight:700"></div>
+        <div id="day-modal-block" style="font-size:11px;color:var(--text3);margin-top:2px"></div>
+      </div>
+      <button onclick="closeDayModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <!-- REST 토글 -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:8px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg)">
+      <span style="font-size:12px;font-weight:600;color:var(--text)">😴 REST (휴식일)</span>
+      <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer">
+        <input type="checkbox" id="dm-rest" onchange="toggleDmRest(this.checked)" style="opacity:0;width:0;height:0">
+        <span id="dm-rest-slider" style="position:absolute;inset:0;background:var(--border2);border-radius:11px;transition:.3s">
+          <span style="position:absolute;left:2px;top:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.3s"></span>
+        </span>
+      </label>
+    </div>
+
+    <!-- 훈련 영역 (REST 시 숨김) -->
+    <div id="dm-training-area">
+      <!-- MD 라벨 -->
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨 <span style="font-size:10px">(예: MD-4, MD-3, D-1)</span></div>
+        <input id="dm-day-label" type="text" placeholder="예) MD-4, D-1" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+      <!-- AM 세션 -->
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">AM 세션</div>
+        <input id="dm-am" type="text" placeholder="예) 팀훈련, GYM → 필드, 피지컬, 이동..." style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+      <!-- PM 세션 -->
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">PM 세션 <span style="font-size:10px">(없으면 비워도 됨)</span></div>
+        <input id="dm-pm" type="text" placeholder="예) GYM, 휴식, 팀훈련..." style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+      </div>
+    </div>
+    <!-- 게이지 영역 (REST 시 숨김) -->
+    <div id="dm-gauge-area">
+    <!-- 팀 Match 평균 참조 -->
+    <div style="margin-bottom:14px;padding:8px 10px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:11px;color:var(--text3)">
+      <span style="font-weight:600;color:var(--text2)">팀 경기 평균 (FT)</span>
+      <div style="display:flex;gap:12px;margin-top:4px;flex-wrap:wrap">
+        <span>TD: <b id="dm-avg-td" style="color:var(--text)">—</b>m</span>
+        <span>HSR: <b id="dm-avg-hsr" style="color:var(--text)">—</b>m</span>
+        <span>Sprint: <b id="dm-avg-sprint" style="color:var(--text)">—</b>m</span>
+        <span>Accel: <b id="dm-avg-accel" style="color:var(--text)">—</b>회</span>
+        <span>RHIE: <b id="dm-avg-rhie" style="color:var(--text)">—</b>회</span>
+      </div>
+    </div>
+    <!-- 볼륨 게이지 -->
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:11px;font-weight:600;color:#60a5fa">볼륨</span>
+        <span style="font-size:12px;font-weight:700;color:#60a5fa"><span id="dm-vol-label">70</span>%</span>
+      </div>
+      <div style="height:8px;border-radius:4px;background:var(--border);margin-bottom:5px">
+        <div id="dm-vol-gauge" style="height:100%;border-radius:4px;background:linear-gradient(90deg,#3b82f6,#60a5fa);width:70%;transition:width .15s"></div>
+      </div>
+      <input id="dm-vol-slider" type="range" min="0" max="100" value="70" oninput="updateDmGauge('vol',this.value)" style="width:100%;accent-color:#60a5fa;cursor:pointer">
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">TD 목표: <b id="dm-vol-td" style="color:#60a5fa">—</b>m</div>
+    </div>
+    <!-- 대사 게이지 -->
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:11px;font-weight:600;color:#f97316">대사강도 <span style="font-weight:400;font-size:10px">(HSR·Sprint)</span></span>
+        <span style="font-size:12px;font-weight:700;color:#f97316"><span id="dm-met-label">60</span>%</span>
+      </div>
+      <div style="height:8px;border-radius:4px;background:var(--border);margin-bottom:5px">
+        <div id="dm-met-gauge" style="height:100%;border-radius:4px;background:linear-gradient(90deg,#ea580c,#f97316);width:60%;transition:width .15s"></div>
+      </div>
+      <input id="dm-met-slider" type="range" min="0" max="100" value="60" oninput="updateDmGauge('met',this.value)" style="width:100%;accent-color:#f97316;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:2px">
+        <span>HSR: <b id="dm-met-hsr" style="color:#f97316">—</b>m</span>
+        <span>Sprint: <b id="dm-met-sprint" style="color:#f97316">—</b>m</span>
+      </div>
+    </div>
+    <!-- 근신경 게이지 -->
+    <div style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:11px;font-weight:600;color:#a855f7">근신경강도 <span style="font-weight:400;font-size:10px">(Accel·RHIE)</span></span>
+        <span style="font-size:12px;font-weight:700;color:#a855f7"><span id="dm-neu-label">75</span>%</span>
+      </div>
+      <div style="height:8px;border-radius:4px;background:var(--border);margin-bottom:5px">
+        <div id="dm-neu-gauge" style="height:100%;border-radius:4px;background:linear-gradient(90deg,#9333ea,#a855f7);width:75%;transition:width .15s"></div>
+      </div>
+      <input id="dm-neu-slider" type="range" min="0" max="100" value="75" oninput="updateDmGauge('neu',this.value)" style="width:100%;accent-color:#a855f7;cursor:pointer">
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text3);margin-top:2px">
+        <span>Accel: <b id="dm-neu-accel" style="color:#a855f7">—</b>회</span>
+        <span>RHIE: <b id="dm-neu-rhie" style="color:#a855f7">—</b>회</span>
+      </div>
+    </div>
+    </div><!-- /dm-gauge-area -->
+    <div style="display:flex;gap:8px">
+      <button onclick="saveDayPlan()" style="flex:1;padding:11px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">저장</button>
+      <button onclick="deleteDayPlan()" id="dm-delete-btn" style="padding:11px 16px;border-radius:8px;border:1px solid #ef4444;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;display:none">삭제</button>
+      <button onclick="closeDayModal()" style="padding:11px 16px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:13px">취소</button>
+    </div>
+  </div>
+</div>
+
 
 <div id="tab-notify" style="display:none">
   <div class="vm-bar">
@@ -8772,7 +9012,7 @@ async function loadMorningReport(){
   const todayMD = (weekGps||[]).find(r=>r.session_date===today)?.session_topic||'—';
   const todayOpp2 = (weekGps||[]).find(r=>r.session_date===today)?.opponent||null;
 
-  // ── 팀 스케줄 compact strip ──────────────────────────────────────
+    // ── 팀 스케줄 compact strip ──────────────────────────────────────
   const _wsByDate = {};
   (weekSched||[]).forEach(e=>{ if(!_wsByDate[e.event_date]) _wsByDate[e.event_date]=[]; _wsByDate[e.event_date].push(e); });
   const _dayKR = ['월','화','수','목','금','토','일'];
@@ -20030,7 +20270,7 @@ async function loadMatchMax(){
 
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['exercise','players','notify','report','match','cprog','superadmin','perms'].forEach(id=>{
+  ['exercise','players','notify','report','match','cprog','superadmin','perms','period'].forEach(id=>{
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
@@ -20041,6 +20281,7 @@ function switchTab(tab,el){
   if(tab==='exercise') switchExerciseTab('gym');
   if(tab==='superadmin') loadSuperAdmin();
   if(tab==='perms') loadPermsTab();
+  if(tab==='period') loadPeriodTab();
 }
 
 function switchExerciseTab(sub){
@@ -22123,6 +22364,651 @@ async function saveCoachWellnessBatch(){
   msgEl.style.color='#22c55e'; msgEl.textContent=`✅ ${records.length}명 저장 완료`;
   setTimeout(()=>{ closeCoachWellnessBatchModal(); loadTeamSummary(_coachWellBatchDate); }, 1000);
 }
+</script>
+
+<!-- ===== 주기화 JS ===== -->
+<script>
+let _periodYear  = new Date().getFullYear();
+let _periodMonth = new Date().getMonth();
+let _periodMatchAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0};
+let _blocksData  = []; // blocks 테이블
+let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }
+let _bmEditId    = null; // 편집중인 block id
+let _dmEditDate  = null; // 편집중인 날짜
+let _dmEditId    = null; // 편집중인 block_days id
+let _bmColor     = '#818cf8';
+const DOW_KR = ['일','월','화','수','목','금','토'];
+
+// ── 데이터 로드 ──
+async function loadPeriodTab() {
+  await loadPeriodMatchAvg();
+  const y=_periodYear, m=_periodMonth;
+  const first=`${y}-${String(m+1).padStart(2,'0')}-01`;
+  const last=`${y}-${String(m+1).padStart(2,'0')}-${new Date(y,m+1,0).getDate()}`;
+  const [{data:blocks},{data:days}] = await Promise.all([
+    supa.from('blocks').select('*').order('start_date'),
+    supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
+  ]);
+  _blocksData = blocks||[];
+  _daysData={};
+  (days||[]).forEach(r=>{ _daysData[r.plan_date]=r; });
+  renderPeriodCalendar();
+}
+
+async function loadPeriodMatchAvg() {
+  // 기존 앱과 동일한 로직: 출전시간 보정 팀 평균 (최근 3경기 FT)
+  const {data}=await supa.from('match_records')
+    .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
+    .eq('time_type','FT').order('match_date',{ascending:false});
+  if(!data||!data.length) return;
+
+  // 최근 3경기 날짜+상대 키
+  const keys=[...new Set(data.map(r=>r.match_date+'__'+r.opponent))].slice(0,3);
+  const rows=data.filter(r=>keys.includes(r.match_date+'__'+r.opponent));
+
+  // 출전시간 보정 팀 평균 함수 (기존 matchAvg 동일 로직)
+  const mAvg=(arr,field)=>{
+    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    if(!vrs.length) return 0;
+    const maxDur=Math.max(...vrs.map(r=>parseFloat(r.duration)));
+    const sumVal=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+    const sumDur=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    return sumDur>0?sumVal/sumDur*maxDur:0;
+  };
+
+  _periodMatchAvg={
+    td:    Math.round(mAvg(rows,'td')),
+    hsr:   Math.round(mAvg(rows,'band4_td')),
+    sprint:Math.round(mAvg(rows,'band5_td')),
+    accel: Math.round(mAvg(rows,'accel')),
+    rhie:  Math.round(mAvg(rows,'rhie')),
+  };
+}
+
+function getBlockForDate(dateStr) {
+  return _blocksData.find(b=>b.start_date<=dateStr&&b.end_date>=dateStr)||null;
+}
+
+// ── 달력 렌더링 ──
+function periodPrevMonth() { _periodMonth--; if(_periodMonth<0){_periodMonth=11;_periodYear--;} loadPeriodTab(); }
+function periodNextMonth() { _periodMonth++; if(_periodMonth>11){_periodMonth=0;_periodYear++;} loadPeriodTab(); }
+
+function renderPeriodCalendar() {
+  const y=_periodYear, m=_periodMonth;
+  document.getElementById('period-month-label').textContent=`${y}년 ${m+1}월`;
+  const firstDow=new Date(y,m,1).getDay();
+  const daysInMonth=new Date(y,m+1,0).getDate();
+  const startOffset=firstDow===0?6:firstDow-1;
+  const today=new Date().toISOString().split('T')[0];
+  const firstOfMonth=`${y}-${String(m+1).padStart(2,'0')}-01`;
+  const avg=_periodMatchAvg;
+  let html='', day=1-startOffset;
+
+  while(day<=daysInMonth){
+    // 이 주의 날짜들 계산
+    const weekDates=[];
+    for(let dow=0;dow<7;dow++){
+      if(day+dow>=1&&day+dow<=daysInMonth){
+        weekDates.push(`${y}-${String(m+1).padStart(2,'0')}-${String(day+dow).padStart(2,'0')}`);
+      } else weekDates.push(null);
+    }
+
+    // 이 주에 속한 블록들 파악 (색띠 행 생성용)
+    const weekBlocks=[];
+    weekDates.forEach((ds,i)=>{
+      if(!ds) return;
+      const b=getBlockForDate(ds);
+      if(b&&!weekBlocks.find(x=>x.id===b.id)) weekBlocks.push(b);
+    });
+
+    // 색띠 행 — 주당 1행으로 통합 (블록별 colspan)
+    if(weekBlocks.length>0){
+      // 블록별 합산 캐시
+      const blockSums={};
+      weekBlocks.forEach(block=>{
+        let sumTD=0,sumHSR=0,sumSPR=0,sumACC=0,sumRHI=0,dayCnt=0;
+        Object.keys(_daysData).forEach(ds=>{
+          if(getBlockForDate(ds)?.id!==block.id) return;
+          const d=_daysData[ds];
+          if(d.day_label?.trim().toUpperCase()==='MD') return;
+          sumTD  += avg.td?     Math.round(avg.td    *(d.volume??0)/100):0;
+          sumHSR += avg.hsr?    Math.round(avg.hsr   *(d.metabolic??0)/100):0;
+          sumSPR += avg.sprint? Math.round(avg.sprint *(d.metabolic??0)/100):0;
+          sumACC += avg.accel?  Math.round(avg.accel  *(d.neuromuscular??0)/100):0;
+          sumRHI += avg.rhie?   Math.round(avg.rhie   *(d.neuromuscular??0)/100):0;
+          dayCnt++;
+        });
+        blockSums[block.id]={sumTD,sumHSR,sumSPR,sumACC,sumRHI,hasSums:dayCnt>0&&avg.td>0};
+      });
+
+      // 타이틀 행
+      html+='<tr>';
+      let dow=0;
+      while(dow<7){
+        const ds=weekDates[dow];
+        const block=ds?getBlockForDate(ds):null;
+        if(!block){ html+=`<td style="border:none;background:transparent;padding:0;height:28px"></td>`; dow++; continue; }
+        let span=0;
+        for(let k=dow;k<7;k++){
+          if(weekDates[k]&&getBlockForDate(weekDates[k])?.id===block.id) span++;
+          else break;
+        }
+        const {sumTD,sumHSR,sumSPR,sumACC,sumRHI,hasSums}=blockSums[block.id]||{};
+        const blockTitle=[block.context,block.label].filter(Boolean).join(' · ');
+        const sumsRow=(hasSums&&block.show_totals!==false)?`
+          <div style="background:rgba(0,0,0,0.25);margin:2px -10px -4px;padding:2px 10px;display:flex;gap:10px;justify-content:center;white-space:nowrap;overflow:hidden">
+            <span style="font-size:9px;color:#fff;opacity:0.9"><b style="font-size:10px">TD</b> ${sumTD.toLocaleString()}m</span>
+            <span style="font-size:9px;color:#60a5fa"><b style="font-size:10px">HSR</b> ${sumHSR.toLocaleString()}m</span>
+            <span style="font-size:9px;color:#fb923c"><b style="font-size:10px">SPR</b> ${sumSPR.toLocaleString()}m</span>
+            <span style="font-size:9px;color:#c084fc"><b style="font-size:10px">ACC</b> ${sumACC}회</span>
+            <span style="font-size:9px;color:#f472b6"><b style="font-size:10px">RHIE</b> ${sumRHI}회</span>
+          </div>` : '';
+        html+=`<td colspan="${span}" onclick="openWeekDetail('${block.id}')"
+          style="padding:3px 10px 4px;background:${block.color}33;border:1px solid ${block.color}66;border-bottom:none;
+          border-radius:4px 4px 0 0;text-align:center;cursor:pointer;overflow:hidden">
+          <div style="font-size:11px;font-weight:700;color:${block.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${blockTitle}</div>
+          ${sumsRow}
+        </td>`;
+        dow+=span;
+      }
+      html+='</tr>';
+
+      // 라벨 행 (MD-4, REST 등) — 날짜별 1셀씩
+      html+='<tr>';
+      for(let dow2=0;dow2<7;dow2++){
+        const ds=weekDates[dow2];
+        const block=ds?getBlockForDate(ds):null;
+        if(!block){ html+=`<td style="border:none;background:transparent;padding:0"></td>`; continue; }
+        const dayRow=_daysData[ds];
+        const label=dayRow?.day_label||'';
+        const isRestDay=label.trim().toUpperCase()==='REST';
+        const labelHtml=isRestDay
+          ?`<span style="font-size:9px;color:#22c55e;font-weight:700">😴 REST</span>`
+          :label?`<span style="font-size:9px;color:${block.color};font-weight:700">${label}</span>`
+          :`<span style="font-size:9px;color:${block.color}44">—</span>`;
+        html+=`<td style="padding:1px 4px;text-align:center;background:${block.color}22;border:1px solid ${block.color}44;border-bottom:2px solid ${block.color}">${labelHtml}</td>`;
+      }
+      html+='</tr>';
+    }
+
+    // 블록 없는 주는 빈 색띠 행 없음
+
+    // 날짜 셀 행
+    html+='<tr>';
+    for(let dow=0;dow<7;dow++){
+      const d2=day+dow;
+      if(d2<1||d2>daysInMonth){
+        html+=`<td style="border:1px solid var(--border);background:var(--bg);height:110px;vertical-align:top"></td>`;
+      } else {
+        const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d2).padStart(2,'0')}`;
+        const block=getBlockForDate(ds);
+        const dayRow=_daysData[ds];
+        const isToday=ds===today;
+        const dayColor=dow===6?'#f87171':dow===5?'#60a5fa':'var(--text)';
+        const dowLabel=DOW_KR[dow===6?0:dow+1];
+
+        // MD 라벨 뱃지 (날짜 셀에서는 제거 - 색띠 라벨 행에서 표시)
+        const dayLabelBadge='';
+
+        // REST 여부
+        const isRest = dayRow?.day_label?.trim().toUpperCase()==='REST';
+        // AM/PM (REST면 휴식 표시, 아니면 항상 두 줄)
+        const amHtml = isRest
+          ? `<div style="font-size:11px;color:#22c55e;margin-top:4px;font-weight:600">😴 REST</div>`
+          : `<div style="font-size:10px;color:${dayRow?.am_session?'var(--text2)':'var(--text3)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:9px;color:var(--text3);font-weight:700">AM</span> ${dayRow?.am_session||'—'}</div>`;
+        const pmHtml = isRest ? ''
+          : `<div style="font-size:10px;color:${dayRow?.pm_session?'var(--text2)':'var(--text3)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:9px;color:var(--text3);font-weight:700">PM</span> ${dayRow?.pm_session||'—'}</div>`;
+
+        // 게이지 (색 + % + 수치)
+        const mgRow=(label,pct,color,val)=>{
+          const w=Math.min(100,Math.max(0,pct??0));
+          const valStr=val?`<span style="font-size:9px;font-weight:600;color:var(--text2)">${val}</span>`:'';
+          const pctStr=pct!=null?`<span style="font-size:9px;font-weight:700;color:${color}">${pct}%</span>`:'';
+          return `<div style="display:flex;align-items:center;gap:3px;margin-top:2px">
+            <span style="font-size:8px;font-weight:700;color:${color};flex-shrink:0;width:24px">${label}</span>
+            <div style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,0.1)"><div style="height:100%;border-radius:2px;background:${color};width:${w}%"></div></div>
+            <div style="display:flex;align-items:center;gap:3px;flex-shrink:0;text-align:right">
+              ${valStr}${pctStr}
+            </div>
+          </div>`;
+        };
+        const hasGauge=dayRow?.volume!=null||dayRow?.metabolic!=null||dayRow?.neuromuscular!=null;
+        const gauges=hasGauge?`<div style="margin-top:4px">
+          ${mgRow('TD', dayRow.volume,      '#60a5fa', avg.td?     Math.round(avg.td*(dayRow.volume??0)/100).toLocaleString()+'m':null)}
+          ${mgRow('HSR',dayRow.metabolic,   '#f97316', avg.hsr?    Math.round(avg.hsr*(dayRow.metabolic??0)/100).toLocaleString()+'m':null)}
+          ${mgRow('SPR',dayRow.metabolic,   '#fb923c', avg.sprint? Math.round(avg.sprint*(dayRow.metabolic??0)/100).toLocaleString()+'m':null)}
+          ${mgRow('ACC',dayRow.neuromuscular,'#a855f7', avg.accel?  Math.round(avg.accel*(dayRow.neuromuscular??0)/100)+'회':null)}
+          ${mgRow('RHIE',dayRow.neuromuscular,'#c084fc', avg.rhie?   Math.round(avg.rhie*(dayRow.neuromuscular??0)/100)+'회':null)}
+        </div>`:'';
+
+        const bg=block?block.color+'15':(isToday?'rgba(99,102,241,0.07)':'var(--surface)');
+        const hover=block?block.color+'28':'var(--surface2)';
+        html+=`<td onclick="openDayModal('${ds}')"
+          style="padding:6px;border:1px solid var(--border);vertical-align:top;cursor:pointer;background:${bg};transition:background .15s"
+          onmouseover="this.style.background='${hover}'"
+          onmouseout="this.style.background='${bg}'">
+          <div style="text-align:center">
+            <span style="font-size:12px;font-weight:${isToday?700:500};color:${dayColor}">${String(m+1).padStart(2,'0')}-${String(d2).padStart(2,'0')} <span style="font-size:10px;opacity:.8">(${dowLabel})</span></span>
+          </div>
+          ${amHtml}${pmHtml}${gauges}
+        </td>`;
+      }
+    }
+    html+='</tr>';
+    day+=7;
+  }
+  document.getElementById('period-calendar-body').innerHTML=html;
+}
+
+// ── 블록 모달 ──
+function selectBmColor(el){
+  document.querySelectorAll('.bm-color').forEach(s=>s.style.border='3px solid transparent');
+  el.style.border='3px solid white';
+  _bmColor=el.dataset.v;
+}
+
+function openBlockModal(blockId){
+  _bmEditId=null; _bmColor='#818cf8';
+  document.getElementById('bm-start').value='';
+  document.getElementById('bm-end').value='';
+  document.getElementById('bm-context').value='';
+  document.getElementById('bm-label').value='';
+  document.getElementById('bm-show-totals').checked=true;
+  document.querySelectorAll('.bm-color').forEach(s=>s.style.border='3px solid transparent');
+  const def=document.querySelector('.bm-color[data-v="#818cf8"]');
+  if(def) def.style.border='3px solid white';
+  document.getElementById('bm-delete-btn').style.display='none';
+  document.getElementById('block-modal-title').textContent='📅 블록 추가';
+
+  if(blockId){
+    const b=_blocksData.find(x=>x.id===blockId);
+    if(b){
+      _bmEditId=b.id; _bmColor=b.color||'#818cf8';
+      document.getElementById('bm-start').value=b.start_date||'';
+      document.getElementById('bm-end').value=b.end_date||'';
+      document.getElementById('bm-context').value=b.context||'';
+      document.getElementById('bm-label').value=b.label||'';
+      document.getElementById('bm-show-totals').checked=b.show_totals!==false;
+      document.querySelectorAll('.bm-color').forEach(s=>s.style.border=s.dataset.v===b.color?'3px solid white':'3px solid transparent');
+      document.getElementById('bm-delete-btn').style.display='block';
+      document.getElementById('block-modal-title').textContent='📅 블록 편집';
+    }
+  }
+  document.getElementById('block-modal').style.display='flex';
+}
+
+function closeBlockModal(){ document.getElementById('block-modal').style.display='none'; }
+
+async function saveBlock(){
+  const start=document.getElementById('bm-start').value;
+  const end=document.getElementById('bm-end').value;
+  if(!start||!end){alert('시작일과 종료일을 입력해주세요.');return;}
+  const row={start_date:start,end_date:end,context:document.getElementById('bm-context').value.trim()||null,label:document.getElementById('bm-label').value.trim()||null,color:_bmColor,show_totals:document.getElementById('bm-show-totals').checked};
+  let error;
+  if(_bmEditId){({error}=await supa.from('blocks').update(row).eq('id',_bmEditId));}
+  else{({error}=await supa.from('blocks').insert(row));}
+  if(error){alert('저장 실패: '+error.message);return;}
+  closeBlockModal();
+  await loadPeriodTab();
+}
+
+async function deleteBlock(){
+  if(!_bmEditId||!confirm('블록을 삭제할까요? (날짜 세션도 함께 삭제됩니다)')) return;
+  await supa.from('blocks').delete().eq('id',_bmEditId);
+  closeBlockModal();
+  await loadPeriodTab();
+}
+
+async function openBlockListModal(){
+  const {data}=await supa.from('blocks').select('*').order('start_date');
+  _blocksData=data||[];
+  const html=_blocksData.length?_blocksData.map(b=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--bg)">
+      <span style="width:12px;height:12px;border-radius:50%;background:${b.color};flex-shrink:0;display:inline-block"></span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.context||''} <span style="color:var(--text3);font-weight:400">${b.label||''}</span></div>
+        <div style="font-size:11px;color:var(--text3)">${b.start_date} ~ ${b.end_date}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="closeBlockListModal();openBlockModal('${b.id}')"
+          style="padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">✏️ 편집</button>
+        <button onclick="deleteBlockFromList('${b.id}')"
+          style="padding:5px 12px;border-radius:6px;border:1px solid #ef444455;background:transparent;color:#ef4444;cursor:pointer;font-size:12px">🗑️ 삭제</button>
+      </div>
+    </div>`).join('')
+    :'<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">등록된 블록이 없어요</div>';
+  document.getElementById('block-list-body').innerHTML=html;
+  document.getElementById('block-list-modal').style.display='flex';
+}
+function closeBlockListModal(){ document.getElementById('block-list-modal').style.display='none'; }
+
+async function deleteBlockFromList(blockId){
+  if(!confirm('블록을 삭제할까요? (날짜 세션도 함께 삭제됩니다)')) return;
+  await supa.from('blocks').delete().eq('id',blockId);
+  await openBlockListModal();
+  await loadPeriodTab();
+}
+
+// ── 날짜 세션 모달 ──
+function updateDmGauge(type,val){
+  val=parseInt(val);
+  const avg=_periodMatchAvg;
+  if(type==='vol'){
+    document.getElementById('dm-vol-gauge').style.width=val+'%';
+    document.getElementById('dm-vol-label').textContent=val;
+    document.getElementById('dm-vol-td').textContent=avg.td?Math.round(avg.td*val/100).toLocaleString():'—';
+  } else if(type==='met'){
+    document.getElementById('dm-met-gauge').style.width=val+'%';
+    document.getElementById('dm-met-label').textContent=val;
+    document.getElementById('dm-met-hsr').textContent=avg.hsr?Math.round(avg.hsr*val/100).toLocaleString():'—';
+    document.getElementById('dm-met-sprint').textContent=avg.sprint?Math.round(avg.sprint*val/100).toLocaleString():'—';
+  } else {
+    document.getElementById('dm-neu-gauge').style.width=val+'%';
+    document.getElementById('dm-neu-label').textContent=val;
+    document.getElementById('dm-neu-accel').textContent=avg.accel?Math.round(avg.accel*val/100):'—';
+    document.getElementById('dm-neu-rhie').textContent=avg.rhie?Math.round(avg.rhie*val/100):'—';
+  }
+}
+
+function toggleDmRest(isRest){
+  const slider = document.getElementById('dm-rest-slider');
+  const dot = slider.querySelector('span');
+  if(isRest){
+    slider.style.background='#22c55e';
+    dot.style.transform='translateX(18px)';
+  } else {
+    slider.style.background='var(--border2)';
+    dot.style.transform='translateX(0)';
+  }
+  document.getElementById('dm-training-area').style.display = isRest?'none':'block';
+  document.getElementById('dm-gauge-area').style.display    = isRest?'none':'block';
+}
+
+function openDayModal(dateStr){
+  _dmEditDate=dateStr;
+  const d=new Date(dateStr+'T00:00:00');
+  const block=getBlockForDate(dateStr);
+  const dayRow=_daysData[dateStr]||{};
+  _dmEditId=dayRow.id||null;
+
+  document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})`;
+  document.getElementById('day-modal-block').textContent=block?`${block.context||''} · ${block.label||''}`:'';
+
+  // REST 여부 판단 (day_label이 REST 이거나 am/pm 없고 volume null)
+  const isRest = dayRow.day_label?.trim().toUpperCase()==='REST'
+    || (!dayRow.am_session && !dayRow.pm_session && dayRow.volume==null && dayRow.id);
+  document.getElementById('dm-rest').checked = isRest;
+  toggleDmRest(isRest);
+
+  document.getElementById('dm-day-label').value = dayRow.day_label||'';
+  document.getElementById('dm-am').value = dayRow.am_session||'';
+  document.getElementById('dm-pm').value = dayRow.pm_session||'';
+
+  const vol=dayRow.volume??70, met=dayRow.metabolic??60, neu=dayRow.neuromuscular??75;
+  document.getElementById('dm-vol-slider').value=vol;
+  document.getElementById('dm-met-slider').value=met;
+  document.getElementById('dm-neu-slider').value=neu;
+  updateDmGauge('vol',vol); updateDmGauge('met',met); updateDmGauge('neu',neu);
+
+  const avg=_periodMatchAvg;
+  document.getElementById('dm-avg-td').textContent=avg.td?avg.td.toLocaleString():'—';
+  document.getElementById('dm-avg-hsr').textContent=avg.hsr?avg.hsr.toLocaleString():'—';
+  document.getElementById('dm-avg-sprint').textContent=avg.sprint?avg.sprint.toLocaleString():'—';
+  document.getElementById('dm-avg-accel').textContent=avg.accel||'—';
+  document.getElementById('dm-avg-rhie').textContent=avg.rhie||'—';
+  document.getElementById('dm-delete-btn').style.display=dayRow.id?'block':'none';
+  document.getElementById('day-modal').style.display='flex';
+}
+
+function closeDayModal(){ document.getElementById('day-modal').style.display='none'; _dmEditDate=null; _dmEditId=null; }
+
+async function saveDayPlan(){
+  if(!_dmEditDate) return;
+  const block=getBlockForDate(_dmEditDate);
+  const isRest=document.getElementById('dm-rest').checked;
+  const row={
+    plan_date:_dmEditDate,
+    block_id:block?.id||null,
+    day_label:isRest?'REST':(document.getElementById('dm-day-label').value.trim()||null),
+    am_session:isRest?null:(document.getElementById('dm-am').value.trim()||null),
+    pm_session:isRest?null:(document.getElementById('dm-pm').value.trim()||null),
+    volume:    isRest?null:parseInt(document.getElementById('dm-vol-slider').value),
+    metabolic: isRest?null:parseInt(document.getElementById('dm-met-slider').value),
+    neuromuscular:isRest?null:parseInt(document.getElementById('dm-neu-slider').value),
+  };
+  let error;
+  if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
+  else{({error}=await supa.from('block_days').insert(row));}
+  if(error){alert('저장 실패: '+error.message);return;}
+  closeDayModal();
+  await loadPeriodTab();
+}
+
+async function deleteDayPlan(){
+  if(!_dmEditId||!confirm('이 날의 세션 계획을 삭제할까요?')) return;
+  await supa.from('block_days').delete().eq('id',_dmEditId);
+  closeDayModal();
+  await loadPeriodTab();
+}
+
+// ── 주간 상세 뷰 ──
+let _wdBlockId = null;
+
+async function openWeekDetail(blockId) {
+  const block = _blocksData.find(b=>b.id===blockId); if(!block) return;
+  _wdBlockId = blockId;
+
+  // 헤더
+  const title = [block.context, block.label].filter(Boolean).join(' · ');
+  document.getElementById('wd-title').textContent = title;
+  document.getElementById('wd-period').textContent = `${block.start_date} ~ ${block.end_date}`;
+  document.getElementById('wd-header').style.borderBottom = `3px solid ${block.color}`;
+
+  // 블록 기간 내 날짜 목록 (로컬 날짜 기준)
+  const dates = [];
+  let cur = new Date(block.start_date+'T00:00:00');
+  const end = new Date(block.end_date+'T00:00:00');
+  const toLocalDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  while(cur <= end) {
+    dates.push(toLocalDate(cur));
+    cur.setDate(cur.getDate()+1);
+  }
+
+  // block_days 로드
+  const {data:days} = await supa.from('block_days').select('*').in('plan_date', dates);
+  const dayMap = {};
+  (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
+
+  const avg = _periodMatchAvg;
+  const calc = (pct, base) => base!=null&&base ? Math.round(base*(pct??0)/100) : null;
+  const fmtV = (v,unit) => v!=null ? `${v>999?v.toLocaleString():v}${unit}` : '—';
+  const today2 = new Date().toISOString().split('T')[0];
+
+  // 합계 (MD·REST 제외)
+  let totTD=0,totHSR=0,totSPR=0,totACC=0,totRHIE=0;
+  dates.forEach(ds=>{
+    const d=dayMap[ds]; if(!d) return;
+    const lbl=d.day_label?.trim().toUpperCase();
+    if(lbl==='MD'||lbl==='REST') return;
+    totTD   += calc(d.volume,       avg.td)     ||0;
+    totHSR  += calc(d.metabolic,    avg.hsr)    ||0;
+    totSPR  += calc(d.metabolic,    avg.sprint) ||0;
+    totACC  += calc(d.neuromuscular,avg.accel)  ||0;
+    totRHIE += calc(d.neuromuscular,avg.rhie)   ||0;
+  });
+
+  // 테이블 스타일
+  const th = (content, extra='') =>
+    `<th style="padding:8px 6px;text-align:center;font-size:11px;font-weight:600;background:var(--bg);border:1px solid var(--border);white-space:nowrap;${extra}">${content}</th>`;
+  const td = (content, extra='') =>
+    `<td style="padding:8px 10px;text-align:center;font-size:11px;border:1px solid var(--border);vertical-align:middle;${extra}">${content}</td>`;
+  const rowLabel = (label, color) =>
+    `<td style="padding:6px 8px;font-size:11px;font-weight:700;color:${color};background:var(--bg);border:1px solid var(--border);white-space:nowrap;width:44px;text-align:center">${label}</td>`;
+
+  const miniBar = (pct,color) => {
+    const w=Math.min(100,Math.max(0,pct??0));
+    return `<div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.1);margin-top:3px"><div style="height:100%;border-radius:2px;background:${color};width:${w}%"></div></div>`;
+  };
+
+  // 헤더 행
+  let hRow = `<th style="width:44px;background:var(--bg);border:1px solid var(--border)"></th>`;
+  dates.forEach(ds=>{
+    const d=new Date(ds+'T00:00:00');
+    const dow=DOW_KR[d.getDay()];
+    const dr=dayMap[ds];
+    const lbl=dr?.day_label?.trim().toUpperCase();
+    const isRest=lbl==='REST';
+    const isMD=lbl==='MD';
+    const isToday=ds===today2;
+    const bgColor=isRest?'rgba(34,197,94,0.1)':isMD?block.color+'20':isToday?block.color+'15':'var(--bg)';
+    const dowColor=d.getDay()===0?'#f87171':d.getDay()===6?'#60a5fa':'var(--text)';
+    const badge=dr?.day_label?`<div style="display:inline-block;margin-top:3px;font-size:10px;font-weight:700;color:${isRest?'#22c55e':block.color};background:${isRest?'rgba(34,197,94,0.15)':block.color+'22'};padding:1px 7px;border-radius:4px;border:1px solid ${isRest?'#22c55e55':block.color+'44'}">${dr.day_label}</div>`:'';
+    hRow += th(`<span style="font-size:13px;font-weight:700;color:${dowColor}">${d.getDate()} ${dow}</span><br>${badge}`,
+      `background:${bgColor};${isToday?'box-shadow:inset 0 -2px 0 '+block.color:''}`)
+  });
+
+  // AM 행
+  let amRow = rowLabel('AM','var(--text3)');
+  dates.forEach(ds=>{
+    const dr=dayMap[ds];
+    const isRest=dr?.day_label?.trim().toUpperCase()==='REST';
+    amRow += td(isRest?`<span style="color:#22c55e;font-weight:600">😴 REST</span>`:`<span style="color:var(--text2)">${dr?.am_session||'—'}</span>`);
+  });
+
+  // PM 행
+  let pmRow = rowLabel('PM','var(--text3)');
+  dates.forEach(ds=>{
+    const dr=dayMap[ds];
+    const isRest=dr?.day_label?.trim().toUpperCase()==='REST';
+    pmRow += td(isRest?'':`<span style="color:var(--text2)">${dr?.pm_session||'—'}</span>`);
+  });
+
+  // 지표 행
+  const metRow = (label,color,field,pctField,base,unit) => {
+    let row=rowLabel(label,color);
+    dates.forEach(ds=>{
+      const dr=dayMap[ds];
+      const isRest=dr?.day_label?.trim().toUpperCase()==='REST';
+      if(isRest||!dr){ row+=td('—','color:var(--text3);text-align:center'); return; }
+      const pct=dr?.[pctField]??null;
+      const v=calc(pct,avg[base]);
+      const w=Math.min(100,Math.max(0,pct??0));
+      row+=td(
+        `<div style="display:flex;align-items:baseline;justify-content:center;gap:4px">
+          <span style="font-weight:700;color:var(--text);font-size:11px">${fmtV(v,unit)}</span>
+          <span style="font-size:10px;color:${color};font-weight:700">${pct!=null?pct+'%':''}</span>
+        </div>
+        <div style="height:4px;border-radius:2px;background:rgba(255,255,255,0.1);margin-top:4px">
+          <div style="height:100%;border-radius:2px;background:${color};width:${w}%"></div>
+        </div>`,
+        `text-align:center;background:${pct!=null&&pct>=80?color+'10':pct!=null&&pct>=50?'transparent':'rgba(239,68,68,0.05)'}`
+      );
+    });
+    return row;
+  };
+
+  const tableHtml = `<table id="wd-table" style="width:100%;border-collapse:collapse;table-layout:fixed">
+    <thead><tr>${hRow}</tr></thead>
+    <tbody>
+      <tr>${amRow}</tr>
+      <tr>${pmRow}</tr>
+      <tr style="border-top:2px solid var(--border)">${metRow('TD','#60a5fa','td','volume','td','m')}</tr>
+      <tr>${metRow('HSR','#f97316','hsr','metabolic','hsr','m')}</tr>
+      <tr>${metRow('SPR','#fb923c','sprint','metabolic','sprint','m')}</tr>
+      <tr>${metRow('ACC','#a855f7','accel','neuromuscular','accel','회')}</tr>
+      <tr>${metRow('RHIE','#c084fc','rhie','neuromuscular','rhie','회')}</tr>
+    </tbody>
+  </table>`;
+  document.getElementById('wd-table').outerHTML = tableHtml;
+
+  // 합계
+  document.getElementById('wd-totals').innerHTML = `
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:11px;color:var(--text3);font-weight:600">합계 (MD·REST 제외)</span>
+      <span style="padding:3px 10px;border-radius:6px;background:#60a5fa18;border:1px solid #60a5fa44;font-size:11px;color:#60a5fa"><b>TD</b> ${totTD.toLocaleString()}m</span>
+      <span style="padding:3px 10px;border-radius:6px;background:#f9731618;border:1px solid #f9731644;font-size:11px;color:#f97316"><b>HSR</b> ${totHSR.toLocaleString()}m</span>
+      <span style="padding:3px 10px;border-radius:6px;background:#fb923c18;border:1px solid #fb923c44;font-size:11px;color:#fb923c"><b>SPR</b> ${totSPR.toLocaleString()}m</span>
+      <span style="padding:3px 10px;border-radius:6px;background:#a855f718;border:1px solid #a855f744;font-size:11px;color:#a855f7"><b>ACC</b> ${totACC}회</span>
+      <span style="padding:3px 10px;border-radius:6px;background:#c084fc18;border:1px solid #c084fc44;font-size:11px;color:#c084fc"><b>RHIE</b> ${totRHIE}회</span>
+    </div>`;
+
+  document.getElementById('week-detail-modal').style.display='flex';
+}
+
+function closeWeekDetail() { document.getElementById('week-detail-modal').style.display='none'; }
+
+function printWeekDetail() {
+  const title  = document.getElementById('wd-title').textContent;
+  const period = document.getElementById('wd-period').textContent;
+  const wdTable = document.getElementById('wd-table');
+  const table = wdTable ? wdTable.outerHTML
+    .replace(/color:var\(--text\)/g,'color:#111')
+    .replace(/color:var\(--text2\)/g,'color:#333')
+    .replace(/color:var\(--text3\)/g,'color:#888')
+    .replace(/background:var\(--bg\)/g,'background:#f8f8f8')
+    .replace(/background:var\(--surface\)/g,'background:#fff')
+    .replace(/border:1px solid var\(--border\)/g,'border:1px solid #ddd')
+    .replace(/rgba\(255,255,255,0\.1\)/g,'#e5e5e5')
+    .replace(/var\(--text\)/g,'#111')
+    .replace(/var\(--text2\)/g,'#333')
+    .replace(/var\(--text3\)/g,'#888')
+    .replace(/var\(--border\)/g,'#ddd')
+    .replace(/var\(--bg\)/g,'#f8f8f8') : '';
+  const totals = (document.getElementById('wd-totals')?.innerHTML||'')
+    .replace(/color:var\(--text3\)/g,'color:#888')
+    .replace(/color:var\(--text2\)/g,'color:#333')
+    .replace(/background:[^;]+18/g,'background:#f5f5f5')
+    .replace(/border:1px solid [^;]+44/g,'border:1px solid #ddd');
+
+  const win = window.open('','_blank','width=1200,height=750');
+  win.document.write(`<!DOCTYPE html><html><head>
+    <meta charset="utf-8">
+    <title>${title}</title>
+    <style>
+      * { box-sizing:border-box; margin:0; padding:0; }
+      @page { size:A4 landscape; margin:10mm; }
+      body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; padding:16px; color:#111; background:#fff; font-size:11px; }
+      .header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:12px; border-bottom:2px solid #333; padding-bottom:8px; }
+      h2 { font-size:16px; font-weight:700; }
+      .period { font-size:10px; color:#666; margin-top:2px; }
+      table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:11px; }
+      th { padding:7px 8px; background:#f0f0f0; border:1px solid #ccc; font-weight:600; text-align:center; }
+      td { padding:7px 8px; border:1px solid #ccc; text-align:center; vertical-align:middle; }
+      td:first-child { text-align:left; font-weight:700; background:#f8f8f8; white-space:nowrap; width:50px; }
+      .rest-cell { background:#f0fff4; color:#16a34a; font-weight:600; }
+      .metric-val { font-weight:600; font-size:11px; }
+      .metric-pct { font-size:10px; margin-top:1px; }
+      .bar-bg { height:3px; border-radius:2px; background:#e5e5e5; margin-top:3px; }
+      .bar-fill { height:100%; border-radius:2px; }
+      .totals { margin-top:10px; padding-top:8px; border-top:2px solid #ccc; display:flex; gap:8px; flex-wrap:wrap; }
+      .tot-chip { padding:2px 8px; border-radius:4px; background:#f5f5f5; border:1px solid #ccc; font-size:10px; font-weight:600; }
+      @media print { body { padding:0; } }
+    </style>
+  </head><body>
+    <div class="header">
+      <div>
+        <h2>${title}</h2>
+        <div class="period">${period}</div>
+      </div>
+      <div style="font-size:11px;color:#888">${new Date().toLocaleDateString('ko-KR')} 출력</div>
+    </div>
+    ${table}
+    <div class="totals">${totals}</div>
+    <script>window.onload=()=>{ window.print(); }<\/script>
+  </body></html>`);
+  win.document.close();
+}
+
+// 하위 호환 (구 함수명)
+function openBlockModal2(id){ openBlockModal(id); }
+function openMesocycleModal(){ openBlockModal(); }
+function openMicrocycleModal(){ openBlockModal(); }
+function openEventModal(){ openBlockModal(); }
+function openMesocycleListModal(){ openBlockListModal(); }
+function closeMesocycleListModal(){ closeBlockListModal(); }
+function editMesocycle(id){ openBlockModal(id); }
+async function saveEvent(){}
+async function deleteEvent(){}
 </script>
 
 <!-- ── 코치 RPE 직접 입력 모달 (선수앱 미사용 팀용) ── -->
