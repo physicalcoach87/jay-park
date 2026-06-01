@@ -11871,6 +11871,26 @@ async function renderColMapForm(){
         </div>`).join('')}
     </div>
 
+    <!-- mpm 컬럼 매핑 -->
+    <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:16px">
+      <div style="font-weight:600;color:var(--text2);font-size:12px;margin-bottom:10px">📈 mpm 파일 컬럼 매핑
+        <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">GPS 업체 원본 파일 컬럼명 입력</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        ${[
+          {key:'mpm_name',  label:'선수명',         hint:'예: Jersey, 이름'},
+          {key:'mpm_time',  label:'시간/분',         hint:'예: Name (타임스탬프 포함), 분, 시간'},
+          {key:'mpm_value', label:'분당이동거리',    hint:'예: Meterage Per Minute'},
+        ].map(f=>`
+          <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+            <div style="font-size:11px;font-weight:600;color:var(--text2);margin-bottom:4px">${f.label}</div>
+            <input id="cm-input-${f.key}" type="text" value="${saved[f.key]||''}"
+              placeholder="${f.hint}"
+              style="width:100%;padding:4px 7px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px;box-sizing:border-box">
+          </div>`).join('')}
+      </div>
+    </div>
+
     <!-- 선수 이름 별칭 -->
     <div style="border-top:1px solid var(--border);padding-top:14px">
       <div style="font-weight:600;color:var(--text2);font-size:12px;margin-bottom:10px">👤 선수 이름 별칭
@@ -18748,21 +18768,27 @@ async function parseMinuteFile(file){
   }
 
   const header = raw[0].map(h => (h||'').toString().trim());
-  const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
-  // 영문 컬럼 (Catapult xlsx/csv 원본)
-  // 한글 컬럼 (gps_process.py 가공 CSV: 이름 / 시간 / 분당이동거리)
-  const COL = {
-    name:   ci('Name')   >= 0 ? ci('Name')   : ci('이름'),
-    jersey: ci('Jersey'),    // 형식 A: 'Name=Gabriel - 00:01:00' + 'Jersey=Gabriel'
-    time:   ci('Time')   >= 0 ? ci('Time')   : ci('시간'),  // 형식 B or 한글 CSV
-    mpm:    ci('Meterage Per Minute') >= 0 ? ci('Meterage Per Minute') : ci('분당이동거리'),
-  };
-  // 형식 결정 (한글 CSV는 이름+시간 → 형식 B와 동일하게 처리)
-  const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
+  const ci = name => { if(!name) return -1; return header.findIndex(h => h.toLowerCase() === name.toLowerCase()); };
 
-  if(COL.name<0 || COL.mpm<0 || !FORMAT){
-    if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락 (Name + Meterage Per Minute + (Jersey 또는 Time) 필요).<br>발견: ${header.join(', ')}</span>`;
-    return;
+  // 저장된 매핑 우선, 없으면 자동 감지
+  const savedCm = getColMap();
+  const mpmNameCol  = savedCm.mpm_name  || '';
+  const mpmTimeCol  = savedCm.mpm_time  || '';
+  const mpmValueCol = savedCm.mpm_value || '';
+  const hasSavedMap = mpmNameCol && mpmValueCol;
+
+  if(!hasSavedMap){
+    const COL = {
+      name:   ci('Name')>=0 ? ci('Name') : ci('이름'),
+      jersey: ci('Jersey'),
+      time:   ci('Time')>=0 ? ci('Time') : ci('시간'),
+      mpm:    ci('Meterage Per Minute')>=0 ? ci('Meterage Per Minute') : ci('분당이동거리'),
+    };
+    const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
+    if(COL.name<0 || COL.mpm<0 || !FORMAT){
+      if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 필수 컬럼 누락.<br>발견: ${header.join(', ')}</span>`;
+      return;
+    }
   }
 
   // 선수명 → ID 매핑
@@ -18772,56 +18798,92 @@ async function parseMinuteFile(file){
   }
   const nameMap = {};
   _players.forEach(p => { nameMap[p.name] = p.id; });
+  const matchAliases = getAliasMap();
+  const resolvePid = name => {
+    if(nameMap[name]) return {pid: nameMap[name], resolved: name};
+    const a = matchAliases[name];
+    if(a && nameMap[a]) return {pid: nameMap[a], resolved: a};
+    return {pid: null, resolved: name};
+  };
 
   const rows = [];
   const unknownPlayers = new Set();
   const playersFound = new Set();
   let invalidTime = 0;
 
-  for(const row of raw.slice(1)){
-    if(!row[COL.name]) continue;
-    const mpm = parseFloat(row[COL.mpm]);
-    if(isNaN(mpm)) continue;
-
-    // 선수명 + 시간 추출 (형식 A/B 분기)
-    let jersey, timeStr, minute;
-    if(FORMAT==='B'){
-      jersey  = String(row[COL.name]).trim();
-      const t = row[COL.time];
-      // datetime.time → 'HH:MM:SS' / Date 객체 / 'HH:MM:SS' 문자열 / fraction(0~1)
-      if(t == null) { invalidTime++; continue; }
-      else if(t instanceof Date){
-        const hh = String(t.getUTCHours()).padStart(2,'0');
-        const mm = String(t.getUTCMinutes()).padStart(2,'0');
-        const ss = String(t.getUTCSeconds()).padStart(2,'0');
-        timeStr = `${hh}:${mm}:${ss}`;
-      } else {
-        timeStr = String(t).trim();
-      }
-      minute = hmsToMin(timeStr);
-    } else {
-      // 형식 A: Name='Gabriel - 00:01:00', Jersey='Gabriel'
-      if(!row[COL.jersey]) continue;
-      jersey = String(row[COL.jersey]).trim();
-      const fullName = String(row[COL.name]).trim();
-      const parts = fullName.split(' - ');
-      timeStr = parts.length>=2 ? parts[parts.length-1].trim() : null;
-      minute = hmsToMin(timeStr);
+  const parseMinute = (rawTime) => {
+    if(rawTime == null) return null;
+    if(rawTime instanceof Date){
+      return rawTime.getUTCHours()*60 + rawTime.getUTCMinutes();
     }
-    if(minute==null){ invalidTime++; continue; }
+    return hmsToMin(String(rawTime).trim());
+  };
 
-    const pid = nameMap[jersey] || null;
-    if(!pid) unknownPlayers.add(jersey);
-    else playersFound.add(jersey);
-    rows.push({
-      match_date:  meta.date,
-      opponent:    meta.opponent,
-      player_id:   pid,
-      player_name: jersey,
-      minute,
-      mpm:        Math.round(mpm*100)/100,
-      raw_time:   timeStr,
-    });
+  if(hasSavedMap){
+    // 저장된 매핑 사용
+    const colName  = ci(mpmNameCol);
+    const colTime  = ci(mpmTimeCol);
+    const colValue = ci(mpmValueCol);
+    if(colName<0 || colValue<0){
+      if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 매핑된 컬럼을 찾을 수 없습니다.<br>발견: ${header.join(', ')}</span>`;
+      return;
+    }
+    for(const row of raw.slice(1)){
+      const name = row[colName] ? String(row[colName]).trim() : null;
+      if(!name) continue;
+      const mpm = parseFloat(row[colValue]);
+      if(isNaN(mpm)) continue;
+      let minute = null;
+      if(colTime>=0){
+        const rawTime = row[colTime];
+        const timeStr = String(rawTime||'').trim();
+        const embedded = timeStr.match(/(\d{2}:\d{2}:\d{2})$/);
+        minute = embedded ? hmsToMin(embedded[1]) : parseMinute(rawTime);
+      }
+      if(minute==null){ invalidTime++; continue; }
+      const {pid, resolved} = resolvePid(name);
+      if(!pid) unknownPlayers.add(name);
+      else playersFound.add(resolved);
+      rows.push({
+        match_date: meta.date, opponent: meta.opponent,
+        player_id: pid, player_name: resolved,
+        minute, mpm: Math.round(mpm*100)/100, raw_time: String(minute),
+      });
+    }
+  } else {
+    // 자동 감지: Name/Jersey/Meterage Per Minute 또는 이름/시간/분당이동거리
+    const COL = {
+      name:   ci('Name')>=0 ? ci('Name') : ci('이름'),
+      jersey: ci('Jersey'),
+      time:   ci('Time')>=0 ? ci('Time') : ci('시간'),
+      mpm:    ci('Meterage Per Minute')>=0 ? ci('Meterage Per Minute') : ci('분당이동거리'),
+    };
+    const FORMAT = COL.time>=0 ? 'B' : (COL.jersey>=0 ? 'A' : null);
+    for(const row of raw.slice(1)){
+      if(!row[COL.name]) continue;
+      const mpm = parseFloat(row[COL.mpm]);
+      if(isNaN(mpm)) continue;
+      let jersey, minute;
+      if(FORMAT==='B'){
+        jersey = String(row[COL.name]).trim();
+        minute = parseMinute(row[COL.time]);
+        if(minute==null){ invalidTime++; continue; }
+      } else {
+        if(!row[COL.jersey]) continue;
+        jersey = String(row[COL.jersey]).trim();
+        const parts = String(row[COL.name]).trim().split(' - ');
+        minute = hmsToMin(parts.length>=2 ? parts[parts.length-1].trim() : null);
+        if(minute==null){ invalidTime++; continue; }
+      }
+      const {pid, resolved} = resolvePid(jersey);
+      if(!pid) unknownPlayers.add(jersey);
+      else playersFound.add(resolved);
+      rows.push({
+        match_date: meta.date, opponent: meta.opponent,
+        player_id: pid, player_name: resolved,
+        minute, mpm: Math.round(mpm*100)/100, raw_time: String(minute),
+      });
+    }
   }
 
   _minuteParseData = {meta, rows, unknownPlayers:[...unknownPlayers], playersFound:[...playersFound], invalidTime};
@@ -18973,13 +19035,20 @@ async function parseTrainMinuteFile(file){
   }
 
   const header = raw[0].map(h => (h||'').toString().trim());
-  const ci = name => header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+  const ci = name => { if(!name) return -1; return header.findIndex(h => h.toLowerCase() === name.toLowerCase()); };
+
+  // 저장된 매핑 우선, 없으면 자동 감지
+  const savedCm = getColMap();
+  const mpmNameCol  = savedCm.mpm_name  || '';
+  const mpmTimeCol  = savedCm.mpm_time  || '';
+  const mpmValueCol = savedCm.mpm_value || '';
+  const hasSavedMap = mpmNameCol && mpmValueCol;
 
   // 새 형식 감지: 이름 / (분 or 시간) / 분당이동거리
-  const hasTimeCol = ci('시간')>=0;  // HH:MM:SS 형식
-  const isNewFormat = ci('이름')>=0 && (ci('분')>=0 || hasTimeCol) && ci('분당이동거리')>=0;
+  const hasTimeCol = ci('시간')>=0;
+  const isNewFormat = !hasSavedMap && ci('이름')>=0 && (ci('분')>=0 || hasTimeCol) && ci('분당이동거리')>=0;
 
-  if(!isNewFormat){
+  if(!hasSavedMap && !isNewFormat){
     const COL = {
       name:   ci('Name'),
       jersey: ci('Jersey'),
@@ -19012,31 +19081,54 @@ async function parseTrainMinuteFile(file){
   const playersFound = new Set();
   let invalidTime = 0;
 
-  if(isNewFormat){
+  // 시간값 → 분 변환 헬퍼
+  const parseMinute = (rawTime) => {
+    if(rawTime == null) return NaN;
+    if(typeof rawTime === 'number') return Math.round(rawTime * 24 * 60);
+    const t = String(rawTime).trim();
+    const parts = t.split(':');
+    return parts.length>=2 ? parseInt(parts[0])*60+parseInt(parts[1]) : NaN;
+  };
+
+  if(hasSavedMap){
+    // 저장된 매핑 사용 (GPS 업체 원본 파일)
+    const colName  = ci(mpmNameCol);
+    const colTime  = ci(mpmTimeCol);
+    const colValue = ci(mpmValueCol);
+    if(colName<0 || colValue<0){
+      if(msgEl) msgEl.innerHTML = `<span style="color:#ef4444">⚠️ 매핑된 컬럼을 찾을 수 없습니다.<br>파일 헤더: ${header.join(', ')}</span>`;
+      return;
+    }
+    for(const row of raw.slice(1)){
+      const name = row[colName] ? String(row[colName]).trim() : null;
+      if(!name) continue;
+      const mpm = parseFloat(row[colValue]);
+      if(isNaN(mpm)) continue;
+      let minute = NaN;
+      if(colTime>=0){
+        const rawTime = row[colTime];
+        const timeStr = String(rawTime||'').trim();
+        // "Player - HH:MM:SS" 형식이면 타임스탬프 추출
+        const embedded = timeStr.match(/(\d{2}:\d{2}:\d{2})$/);
+        minute = embedded ? parseMinute(embedded[1]) : parseMinute(rawTime);
+      }
+      if(isNaN(minute)) continue;
+      const {pid, resolved} = resolvePid(name);
+      if(!pid) unknownPlayers.add(name);
+      else playersFound.add(resolved);
+      rows.push({
+        session_date: meta.date, session_label: meta.label,
+        player_id: pid, player_name: resolved,
+        minute, mpm: Math.round(mpm*100)/100, raw_time: String(minute),
+      });
+    }
+  } else if(isNewFormat){
     // 새 형식: 이름(한국어) / 분(정수) or 시간(HH:MM:SS) / 분당이동거리
     const colName = ci('이름'), colMin = ci('분'), colTime = ci('시간'), colMpm = ci('분당이동거리');
     for(const row of raw.slice(1)){
       const name = row[colName] ? String(row[colName]).trim() : null;
       if(!name) continue;
-      // 분(정수) 또는 시간(HH:MM:SS) → 분 변환
-      let minute;
-      if(colMin>=0){
-        minute = parseInt(row[colMin]);
-      } else {
-        const rawTime = row[colTime];
-        if(rawTime == null){
-          minute = NaN;
-        } else if(typeof rawTime === 'number'){
-          // SheetJS가 CSV 시간값을 Excel 시리얼(0~1)로 읽는 경우 → 분 변환
-          // 예: 00:01:00 → 0.000694 → round(0.000694*24*60) = 1
-          minute = Math.round(rawTime * 24 * 60);
-        } else {
-          // HH:MM:SS 문자열 → 분 (00:05:00 → 5)
-          const t = String(rawTime).trim();
-          const parts = t.split(':');
-          minute = parts.length>=2 ? parseInt(parts[0])*60+parseInt(parts[1]) : NaN;
-        }
-      }
+      const minute = colMin>=0 ? parseInt(row[colMin]) : parseMinute(row[colTime]);
       const mpm = parseFloat(row[colMpm]);
       if(isNaN(minute) || isNaN(mpm)) continue;
       const {pid, resolved} = resolvePid(name);
