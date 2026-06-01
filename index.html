@@ -11787,8 +11787,6 @@ const GPS_INTERNAL_FIELDS = [
   {key:'fmpRunHigh',label:'FMP Running High',      unit:'sec'},
   {key:'fmpDynMed', label:'FMP Dynamic Medium',    unit:'sec'},
   {key:'fmpDynHigh',label:'FMP Dynamic High',      unit:'sec'},
-  {key:'rpe',       label:'RPE',                   unit:'1-10'},
-  {key:'weight',    label:'체중',                  unit:'kg'},
 ];
 
 function _colMapKey(){ return 'gps_colmap_' + (currentClubId||'default'); }
@@ -11965,10 +11963,9 @@ async function parseGpsFile(file){
           max_speed: gv('maxSpeed'), player_load: gv('pload'), rhie: gv('rhie'),
           fmp_run_medium: gv('fmpRunMed'), fmp_run_high: gv('fmpRunHigh'),
           fmp_dyn_medium: gv('fmpDynMed'), fmp_dyn_high: gv('fmpDynHigh'),
-          _rpe:    (!currentUsePlayerApp && currentUseRpe) ? (parseFloat(gv('rpe'))||null) : null,
-          _weight: (!currentUsePlayerApp && currentUseRpe) ? (parseFloat(gv('weight'))||null) : null,
-          hr_140_plus: gv('mpm140'), hr_120_140: gv('mpm120'), hr_100_120: gv('mpm100'),
-          hr_80_100: gv('mpm80'), hr_60_80: gv('mpm60'), hr_40_60: gv('mpm40'), hr_20_40: gv('mpm20'),
+          _rpe: null, _weight: null,
+          hr_140_plus: null, hr_120_140: null, hr_100_120: null,
+          hr_80_100: null, hr_60_80: null, hr_40_60: null, hr_20_40: null,
           session_topic: mv('topic'),
           cycle: mv('cycle'), periodization: mv('period'),
           opponent: mv('opponent'), robin: mv('robin'),
