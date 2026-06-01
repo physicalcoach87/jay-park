@@ -12044,6 +12044,9 @@ function renderGpsPreviewTable(){
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">세션</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">타입</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">훈련주제</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">준비대상</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">로빈</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">주기</th>
       ${_isCoachRpe?'<th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">RPE</th><th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">체중(kg)</th>':''}
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">TD(m)</th>
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">HSR(m)</th>
@@ -12070,8 +12073,11 @@ function renderGpsPreviewTable(){
           <input type="text" value="${r.session_topic||''}"
             onchange="updateGpsRow(${i},'session_topic',this.value||null)"
             placeholder="주제"
-            style="width:80px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px">
+            style="width:72px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px">
         </td>
+        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.opponent||'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.robin||'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.cycle||'<span style="color:var(--text3)">—</span>'}</td>
         ${_isCoachRpe?`
           <td style="padding:4px 6px"><input type="number" min="1" max="10" step="0.5" value="${r._rpe??''}"
             onchange="updateGpsRow(${i},'_rpe',this.value?parseFloat(this.value):null)"
@@ -12120,7 +12126,20 @@ function applyGpsBatchMeta(){
 
   renderGpsPreviewTable();
   const msg=document.getElementById('upload-msg');
-  if(msg){ msg.style.color='#4ade80'; msg.textContent=`✅ 전체 적용 완료 (${_gpsParseData.length}명)`; setTimeout(()=>{msg.textContent='';},2000); }
+  if(msg){
+    const parts=[];
+    if(cycle) parts.push(`주기: ${cycle}`);
+    if(period) parts.push(`주기화: ${period}`);
+    if(opponent) parts.push(`준비대상: ${opponent}`);
+    if(robin) parts.push(`로빈: ${robin}`);
+    if(score) parts.push(`스코어: ${score}`);
+    if(result) parts.push(`결과: ${result}`);
+    if(ha) parts.push(`H/A: ${ha}`);
+    if(type) parts.push(`타입: ${type}`);
+    if(topic) parts.push(`훈련주제: ${topic}`);
+    msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80';
+    msg.textContent=`✅ 전체 적용 완료 (${_gpsParseData.length}명) — ${parts.join(' · ')||'변경 없음'}`;
+  }
 }
 
 async function saveGpsData(){
