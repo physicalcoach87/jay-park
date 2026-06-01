@@ -12005,14 +12005,14 @@ async function parseGpsFile(file){
               </select></div>
             <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">훈련 주제</div>
               <input id="meta-topic" type="text" value="${firstRow.session_topic||''}" placeholder="예: 전술훈련" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
-            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기</div>
-              <input id="meta-cycle" type="text" value="${firstRow.cycle||''}" placeholder="예: W1" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
-            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기화</div>
-              <input id="meta-period" type="text" value="${firstRow.periodization||''}" placeholder="예: MD-2" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
-            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">경기상대</div>
-              <input id="meta-opponent" type="text" value="${firstRow.opponent||''}" placeholder="예: 전북현대" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
-            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">로빈</div>
-              <input id="meta-robin" type="text" value="${firstRow.robin||''}" placeholder="예: 15" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기 <span style="color:var(--text3);font-size:9px">(경기기준일)</span></div>
+              <input id="meta-cycle" type="text" value="${firstRow.cycle||''}" placeholder="MD-1, MD-2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기화 <span style="color:var(--text3);font-size:9px">(구조)</span></div>
+              <input id="meta-period" type="text" value="${firstRow.periodization||''}" placeholder="1R-4DAY, 1R-3DAY..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">준비대상 <span style="color:var(--text3);font-size:9px">(경기상대/시즌)</span></div>
+              <input id="meta-opponent" type="text" value="${firstRow.opponent||''}" placeholder="전북현대 / Rest Week / 1차 프리시즌..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+            <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">로빈 <span style="color:var(--text3);font-size:9px">(결산 단위)</span></div>
+              <input id="meta-robin" type="text" value="${firstRow.robin||''}" placeholder="R1, R2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
             <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스코어</div>
               <input id="meta-score" type="text" value="${firstRow.score||''}" placeholder="예: 2-1" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
             <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">결과</div>
