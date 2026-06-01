@@ -11816,12 +11816,34 @@ function resetColMap(){
   if(msg){ msg.style.color='var(--text3)'; msg.textContent='초기화 완료'; setTimeout(()=>{msg.textContent='';},2000); }
 }
 
-function renderColMapForm(){
+// ── 선수 이름 별칭 ─────────────────────────────────────
+function _aliasKey(){ return 'gps_alias_' + (currentClubId||'default'); }
+function getAliasMap(){ try{ return JSON.parse(localStorage.getItem(_aliasKey())||'{}'); }catch(e){ return {}; } }
+function saveAlias(gpsName, profileName){
+  const map = getAliasMap();
+  map[gpsName.trim()] = profileName;
+  localStorage.setItem(_aliasKey(), JSON.stringify(map));
+}
+function deleteAlias(gpsName){
+  const map = getAliasMap();
+  delete map[gpsName];
+  localStorage.setItem(_aliasKey(), JSON.stringify(map));
+  renderColMapForm();
+}
+
+async function renderColMapForm(){
   const saved = getColMap();
+  const aliases = getAliasMap();
   const area = document.getElementById('colmap-form-area');
   if(!area) return;
+
+  // 선수 목록 로드 (드롭다운용)
+  const {data:players} = await supa.from('player_profiles').select('id,name').eq('club_id', currentClubId);
+  const playerNames = (players||[]).map(p=>p.name).sort();
+
   area.innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+    <!-- 컬럼 매핑 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px">
       ${GPS_INTERNAL_FIELDS.map(f=>`
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">
           <div style="flex:1;min-width:0">
@@ -11832,7 +11854,52 @@ function renderColMapForm(){
             placeholder="파일 컬럼명"
             style="width:130px;padding:4px 7px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px;flex-shrink:0">
         </div>`).join('')}
+    </div>
+
+    <!-- 선수 이름 별칭 -->
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-weight:600;color:var(--text2);font-size:12px;margin-bottom:10px">👤 선수 이름 별칭
+        <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">GPS 파일 이름 → 코치웹 등록 이름</span>
+      </div>
+
+      <!-- 저장된 별칭 목록 -->
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
+        ${Object.keys(aliases).length===0
+          ? `<div style="font-size:11px;color:var(--text3);padding:6px 0">등록된 별칭이 없습니다.</div>`
+          : Object.entries(aliases).map(([gps,profile])=>`
+            <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 10px">
+              <span style="font-size:11px;color:var(--text2);flex:1">${gps}</span>
+              <span style="font-size:11px;color:var(--text3)">→</span>
+              <span style="font-size:11px;color:var(--accent2);flex:1">${profile}</span>
+              <button onclick="deleteAlias('${gps.replace(/'/g,"\\'")}');event.stopPropagation()"
+                style="padding:2px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:#f87171;font-size:10px;cursor:pointer">삭제</button>
+            </div>`).join('')}
+      </div>
+
+      <!-- 새 별칭 추가 -->
+      <div style="display:flex;align-items:center;gap:6px">
+        <input id="alias-gps-name" type="text" placeholder="GPS 파일 이름 (예: Berg Gutem)"
+          style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px">
+        <span style="color:var(--text3);font-size:12px">→</span>
+        <select id="alias-profile-name"
+          style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px">
+          <option value="">선수 선택</option>
+          ${playerNames.map(n=>`<option value="${n}">${n}</option>`).join('')}
+        </select>
+        <button onclick="addAlias()"
+          style="padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--accent2);font-size:11px;cursor:pointer;white-space:nowrap">+ 추가</button>
+      </div>
     </div>`;
+}
+
+function addAlias(){
+  const gps = document.getElementById('alias-gps-name')?.value.trim();
+  const profile = document.getElementById('alias-profile-name')?.value;
+  if(!gps||!profile){ alert('GPS 이름과 선수를 모두 입력하세요.'); return; }
+  saveAlias(gps, profile);
+  renderColMapForm();
+  const msg = document.getElementById('colmap-msg');
+  if(msg){ msg.style.color='#4ade80'; msg.textContent=`✅ 별칭 추가: ${gps} → ${profile}`; setTimeout(()=>{msg.textContent='';},2000); }
 }
 
 function handleFileDrop(e){
@@ -11862,7 +11929,7 @@ function parseFilename(filename){
 }
 
 // 단일 파일 파싱 → 데이터 배열 반환
-async function parseSingleGpsFile(file, playerMap, cm){
+async function parseSingleGpsFile(file, playerMap, cm, aliases={}){
   return new Promise((resolve, reject)=>{
     const {date, label, isMatch, timeType} = parseFilename(file.name);
     if(!date){ reject(new Error(`${file.name}: 파일명에 날짜(YYYY-MM-DD)가 없습니다.`)); return; }
@@ -11898,12 +11965,14 @@ async function parseSingleGpsFile(file, playerMap, cm){
           const nameVal=fIdx.name>=0?row[fIdx.name]:null;
           if(!nameVal||!String(nameVal).trim()) return;
           const nameStr=String(nameVal).trim();
-          const pid=playerMap[nameStr];
+          // 1. 직접 매칭 → 2. 별칭 테이블 조회
+          const resolvedName = playerMap[nameStr] ? nameStr : (aliases[nameStr] || null);
+          const pid = resolvedName ? playerMap[resolvedName] : null;
           if(!pid){unknown.add(nameStr);return;}
           const gv=k=>{ const idx=fIdx[k]; if(idx<0) return null; const v=row[idx]; return v!=null&&v!==''?v:null; };
           rows.push({
             _isMatch:isMatch, _srcFile:file.name,
-            player_id:pid, player_name:nameStr,
+            player_id:pid, player_name:resolvedName,
             session_date:date, session_label:label,
             session_type2:isMatch?null:null,
             time_type:isMatch?timeType:null,
@@ -11940,14 +12009,15 @@ async function parseGpsFiles(files){
   if(msg) msg.textContent='';
 
   try{
-    // 선수 목록 + 컬럼 매핑 로드
+    // 선수 목록 + 컬럼 매핑 + 별칭 로드
     const {data:players}=await supa.from('player_profiles').select('id,name').eq('club_id',currentClubId);
     const playerMap={};
     (players||[]).forEach(p=>{playerMap[p.name]=p.id;});
+    const aliases=getAliasMap(); // GPS이름 → 프로필이름
     const cm=getColMap();
 
     // 모든 파일 병렬 파싱
-    const results=await Promise.all(Array.from(files).map(f=>parseSingleGpsFile(f,playerMap,cm)));
+    const results=await Promise.all(Array.from(files).map(f=>parseSingleGpsFile(f,playerMap,cm,aliases)));
 
     // 결과 합치기
     _gpsParseData=results.flatMap(r=>r.rows);
