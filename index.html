@@ -22699,7 +22699,11 @@ function renderDmMetrics(dayRow){
           oninput="onDmSlider('${m.id}',this.value)"
           style="width:100%;accent-color:${m.color};cursor:pointer;height:16px">
       </div>
-      <span id="dm-pct-${m.id}" style="font-size:11px;font-weight:700;color:${m.color};width:38px;text-align:right;flex-shrink:0">${pct!=null?pct+'%':'—'}</span>
+      <input id="dm-pct-${m.id}" type="number" value="${pct??''}" min="0" max="200"
+        oninput="onDmPct('${m.id}',this.value)"
+        placeholder="—"
+        style="width:52px;padding:4px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:${pct!=null&&pct>=150?'#ef4444':pct!=null&&pct>=100?'#f97316':m.color};font-size:11px;font-weight:700;text-align:center;flex-shrink:0">
+      <span style="font-size:11px;color:var(--text3);flex-shrink:0">%</span>
       <input id="dm-abs-${m.id}" type="number" value="${absVal??''}" min="0"
         oninput="onDmAbs('${m.id}',this.value)"
         placeholder="—"
@@ -22724,6 +22728,22 @@ function onDmSlider(id, pctVal){
   document.getElementById('dm-abs-'+id).value=absVal||'';
 }
 
+function onDmPct(id, pctVal){
+  pctVal=parseInt(pctVal)||0;
+  const avg=_periodMatchAvg;
+  const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
+  const avgVal=avg[m.avgKey]||0;
+  const absVal=avgVal?Math.round(avgVal*pctVal/100):0;
+  const sliderPct=Math.min(200,pctVal);
+  const gaugeW=Math.min(100,pctVal);
+  const gc=pctVal>=150?'#ef4444':pctVal>=100?'#f97316':m.color;
+  document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
+  document.getElementById('dm-gauge-'+id).style.background=gc;
+  document.getElementById('dm-pct-'+id).style.color=gc;
+  document.getElementById('dm-slider-'+id).value=sliderPct;
+  document.getElementById('dm-abs-'+id).value=absVal||'';
+}
+
 function onDmAbs(id, absVal){
   absVal=parseInt(absVal)||0;
   const avg=_periodMatchAvg;
@@ -22736,7 +22756,7 @@ function onDmAbs(id, absVal){
   document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
   document.getElementById('dm-gauge-'+id).style.background=gc2;
   document.getElementById('dm-pct-'+id).style.color=gc2;
-  document.getElementById('dm-pct-'+id).textContent=pct+'%';
+  document.getElementById('dm-pct-'+id).value=pct;
   document.getElementById('dm-slider-'+id).value=sliderPct;
 }
 
@@ -22798,8 +22818,16 @@ async function saveDayPlan(){
   const block=getBlockForDate(_dmEditDate);
   const isRest=document.getElementById('dm-rest').checked;
   const getAbs = id => {
-    const el=document.getElementById('dm-abs-'+id);
-    return el&&el.value!==''?parseInt(el.value):null;
+    const absEl=document.getElementById('dm-abs-'+id);
+    if(absEl&&absEl.value!=='') return parseInt(absEl.value);
+    // 절대값 없으면 % 입력값으로 계산
+    const pctEl=document.getElementById('dm-pct-'+id);
+    const m=DM_METRICS.find(x=>x.id===id);
+    if(pctEl&&pctEl.value!==''&&m){
+      const avgVal=_periodMatchAvg[m.avgKey]||0;
+      return avgVal?Math.round(avgVal*parseInt(pctEl.value)/100):null;
+    }
+    return null;
   };
   const row={
     plan_date:_dmEditDate,
