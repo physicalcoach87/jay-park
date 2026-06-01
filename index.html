@@ -22724,7 +22724,7 @@ function onDmSlider(id, pctVal){
   document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
   document.getElementById('dm-gauge-'+id).style.background=gc;
   document.getElementById('dm-pct-'+id).style.color=gc;
-  document.getElementById('dm-pct-'+id).textContent=pctVal+'%';
+  document.getElementById('dm-pct-'+id).value=pctVal;
   document.getElementById('dm-abs-'+id).value=absVal||'';
 }
 
