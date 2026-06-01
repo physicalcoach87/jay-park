@@ -12149,8 +12149,8 @@ async function saveGpsData(){
 
   btn.textContent='저장 중...'; btn.disabled=true;
 
-  // _isMatch 플래그로 훈련/경기 분리
-  const allRecords = _gpsParseData.map(({player_name, _isMatch, time_type, ...rest})=>({...rest, _isMatch, time_type}));
+  // _isMatch 플래그로 훈련/경기 분리 (_srcFile 등 내부 필드 제거)
+  const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
   const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>r);
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, time_type, session_label, session_type2, training_form,
