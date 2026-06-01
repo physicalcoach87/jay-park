@@ -11997,6 +11997,8 @@ async function parseGpsFile(file){
                 <option value="">—</option>
                 <option value="M">M (주전)</option>
                 <option value="S">S (서브)</option>
+                <option value="SS">SS</option>
+                <option value="X">X</option>
                 <option value="FT">FT</option>
                 <option value="1Q">1Q</option>
                 <option value="2Q">2Q</option>
@@ -12049,6 +12051,7 @@ function renderGpsPreviewTable(){
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">날짜</th>
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">세션</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">타입</th>
+      <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">훈련주제</th>
       ${_isCoachRpe?'<th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">RPE</th><th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">체중(kg)</th>':''}
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">TD(m)</th>
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">HSR(m)</th>
@@ -12068,8 +12071,14 @@ function renderGpsPreviewTable(){
             <option value="">—</option>
             ${r._isMatch
               ? ['FT','1Q','2Q','Top'].map(v=>`<option value="${v}" ${(r.time_type||'')==v?'selected':''}>${v}</option>`).join('')
-              : ['M','S'].map(v=>`<option value="${v}" ${(r.session_type2||'')==v?'selected':''}>${v}</option>`).join('')}
+              : ['M','S','SS','X'].map(v=>`<option value="${v}" ${(r.session_type2||'')==v?'selected':''}>${v}</option>`).join('')}
           </select>
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${r.session_topic||''}"
+            onchange="updateGpsRow(${i},'session_topic',this.value||null)"
+            placeholder="주제"
+            style="width:80px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px">
         </td>
         ${_isCoachRpe?`
           <td style="padding:4px 6px"><input type="number" min="1" max="10" step="0.5" value="${r._rpe??''}"
