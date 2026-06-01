@@ -18865,6 +18865,13 @@ async function parseTrainMinuteFile(file){
   }
   const nameMap = {};
   _players.forEach(p => { nameMap[p.name] = p.id; });
+  const mpmAliases = getAliasMap();
+  const resolvePid = name => {
+    if(nameMap[name]) return {pid: nameMap[name], resolved: name};
+    const a = mpmAliases[name];
+    if(a && nameMap[a]) return {pid: nameMap[a], resolved: a};
+    return {pid: null, resolved: name};
+  };
 
   const rows = [];
   const unknownPlayers = new Set();
@@ -18898,12 +18905,12 @@ async function parseTrainMinuteFile(file){
       }
       const mpm = parseFloat(row[colMpm]);
       if(isNaN(minute) || isNaN(mpm)) continue;
-      const pid = nameMap[name] || null;
+      const {pid, resolved} = resolvePid(name);
       if(!pid) unknownPlayers.add(name);
-      else playersFound.add(name);
+      else playersFound.add(resolved);
       rows.push({
         session_date: meta.date, session_label: meta.label,
-        player_id: pid, player_name: name,
+        player_id: pid, player_name: resolved,
         minute, mpm: Math.round(mpm*100)/100, raw_time: String(minute),
       });
     }
@@ -18932,12 +18939,12 @@ async function parseTrainMinuteFile(file){
         minute = hmsToMin(timeStr);
       }
       if(minute==null){ invalidTime++; continue; }
-      const pid = nameMap[jersey] || null;
+      const {pid, resolved} = resolvePid(jersey);
       if(!pid) unknownPlayers.add(jersey);
-      else playersFound.add(jersey);
+      else playersFound.add(resolved);
       rows.push({
         session_date: meta.date, session_label: meta.label,
-        player_id: pid, player_name: jersey,
+        player_id: pid, player_name: resolved,
         minute, mpm: Math.round(mpm*100)/100, raw_time: timeStr,
       });
     }
