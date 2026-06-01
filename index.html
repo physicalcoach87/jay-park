@@ -821,6 +821,21 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏟️ 업로드된 경기 기록</div>
         <div id="match-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
       </div>
+
+      <!-- Raw 데이터 다운로드 -->
+      <div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px">📥 Raw 데이터 다운로드</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <input type="date" id="raw-dl-from" style="padding:5px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px">
+          <span style="color:var(--text3);font-size:12px">~</span>
+          <input type="date" id="raw-dl-to" style="padding:5px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="downloadGpsRaw()" class="btn-exp" style="flex:1;padding:10px;font-size:12px">📊 GPS Raw 다운로드</button>
+          <button onclick="downloadMpmRaw()" class="btn-exp" style="flex:1;padding:10px;font-size:12px">📈 mpm Raw 다운로드</button>
+        </div>
+        <div id="raw-dl-msg" style="font-size:12px;margin-top:8px;min-height:16px;color:var(--text3)"></div>
+      </div>
     </div>
 
     <!-- Tab 2: mpm 파일 업로드 (훈련 + 경기 통합) -->
@@ -12359,6 +12374,117 @@ function cancelUpload(){
   _gpsParseData=[];
   document.getElementById('upload-preview').style.display='none';
   document.getElementById('gps-file-input').value='';
+}
+
+// ── Raw 데이터 다운로드 ───────────────────────────────────────────
+function _getRawDlRange(){
+  const from = document.getElementById('raw-dl-from')?.value;
+  const to   = document.getElementById('raw-dl-to')?.value;
+  const msg  = document.getElementById('raw-dl-msg');
+  if(!from||!to){ if(msg){ msg.style.color='#f87171'; msg.textContent='기간을 선택해 주세요.'; } return null; }
+  if(from>to){    if(msg){ msg.style.color='#f87171'; msg.textContent='시작일이 종료일보다 늦습니다.'; } return null; }
+  return {from, to, msg};
+}
+
+async function downloadGpsRaw(){
+  const range = _getRawDlRange(); if(!range) return;
+  const {from, to, msg} = range;
+  msg.style.color='var(--text3)'; msg.textContent='조회 중...';
+
+  const {data:recs, error} = await supa.from('gps_records')
+    .select('*, player_profiles(name)')
+    .eq('club_id', currentClubId)
+    .gte('session_date', from).lte('session_date', to)
+    .order('session_date').order('session_label');
+  if(error){ msg.style.color='#f87171'; msg.textContent='조회 실패: '+error.message; return; }
+  if(!recs||!recs.length){ msg.style.color='#f59e0b'; msg.textContent='해당 기간에 데이터가 없습니다.'; return; }
+
+  // RPE, 체중 조회
+  const {data:rpeRecs}  = await supa.from('session_records').select('record_date,player_id,rpe').eq('club_id',currentClubId).gte('record_date',from).lte('record_date',to);
+  const {data:wellRecs} = await supa.from('wellness_records').select('record_date,player_id,morning_weight').eq('club_id',currentClubId).gte('record_date',from).lte('record_date',to);
+  const rpeMap  = {}; (rpeRecs||[]).forEach(r=>{ rpeMap[r.record_date+'|'+r.player_id]=r.rpe; });
+  const wellMap = {}; (wellRecs||[]).forEach(r=>{ wellMap[r.record_date+'|'+r.player_id]=r.morning_weight; });
+
+  const rows = recs.map(r=>{
+    const k = r.session_date+'|'+r.player_id;
+    return {
+      '날짜':                        r.session_date,
+      '세션구분':                    r.session_label,
+      '이름':                        r.player_profiles?.name||'',
+      '타입':                        r.session_type2||'',
+      '운동형태':                    r.training_form||'',
+      '운동 or 출전시간':            r.duration??'',
+      '총 이동거리 (m)':             r.td??'',
+      '분당이동거리 (avg)':          r.td_per_min??'',
+      '고강도 +스프린트 거리 (m)':   r.hsr_total??'',
+      '중강도 러닝 (m)':             r.running_medium??'',
+      '고강도 러닝 (m)':             r.running_high??'',
+      '스프린트 (m)':                r.sprint??'',
+      '고강도 러닝 횟수 (n)':        r.running_high_n??'',
+      '스프린트 횟수 (n)':           r.sprint_n??'',
+      '가속 횟수 (n)':               r.accel??'',
+      '감속 횟수 (n)':               r.decel??'',
+      '최고속도 (km/h)':             r.max_speed??'',
+      '운동량':                      r.player_load??'',
+      'RHIE 횟수 (n)':               r.rhie??'',
+      'FMP Running Medium (sec)':    r.fmp_run_medium??'',
+      'FMP Running High (sec)':      r.fmp_run_high??'',
+      'FMP Dynamic Medium (sec)':    r.fmp_dyn_medium??'',
+      'FMP Dynamic High (sec)':      r.fmp_dyn_high??'',
+      '훈련 주제':                   r.session_topic||'',
+      '경기상대':                    r.opponent||'',
+      '로빈':                        r.robin||'',
+      '주기':                        r.cycle||'',
+      '주기화':                      r.periodization||'',
+      '스코어':                      r.score||'',
+      '결과':                        r.result||'',
+      'H/A':                         r.home_away||'',
+      'RPE':                         rpeMap[k]??'',
+      '체중':                        wellMap[k]??'',
+    };
+  });
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet');
+  XLSX.writeFile(wb, `GPS_Raw_${from}_${to}.xlsx`);
+  msg.style.color='#4ade80'; msg.textContent=`✅ ${recs.length}건 다운로드 완료`;
+}
+
+async function downloadMpmRaw(){
+  const range = _getRawDlRange(); if(!range) return;
+  const {from, to, msg} = range;
+  msg.style.color='var(--text3)'; msg.textContent='조회 중...';
+
+  const {data:recs, error} = await supa.from('session_minute_records')
+    .select('*, player_profiles(name)')
+    .eq('club_id', currentClubId)
+    .gte('session_date', from).lte('session_date', to)
+    .order('session_date').order('session_label').order('player_id').order('minute');
+  if(error){ msg.style.color='#f87171'; msg.textContent='조회 실패: '+error.message; return; }
+  if(!recs||!recs.length){ msg.style.color='#f59e0b'; msg.textContent='해당 기간에 mpm 데이터가 없습니다.'; return; }
+
+  const minToHms = m => {
+    const h = String(Math.floor(m/60)).padStart(2,'0');
+    const mn = String(m%60).padStart(2,'0');
+    return `${h}:${mn}:00`;
+  };
+
+  const rows = recs.map(r=>({
+    '날짜':       r.session_date,
+    '세션':       r.session_label||'',
+    '이름':       r.player_profiles?.name||'',
+    '시간':       minToHms(r.minute||0),
+    '분당이동거리': r.mpm??'',
+  }));
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet');
+  XLSX.writeFile(wb, `MPM_Raw_${from}_${to}.xlsx`);
+  msg.style.color='#4ade80'; msg.textContent=`✅ ${recs.length}건 다운로드 완료`;
 }
 
 // ── GPS 업로드 기록 목록 조회 ─────────────────────────────────────
