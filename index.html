@@ -12391,17 +12391,21 @@ async function downloadGpsRaw(){
   const {from, to, msg} = range;
   msg.style.color='var(--text3)'; msg.textContent='조회 중...';
 
+  const {data:players} = await supa.from('player_profiles').select('id').eq('club_id', currentClubId);
+  const pids = (players||[]).map(p=>p.id);
+  if(!pids.length){ msg.style.color='#f59e0b'; msg.textContent='선수 데이터가 없습니다.'; return; }
+
   const {data:recs, error} = await supa.from('gps_records')
     .select('*, player_profiles(name)')
-    .eq('club_id', currentClubId)
+    .in('player_id', pids)
     .gte('session_date', from).lte('session_date', to)
     .order('session_date').order('session_label');
   if(error){ msg.style.color='#f87171'; msg.textContent='조회 실패: '+error.message; return; }
   if(!recs||!recs.length){ msg.style.color='#f59e0b'; msg.textContent='해당 기간에 데이터가 없습니다.'; return; }
 
   // RPE, 체중 조회
-  const {data:rpeRecs}  = await supa.from('session_records').select('record_date,player_id,rpe').eq('club_id',currentClubId).gte('record_date',from).lte('record_date',to);
-  const {data:wellRecs} = await supa.from('wellness_records').select('record_date,player_id,morning_weight').eq('club_id',currentClubId).gte('record_date',from).lte('record_date',to);
+  const {data:rpeRecs}  = await supa.from('session_records').select('record_date,player_id,rpe').in('player_id',pids).gte('record_date',from).lte('record_date',to);
+  const {data:wellRecs} = await supa.from('wellness_records').select('record_date,player_id,morning_weight').in('player_id',pids).gte('record_date',from).lte('record_date',to);
   const rpeMap  = {}; (rpeRecs||[]).forEach(r=>{ rpeMap[r.record_date+'|'+r.player_id]=r.rpe; });
   const wellMap = {}; (wellRecs||[]).forEach(r=>{ wellMap[r.record_date+'|'+r.player_id]=r.morning_weight; });
 
@@ -12457,9 +12461,13 @@ async function downloadMpmRaw(){
   const {from, to, msg} = range;
   msg.style.color='var(--text3)'; msg.textContent='조회 중...';
 
+  const {data:players2} = await supa.from('player_profiles').select('id').eq('club_id', currentClubId);
+  const pids2 = (players2||[]).map(p=>p.id);
+  if(!pids2.length){ msg.style.color='#f59e0b'; msg.textContent='선수 데이터가 없습니다.'; return; }
+
   const {data:recs, error} = await supa.from('session_minute_records')
     .select('*, player_profiles(name)')
-    .eq('club_id', currentClubId)
+    .in('player_id', pids2)
     .gte('session_date', from).lte('session_date', to)
     .order('session_date').order('session_label').order('player_id').order('minute');
   if(error){ msg.style.color='#f87171'; msg.textContent='조회 실패: '+error.message; return; }
