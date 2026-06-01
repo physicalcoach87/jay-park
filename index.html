@@ -16110,9 +16110,9 @@ async function generateMatchReport(){
     .order('match_date',{ascending:false})
     .limit(300);
 
-  // 경기 준비 훈련 흐름 — MD-5~MD-1 (현재 선택 경기 기준)
+  // 경기 준비 훈련 흐름 — 주기(MD 레이블) + 경기상대 기반
   const _preFrom = new Date(date);
-  _preFrom.setDate(_preFrom.getDate() - 7);
+  _preFrom.setDate(_preFrom.getDate() - 14); // MD-5까지 커버 (최대 14일)
   const _preFromStr = _preFrom.toISOString().split('T')[0];
   const [{data:preGPS},{data:preRPE}] = await Promise.all([
     supa.from('gps_records')
@@ -16480,9 +16480,22 @@ async function generateMatchReport(){
 
   ${(()=>{
     // ── 경기 준비 훈련 흐름 카드 (MD-5 → Match) ───────────────────
-    const _mGPS = (preGPS||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    // 필터 기준: M 세션 중 ① 경기상대 일치 OR ② MD 주기 레이블 포함
+    const _oppNorm = s => (s||'').trim().toLowerCase().replace(/[^가-힣a-z0-9]/g,'').replace(/^\d+r/,'').replace(/^vs/,'');
+    const _tgtOpp  = _oppNorm(opponent);
+    const _mGPS = (preGPS||[]).filter(r=>{
+      if((r.session_type2||'').trim().toUpperCase() !== 'M') return false;
+      // ① 경기상대 일치 (fuzzy)
+      const rOpp = _oppNorm(r.opponent||'');
+      const hasOpp = _tgtOpp && rOpp && (rOpp===_tgtOpp || rOpp.includes(_tgtOpp) || _tgtOpp.includes(rOpp));
+      // ② MD 주기 레이블 포함 (MD-1 ~ MD-5)
+      const hasMD = /(MD-?[1-5])/i.test(r.periodization||r.cycle||'');
+      return hasOpp || hasMD;
+    });
+    // _mGPS에 포함된 날짜만 RPE 참조
+    const _validDates = new Set(_mGPS.map(r=>r.session_date));
     const _rpeMap = {};
-    (preRPE||[]).forEach(r=>{ _rpeMap[r.record_date+'|'+r.player_id]=r; });
+    (preRPE||[]).filter(r=>_validDates.has(r.record_date)).forEach(r=>{ _rpeMap[r.record_date+'|'+r.player_id]=r; });
 
     // 날짜별 그룹
     const _dg = {};
