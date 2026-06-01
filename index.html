@@ -776,6 +776,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         class="btn-exp" style="flex:1;border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📊 GPS 파일 업로드</button>
       <button id="uptab-match" onclick="setUploadTab('match')"
         class="btn-exp" style="flex:1">📈 mpm 파일 업로드</button>
+      <button id="uptab-colmap" onclick="setUploadTab('colmap')"
+        class="btn-exp" style="flex:1">🔧 컬럼 매핑 설정</button>
     </div>
 
     <!-- Tab 1: GPS 파일 업로드 (훈련 + 경기 통합) -->
@@ -792,14 +794,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         ondragleave="this.style.borderColor='var(--border2)'"
         ondrop="handleFileDrop(event)">
         <div style="font-size:32px;margin-bottom:8px">📂</div>
-        <div style="font-size:14px;font-weight:600;color:var(--text2)">GPS Excel 파일 클릭 또는 드래그</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls 지원 · 훈련(AM/PM) + 경기(Match) 모두 가능</div>
+        <div style="font-size:14px;font-weight:600;color:var(--text2)">GPS 파일 클릭 또는 드래그</div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls / .csv · 여러 파일 동시 선택 가능</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">파일명 규칙: YYYY-MM-DD-AM / PM / M_FT / M_1Q / M_2Q / M_Top</div>
       </div>
-      <input type="file" id="gps-file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFileSelect(event)">
+      <input type="file" id="gps-file-input" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleFileSelect(event)">
       <div id="upload-preview" style="display:none">
         <div style="font-size:13px;font-weight:600;color:var(--accent2);margin-bottom:10px" id="upload-preview-title"></div>
+        <div id="upload-mapping-status"></div>
+        <div id="upload-meta-form"></div>
         <div style="overflow-x:auto;margin-bottom:12px">
-          <table id="upload-preview-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:600px"></table>
+          <table id="upload-preview-table" style="width:100%;border-collapse:collapse;font-size:11px;min-width:500px"></table>
         </div>
         <div style="display:flex;gap:8px">
           <button onclick="saveGpsData()" class="btn-exp pri" style="flex:2;padding:11px" id="upload-save-btn">💾 Supabase에 저장</button>
@@ -815,6 +820,21 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <div id="match-history-section" style="margin-top:1.2rem">
         <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏟️ 업로드된 경기 기록</div>
         <div id="match-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
+      </div>
+
+      <!-- Raw 데이터 다운로드 -->
+      <div style="margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px">📥 Raw 데이터 다운로드</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+          <input type="date" id="raw-dl-from" style="padding:5px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px">
+          <span style="color:var(--text3);font-size:12px">~</span>
+          <input type="date" id="raw-dl-to" style="padding:5px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px">
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="downloadGpsRaw()" class="btn-exp" style="flex:1;padding:10px;font-size:12px">📊 GPS Raw 다운로드</button>
+          <button onclick="downloadMpmRaw()" class="btn-exp" style="flex:1;padding:10px;font-size:12px">📈 mpm Raw 다운로드</button>
+        </div>
+        <div id="raw-dl-msg" style="font-size:12px;margin-top:8px;min-height:16px;color:var(--text3)"></div>
       </div>
     </div>
 
@@ -883,6 +903,20 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <div id="minute-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
         </div>
       </div>
+    </div>
+
+    <!-- Tab 3: 컬럼 매핑 설정 -->
+    <div id="uv-colmap" style="display:none">
+      <div class="coaching-box" style="margin-bottom:1rem">
+        <p>GPS 파일의 컬럼명을 코치웹 항목에 연결하세요.<br>
+        <strong style="color:var(--accent2)">한 번 저장하면 다음 업로드부터 자동 적용</strong>됩니다. 비워두면 해당 항목은 미사용 처리됩니다.</p>
+      </div>
+      <div id="colmap-form-area"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button onclick="saveColMap()" class="btn-exp pri" style="flex:2;padding:10px">💾 저장</button>
+        <button onclick="resetColMap()" class="btn-exp" style="flex:1;padding:10px">초기화</button>
+      </div>
+      <div id="colmap-msg" style="font-size:12px;margin-top:8px;min-height:16px"></div>
     </div>
   </div>
 
@@ -11748,150 +11782,449 @@ async function loadPlayerDashboard(){
 
 
 // ── GPS 파일 업로드 ───────────────────────
+// ── GPS 컬럼 매핑 설정 ─────────────────────────────────────────────
+const GPS_INTERNAL_FIELDS = [
+  {key:'name',      label:'이름',                  unit:''},
+  {key:'duration',  label:'운동/출전시간',          unit:'분'},
+  {key:'td',        label:'총 이동거리',            unit:'m'},
+  {key:'tdPerMin',  label:'분당이동거리 (avg)',     unit:'m/min'},
+  {key:'hsrTotal',  label:'고강도+스프린트 합계',   unit:'m'},
+  {key:'runMed',    label:'중강도 러닝',            unit:'m'},
+  {key:'runHigh',   label:'고강도 러닝',            unit:'m'},
+  {key:'sprint',    label:'스프린트',               unit:'m'},
+  {key:'runHighN',  label:'고강도 러닝 횟수',       unit:'회'},
+  {key:'sprintN',   label:'스프린트 횟수',          unit:'회'},
+  {key:'accel',     label:'가속 횟수',              unit:'회'},
+  {key:'decel',     label:'감속 횟수',              unit:'회'},
+  {key:'maxSpeed',  label:'최고속도',               unit:'km/h'},
+  {key:'pload',     label:'운동량 (P.Load)',        unit:''},
+  {key:'rhie',      label:'RHIE',                  unit:'회'},
+  {key:'fmpRunMed', label:'FMP Running Medium',    unit:'sec'},
+  {key:'fmpRunHigh',label:'FMP Running High',      unit:'sec'},
+  {key:'fmpDynMed', label:'FMP Dynamic Medium',    unit:'sec'},
+  {key:'fmpDynHigh',label:'FMP Dynamic High',      unit:'sec'},
+];
+
+function _colMapKey(){ return 'gps_colmap_' + (currentClubId||'default'); }
+
+function getColMap(){
+  try{ return JSON.parse(localStorage.getItem(_colMapKey())||'{}'); }
+  catch(e){ return {}; }
+}
+
+function saveColMap(){
+  const map = {};
+  GPS_INTERNAL_FIELDS.forEach(f=>{
+    const el = document.getElementById('cm-input-'+f.key);
+    if(el && el.value.trim()) map[f.key] = el.value.trim();
+  });
+  localStorage.setItem(_colMapKey(), JSON.stringify(map));
+  const msg = document.getElementById('colmap-msg');
+  if(msg){ msg.style.color='#4ade80'; msg.textContent='✅ 저장 완료! 다음 GPS 업로드부터 자동 적용됩니다.'; setTimeout(()=>{msg.textContent='';},3000); }
+}
+
+function resetColMap(){
+  if(!confirm('매핑 설정을 초기화하시겠습니까?')) return;
+  localStorage.removeItem(_colMapKey());
+  renderColMapForm();
+  const msg = document.getElementById('colmap-msg');
+  if(msg){ msg.style.color='var(--text3)'; msg.textContent='초기화 완료'; setTimeout(()=>{msg.textContent='';},2000); }
+}
+
+// ── 선수 이름 별칭 ─────────────────────────────────────
+function _aliasKey(){ return 'gps_alias_' + (currentClubId||'default'); }
+function getAliasMap(){ try{ return JSON.parse(localStorage.getItem(_aliasKey())||'{}'); }catch(e){ return {}; } }
+function saveAlias(gpsName, profileName){
+  const map = getAliasMap();
+  map[gpsName.trim()] = profileName;
+  localStorage.setItem(_aliasKey(), JSON.stringify(map));
+}
+function deleteAlias(gpsName){
+  const map = getAliasMap();
+  delete map[gpsName];
+  localStorage.setItem(_aliasKey(), JSON.stringify(map));
+  renderColMapForm();
+}
+
+async function renderColMapForm(){
+  const saved = getColMap();
+  const aliases = getAliasMap();
+  const area = document.getElementById('colmap-form-area');
+  if(!area) return;
+
+  // 선수 목록 로드 (드롭다운용)
+  const {data:players} = await supa.from('player_profiles').select('id,name').eq('club_id', currentClubId);
+  const playerNames = (players||[]).map(p=>p.name).sort();
+
+  area.innerHTML = `
+    <!-- 컬럼 매핑 -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px">
+      ${GPS_INTERNAL_FIELDS.map(f=>`
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;display:flex;align-items:center;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:11px;font-weight:600;color:var(--text2)">${f.label}</div>
+            ${f.unit?`<div style="font-size:10px;color:var(--text3)">${f.unit}</div>`:''}
+          </div>
+          <input id="cm-input-${f.key}" type="text" value="${saved[f.key]||''}"
+            placeholder="파일 컬럼명"
+            style="width:130px;padding:4px 7px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px;flex-shrink:0">
+        </div>`).join('')}
+    </div>
+
+    <!-- 선수 이름 별칭 -->
+    <div style="border-top:1px solid var(--border);padding-top:14px">
+      <div style="font-weight:600;color:var(--text2);font-size:12px;margin-bottom:10px">👤 선수 이름 별칭
+        <span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">GPS 파일 이름 → 코치웹 등록 이름</span>
+      </div>
+
+      <!-- 저장된 별칭 목록 -->
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:12px">
+        ${Object.keys(aliases).length===0
+          ? `<div style="font-size:11px;color:var(--text3);padding:6px 0">등록된 별칭이 없습니다.</div>`
+          : Object.entries(aliases).map(([gps,profile])=>`
+            <div style="display:flex;align-items:center;gap:8px;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:6px 10px">
+              <span style="font-size:11px;color:var(--text2);flex:1">${gps}</span>
+              <span style="font-size:11px;color:var(--text3)">→</span>
+              <span style="font-size:11px;color:var(--accent2);flex:1">${profile}</span>
+              <button onclick="deleteAlias('${gps.replace(/'/g,"\\'")}');event.stopPropagation()"
+                style="padding:2px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:#f87171;font-size:10px;cursor:pointer">삭제</button>
+            </div>`).join('')}
+      </div>
+
+      <!-- 새 별칭 추가 -->
+      <div style="display:flex;align-items:center;gap:6px">
+        <input id="alias-gps-name" type="text" placeholder="GPS 파일 이름 (예: Berg Gutem)"
+          style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px">
+        <span style="color:var(--text3);font-size:12px">→</span>
+        <select id="alias-profile-name"
+          style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:11px">
+          <option value="">선수 선택</option>
+          ${playerNames.map(n=>`<option value="${n}">${n}</option>`).join('')}
+        </select>
+        <button onclick="addAlias()"
+          style="padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--accent2);font-size:11px;cursor:pointer;white-space:nowrap">+ 추가</button>
+      </div>
+    </div>`;
+}
+
+function addAlias(){
+  const gps = document.getElementById('alias-gps-name')?.value.trim();
+  const profile = document.getElementById('alias-profile-name')?.value;
+  if(!gps||!profile){ alert('GPS 이름과 선수를 모두 입력하세요.'); return; }
+  saveAlias(gps, profile);
+  renderColMapForm();
+  const msg = document.getElementById('colmap-msg');
+  if(msg){ msg.style.color='#4ade80'; msg.textContent=`✅ 별칭 추가: ${gps} → ${profile}`; setTimeout(()=>{msg.textContent='';},2000); }
+}
+
 function handleFileDrop(e){
   e.preventDefault();
   document.getElementById('upload-drop-zone').style.borderColor='var(--border2)';
-  const file = e.dataTransfer.files[0];
-  if(file) parseGpsFile(file);
+  if(e.dataTransfer.files.length) parseGpsFiles(e.dataTransfer.files);
 }
 
 function handleFileSelect(e){
-  const file = e.target.files[0];
-  if(file) parseGpsFile(file);
+  if(e.target.files.length) parseGpsFiles(e.target.files);
 }
 
-async function parseGpsFile(file){
-  const msg = document.getElementById('upload-msg');
-  const preview = document.getElementById('upload-preview');
-  document.getElementById('upload-preview-title').textContent = `파싱 중: ${file.name}`;
-  preview.style.display='block';
+// 파일명에서 날짜·세션구분·타입 자동 감지
+function parseFilename(filename){
+  const name = filename.replace(/\.[^.]+$/,'');
+  const dm = name.match(/(\d{4})-(\d{2})-(\d{2})/)||name.match(/(\d{4})(\d{2})(\d{2})/);
+  const date = dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : null;
+  let label='AM', isMatch=false, timeType=null;
+  const tm = name.match(/[-_]M[-_](FT|1Q|2Q|Top|TOP)/i);
+  if(tm){
+    isMatch=true; label='Match';
+    timeType=tm[1].toUpperCase();
+    if(timeType==='TOP') timeType='Top';
+  } else if(/[-_]PM/i.test(name)) label='PM';
+  else if(/[-_]AM/i.test(name)) label='AM';
+  return {date, label, isMatch, timeType};
+}
 
-  // SheetJS로 파일 파싱
-  const reader = new FileReader();
-  reader.onload = async(e)=>{
-    try{
-      const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
-      const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
+// 단일 파일 파싱 → 데이터 배열 반환
+async function parseSingleGpsFile(file, playerMap, cm, aliases={}){
+  return new Promise((resolve, reject)=>{
+    const {date, label, isMatch, timeType} = parseFilename(file.name);
+    if(!date){ reject(new Error(`${file.name}: 파일명에 날짜(YYYY-MM-DD)가 없습니다.`)); return; }
 
-      // 헤더 행 찾기 (날짜, 이름 컬럼이 있는 행)
-      let headerRow = -1;
-      for(let i=0;i<raw.length;i++){
-        const row = raw[i];
-        if(row && row.some(c=>c==='이름'||c==='날짜')) { headerRow=i; break; }
-      }
-      if(headerRow<0){ msg.textContent='헤더를 찾을 수 없습니다. 파일 형식을 확인하세요.'; msg.style.color='var(--red)'; return; }
+    const reader = new FileReader();
+    reader.onload = async(e)=>{
+      try{
+        const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+        const wb = XLSX.read(e.target.result, {type:'array', cellDates:true});
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:null});
 
-      const headers = raw[headerRow];
-      const dataRows = raw.slice(headerRow+1).filter(r=>r&&r.some(c=>c!=null));
-
-      // 컬럼 인덱스 매핑
-      const ci = (name) => headers.findIndex(h=>h===name);
-      const colMap = {
-        date: ci('날짜'), label: ci('세션구분'), name: ci('이름'), type: ci('타입'),
-        form: ci('운동형태'), duration: ci('운동 or 출전시간'),
-        td: ci('총 이동거리 (m)'), tdPerMin: ci('분당이동거리 (avg)'),
-        hsrTotal: ci('고강도 +스프린트 거리 (m)'), runMed: ci('중강도 러닝 (m)'),
-        runHigh: ci('고강도 러닝 (m)'), sprint: ci('스프린트 (m)'),
-        runHighN: ci('고강도 러닝 횟수 (n)'), sprintN: ci('스프린트 횟수 (n)'),
-        accel: ci('가속 횟수 (n)'), decel: ci('감속 횟수 (n)'),
-        maxSpeed: ci('최고속도 (km/h)'), pload: ci('운동량'), rhie: ci('RHIE 횟수 (n)'),
-        fmpRunMed: ci('FMP Running Medium (sec)'), fmpRunHigh: ci('FMP Running High (sec)'),
-        fmpDynMed: ci('FMP Dynamic Medium (sec)'), fmpDynHigh: ci('FMP Dynamic High (sec)'),
-        rpe: ci('RPE'),
-        hr140: ci('>140 이상'), hr120: ci('140>120 사이'), hr100: ci('120>100 사이'),
-        hr80: ci('100>80 사이'), hr60: ci('80>60 사이'), hr40: ci('60>40 사이'), hr20: ci('40>20 사이'),
-        topic: ci('훈련 주제'), opponent: ci('경기상대'), robin: ci('로빈'), cycle: ci('주기'),
-        period: ci('주기화'), score: ci('스코어'), result: ci('결과'), ha: ci('H/A'), weight: ci('체중'),
-      };
-
-      // 선수 이름 → ID 매핑
-      const {data:players} = await supa.from('player_profiles').select('id,name').eq('club_id', currentClubId);
-      const playerMap = {};
-      (players||[]).forEach(p=>{ playerMap[p.name]=p.id; });
-
-      // 데이터 파싱
-      _gpsParseData = [];
-      const unknown = new Set();
-
-      dataRows.forEach(row=>{
-        const name = row[colMap.name];
-        if(!name) return;
-        const pid = playerMap[name];
-        if(!pid){ unknown.add(name); return; }
-
-        const getVal = (key) => { const v=row[colMap[key]]; return v!=null&&v!==''?v:null; };
-        const dateVal = getVal('date');
-        let dateStr = '';
-        if(dateVal instanceof Date){
-          // 한국 시간대 고려 (UTC+9 보정)
-          const d = new Date(dateVal.getTime() + 9*60*60*1000);
-          dateStr = d.toISOString().split('T')[0];
+        let headerRow=-1, maxCells=0;
+        for(let i=0;i<Math.min(raw.length,10);i++){
+          const row=raw[i]; if(!row) continue;
+          const cnt=row.filter(c=>c!=null&&String(c).trim()!=='').length;
+          if(cnt>maxCells){maxCells=cnt;headerRow=i;}
         }
-        else if(typeof dateVal==='string') dateStr = dateVal.split(' ')[0];
-        else if(typeof dateVal==='number'){
-          // Excel 시리얼 날짜 → 로컬 날짜
-          const d = new Date(Math.round((dateVal-25569)*86400*1000));
-          const local = new Date(d.getTime() + 9*60*60*1000);
-          dateStr = local.toISOString().split('T')[0];
-        }
-        if(!dateStr) return;
+        if(headerRow<0){ reject(new Error(`${file.name}: 헤더를 찾을 수 없습니다.`)); return; }
 
-        const sessionLabel = getVal('label') ? getVal('label').trim() : 'AM';
-        const isMatch = sessionLabel === 'Match';
-        const typeVal = getVal('type') ? String(getVal('type')).trim().toUpperCase() : null;
+        const headers=raw[headerRow].map(h=>h!=null?String(h).trim():'');
+        const dataRows=raw.slice(headerRow+1).filter(r=>r&&r.some(c=>c!=null));
+        const norm=s=>s.toLowerCase().replace(/\s+/g,' ').trim();
+        const ci=col=>{ if(!col) return -1; const n=norm(col); return headers.findIndex(h=>norm(h)===n); };
 
-        _gpsParseData.push({
-          _isMatch: isMatch,  // 내부 라우팅 플래그 (저장 시 제거)
-          player_id: pid, player_name: name,
-          session_date: dateStr,
-          session_label: sessionLabel,
-          // 훈련: 타입=M/S/SS/X → session_type2 / 경기: 타입=1Q/2Q/FT/Top → time_type
-          session_type2: isMatch ? null : typeVal,
-          time_type: isMatch ? typeVal : null,
-          training_form: isMatch ? null : getVal('form'),
-          duration: getVal('duration'),
-          td: getVal('td'), td_per_min: getVal('tdPerMin'),
-          hsr_total: getVal('hsrTotal'), running_medium: getVal('runMed'),
-          running_high: getVal('runHigh'), sprint: getVal('sprint'),
-          running_high_n: getVal('runHighN'), sprint_n: getVal('sprintN'),
-          accel: getVal('accel'), decel: getVal('decel'),
-          max_speed: getVal('maxSpeed'), player_load: getVal('pload'), rhie: getVal('rhie'),
-          fmp_run_medium: getVal('fmpRunMed'), fmp_run_high: getVal('fmpRunHigh'),
-          fmp_dyn_medium: getVal('fmpDynMed'), fmp_dyn_high: getVal('fmpDynHigh'),
-          // 코치 RPE 모드에서만 Excel의 RPE·체중 파싱 (선수앱 모드에서는 앱이 수집)
-          _rpe:    (!currentUsePlayerApp && currentUseRpe) ? (parseFloat(getVal('rpe'))||null)    : null,
-          _weight: (!currentUsePlayerApp && currentUseRpe) ? (parseFloat(getVal('weight'))||null) : null,
-          hr_140_plus: getVal('hr140'), hr_120_140: getVal('hr120'), hr_100_120: getVal('hr100'),
-          hr_80_100: getVal('hr80'), hr_60_80: getVal('hr60'), hr_40_60: getVal('hr40'), hr_20_40: getVal('hr20'),
-          session_topic: getVal('topic'),
-          cycle: getVal('cycle'), periodization: getVal('period'),
-          opponent: getVal('opponent'), robin: getVal('robin'),
-          score: getVal('score'), result: getVal('result'), home_away: getVal('ha'),
+        // GPS 필드 매핑
+        const fIdx={};
+        GPS_INTERNAL_FIELDS.forEach(f=>{ fIdx[f.key]=ci(cm[f.key]||''); });
+
+        const rows=[];
+        const unknown=new Set();
+        dataRows.forEach(row=>{
+          const nameVal=fIdx.name>=0?row[fIdx.name]:null;
+          if(!nameVal||!String(nameVal).trim()) return;
+          const nameStr=String(nameVal).trim();
+          // 1. 직접 매칭 → 2. 별칭 테이블 조회
+          const resolvedName = playerMap[nameStr] ? nameStr : (aliases[nameStr] || null);
+          const pid = resolvedName ? playerMap[resolvedName] : null;
+          if(!pid){unknown.add(nameStr);return;}
+          const gv=k=>{ const idx=fIdx[k]; if(idx<0) return null; const v=row[idx]; return v!=null&&v!==''?v:null; };
+          rows.push({
+            _isMatch:isMatch, _srcFile:file.name,
+            player_id:pid, player_name:resolvedName,
+            session_date:date, session_label:label,
+            session_type2:isMatch?null:null,
+            time_type:isMatch?timeType:null,
+            training_form:null, duration:gv('duration'),
+            td:gv('td'), td_per_min:gv('tdPerMin'),
+            hsr_total:gv('hsrTotal'), running_medium:gv('runMed'),
+            running_high:gv('runHigh'), sprint:gv('sprint'),
+            running_high_n:gv('runHighN'), sprint_n:gv('sprintN'),
+            accel:gv('accel'), decel:gv('decel'),
+            max_speed:gv('maxSpeed'), player_load:gv('pload'), rhie:gv('rhie'),
+            fmp_run_medium:gv('fmpRunMed'), fmp_run_high:gv('fmpRunHigh'),
+            fmp_dyn_medium:gv('fmpDynMed'), fmp_dyn_high:gv('fmpDynHigh'),
+            _rpe:null, _weight:null,
+            hr_140_plus:null, hr_120_140:null, hr_100_120:null,
+            hr_80_100:null, hr_60_80:null, hr_40_60:null, hr_20_40:null,
+            session_topic:null, cycle:null, periodization:null,
+            opponent:null, robin:null, score:null, result:null, home_away:null,
+          });
         });
-      });
+        resolve({rows, unknown, label, isMatch, timeType, date, fileName:file.name});
+      }catch(err){ reject(err); }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
 
-      // 미리보기 테이블
-      const table = document.getElementById('upload-preview-table');
-      const trainCount = _gpsParseData.filter(r=>!r._isMatch).length;
-      const matchCount = _gpsParseData.filter(r=>r._isMatch).length;
-      const _isV1up = currentGpsPlan === 'V1';
-      const _isCoachRpe = !currentUsePlayerApp && currentUseRpe;
-      const cols = ['player_name','session_date','session_label','session_type2','time_type','td','running_high','sprint','max_speed',...(_isV1up?[]:['player_load','rhie']),'accel','duration',...(_isCoachRpe?['_rpe','_weight']:[])];
-      const colLabels = ['선수','날짜','세션','타입(훈련)','구간(경기)','TD(m)','HSR(m)','Sprint(m)','최고속도',...(_isV1up?[]:['P.Load','RHIE']),'가속','시간',...(_isCoachRpe?['RPE','체중(kg)']:[])];
-      table.innerHTML = `
-        <tr style="background:var(--surface2)">${colLabels.map((l,i)=>`<th style="padding:6px 8px;font-size:11px;color:${i>=colLabels.length-(_isCoachRpe?2:0)?'#a78bfa':'var(--text3)'};white-space:nowrap">${l}</th>`).join('')}</tr>
-        ${_gpsParseData.map(r=>`<tr style="border-bottom:1px solid var(--border);background:${r._isMatch?'rgba(251,191,36,0.06)':'inherit'}">${cols.map(c=>`<td style="padding:6px 8px;font-size:11px;color:var(--text2);white-space:nowrap">${r[c]??'-'}</td>`).join('')}</tr>`).join('')}`;
+async function parseGpsFiles(files){
+  const msg=document.getElementById('upload-msg');
+  const preview=document.getElementById('upload-preview');
+  document.getElementById('upload-preview-title').textContent=`파싱 중... (${files.length}개 파일)`;
+  document.getElementById('upload-mapping-status').innerHTML='';
+  document.getElementById('upload-meta-form').innerHTML='';
+  preview.style.display='block';
+  if(msg) msg.textContent='';
 
-      document.getElementById('upload-preview-title').textContent =
-        `✅ ${_gpsParseData.length}개 파싱 완료 (훈련 ${trainCount}개 / 경기 ${matchCount}개)${unknown.size?` · ⚠️ 미등록 선수: ${[...unknown].join(', ')}`:''}`;
-      if(msg) msg.textContent='';
-    }catch(err){
-      if(msg){ msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)'; }
-    }
-  };
-  reader.readAsArrayBuffer(file);
+  try{
+    // 선수 목록 + 컬럼 매핑 + 별칭 로드
+    const {data:players}=await supa.from('player_profiles').select('id,name').eq('club_id',currentClubId);
+    const playerMap={};
+    (players||[]).forEach(p=>{playerMap[p.name]=p.id;});
+    const aliases=getAliasMap(); // GPS이름 → 프로필이름
+    const cm=getColMap();
+
+    // 모든 파일 병렬 파싱
+    const results=await Promise.all(Array.from(files).map(f=>parseSingleGpsFile(f,playerMap,cm,aliases)));
+
+    // 결과 합치기
+    _gpsParseData=results.flatMap(r=>r.rows);
+    const allUnknown=new Set(results.flatMap(r=>[...r.unknown]));
+
+    const trainCount=_gpsParseData.filter(r=>!r._isMatch).length;
+    const matchCount=_gpsParseData.filter(r=>r._isMatch).length;
+
+    // 파일별 요약 + 매핑 상태
+    const savedCm=getColMap();
+    const mappedFields=GPS_INTERNAL_FIELDS.filter(f=>savedCm[f.key]);
+    const unmappedFields=GPS_INTERNAL_FIELDS.filter(f=>!savedCm[f.key]);
+    document.getElementById('upload-mapping-status').innerHTML=`
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:11px">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:8px">📂 파일 인식 결과</div>
+        <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+          ${results.map(r=>`
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#4ade80;font-size:12px">✓</span>
+              <span style="color:var(--text2);font-size:11px">${r.fileName}</span>
+              <span style="background:${r.isMatch?'rgba(251,191,36,0.15)':'rgba(96,165,250,0.15)'};color:${r.isMatch?'#fbbf24':'#60a5fa'};padding:1px 7px;border-radius:4px;font-size:10px">
+                ${r.isMatch?`경기 · ${r.timeType}`:`훈련 · ${r.label}`}
+              </span>
+              <span style="color:var(--text3);font-size:10px">${r.rows.length}명</span>
+            </div>`).join('')}
+        </div>
+        <div style="font-weight:600;color:var(--text3);margin-bottom:5px;font-size:10px">📡 컬럼 매핑 — ${mappedFields.length}개 / ${GPS_INTERNAL_FIELDS.length}개</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px">
+          ${GPS_INTERNAL_FIELDS.map(f=>`
+            <span style="padding:2px 6px;border-radius:4px;font-size:10px;
+              background:${savedCm[f.key]?'rgba(34,197,94,0.12)':'rgba(100,100,100,0.1)'};
+              color:${savedCm[f.key]?'#4ade80':'var(--text3)'};
+              border:1px solid ${savedCm[f.key]?'#166534':'var(--border)'}">
+              ${savedCm[f.key]?'✓':'—'} ${f.label}
+            </span>`).join('')}
+        </div>
+        ${unmappedFields.length>0?`<div style="color:#f59e0b;margin-top:6px;font-size:10px">⚠️ 미매핑 항목은 🔧 컬럼 매핑 설정 탭에서 연결하세요.</div>`:''}
+      </div>`;
+
+    document.getElementById('upload-preview-title').textContent=
+      `✅ ${files.length}개 파일 · 총 ${_gpsParseData.length}건 파싱 완료 (훈련 ${trainCount} / 경기 ${matchCount})${allUnknown.size?` · ⚠️ 미등록: ${[...allUnknown].join(', ')}`:''}`;
+
+    // 공통 메타 폼 (경기가 있으면 경기 필드 강조)
+    const hasMatch=matchCount>0;
+    const firstRow=_gpsParseData[0]||{};
+    document.getElementById('upload-meta-form').innerHTML=`
+      <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-weight:600;color:var(--text2);margin-bottom:10px;font-size:12px">✏️ 공통 정보 입력 후 <strong style="color:var(--accent2)">전체 적용</strong> 클릭</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px">
+          ${!hasMatch?`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">타입 기본값</div>
+            <select id="meta-type" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="">—</option>
+              <option value="M">M (주전)</option><option value="S">S (서브)</option>
+              <option value="SS">SS</option><option value="X">X</option>
+            </select></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">훈련 주제</div>
+            <input id="meta-topic" type="text" value="" placeholder="예: 전술훈련" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>`:''}
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기 <span style="font-size:9px">(경기기준일)</span></div>
+            <input id="meta-cycle" type="text" value="" placeholder="MD-1, MD-2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기화 <span style="font-size:9px">(구조)</span></div>
+            <input id="meta-period" type="text" value="" placeholder="1R-4DAY..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">준비대상</div>
+            <input id="meta-opponent" type="text" value="" placeholder="전북현대 / Rest Week..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">로빈</div>
+            <input id="meta-robin" type="text" value="" placeholder="R1, R2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+          ${hasMatch?`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스코어</div>
+            <input id="meta-score" type="text" value="" placeholder="2-1" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">결과</div>
+            <select id="meta-result" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="">—</option><option value="W">W (승)</option><option value="D">D (무)</option><option value="L">L (패)</option>
+            </select></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">H/A</div>
+            <select id="meta-ha" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="">—</option><option value="H">H (홈)</option><option value="A">A (어웨이)</option>
+            </select></div>`:''}
+        </div>
+        <button onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
+      </div>`;
+
+    renderGpsPreviewTable();
+  }catch(err){
+    if(msg){msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)';}
+  }
+}
+
+function renderGpsPreviewTable(){
+  const _isCoachRpe = !currentUsePlayerApp && currentUseRpe;
+  const table = document.getElementById('upload-preview-table');
+  if(!table) return;
+  table.innerHTML = `
+    <tr style="background:var(--surface2)">
+      <th style="padding:6px 8px;color:var(--text3);text-align:left;white-space:nowrap">선수</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">날짜</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">세션</th>
+      <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">타입</th>
+      <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">훈련주제</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">준비대상</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">로빈</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">주기</th>
+      ${_isCoachRpe?'<th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">RPE</th><th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">체중(kg)</th>':''}
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">TD(m)</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">HSR(m)</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">Sprint(m)</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">최고속도</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">가속</th>
+      <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">시간</th>
+    </tr>
+    ${_gpsParseData.map((r,i)=>`
+      <tr style="border-bottom:1px solid var(--border);background:${r._isMatch?'rgba(251,191,36,0.06)':'inherit'}">
+        <td style="padding:5px 8px;color:var(--text)">${r.player_name}</td>
+        <td style="padding:5px 8px;color:var(--text2);white-space:nowrap">${r.session_date}</td>
+        <td style="padding:5px 8px;color:var(--text3);white-space:nowrap">${r.session_label}</td>
+        <td style="padding:4px 6px">
+          <select onchange="updateGpsRow(${i},'${r._isMatch?'time_type':'session_type2'}',this.value||null)"
+            style="padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px;width:58px">
+            <option value="">—</option>
+            ${r._isMatch
+              ? ['FT','1Q','2Q','Top'].map(v=>`<option value="${v}" ${(r.time_type||'')==v?'selected':''}>${v}</option>`).join('')
+              : ['M','S','SS','X'].map(v=>`<option value="${v}" ${(r.session_type2||'')==v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${r.session_topic||''}"
+            onchange="updateGpsRow(${i},'session_topic',this.value||null)"
+            placeholder="주제"
+            style="width:72px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px">
+        </td>
+        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.opponent||'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.robin||'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.cycle||'<span style="color:var(--text3)">—</span>'}</td>
+        ${_isCoachRpe?`
+          <td style="padding:4px 6px"><input type="number" min="1" max="10" step="0.5" value="${r._rpe??''}"
+            onchange="updateGpsRow(${i},'_rpe',this.value?parseFloat(this.value):null)"
+            style="width:46px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px"></td>
+          <td style="padding:4px 6px"><input type="number" min="40" max="120" step="0.1" value="${r._weight??''}"
+            onchange="updateGpsRow(${i},'_weight',this.value?parseFloat(this.value):null)"
+            style="width:54px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px"></td>
+        `:''}
+        <td style="padding:5px 8px;text-align:right;color:var(--accent2)">${r.td?Math.round(r.td).toLocaleString():'-'}</td>
+        <td style="padding:5px 8px;text-align:right;color:var(--text2)">${r.running_high!=null?Math.round(r.running_high):'-'}</td>
+        <td style="padding:5px 8px;text-align:right;color:var(--text2)">${r.sprint!=null?Math.round(r.sprint):'-'}</td>
+        <td style="padding:5px 8px;text-align:right;color:var(--text2)">${r.max_speed??'-'}</td>
+        <td style="padding:5px 8px;text-align:right;color:var(--text2)">${r.accel??'-'}</td>
+        <td style="padding:5px 8px;text-align:right;color:var(--text2)">${r.duration??'-'}</td>
+      </tr>`).join('')}`;
+}
+
+function updateGpsRow(idx, field, val){
+  if(_gpsParseData[idx]) _gpsParseData[idx][field] = val;
+}
+
+function applyGpsBatchMeta(){
+  const label    = document.getElementById('meta-label')?.value||null;
+  const type     = document.getElementById('meta-type')?.value||null;
+  const topic    = document.getElementById('meta-topic')?.value?.trim()||null;
+  const cycle    = document.getElementById('meta-cycle')?.value?.trim()||null;
+  const period   = document.getElementById('meta-period')?.value?.trim()||null;
+  const opponent = document.getElementById('meta-opponent')?.value?.trim()||null;
+  const robin    = document.getElementById('meta-robin')?.value?.trim()||null;
+  const score    = document.getElementById('meta-score')?.value?.trim()||null;
+  const result   = document.getElementById('meta-result')?.value||null;
+  const ha       = document.getElementById('meta-ha')?.value||null;
+
+  _gpsParseData.forEach(r=>{
+    if(label){ r.session_label=label; r._isMatch=(label==='Match'); }
+    if(type){ r._isMatch?(r.time_type=type||null):(r.session_type2=type||null); }
+    if(topic!==null)    r.session_topic=topic;
+    if(cycle!==null)    r.cycle=cycle;
+    if(period!==null)   r.periodization=period;
+    if(opponent!==null) r.opponent=opponent;
+    if(robin!==null)    r.robin=robin;
+    if(score!==null)    r.score=score;
+    if(result!==null)   r.result=result;
+    if(ha!==null)       r.home_away=ha;
+  });
+
+  renderGpsPreviewTable();
+  const msg=document.getElementById('upload-msg');
+  if(msg){
+    const parts=[];
+    if(cycle) parts.push(`주기: ${cycle}`);
+    if(period) parts.push(`주기화: ${period}`);
+    if(opponent) parts.push(`준비대상: ${opponent}`);
+    if(robin) parts.push(`로빈: ${robin}`);
+    if(score) parts.push(`스코어: ${score}`);
+    if(result) parts.push(`결과: ${result}`);
+    if(ha) parts.push(`H/A: ${ha}`);
+    if(type) parts.push(`타입: ${type}`);
+    if(topic) parts.push(`훈련주제: ${topic}`);
+    msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80';
+    msg.textContent=`✅ 전체 적용 완료 (${_gpsParseData.length}명) — ${parts.join(' · ')||'변경 없음'}`;
+  }
 }
 
 async function saveGpsData(){
@@ -11901,8 +12234,8 @@ async function saveGpsData(){
 
   btn.textContent='저장 중...'; btn.disabled=true;
 
-  // _isMatch 플래그로 훈련/경기 분리
-  const allRecords = _gpsParseData.map(({player_name, _isMatch, time_type, ...rest})=>({...rest, _isMatch, time_type}));
+  // _isMatch 플래그로 훈련/경기 분리 (_srcFile 등 내부 필드 제거)
+  const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
   const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>r);
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, time_type, session_label, session_type2, training_form,
@@ -12043,6 +12376,125 @@ function cancelUpload(){
   document.getElementById('gps-file-input').value='';
 }
 
+// ── Raw 데이터 다운로드 ───────────────────────────────────────────
+function _getRawDlRange(){
+  const from = document.getElementById('raw-dl-from')?.value;
+  const to   = document.getElementById('raw-dl-to')?.value;
+  const msg  = document.getElementById('raw-dl-msg');
+  if(!from||!to){ if(msg){ msg.style.color='#f87171'; msg.textContent='기간을 선택해 주세요.'; } return null; }
+  if(from>to){    if(msg){ msg.style.color='#f87171'; msg.textContent='시작일이 종료일보다 늦습니다.'; } return null; }
+  return {from, to, msg};
+}
+
+async function downloadGpsRaw(){
+  const range = _getRawDlRange(); if(!range) return;
+  const {from, to, msg} = range;
+  msg.style.color='var(--text3)'; msg.textContent='조회 중...';
+
+  const {data:players} = await supa.from('player_profiles').select('id').eq('club_id', currentClubId);
+  const pids = (players||[]).map(p=>p.id);
+  if(!pids.length){ msg.style.color='#f59e0b'; msg.textContent='선수 데이터가 없습니다.'; return; }
+
+  const {data:recs, error} = await supa.from('gps_records')
+    .select('*, player_profiles(name)')
+    .in('player_id', pids)
+    .gte('session_date', from).lte('session_date', to)
+    .order('session_date').order('session_label');
+  if(error){ msg.style.color='#f87171'; msg.textContent='조회 실패: '+error.message; return; }
+  if(!recs||!recs.length){ msg.style.color='#f59e0b'; msg.textContent='해당 기간에 데이터가 없습니다.'; return; }
+
+  // RPE, 체중 조회
+  const {data:rpeRecs}  = await supa.from('session_records').select('record_date,player_id,rpe').in('player_id',pids).gte('record_date',from).lte('record_date',to);
+  const {data:wellRecs} = await supa.from('wellness_records').select('record_date,player_id,morning_weight').in('player_id',pids).gte('record_date',from).lte('record_date',to);
+  const rpeMap  = {}; (rpeRecs||[]).forEach(r=>{ rpeMap[r.record_date+'|'+r.player_id]=r.rpe; });
+  const wellMap = {}; (wellRecs||[]).forEach(r=>{ wellMap[r.record_date+'|'+r.player_id]=r.morning_weight; });
+
+  const rows = recs.map(r=>{
+    const k = r.session_date+'|'+r.player_id;
+    return {
+      '날짜':                        r.session_date,
+      '세션구분':                    r.session_label,
+      '이름':                        r.player_profiles?.name||'',
+      '타입':                        r.session_type2||'',
+      '운동형태':                    r.training_form||'',
+      '운동 or 출전시간':            r.duration??'',
+      '총 이동거리 (m)':             r.td??'',
+      '분당이동거리 (avg)':          r.td_per_min??'',
+      '고강도 +스프린트 거리 (m)':   r.hsr_total??'',
+      '중강도 러닝 (m)':             r.running_medium??'',
+      '고강도 러닝 (m)':             r.running_high??'',
+      '스프린트 (m)':                r.sprint??'',
+      '고강도 러닝 횟수 (n)':        r.running_high_n??'',
+      '스프린트 횟수 (n)':           r.sprint_n??'',
+      '가속 횟수 (n)':               r.accel??'',
+      '감속 횟수 (n)':               r.decel??'',
+      '최고속도 (km/h)':             r.max_speed??'',
+      '운동량':                      r.player_load??'',
+      'RHIE 횟수 (n)':               r.rhie??'',
+      'FMP Running Medium (sec)':    r.fmp_run_medium??'',
+      'FMP Running High (sec)':      r.fmp_run_high??'',
+      'FMP Dynamic Medium (sec)':    r.fmp_dyn_medium??'',
+      'FMP Dynamic High (sec)':      r.fmp_dyn_high??'',
+      '훈련 주제':                   r.session_topic||'',
+      '경기상대':                    r.opponent||'',
+      '로빈':                        r.robin||'',
+      '주기':                        r.cycle||'',
+      '주기화':                      r.periodization||'',
+      '스코어':                      r.score||'',
+      '결과':                        r.result||'',
+      'H/A':                         r.home_away||'',
+      'RPE':                         rpeMap[k]??'',
+      '체중':                        wellMap[k]??'',
+    };
+  });
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet');
+  XLSX.writeFile(wb, `GPS_Raw_${from}_${to}.xlsx`);
+  msg.style.color='#4ade80'; msg.textContent=`✅ ${recs.length}건 다운로드 완료`;
+}
+
+async function downloadMpmRaw(){
+  const range = _getRawDlRange(); if(!range) return;
+  const {from, to, msg} = range;
+  msg.style.color='var(--text3)'; msg.textContent='조회 중...';
+
+  const {data:players2} = await supa.from('player_profiles').select('id').eq('club_id', currentClubId);
+  const pids2 = (players2||[]).map(p=>p.id);
+  if(!pids2.length){ msg.style.color='#f59e0b'; msg.textContent='선수 데이터가 없습니다.'; return; }
+
+  const {data:recs, error} = await supa.from('session_minute_records')
+    .select('*, player_profiles(name)')
+    .in('player_id', pids2)
+    .gte('session_date', from).lte('session_date', to)
+    .order('session_date').order('session_label').order('player_id').order('minute');
+  if(error){ msg.style.color='#f87171'; msg.textContent='조회 실패: '+error.message; return; }
+  if(!recs||!recs.length){ msg.style.color='#f59e0b'; msg.textContent='해당 기간에 mpm 데이터가 없습니다.'; return; }
+
+  const minToHms = m => {
+    const h = String(Math.floor(m/60)).padStart(2,'0');
+    const mn = String(m%60).padStart(2,'0');
+    return `${h}:${mn}:00`;
+  };
+
+  const rows = recs.map(r=>({
+    '날짜':       r.session_date,
+    '세션':       r.session_label||'',
+    '이름':       r.player_profiles?.name||'',
+    '시간':       minToHms(r.minute||0),
+    '분당이동거리': r.mpm??'',
+  }));
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet');
+  XLSX.writeFile(wb, `MPM_Raw_${from}_${to}.xlsx`);
+  msg.style.color='#4ade80'; msg.textContent=`✅ ${recs.length}건 다운로드 완료`;
+}
+
 // ── GPS 업로드 기록 목록 조회 ─────────────────────────────────────
 async function loadGpsHistory(){
   const listEl = document.getElementById('gps-history-list');
@@ -12107,7 +12559,7 @@ async function deleteGpsDate(date){
 }
 
 function setUploadTab(tab){
-  ['gps','match'].forEach(t=>{
+  ['gps','match','colmap'].forEach(t=>{
     const el=document.getElementById('uv-'+t);
     if(el) el.style.display=t===tab?'block':'none';
     const btn=document.getElementById('uptab-'+t);
@@ -12119,6 +12571,7 @@ function setUploadTab(tab){
   });
   if(tab==='match'){ loadMinuteHistory(); loadTrainMinuteHistory(); }
   if(tab==='gps'){ loadGpsHistory(); loadMatchHistory(); }
+  if(tab==='colmap'){ renderColMapForm(); }
 }
 
 
@@ -18546,6 +18999,13 @@ async function parseTrainMinuteFile(file){
   }
   const nameMap = {};
   _players.forEach(p => { nameMap[p.name] = p.id; });
+  const mpmAliases = getAliasMap();
+  const resolvePid = name => {
+    if(nameMap[name]) return {pid: nameMap[name], resolved: name};
+    const a = mpmAliases[name];
+    if(a && nameMap[a]) return {pid: nameMap[a], resolved: a};
+    return {pid: null, resolved: name};
+  };
 
   const rows = [];
   const unknownPlayers = new Set();
@@ -18579,12 +19039,12 @@ async function parseTrainMinuteFile(file){
       }
       const mpm = parseFloat(row[colMpm]);
       if(isNaN(minute) || isNaN(mpm)) continue;
-      const pid = nameMap[name] || null;
+      const {pid, resolved} = resolvePid(name);
       if(!pid) unknownPlayers.add(name);
-      else playersFound.add(name);
+      else playersFound.add(resolved);
       rows.push({
         session_date: meta.date, session_label: meta.label,
-        player_id: pid, player_name: name,
+        player_id: pid, player_name: resolved,
         minute, mpm: Math.round(mpm*100)/100, raw_time: String(minute),
       });
     }
@@ -18613,12 +19073,12 @@ async function parseTrainMinuteFile(file){
         minute = hmsToMin(timeStr);
       }
       if(minute==null){ invalidTime++; continue; }
-      const pid = nameMap[jersey] || null;
+      const {pid, resolved} = resolvePid(jersey);
       if(!pid) unknownPlayers.add(jersey);
-      else playersFound.add(jersey);
+      else playersFound.add(resolved);
       rows.push({
         session_date: meta.date, session_label: meta.label,
-        player_id: pid, player_name: jersey,
+        player_id: pid, player_name: resolved,
         minute, mpm: Math.round(mpm*100)/100, raw_time: timeStr,
       });
     }
