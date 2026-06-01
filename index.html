@@ -12094,14 +12094,14 @@ function updateGpsRow(idx, field, val){
 }
 
 function applyGpsBatchMeta(){
-  const label    = document.getElementById('meta-label')?.value;
-  const type     = document.getElementById('meta-type')?.value;
-  const topic    = document.getElementById('meta-topic')?.value.trim()||null;
-  const cycle    = document.getElementById('meta-cycle')?.value.trim()||null;
-  const period   = document.getElementById('meta-period')?.value.trim()||null;
-  const opponent = document.getElementById('meta-opponent')?.value.trim()||null;
-  const robin    = document.getElementById('meta-robin')?.value.trim()||null;
-  const score    = document.getElementById('meta-score')?.value.trim()||null;
+  const label    = document.getElementById('meta-label')?.value||null;
+  const type     = document.getElementById('meta-type')?.value||null;
+  const topic    = document.getElementById('meta-topic')?.value?.trim()||null;
+  const cycle    = document.getElementById('meta-cycle')?.value?.trim()||null;
+  const period   = document.getElementById('meta-period')?.value?.trim()||null;
+  const opponent = document.getElementById('meta-opponent')?.value?.trim()||null;
+  const robin    = document.getElementById('meta-robin')?.value?.trim()||null;
+  const score    = document.getElementById('meta-score')?.value?.trim()||null;
   const result   = document.getElementById('meta-result')?.value||null;
   const ha       = document.getElementById('meta-ha')?.value||null;
 
