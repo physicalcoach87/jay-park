@@ -22498,7 +22498,7 @@ function renderPeriodCalendar() {
     for(let dow=0;dow<7;dow++){
       const d2=day+dow;
       if(d2<1||d2>daysInMonth){
-        html+=`<td style="border:1px solid var(--border);background:var(--bg);height:110px;vertical-align:top"></td>`;
+        html+=`<td style="border:1px solid var(--border);background:var(--bg);height:160px;vertical-align:top"></td>`;
       } else {
         const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(d2).padStart(2,'0')}`;
         const block=getBlockForDate(ds);
@@ -22544,7 +22544,7 @@ function renderPeriodCalendar() {
         const bg=block?block.color+'15':(isToday?'rgba(99,102,241,0.07)':'var(--surface)');
         const hover=block?block.color+'28':'var(--surface2)';
         html+=`<td onclick="openDayModal('${ds}')"
-          style="padding:6px;border:1px solid var(--border);vertical-align:top;cursor:pointer;background:${bg};transition:background .15s"
+          style="padding:6px;border:1px solid var(--border);vertical-align:top;cursor:pointer;background:${bg};transition:background .15s;height:160px"
           onmouseover="this.style.background='${hover}'"
           onmouseout="this.style.background='${bg}'">
           <div style="text-align:center">
