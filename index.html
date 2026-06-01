@@ -9646,31 +9646,59 @@ async function downloadDashboardExcel(){
     ];
   });
 
-  // 경기 rows
-  const matchRows=(matchData||[]).map(r=>{
-    const well = wellMap[r.match_date];
-    const ha = (r.home_away||'').toUpperCase()==='HOME'?'홈':(r.home_away||'').toUpperCase()==='AWAY'?'원정':'';
-    const isTopUp = r.time_type==='Top-up';
-    const resultLabel = {W:'승',D:'무',L:'패'}[r.result]||r.result||'';
-    const resultStr = isTopUp ? 'Top-up' : [resultLabel, r.score].filter(Boolean).join(' ');
-    const hsrTotal = r.hir_sprint!=null ? Math.round(r.hir_sprint)
-      : ((parseFloat(r.band4_td)||0)+(parseFloat(r.band5_td)||0)) || '';
+  // 경기 rows — 같은 날 FT + Top-up 합산 (개인 운동부하 기준)
+  const matchByDate = {};
+  (matchData||[]).forEach(r=>{
+    if(!matchByDate[r.match_date]) matchByDate[r.match_date]=[];
+    matchByDate[r.match_date].push(r);
+  });
+  const n = v => parseFloat(v)||0;
+  const matchRows = Object.entries(matchByDate).map(([date, recs])=>{
+    const ft  = recs.find(r=>r.time_type==='FT');
+    const top = recs.find(r=>r.time_type==='Top-up');
+    const base = ft || top; // FT 없으면 Top-up만
+    const well = wellMap[date];
+    const ha = (base.home_away||'').toUpperCase()==='HOME'?'홈':(base.home_away||'').toUpperCase()==='AWAY'?'원정':'';
+    const resultLabel = {W:'승',D:'무',L:'패'}[base.result]||base.result||'';
+    const resultStr = ft ? [resultLabel, base.score].filter(Boolean).join(' ') : 'Top-up만';
+    // 구간 레이블 — 합산 여부 명시
+    const typeLabel = ft && top ? 'FT+Top-up' : ft ? 'FT' : 'Top-up';
+
+    // FT + Top-up 합산 (숫자 지표는 더하기, 최고속도는 최댓값)
+    const sum = (field) => {
+      const v = n(ft?.[field]) + n(top?.[field]);
+      return v > 0 ? Math.round(v) : '';
+    };
+    const sumF = (field) => {
+      const v = n(ft?.[field]) + n(top?.[field]);
+      return v > 0 ? parseFloat(v.toFixed(1)) : '';
+    };
+    const maxVal = (field) => {
+      const v = Math.max(n(ft?.[field]), n(top?.[field]));
+      return v > 0 ? parseFloat(v.toFixed(2)) : '';
+    };
+    const hsrTotal = (() => {
+      const v = n(ft?.hir_sprint||0) + n(top?.hir_sprint||0);
+      if(v>0) return Math.round(v);
+      return (n(ft?.band4_td)+n(ft?.band5_td)+n(top?.band4_td)+n(top?.band5_td)) || '';
+    })();
     return [
-      r.match_date, '경기',
-      r.opponent||'', ha,
-      r.time_type||'FT', resultStr,
-      parseFloat(r.duration)||'',
-      r.td ? Math.round(r.td) : '',
+      date, '경기',
+      base.opponent||'', ha,
+      typeLabel, resultStr,
+      sum('duration'),
+      sum('td'),
       hsrTotal,
-      r.band3_td ? Math.round(r.band3_td) : '',
-      r.band4_td ? Math.round(r.band4_td) : '',
-      r.band5_td ? Math.round(r.band5_td) : '',
-      r.band4_n||'', r.band5_n||'',
-      r.accel||'', r.decel||'',
-      r.max_speed||'', r.player_load||'', r.rhie||'',
-      r.fmp_run_m||'', r.fmp_run_h||'',
-      r.fmp_dyn_m||'', r.fmp_dyn_h||'',
-      '', '',  // RPE·sRPE (경기는 해당 없음)
+      sum('band3_td'),
+      sum('band4_td'),
+      sum('band5_td'),
+      sum('band4_n'), sum('band5_n'),
+      sum('accel'), sum('decel'),
+      maxVal('max_speed'),
+      sumF('player_load'), sum('rhie'),
+      sumF('fmp_run_m'), sumF('fmp_run_h'),
+      sumF('fmp_dyn_m'), sumF('fmp_dyn_h'),
+      '', '',  // RPE·sRPE
       well?.morning_weight||''
     ];
   });
