@@ -11769,7 +11769,6 @@ async function loadPlayerDashboard(){
 // ── GPS 컬럼 매핑 설정 ─────────────────────────────────────────────
 const GPS_INTERNAL_FIELDS = [
   {key:'name',      label:'이름',                  unit:''},
-  {key:'date',      label:'날짜',                  unit:'YYYY-MM-DD'},
   {key:'duration',  label:'운동/출전시간',          unit:'분'},
   {key:'td',        label:'총 이동거리',            unit:'m'},
   {key:'tdPerMin',  label:'분당이동거리 (avg)',     unit:'m/min'},
@@ -11788,13 +11787,6 @@ const GPS_INTERNAL_FIELDS = [
   {key:'fmpRunHigh',label:'FMP Running High',      unit:'sec'},
   {key:'fmpDynMed', label:'FMP Dynamic Medium',    unit:'sec'},
   {key:'fmpDynHigh',label:'FMP Dynamic High',      unit:'sec'},
-  {key:'mpm140',    label:'mpm >140',              unit:'분'},
-  {key:'mpm120',    label:'mpm 120~140',           unit:'분'},
-  {key:'mpm100',    label:'mpm 100~120',           unit:'분'},
-  {key:'mpm80',     label:'mpm 80~100',            unit:'분'},
-  {key:'mpm60',     label:'mpm 60~80',             unit:'분'},
-  {key:'mpm40',     label:'mpm 40~60',             unit:'분'},
-  {key:'mpm20',     label:'mpm 20~40',             unit:'분'},
   {key:'rpe',       label:'RPE',                   unit:'1-10'},
   {key:'weight',    label:'체중',                  unit:'kg'},
 ];
@@ -11928,6 +11920,14 @@ async function parseGpsFile(file){
       const playerMap = {};
       (players||[]).forEach(p=>{ playerMap[p.name]=p.id; });
 
+      // 파일명에서 날짜 추출 (YYYY-MM-DD 또는 YYYYMMDD 패턴)
+      const fnDate = file.name.match(/(\d{4})-(\d{2})-(\d{2})/)||file.name.match(/(\d{4})(\d{2})(\d{2})/);
+      const fileDate = fnDate ? `${fnDate[1]}-${fnDate[2]}-${fnDate[3]}` : '';
+      if(!fileDate){
+        msg.textContent='파일명에서 날짜를 찾을 수 없습니다. 파일명에 날짜(YYYY-MM-DD 또는 YYYYMMDD)를 포함해 주세요.';
+        msg.style.color='var(--red)'; return;
+      }
+
       // 데이터 파싱
       _gpsParseData = [];
       const unknown = new Set();
@@ -11942,12 +11942,7 @@ async function parseGpsFile(file){
         const gv = key => { const idx=cm[key]; if(idx<0) return null; const v=row[idx]; return v!=null&&v!==''?v:null; };
         const mv = key => { const idx=mc[key]; if(idx<0) return null; const v=row[idx]; return v!=null&&v!==''?String(v).trim():null; };
 
-        const dateVal = gv('date');
-        let dateStr = '';
-        if(dateVal instanceof Date){ const d=new Date(dateVal.getTime()+9*60*60*1000); dateStr=d.toISOString().split('T')[0]; }
-        else if(typeof dateVal==='string') dateStr=dateVal.split(' ')[0];
-        else if(typeof dateVal==='number'){ const d=new Date(Math.round((dateVal-25569)*86400*1000)); dateStr=new Date(d.getTime()+9*60*60*1000).toISOString().split('T')[0]; }
-        if(!dateStr) return;
+        if(!fileDate) return;
 
         const sessionLabel = mv('label') || 'AM';
         const isMatch = sessionLabel === 'Match';
@@ -11956,7 +11951,7 @@ async function parseGpsFile(file){
         _gpsParseData.push({
           _isMatch: isMatch,
           player_id: pid, player_name: nameStr,
-          session_date: dateStr,
+          session_date: fileDate,
           session_label: sessionLabel,
           session_type2: isMatch ? null : typeVal,
           time_type: isMatch ? typeVal : null,
