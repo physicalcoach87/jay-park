@@ -22512,9 +22512,8 @@ function renderPeriodCalendar() {
 
         // REST 여부
         const isRest = dayRow?.day_label?.trim().toUpperCase()==='REST';
-        // AM/PM (REST면 휴식 표시, 아니면 항상 두 줄)
-        const amHtml = isRest
-          ? `<div style="font-size:11px;color:#22c55e;margin-top:4px;font-weight:600">😴 REST</div>`
+        // AM/PM (REST면 빈칸, 아니면 항상 두 줄)
+        const amHtml = isRest ? ''
           : `<div style="font-size:10px;color:${dayRow?.am_session?'var(--text2)':'var(--text3)'};margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:9px;color:var(--text3);font-weight:700">AM</span> ${dayRow?.am_session||'—'}</div>`;
         const pmHtml = isRest ? ''
           : `<div style="font-size:10px;color:${dayRow?.pm_session?'var(--text2)':'var(--text3)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:9px;color:var(--text3);font-weight:700">PM</span> ${dayRow?.pm_session||'—'}</div>`;
