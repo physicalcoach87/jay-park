@@ -1988,10 +1988,19 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   </div>
 
   <!-- 범례 -->
-  <div style="display:flex;gap:12px;flex-wrap:wrap;padding:4px 0 10px;font-size:11px;align-items:center;color:var(--text3)">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;padding:4px 0 6px;font-size:11px;align-items:center;color:var(--text3)">
     <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:#60a5fa"></span>볼륨</span>
     <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:#f97316"></span>대사강도</span>
     <span style="display:flex;align-items:center;gap:3px"><span style="display:inline-block;width:10px;height:4px;border-radius:2px;background:#a855f7"></span>근신경강도</span>
+  </div>
+  <!-- MSS 범례 -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;padding:0 0 10px;font-size:10px;align-items:center;color:var(--text3)">
+    <span style="font-weight:600;color:var(--text2);font-size:10px">⚡ MSS 노출</span>
+    <span><span style="color:#facc15;font-size:11px;font-weight:700">⚡⚡</span> <span>최적 (MD-2)</span></span>
+    <span><span style="color:var(--text3)">⚡</span> 가능 (MD-3)</span>
+    <span><span style="color:var(--text3)">·</span> 보통 (MD-4)</span>
+    <span><span>⚠️</span> 주의 (MD-1)</span>
+    <span><span style="color:var(--text3)">✕</span> 금지 (MD+1)</span>
   </div>
 
   <!-- 달력 -->
@@ -22506,11 +22515,17 @@ function renderPeriodCalendar() {
         const dayRow=_daysData[ds];
         const label=dayRow?.day_label||'';
         const isRestDay=label.trim().toUpperCase()==='REST';
+        const mssIcons={'MD-2':'⚡⚡','MD-3':'⚡','MD-4':'·','MD-1':'⚠️','MD+1':'✕'};
+        const mssIcon=mssIcons[label.trim().toUpperCase()]||null;
+        const isMssBest=label.trim().toUpperCase()==='MD-2';
+        const mssCellMap={'MD-2':{text:'최적',color:'#22c55e'},'MD-3':{text:'가능',color:'#86efac'},'MD-4':{text:'보통',color:'#fbbf24'},'MD-1':{text:'주의',color:'#fb923c'},'MD+1':{text:'금지',color:'#f87171'}};
+        const mssCellInfo=mssCellMap[label.trim().toUpperCase()]||null;
+        const mssCellBadge=mssCellInfo?`<span style="font-size:8px;font-weight:700;color:${mssCellInfo.color};background:${mssCellInfo.color}22;border:1px solid ${mssCellInfo.color}44;border-radius:3px;padding:0 4px;flex-shrink:0">MSS ${mssCellInfo.text}</span>`:'';
         const labelHtml=isRestDay
           ?`<span style="font-size:9px;color:#22c55e;font-weight:700">😴 REST</span>`
-          :label?`<span style="font-size:9px;color:${block.color};font-weight:700">${label}</span>`
+          :label?`<div style="position:relative;text-align:center"><span style="font-size:9px;color:${block.color};font-weight:700">${label}</span>${mssCellBadge?`<span style="position:absolute;right:0;top:50%;transform:translateY(-50%)">${mssCellBadge}</span>`:''}</div>`
           :`<span style="font-size:9px;color:${block.color}44">—</span>`;
-        html+=`<td style="padding:1px 4px;text-align:center;background:${block.color}22;border:1px solid ${block.color}44;border-bottom:2px solid ${block.color}">${labelHtml}</td>`;
+        html+=`<td style="padding:2px 4px;background:${block.color}22;border:1px solid ${block.color}44;border-bottom:2px solid ${block.color}">${labelHtml}</td>`;
       }
       html+='</tr>';
     }
@@ -22535,7 +22550,8 @@ function renderPeriodCalendar() {
         const dayLabelBadge='';
 
         // REST 여부
-        const isRest = dayRow?.day_label?.trim().toUpperCase()==='REST';
+        const dayLabel = dayRow?.day_label||'';
+        const isRest = dayLabel.trim().toUpperCase()==='REST';
         // AM/PM (REST면 빈칸, 아니면 항상 두 줄)
         const amHtml = isRest ? ''
           : `<div style="font-size:10px;color:${dayRow?.am_session?'var(--text2)':'var(--text3)'};margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"><span style="font-size:9px;color:var(--text3);font-weight:700">AM</span> ${dayRow?.am_session||'—'}</div>`;
@@ -22568,14 +22584,23 @@ function renderPeriodCalendar() {
 
         const bg=block?block.color+'15':(isToday?'rgba(99,102,241,0.07)':'var(--surface)');
         const hover=block?block.color+'28':'var(--surface2)';
+        const mssBadgeMap={
+          'MD-2':{ text:'최적', color:'#22c55e', bg:'rgba(34,197,94,0.15)' },
+          'MD-3':{ text:'가능', color:'#86efac', bg:'rgba(134,239,172,0.12)' },
+          'MD-4':{ text:'보통', color:'#fbbf24', bg:'rgba(251,191,36,0.12)' },
+          'MD-1':{ text:'주의', color:'#fb923c', bg:'rgba(251,146,60,0.15)' },
+          'MD+1':{ text:'금지', color:'#f87171', bg:'rgba(248,113,113,0.15)' },
+        };
+        const mssBadgeInfo=null;
+        const mssBadgeHtml='';
         html+=`<td onclick="openDayModal('${ds}')"
-          style="padding:6px;border:1px solid var(--border);vertical-align:top;cursor:pointer;background:${bg};transition:background .15s;height:140px"
+          style="position:relative;padding:6px;border:1px solid var(--border);vertical-align:top;cursor:pointer;background:${bg};transition:background .15s;height:140px"
           onmouseover="this.style.background='${hover}'"
           onmouseout="this.style.background='${bg}'">
           <div style="text-align:center">
             <span style="font-size:12px;font-weight:${isToday?700:500};color:${dayColor}">${String(m+1).padStart(2,'0')}-${String(d2).padStart(2,'0')} <span style="font-size:10px;opacity:.8">(${dowLabel})</span></span>
           </div>
-          ${amHtml}${pmHtml}${gauges}
+          ${amHtml}${pmHtml}${gauges}${mssBadgeHtml}
         </td>`;
       }
     }
@@ -23012,7 +23037,10 @@ async function openWeekDetail(blockId) {
     const isToday=ds===today2;
     const bgColor=isRest?'rgba(34,197,94,0.1)':isMD?block.color+'20':isToday?block.color+'15':'var(--bg)';
     const dowColor=d.getDay()===0?'#f87171':d.getDay()===6?'#60a5fa':'var(--text)';
-    const badge=dr?.day_label?`<div style="display:inline-block;margin-top:3px;font-size:10px;font-weight:700;color:${isRest?'#22c55e':block.color};background:${isRest?'rgba(34,197,94,0.15)':block.color+'22'};padding:1px 7px;border-radius:4px;border:1px solid ${isRest?'#22c55e55':block.color+'44'}">${dr.day_label}</div>`:'';
+    const wdMssMap={'MD-2':{text:'최적',color:'#22c55e'},'MD-3':{text:'가능',color:'#86efac'},'MD-4':{text:'보통',color:'#fbbf24'},'MD-1':{text:'주의',color:'#fb923c'},'MD+1':{text:'금지',color:'#f87171'}};
+    const wdMssInfo=wdMssMap[lbl]||null;
+    const wdMssBadge=wdMssInfo?`<span style="font-size:9px;font-weight:700;color:${wdMssInfo.color};background:${wdMssInfo.color}22;border:1px solid ${wdMssInfo.color}44;border-radius:3px;padding:0 4px;margin-left:4px">MSS ${wdMssInfo.text}</span>`:'';
+    const badge=dr?.day_label?`<div style="display:inline-flex;align-items:center;margin-top:3px;font-size:10px;font-weight:700;color:${isRest?'#22c55e':block.color};background:${isRest?'rgba(34,197,94,0.15)':block.color+'22'};padding:1px 7px;border-radius:4px;border:1px solid ${isRest?'#22c55e55':block.color+'44'}">${dr.day_label}${wdMssBadge}</div>`:'';
     hRow += th(`<span style="font-size:13px;font-weight:700;color:${dowColor}">${d.getDate()} ${dow}</span><br>${badge}`,
       `background:${bgColor};${isToday?'box-shadow:inset 0 -2px 0 '+block.color:''}`)
   });
