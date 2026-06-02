@@ -18857,7 +18857,11 @@ ${printContent}
 
 // ── 훈련 보고서 인쇄 콘텐츠 추출 ────────────────────────────────
 function _getTrainingReportPrintContent(){
-  const wrap = document.getElementById('team-summary-output');
+  // 훈련 데이터 탭에서 열었으면 training-report-output 우선
+  const trainOut = document.getElementById('training-report-output');
+  const teamOut  = document.getElementById('team-summary-output');
+  const wrap = (trainOut && trainOut.innerHTML && trainOut.innerHTML.trim().length > 50)
+    ? trainOut : teamOut;
   if(!wrap) return '';
   const clone = wrap.cloneNode(true);
   const bar = clone.querySelector('#training-report-action-bar');
