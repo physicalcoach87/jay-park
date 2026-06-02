@@ -772,16 +772,10 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- 훈련 데이터 뷰 -->
   <div id="pv-training" style="display:none">
-    <!-- 날짜 선택 + 내보내기 버튼 -->
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <input type="date" id="training-report-date" style="padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px">
-      <button onclick="loadTrainingReport()" class="btn-exp pri" style="padding:7px 16px">📋 보고서 생성</button>
-      <div style="flex:1"></div>
-      <button onclick="printTrainingReport()" style="padding:6px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit">🖨️ 인쇄</button>
-      <button onclick="savePdfTrainingReport()" style="padding:6px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit">📄 PDF</button>
-      <button onclick="saveHtmlTrainingReport()" style="padding:6px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit">💾 HTML</button>
+      <button onclick="runTrainingReport()" class="btn-exp pri" style="padding:7px 16px">📋 보고서 생성</button>
     </div>
-    <!-- 보고서 출력 영역 -->
     <div id="training-report-output">
       <div style="text-align:center;padding:3rem;color:var(--text3);font-size:13px">날짜를 선택하고 보고서 생성을 클릭하세요</div>
     </div>
@@ -11392,7 +11386,53 @@ async function buildWeeklyLoadHtml(forDate){
   const wkRpeRows=(rpe28w||[]).filter(r=>r.record_date>=weekStartStr&&r.record_date<=forDate&&wkTeamDates.has(r.record_date));
   const wkSRPE=Math.round(wkRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0)).toLocaleString();
 
-  return `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+  // 훈련 데이터 모드일 때 주기화 헤더 추가
+  let periodHeader = '';
+  if(window._trainingMode) {
+    const {data: bdWeek} = await supa.from('block_days')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
+    const bdMap = {};
+    (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
+    const DOW = ['일','월','화','수','목','금','토'];
+    const bdRows = weekDates.map(dd=>{
+      const bd = bdMap[dd]; if(!bd) return '';
+      const isRest = bd.day_label==='REST';
+      const isSel = dd===forDate;
+      const dObj = new Date(dd+'T12:00:00');
+      return '<tr style="'+(isSel?'background:rgba(99,102,241,0.08);font-weight:600':'')+(isRest?'opacity:0.4':'')+'">'
+        +'<td style="padding:5px 8px">'+DOW[dObj.getDay()]+' '+(dObj.getMonth()+1)+'/'+(dObj.getDate())+'</td>'
+        +'<td style="padding:5px 8px;font-weight:600;color:#a5b4fc">'+(bd.day_label||'—')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+(bd.td_target!=null?bd.td_target.toLocaleString()+'m':'—')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+(bd.hsr_target!=null?bd.hsr_target.toLocaleString()+'m':'—')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+(bd.spr_target!=null?bd.spr_target.toLocaleString()+'m':'—')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+(bd.acc_target!=null?bd.acc_target+'회':'—')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+(bd.rhie_target!=null?bd.rhie_target+'회':'—')+'</td>'
+        +'<td style="padding:5px 8px;font-size:10px;color:var(--text3)">'+([bd.am_session,bd.pm_session].filter(Boolean).join(' / ')||'—')+'</td>'
+        +'</tr>';
+    }).filter(Boolean).join('');
+    if(bdRows) {
+      periodHeader = '<div style="background:var(--surface);border:0.5px solid rgba(99,102,241,0.4);border-radius:10px;padding:14px;margin-bottom:10px">'
+        +'<div style="font-size:12px;font-weight:600;color:#a5b4fc;margin-bottom:10px">📅 이번 주 훈련 목표 (주기화) · '+weekStartStr+' ~ '+weekEndStr+'</div>'
+        +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+        +'<thead><tr style="background:var(--surface2)">'
+        +'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">날짜</th>'
+        +'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">MD</th>'
+        +'<th style="padding:5px 8px;text-align:right;color:#60a5fa;font-weight:500">TD 목표</th>'
+        +'<th style="padding:5px 8px;text-align:right;color:#f59e0b;font-weight:500">HSR 목표</th>'
+        +'<th style="padding:5px 8px;text-align:right;color:#ef4444;font-weight:500">Sprint 목표</th>'
+        +'<th style="padding:5px 8px;text-align:right;color:#fb923c;font-weight:500">가속 목표</th>'
+        +'<th style="padding:5px 8px;text-align:right;color:#34d399;font-weight:500">RHIE 목표</th>'
+        +'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">세션</th>'
+        +'</tr></thead>'
+        +'<tbody>'+bdRows+'</tbody></table></div>'
+        +'<div style="font-size:9px;color:var(--text3);margin-top:8px;padding:5px 8px;background:var(--surface2);border-radius:5px">'
+        +'※ % 기준: 개인 Match Max × 주기화 목표% — 선수별 경기 최대 데이터 대비 오늘 훈련 달성률'
+        +'</div></div>';
+    }
+  }
+
+  return periodHeader + `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
       <div style="font-size:12px;font-weight:600;color:var(--text2)">📋 훈련 데이터 보고서 <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">${weekStartStr} ~ ${weekEndStr}</span></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -11433,7 +11473,7 @@ async function loadTeamSummary(){
   out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
   if(date) loadTwoWeekCal(date);
 
-  const [{data:gps},{data:sessions},{data:wellness}] = await Promise.all([
+  const [{data:gps},{data:sessions},{data:wellness},{data:blockDayRow},{data:matchRef}] = await Promise.all([
     supa.from('gps_records')
       .select('*, player_profiles(name, position, match_max_td, match_max_hsr, match_max_sprint, match_max_accel, match_max_rhie, match_max_speed, match_max_pl)')
       .eq('session_date', date)
@@ -11444,6 +11484,12 @@ async function loadTeamSummary(){
     supa.from('wellness_records')
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', date),
+    supa.from('block_days')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .eq('plan_date', date).maybeSingle(),
+    supa.from('match_records')
+      .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
+      .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
   ]);
 
   _lastGpsData = gps||[]; // 코치 RPE 모달에서 GPS duration 참조용
@@ -11585,13 +11631,48 @@ async function loadTeamSummary(){
     return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : '-';
   };
 
-  // Match Max % 배지 — ≥80% 🟢 / 60~79% 🟡 / <60% 🔴
-  const mmPct = (val, mx) => {
+  // ── 주기화 periodPct 계산 (훈련 데이터 모드) ──
+  const _mAvgTs = (arr, field) => {
+    const vrs = arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    if(!vrs.length) return null;
+    const mx = Math.max(...vrs.map(r=>parseFloat(r.duration)));
+    const sv = vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+    const sd = vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    return sd>0 ? sv/sd*mx : null;
+  };
+  const allMKeys = [...new Set((matchRef||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
+  const ref3RowsTs = (matchRef||[]).filter(r=>allMKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
+  const teamMAvg = {
+    td:    _mAvgTs(ref3RowsTs,'td'),
+    hsr:   _mAvgTs(ref3RowsTs,'band4_td'),
+    sprint:_mAvgTs(ref3RowsTs,'band5_td'),
+    accel: _mAvgTs(ref3RowsTs,'accel'),
+    rhie:  _mAvgTs(ref3RowsTs,'rhie'),
+  };
+  const bd = blockDayRow || null;
+  // periodPct: block_days 절대 목표 / 팀 경기 평균 (역산)
+  const periodPct = {
+    td:    (bd?.td_target   && teamMAvg.td)    ? bd.td_target   / teamMAvg.td    * 100 : null,
+    hsr:   (bd?.hsr_target  && teamMAvg.hsr)   ? bd.hsr_target  / teamMAvg.hsr   * 100 : null,
+    sprint:(bd?.spr_target  && teamMAvg.sprint) ? bd.spr_target  / teamMAvg.sprint * 100 : null,
+    accel: (bd?.acc_target  && teamMAvg.accel)  ? bd.acc_target  / teamMAvg.accel  * 100 : null,
+    rhie:  (bd?.rhie_target && teamMAvg.rhie)   ? bd.rhie_target / teamMAvg.rhie   * 100 : null,
+  };
+  const isTrainingMode = window._trainingMode === true;
+
+  // Match Max % 배지 — 훈련 데이터 모드: 개인 Match Max × periodPct% 기준 / 일반: Match Max 절대 기준
+  const mmPct = (val, mx, field) => {
     const v = parseFloat(val), m = parseFloat(mx);
     if(!v || !m || isNaN(v) || isNaN(m)) return '';
-    const pct = Math.round((v/m)*100);
-    const color = pct>=80?'#4ade80':pct>=60?'#fbbf24':'#f87171';
-    return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${pct}%</span>`;
+    let target = m;
+    if(isTrainingMode && field && periodPct[field] != null) {
+      target = m * periodPct[field] / 100;
+    }
+    if(!target) return '';
+    const pct = Math.round((v/target)*100);
+    const color = pct>=90?'#4ade80':pct>=70?'#fbbf24':'#f87171';
+    const label = isTrainingMode ? `${pct}%` : `${pct}%`;
+    return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${label}</span>`;
   };
 
   const renderTable = (arr) => arr.map(r=>{
@@ -11623,11 +11704,11 @@ async function loadTeamSummary(){
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
       </td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
-      <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel)}</td>
-      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie)}</td>`}
+      <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td, 'td')}</td>
+      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr, 'hsr')}</td>
+      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint, 'sprint')}</td>
+      <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel, 'accel')}</td>
+      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie, 'rhie')}</td>`}
       <td style="padding:7px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}${mmPct(r.max_speed, mx.match_max_speed)}</td>
       ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.player_load||'-'}${mmPct(r.player_load, mx.match_max_pl)}</td>`}
       ${currentUseRpe?`<td style="padding:7px 8px;text-align:right;color:#fbbf24;font-weight:600">${rpeVal||'—'}</td>`:''}
@@ -22548,343 +22629,39 @@ async function saveCoachWellnessBatch(){
 }
 </script>
 
+
 <!-- ===== 훈련 데이터 보고서 JS ===== -->
 <script>
-async function loadTrainingReport(){
+// 훈련 데이터 탭 보고서 생성 — loadTeamSummary 기반 + 주기화 연동
+async function runTrainingReport(){
   const dateEl = document.getElementById('training-report-date');
   const date = dateEl?.value || getKSTDateStr();
-  const out = document.getElementById('training-report-output');
-  if(!out) return;
-  out.innerHTML = '<div style="text-align:center;padding:3rem;color:var(--text3)">⏳ 보고서 생성 중...</div>';
+  if(!date) return;
 
-  // 이번 주 월요일
-  const d = new Date(date);
-  const dow = d.getDay();
-  const weekStart = new Date(d);
-  weekStart.setDate(d.getDate() - (dow===0?6:dow-1));
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
-  const weekStartStr = weekStart.toISOString().split('T')[0];
-  const weekEndStr   = weekEnd.toISOString().split('T')[0];
-  const WEEK_DAYS = ['일','월','화','수','목','금','토'];
+  // 1. 훈련 모드 플래그 설정
+  window._trainingMode = true;
 
-  // 데이터 병렬 조회
-  const [
-    {data:blockDays},
-    {data:blocks},
-    {data:gpsData},
-    {data:sessData},
-    {data:wellData},
-    {data:matchRaw},
-  ] = await Promise.all([
-    supa.from('block_days').select('*').gte('plan_date',weekStartStr).lte('plan_date',weekEndStr),
-    supa.from('blocks').select('*').order('start_date'),
-    supa.from('gps_records')
-      .select('*, player_profiles(name,position,mss,match_max_td,match_max_mpm,match_max_hir,match_max_accel,match_max_rhie,match_max_speed)')
-      .eq('session_date',date),
-    supa.from('session_records').select('*').eq('record_date',date),
-    supa.from('wellness_records').select('*').eq('record_date',date),
-    supa.from('match_records')
-      .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
-      .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
-  ]);
+  // 2. team-date 동기화 후 loadTeamSummary 호출
+  const teamDateEl = document.getElementById('team-date');
+  if(teamDateEl) teamDateEl.value = date;
 
-  // block_days 맵
-  const bdMap = {};
-  (blockDays||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
-  const todayBd = bdMap[date] || null;
+  // 3. training-report-output에 렌더 (loadTeamSummary의 out을 임시 교체)
+  const origOut = document.getElementById('team-summary-output');
+  const trainOut = document.getElementById('training-report-output');
+  if(!origOut || !trainOut) return;
 
-  // 팀 경기 평균 (최근 3경기)
-  const matchAvg = (arr,field) => {
-    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
-    if(!vrs.length) return null;
-    const maxDur=Math.max(...vrs.map(r=>parseFloat(r.duration)));
-    const sumVal=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sumDur=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
-    return sumDur>0?sumVal/sumDur*maxDur:null;
-  };
-  const allKeys=[...new Set((matchRaw||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
-  const ref3Keys=allKeys.slice(0,3);
-  const ref3Rows=(matchRaw||[]).filter(r=>ref3Keys.includes(r.match_date+'__'+r.opponent));
-  const teamMatchAvg={
-    td:    matchAvg(ref3Rows,'td'),
-    hsr:   matchAvg(ref3Rows,'band4_td'),
-    sprint:matchAvg(ref3Rows,'band5_td'),
-    accel: matchAvg(ref3Rows,'accel'),
-    rhie:  matchAvg(ref3Rows,'rhie'),
-  };
+  // team-summary-output을 훈련 출력 div로 임시 교체
+  const origId = origOut.id;
+  origOut.id = 'team-summary-output-hidden';
+  trainOut.id = 'team-summary-output';
+  trainOut.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 보고서 생성 중...</div>';
 
-  // 주기화 % 역산 (block_days 절대값 / 팀 경기 평균)
-  const periodPct = {
-    td:    (todayBd?.td_target   && teamMatchAvg.td)    ? Math.round(todayBd.td_target/teamMatchAvg.td*100)       : null,
-    hsr:   (todayBd?.hsr_target  && teamMatchAvg.hsr)   ? Math.round(todayBd.hsr_target/teamMatchAvg.hsr*100)     : null,
-    sprint:(todayBd?.spr_target  && teamMatchAvg.sprint) ? Math.round(todayBd.spr_target/teamMatchAvg.sprint*100) : null,
-    accel: (todayBd?.acc_target  && teamMatchAvg.accel)  ? Math.round(todayBd.acc_target/teamMatchAvg.accel*100)  : null,
-    rhie:  (todayBd?.rhie_target && teamMatchAvg.rhie)   ? Math.round(todayBd.rhie_target/teamMatchAvg.rhie*100)  : null,
-  };
+  await loadTeamSummary();
 
-  // GPS 맵 (M 기준)
-  const gpsAll = gpsData||[];
-  const gpsM   = gpsAll.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
-  const gpsUse = gpsM.length ? gpsM : gpsAll;
-
-  // 팀 평균 헬퍼
-  const teamAvg = field => {
-    const vrs=gpsUse.filter(r=>parseFloat(r[field])>0);
-    return vrs.length ? vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0)/vrs.length : null;
-  };
-  const tAvg={
-    td:teamAvg('td'), hsr:teamAvg('running_high'),
-    sprint:teamAvg('sprint'), accel:teamAvg('accel'),
-    rhie:teamAvg('rhie'), speed:teamAvg('max_speed'), dur:teamAvg('duration'),
-  };
-
-  // sessMap, wellMap
-  const sessMap={};
-  (sessData||[]).forEach(s=>{ sessMap[s.player_id]=s; });
-  const wellMap={};
-  (wellData||[]).forEach(w=>{ wellMap[w.player_id]=w; });
-
-  // 달성률 색상
-  const pctColor = p => p==null?'var(--text3)':p>=90?'#22c55e':p>=70?'#eab308':'#ef4444';
-  const pctBadge = (val,target) => {
-    if(!val||!target) return '<span style="color:var(--text3)">—</span>';
-    const p=Math.round(val/target*100);
-    return `<span style="color:${pctColor(p)};font-weight:700">${p}%</span>`;
-  };
-
-  // ── 보고서 HTML 생성 ──
-  const reportDate = new Date(date);
-  const dayLabel = todayBd?.day_label || '—';
-  const blockInfo = (blocks||[]).find(b=>b.start_date<=date&&b.end_date>=date);
-
-  // [1] 이번 주 훈련 목표
-  const weekDays = [];
-  for(let i=0;i<7;i++){ const dd=new Date(weekStart); dd.setDate(weekStart.getDate()+i); weekDays.push(dd.toISOString().split('T')[0]); }
-  const sec1 = `
-    <div class="tr-section">
-      <div class="tr-section-title">① 이번 주 훈련 목표 (주기화)</div>
-      ${blockInfo?`<div style="font-size:11px;color:var(--text3);margin-bottom:8px">블록: ${[blockInfo.context,blockInfo.label].filter(Boolean).join(' · ')}</div>`:''}
-      <table class="tr-table">
-        <thead><tr>
-          <th>요일</th><th>MD</th><th>TD 목표</th><th>HSR 목표</th><th>Sprint 목표</th><th>가속 목표</th><th>RHIE 목표</th><th>세션</th>
-        </tr></thead>
-        <tbody>
-          ${weekDays.map(dd=>{
-            const bd=bdMap[dd];
-            const isRest=bd?.day_label==='REST';
-            const isToday=dd===date;
-            const dd2=new Date(dd);
-            return `<tr style="${isToday?'background:rgba(99,102,241,0.08);font-weight:600':''}${isRest?'opacity:0.4':''}">
-              <td>${WEEK_DAYS[dd2.getDay()]} ${dd2.getMonth()+1}/${dd2.getDate()}</td>
-              <td>${bd?.day_label||'—'}</td>
-              <td>${bd?.td_target!=null?bd.td_target.toLocaleString()+'m':'—'}</td>
-              <td>${bd?.hsr_target!=null?bd.hsr_target.toLocaleString()+'m':'—'}</td>
-              <td>${bd?.spr_target!=null?bd.spr_target.toLocaleString()+'m':'—'}</td>
-              <td>${bd?.acc_target!=null?bd.acc_target+'회':'—'}</td>
-              <td>${bd?.rhie_target!=null?bd.rhie_target+'회':'—'}</td>
-              <td style="font-size:10px">${[bd?.am_session,bd?.pm_session].filter(Boolean).join(' / ')||'—'}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
-
-  // [2] 오늘 팀 평균 vs 목표
-  const metrics2 = [
-    {label:'TD',     actual:tAvg.td,     target:todayBd?.td_target,   unit:'m'},
-    {label:'HSR',    actual:tAvg.hsr,    target:todayBd?.hsr_target,  unit:'m'},
-    {label:'Sprint', actual:tAvg.sprint, target:todayBd?.spr_target,  unit:'m'},
-    {label:'가속',   actual:tAvg.accel,  target:todayBd?.acc_target,  unit:'회'},
-    {label:'RHIE',   actual:tAvg.rhie,   target:todayBd?.rhie_target, unit:'회'},
-  ];
-  const sec2 = `
-    <div class="tr-section">
-      <div class="tr-section-title">② 오늘 팀 평균 vs 목표 · ${date} (${WEEK_DAYS[reportDate.getDay()]}) · ${dayLabel}</div>
-      <table class="tr-table">
-        <thead><tr><th>지표</th><th>목표</th><th>팀 평균</th><th>달성률</th></tr></thead>
-        <tbody>
-          ${metrics2.map(({label,actual,target,unit})=>{
-            const a=actual?Math.round(actual):null;
-            const p=a&&target?Math.round(a/target*100):null;
-            return `<tr>
-              <td>${label}</td>
-              <td>${target!=null?target.toLocaleString()+unit:'—'}</td>
-              <td style="color:var(--accent2);font-weight:600">${a!=null?a.toLocaleString()+unit:'—'}</td>
-              <td style="color:${pctColor(p)};font-weight:700">${p!=null?p+'%':'—'}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
-
-  // [3] 개인 데이터 (본인 Match Max × 주기화% = 개인목표 → 달성률)
-  const players3 = sortByPos(_players||[]).filter(p=>gpsUse.find(g=>g.player_id===p.id));
-  const sec3 = `
-    <div class="tr-section">
-      <div class="tr-section-title">③ 오늘 개인 데이터 (개인 Match Max 대비 달성률)</div>
-      <div style="overflow-x:auto">
-      <table class="tr-table">
-        <thead><tr>
-          <th>선수</th><th>포지션</th>
-          <th>TD</th><th>%</th>
-          <th>HSR</th><th>%</th>
-          <th>Sprint</th><th>%</th>
-          <th>가속</th><th>%</th>
-          <th>RHIE</th><th>%</th>
-        </tr></thead>
-        <tbody>
-          ${players3.map(p=>{
-            const g=gpsUse.find(r=>r.player_id===p.id);
-            const pp=g?.player_profiles||{};
-            const calc=(val,matchMax,pct)=>{
-              if(!val||!matchMax||!pct) return {val:val?Math.round(val):null,pct:null};
-              const target=matchMax*(pct/100);
-              return {val:Math.round(val), pct:Math.round(val/target*100)};
-            };
-            const td    =calc(g?.td,         pp.match_max_td,   periodPct.td);
-            const hsr   =calc(g?.running_high,pp.match_max_hir,  periodPct.hsr);
-            const sprint=calc(g?.sprint,      pp.match_max_speed, periodPct.sprint); // sprint용 match_max 없으면 speed 대신
-            const accel =calc(g?.accel,       pp.match_max_accel, periodPct.accel);
-            const rhie  =calc(g?.rhie,        pp.match_max_rhie,  periodPct.rhie);
-            const cell=(obj,unit)=>`<td style="color:var(--text2)">${obj.val!=null?obj.val.toLocaleString()+unit:'—'}</td><td style="color:${pctColor(obj.pct)};font-weight:700">${obj.pct!=null?obj.pct+'%':'—'}</td>`;
-            return `<tr>
-              <td style="font-weight:600">${p.name}</td>
-              <td style="color:var(--text3)">${p.position}</td>
-              ${cell(td,'m')}${cell(hsr,'m')}${cell(sprint,'m')}${cell(accel,'회')}${cell(rhie,'회')}
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-      </div>
-      <div class="tr-note">※ % 기준: 본인 Match Max × 주기화 목표% (TD ${periodPct.td||'?'}% / HSR ${periodPct.hsr||'?'}% / Sprint ${periodPct.sprint||'?'}% / 가속 ${periodPct.accel||'?'}% / RHIE ${periodPct.rhie||'?'}%)<br>→ 개인 경기 최대 데이터 대비 오늘 훈련 달성률</div>
-    </div>`;
-
-  // [4] 최대 속도 현황
-  const sec4 = `
-    <div class="tr-section">
-      <div class="tr-section-title">④ 최대 속도 현황</div>
-      <table class="tr-table">
-        <thead><tr><th>선수</th><th>포지션</th><th>오늘 최대속도</th><th>개인 MSS</th><th>MSS 대비 %</th><th>Zone5 (90%MSS)</th><th>달성</th></tr></thead>
-        <tbody>
-          ${sortByPos(_players||[]).filter(p=>gpsUse.find(g=>g.player_id===p.id)).map(p=>{
-            const g=gpsUse.find(r=>r.player_id===p.id);
-            const pp=g?.player_profiles||{};
-            const speed=g?.max_speed?parseFloat(g.max_speed):null;
-            const mss=pp.mss?parseFloat(pp.mss):null;
-            const mssPct=speed&&mss?Math.round(speed/mss*100):null;
-            const zone5=mss?Math.round(mss*0.9*10)/10:null;
-            const reached=speed&&zone5?speed>=zone5:false;
-            return `<tr>
-              <td style="font-weight:600">${p.name}</td>
-              <td style="color:var(--text3)">${p.position}</td>
-              <td style="color:${mssPct>=90?'#22c55e':mssPct>=80?'#eab308':'var(--text2)'}; font-weight:600">${speed?speed.toFixed(1)+' km/h':'—'}</td>
-              <td>${mss?mss.toFixed(1)+' km/h':'—'}</td>
-              <td style="color:${pctColor(mssPct)};font-weight:700">${mssPct?mssPct+'%':'—'}</td>
-              <td style="color:var(--text3)">${zone5?'≥'+zone5+' km/h':'—'}</td>
-              <td>${speed?(reached?'<span style="color:#22c55e;font-weight:700">✅ 달성</span>':'<span style="color:var(--text3)">미달성</span>'):'—'}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
-
-  // [5] 웰니스 / RPE 현황
-  const sec5 = `
-    <div class="tr-section">
-      <div class="tr-section-title">⑤ 웰니스 / RPE 현황</div>
-      <table class="tr-table">
-        <thead><tr><th>선수</th><th>포지션</th><th>피로</th><th>수면</th><th>스트레스</th><th>근육통</th><th>웰니스 합계</th><th>RPE</th><th>sRPE</th></tr></thead>
-        <tbody>
-          ${sortByPos(_players||[]).map(p=>{
-            const w=wellMap[p.id]||{};
-            const s=sessMap[p.id]||{};
-            const hasW=w.fatigue!=null;
-            const wTotal=hasW?(w.fatigue||0)+(w.sleep_quality||0)+(w.stress||0)+(w.muscle_soreness||0):null;
-            const wColor=wTotal==null?'var(--text3)':wTotal>=16?'#22c55e':wTotal>=12?'#eab308':'#ef4444';
-            const rpe=s.rpe?parseFloat(s.rpe):null;
-            const dur=s.duration?parseFloat(s.duration):null;
-            const sRPE=rpe&&dur?Math.round(rpe*dur):null;
-            const vCell=(v,suffix='')=>v!=null?`<td>${v}${suffix}</td>`:`<td style="color:var(--text3)">—</td>`;
-            return `<tr>
-              <td style="font-weight:600">${p.name}</td>
-              <td style="color:var(--text3)">${p.position}</td>
-              ${vCell(w.fatigue)} ${vCell(w.sleep_quality)} ${vCell(w.stress)} ${vCell(w.muscle_soreness)}
-              <td style="color:${wColor};font-weight:700">${wTotal!=null?wTotal+'/20':'—'}</td>
-              ${vCell(rpe)} ${vCell(sRPE,' AU')}
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
-
-  // 보고서 전체 렌더
-  const hasData = gpsUse.length > 0 || Object.keys(wellMap).length > 0;
-  out.innerHTML = `
-    <style>
-      .tr-report { font-family:inherit; color:var(--text); }
-      .tr-header { padding:16px 0 12px; border-bottom:2px solid var(--accent); margin-bottom:16px; }
-      .tr-header-title { font-size:17px; font-weight:700; color:var(--text); }
-      .tr-header-sub { font-size:12px; color:var(--text3); margin-top:4px; }
-      .tr-section { margin-bottom:20px; }
-      .tr-section-title { font-size:13px; font-weight:700; color:var(--accent2); margin-bottom:10px; padding-bottom:5px; border-bottom:0.5px solid var(--border2); }
-      .tr-table { width:100%; border-collapse:collapse; font-size:11px; }
-      .tr-table th { padding:6px 8px; background:var(--surface2); color:var(--text3); font-weight:500; text-align:center; border-bottom:1px solid var(--border); }
-      .tr-table td { padding:6px 8px; text-align:center; border-bottom:0.5px solid var(--border); color:var(--text2); }
-      .tr-table tr:hover td { background:var(--surface2); }
-      .tr-note { font-size:10px; color:var(--text3); margin-top:8px; line-height:1.7; padding:6px 10px; background:var(--surface2); border-radius:6px; }
-      @media print {
-        body { background:#fff !important; color:#111 !important; }
-        .tr-table th { background:#f3f4f6 !important; color:#374151 !important; }
-        .tr-table td { color:#111 !important; }
-        .tr-note { background:#f9fafb !important; color:#6b7280 !important; }
-        #training-report-output > *:first-child .tr-header { border-bottom-color:#6366f1 !important; }
-        button, .tab-bar, #pv-training > div:first-child { display:none !important; }
-      }
-    </style>
-    <div class="tr-report">
-      <div class="tr-header">
-        <div class="tr-header-title">훈련 데이터 보고서</div>
-        <div class="tr-header-sub">${date} (${WEEK_DAYS[reportDate.getDay()]}) · ${dayLabel} ${blockInfo?'· '+[blockInfo.context,blockInfo.label].filter(Boolean).join(' · '):''}</div>
-      </div>
-      ${!hasData?'<div style="text-align:center;padding:2rem;color:var(--text3)">'+date+' 훈련 데이터가 없습니다.</div>':`
-      ${sec1}${sec2}${sec3}${sec4}${sec5}
-      `}
-    </div>`;
-
-  window._trainingReportDate = date;
-}
-
-function printTrainingReport(){
-  window.print();
-}
-
-function savePdfTrainingReport(){
-  window.print(); // 브라우저 인쇄 → PDF 저장
-}
-
-function saveHtmlTrainingReport(){
-  const date = window._trainingReportDate || getKSTDateStr();
-  const content = document.getElementById('training-report-output')?.innerHTML || '';
-  const html = `<!DOCTYPE html>
-<html lang="ko"><head><meta charset="UTF-8">
-<title>훈련 데이터 보고서 ${date}</title>
-<style>
-  body { font-family: -apple-system, sans-serif; background:#111; color:#e5e7eb; padding:24px; max-width:1100px; margin:auto; }
-  table { width:100%; border-collapse:collapse; font-size:11px; }
-  th { padding:6px 8px; background:#1f2937; color:#9ca3af; font-weight:500; text-align:center; border-bottom:1px solid #374151; }
-  td { padding:6px 8px; text-align:center; border-bottom:0.5px solid #374151; color:#d1d5db; }
-  .tr-section { margin-bottom:20px; }
-  .tr-section-title { font-size:13px; font-weight:700; color:#818cf8; margin-bottom:10px; padding-bottom:5px; border-bottom:0.5px solid #374151; }
-  .tr-note { font-size:10px; color:#6b7280; margin-top:8px; line-height:1.7; padding:6px 10px; background:#1f2937; border-radius:6px; }
-  .tr-header { padding:16px 0 12px; border-bottom:2px solid #6366f1; margin-bottom:16px; }
-  .tr-header-title { font-size:17px; font-weight:700; }
-  .tr-header-sub { font-size:12px; color:#9ca3af; margin-top:4px; }
-</style></head><body>${content}</body></html>`;
-  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `훈련보고서_${date}.html`;
-  a.click();
+  // 복원
+  trainOut.id = 'training-report-output';
+  origOut.id = 'team-summary-output';
+  window._trainingMode = false;
 }
 </script>
 
