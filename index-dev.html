@@ -11928,7 +11928,7 @@ async function loadTeamSummary(){
   out.innerHTML = `
     <!-- ③ GPS 선수 테이블 (M그룹) -->
     ${hasGps ? `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
         M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
       </div>
@@ -11951,7 +11951,7 @@ async function loadTeamSummary(){
 
     <!-- ④ 서브/미엔트리 그룹 -->
     ${indGps.length ? `
-    <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         서브 평균 (${indGps.length}명)
       </div>
