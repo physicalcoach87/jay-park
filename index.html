@@ -8404,6 +8404,7 @@ async function loadMorningReport(){
     {data:injuredAll},
     {data:weekSched},
     {data:weekMatchRaw},
+    {data:weekBlockDays},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
@@ -8435,6 +8436,9 @@ async function loadMorningReport(){
       .eq('time_type','FT')
       .order('match_date',{ascending:false})
       .limit(300),
+    supa.from('block_days')
+      .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
+      .gte('plan_date', yesterdayStr).lte('plan_date', weekEndStr),
   ]);
 
   // ── 경기 팀 평균: (합계) / (출전시간 합) × max(출전시간) ──────
@@ -8838,30 +8842,232 @@ async function loadMorningReport(){
 
   // ── 오늘 권장 부하 ─────────────────────────────────────────────
   const todayTopic = (weekGps||[]).find(r=>r.session_date===today)?.session_topic || '';
-  const mdKey = Object.keys(MD_LOAD_TARGETS).find(k=>todayTopic.toUpperCase().includes(k));
-  const todayTarget = mdKey ? MD_LOAD_TARGETS[mdKey] : null;
   const todayOpp = (weekGps||[]).find(r=>r.session_date===today)?.opponent||null;
 
-  const loadHtml = todayTarget ? `
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
-      <div style="background:#0c1a2e;border:0.5px solid #3b82f6;border-radius:8px;padding:9px 8px;text-align:center">
-        <div style="font-size:10px;color:#60a5fa;margin-bottom:2px">목표 TD</div>
-        <div style="font-size:14px;font-weight:500;color:#93c5fd">${todayTarget.td[0]}~${todayTarget.td[1]}<span style="font-size:9px;color:#60a5fa;margin-left:1px">km</span></div>
-      </div>
-      <div style="background:#0c1a2e;border:0.5px solid #3b82f6;border-radius:8px;padding:9px 8px;text-align:center">
-        <div style="font-size:10px;color:#60a5fa;margin-bottom:2px">목표 HSR</div>
-        <div style="font-size:14px;font-weight:500;color:#93c5fd">${todayTarget.hsr[0].toLocaleString()}~${todayTarget.hsr[1].toLocaleString()}<span style="font-size:9px;color:#60a5fa;margin-left:1px">m</span></div>
-      </div>
-      <div style="background:#0c1a2e;border:0.5px solid #3b82f6;border-radius:8px;padding:9px 8px;text-align:center">
-        <div style="font-size:10px;color:#60a5fa;margin-bottom:2px">목표 sRPE</div>
-        <div style="font-size:14px;font-weight:500;color:#93c5fd">${todayTarget.sRPE[0]}~${todayTarget.sRPE[1]}<span style="font-size:9px;color:#60a5fa;margin-left:1px">AU</span></div>
-      </div>
-    </div>
-    <div style="font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:3px">
-      <div>• <strong>${todayTopic}</strong> · ${todayTarget.label}${todayOpp?` · vs ${todayOpp}`:''}</div>
-      <div>• 팀 ACWR <span style="color:${acwrColor(teamACWR)};font-weight:600">${teamACWR?teamACWR.toFixed(2):'—'}</span> — ${acwrLabel(teamACWR)}</div>
-      ${riskResults.filter(r=>r.risk.level==='red').map(r=>`<div style="color:#f87171">• ${r.player.name} 스프린트/고강도 제한 권고</div>`).join('')}
-    </div>` : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">오늘 세션 정보 없음 (GPS 데이터 업로드 후 표시)</div>`;
+  // block_days 맵 (날짜별)
+  const blockDayMap = {};
+  (weekBlockDays||[]).forEach(r=>{ blockDayMap[r.plan_date]=r; });
+
+  // 오늘 / 어제 block_days
+  const todayBlockDay = blockDayMap[today] || null;
+  const yesterdayBlockDay = blockDayMap[yesterdayStr] || null;
+
+  // MD fallback (오늘 라벨 or GPS topic 기반)
+  const mdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(todayBlockDay?.day_label||todayTopic).toUpperCase().includes(k));
+  const mdFallback = mdKey ? MD_LOAD_TARGETS[mdKey] : null;
+
+  // 목표 출처 판별
+  const hasBlockTarget = todayBlockDay && (todayBlockDay.td_target||todayBlockDay.hsr_target||todayBlockDay.spr_target||todayBlockDay.acc_target||todayBlockDay.rhie_target);
+  const todayDayLabel = todayBlockDay?.day_label || (mdKey||'—');
+  const todayAmSession = todayBlockDay?.am_session || '';
+  const todayPmSession = todayBlockDay?.pm_session || '';
+
+  // 목표값 결정 (block_days 절대값 우선, 없으면 MD fallback)
+  const getTarget = (blockVal, mdRange) => {
+    if(blockVal!=null) return { val: blockVal, isBlock: true };
+    if(mdRange) return { val: mdRange, isBlock: false };
+    return null;
+  };
+  const tTD   = getTarget(todayBlockDay?.td_target,   mdFallback?.td);
+  const tHSR  = getTarget(todayBlockDay?.hsr_target,  mdFallback?.hsr);
+  const tSPR  = getTarget(todayBlockDay?.spr_target,  null);
+  const tACC  = getTarget(todayBlockDay?.acc_target,  null);
+  const tRHIE = getTarget(todayBlockDay?.rhie_target, null);
+  const tSRPE = getTarget(null, mdFallback?.sRPE);
+  const hasAnyTarget = tTD||tHSR||tSPR||tACC||tRHIE||tSRPE;
+
+  const targetBadge = hasBlockTarget
+    ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:0.5px solid rgba(99,102,241,0.3)">📅 주기화</span>'
+    : mdFallback
+    ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(96,165,250,0.1);color:#60a5fa;border:0.5px solid rgba(96,165,250,0.2)">MD 기본값</span>'
+    : '';
+
+  // ── 주간 목표 합산 (REST 제외, 오늘까지만) ──
+  // 오늘 GPS 유무에 따라 기준일 결정
+  // GPS 있음 → 오늘까지 목표 vs 오늘까지 실제
+  // GPS 없음 → 어제까지 목표 vs 어제까지 실제
+  const todayHasGps = (weekGps||[]).some(r=>r.session_date===today);
+  const weekCutDate = todayHasGps ? today : yesterdayStr;
+  const weekCutLabel = todayHasGps ? '오늘' : '어제';
+
+  const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
+  const weekTargetSet = { td:false, hsr:false, spr:false, acc:false, rhie:false };
+  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=weekCutDate&&r.day_label!=='REST').forEach(r=>{
+    if(r.td_target   != null){ weekTargetSum.td   += r.td_target;   weekTargetSet.td   = true; }
+    if(r.hsr_target  != null){ weekTargetSum.hsr  += r.hsr_target;  weekTargetSet.hsr  = true; }
+    if(r.spr_target  != null){ weekTargetSum.spr  += r.spr_target;  weekTargetSet.spr  = true; }
+    if(r.acc_target  != null){ weekTargetSum.acc  += r.acc_target;  weekTargetSet.acc  = true; }
+    if(r.rhie_target != null){ weekTargetSum.rhie += r.rhie_target; weekTargetSet.rhie = true; }
+  });
+
+  // 주간 실제 (weekCutDate까지의 GPS 기반)
+  const weekGpsCut = (weekGps||[]).filter(r=>r.session_date<=weekCutDate);
+  const weekCutDates = [...new Set(weekGpsCut.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M').map(r=>r.session_date))];
+  const weekActualTD   = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'td')||0); },0);
+  const weekActualHSR  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'running_high')||0); },0);
+  const weekActualSPR  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'sprint')||0); },0);
+  const weekActualACC  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'accel')||0); },0);
+  const weekActualRHIE = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'rhie')||0); },0);
+
+  const weekActual = {
+    td:   Math.round(weekActualTD),
+    hsr:  Math.round(weekActualHSR),
+    spr:  Math.round(weekActualSPR),
+    acc:  Math.round(weekActualACC),
+    rhie: Math.round(weekActualRHIE),
+  };
+
+  // 달성률 배지 헬퍼 (0 포함 처리)
+  const achBadge = (actual, target, targetSet) => {
+    if(!targetSet && actual==null) return '<span style="color:var(--text3)">—</span>';
+    if(targetSet && target===0 && actual===0) return '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:600">100%</span>';
+    if(target==null || target===0) return '<span style="color:var(--text3)">—</span>';
+    const pct = Math.round(actual/target*100);
+    const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
+    const b = pct>=90?'rgba(34,197,94,0.1)':pct>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+    return '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:'+b+';color:'+c+';font-weight:600">'+pct+'%</span>';
+  };
+
+  // 주간 테이블 행 헬퍼
+  const weekRow = (label, actualVal, targetVal, targetSet, unit, color) => {
+    if(!targetSet && !actualVal) return '';
+    const aDisp = (actualVal != null && actualVal > 0) ? actualVal.toLocaleString()+unit : (targetSet ? '0'+unit : '—');
+    const tDisp = targetSet ? targetVal.toLocaleString()+unit : '—';
+    return '<tr style="border-top:0.5px solid var(--border)">'+
+      '<td style="padding:5px 8px;color:var(--text3)">'+label+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:var(--text3)">'+tDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:'+color+';font-weight:600">'+aDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right">'+achBadge(actualVal,targetVal,targetSet)+'</td>'+
+      '</tr>';
+  };
+
+  // 어제 실제값
+  const yestActual = { td:yTD, hsr:yHSR, spr:ySprint, acc:yAccel, rhie:yRHIE };
+  const yestMdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(yesterdayBlockDay?.day_label||'').toUpperCase().includes(k));
+  const yestMdFallback = yestMdKey ? MD_LOAD_TARGETS[yestMdKey] : null;
+
+  // 어제 비교 행 헬퍼 (0 포함 처리)
+  const yestRow = (label, target, actual, unit, color, mdRange) => {
+    const hasT = target != null;
+    // 목표가 있으면 실제 null → 0으로 처리 (trainAvg가 0값 필터링해서 null 반환하는 경우 대비)
+    const ar = actual != null ? Math.round(actual) : (hasT ? 0 : null);
+    if(!hasT && !mdRange && ar == null) return '';
+    const tDisp = hasT ? target.toLocaleString()+unit : mdRange ? mdRange[0]+'~'+mdRange[1]+unit : '—';
+    const aDisp = (ar != null && ar > 0) ? ar.toLocaleString()+unit : (hasT ? '0'+unit : '—');
+    let pctHtml = '<span style="color:var(--text3)">—</span>';
+    if(ar != null) {
+      const ref = hasT ? target : (mdRange ? (mdRange[0]+mdRange[1])/2 : null);
+      if(ref === 0 && ar === 0) {
+        pctHtml = '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:600">100%</span>';
+      } else if(ref > 0) {
+        const pct = Math.round(ar/ref*100);
+        const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
+        const b = pct>=90?'rgba(34,197,94,0.1)':pct>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+        pctHtml = '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:'+b+';color:'+c+';font-weight:600">'+pct+'%</span>';
+      }
+    }
+    return '<tr style="border-top:0.5px solid var(--border)">'+
+      '<td style="padding:5px 8px;color:var(--text3)">'+label+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:var(--text3)">'+tDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:'+color+';font-weight:600">'+aDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right">'+pctHtml+'</td>'+
+      '</tr>';
+  };
+
+  const tableThead = '<thead><tr>'+
+    '<th style="padding:4px 8px;text-align:left;font-weight:500;color:var(--text3);width:18%">지표</th>'+
+    '<th style="padding:4px 8px;text-align:right;font-weight:500;color:var(--text3);width:27%">목표</th>'+
+    '<th style="padding:4px 8px;text-align:right;font-weight:500;color:var(--text3);width:27%">실제</th>'+
+    '<th style="padding:4px 8px;text-align:right;font-weight:500;color:var(--text3);width:28%">달성</th>'+
+    '</tr></thead>';
+
+  const loadHtml =
+    // ── 오늘 목표 ──
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+
+      '<span style="font-size:13px;font-weight:700;color:var(--text)">'+todayDayLabel+'</span>'+
+      (todayAmSession?'<span style="font-size:11px;color:var(--text3)">오전: '+todayAmSession+'</span>':'')+
+      (todayPmSession?'<span style="font-size:11px;color:var(--text3)">오후: '+todayPmSession+'</span>':'')+
+      (todayOpp?'<span style="font-size:11px;color:var(--text3)">· vs '+todayOpp+'</span>':'')+
+      '<span style="margin-left:auto">'+targetBadge+'</span>'+
+    '</div>'+
+    (hasAnyTarget ?
+      '<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px">'+
+      [
+        {label:'TD',     t:tTD,   unit:'m',  color:'#60a5fa', ref:matchRef3.td},
+        {label:'HSR',    t:tHSR,  unit:'m',  color:'#f59e0b', ref:matchRef3.hsr},
+        {label:'Sprint', t:tSPR,  unit:'m',  color:'#ef4444', ref:matchRef3.sprint},
+        {label:'가속',   t:tACC,  unit:'회', color:'#fb923c', ref:matchRef3.accel},
+        {label:'RHIE',   t:tRHIE, unit:'회', color:'#34d399', ref:matchRef3.rhie},
+      ].map(({label,t,unit,color,ref})=>{
+        const rawVal = !t ? null : Array.isArray(t.val) ? (t.val[0]+t.val[1])/2 : t.val;
+        const v = !t ? '—' : Array.isArray(t.val) ? t.val[0].toLocaleString()+'~'+t.val[1].toLocaleString() : t.val.toLocaleString();
+        const vc = !t ? 'var(--text3)' : 'var(--text)';
+        let pctSpan = '';
+        if(rawVal && ref && ref>0) {
+          const pct = Math.round(rawVal/ref*100);
+          const pc = pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';
+          pctSpan = ' <span style="font-size:9px;color:'+pc+';font-weight:600">'+pct+'%</span>';
+        }
+        return '<div style="background:var(--surface2);padding:10px 4px;text-align:center">'+
+          '<div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:5px">'+label+'</div>'+
+          '<div style="font-size:13px;font-weight:700;color:'+vc+';line-height:1.2">'+v+'<span style="font-size:9px;color:var(--text3);margin-left:1px">'+unit+'</span>'+pctSpan+'</div>'+
+          '</div>';
+      }).join('')+
+      '</div>'
+      : '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">주기화 목표 미설정 — 주기화 탭에서 오늘 세션을 설정하세요</div>'
+    )+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:0">팀 ACWR '+
+      '<span style="color:'+acwrColor(teamACWR)+';font-weight:600">'+(teamACWR?teamACWR.toFixed(2):'—')+'</span> — '+acwrLabel(teamACWR)+
+    '</div>'+
+
+    // ── 이번 주 누적 + 어제 결과 (나란히) ──
+    '<div style="height:0.5px;background:var(--border2);margin:12px 0"></div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start">'+
+
+      // 왼쪽: 이번 주 누적
+      '<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'+
+        '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 <span style="font-weight:400;color:var(--text3);font-size:9px">('+weekStartStr+' ~ '+weekCutLabel+')</span></div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
+        '<thead><tr>'+
+          '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
+          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">목표</th>'+
+          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">실제</th>'+
+          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
+        '</tr></thead>'+
+        '<tbody>'+
+          weekRow('TD',     weekActual.td,   weekTargetSum.td,   weekTargetSet.td,   'm',  '#60a5fa')+
+          weekRow('HSR',    weekActual.hsr,  weekTargetSum.hsr,  weekTargetSet.hsr,  'm',  '#f59e0b')+
+          weekRow('Sprint', weekActual.spr,  weekTargetSum.spr,  weekTargetSet.spr,  'm',  '#ef4444')+
+          weekRow('가속',   weekActual.acc,  weekTargetSum.acc,  weekTargetSet.acc,  '회', '#fb923c')+
+          weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie, weekTargetSet.rhie, '회', '#34d399')+
+        '</tbody></table>'+
+      '</div>'+
+
+      // 오른쪽: 어제 결과
+      (yGps.length ?
+        '<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'+
+          '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📊 어제 결과 '+
+            '<span style="font-weight:400;font-size:9px">('+WEEK_DAYS[yesterday.getDay()]+')'+
+            (yesterdayBlockDay?.day_label?' · '+yesterdayBlockDay.day_label:'')+
+          '</span></div>'+
+          '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
+          '<thead><tr>'+
+            '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
+            '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">목표</th>'+
+            '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">실제</th>'+
+            '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
+          '</tr></thead>'+
+          '<tbody>'+
+            yestRow('TD',     yesterdayBlockDay?.td_target,   yestActual.td,  'm',  '#60a5fa', null)+
+            yestRow('HSR',    yesterdayBlockDay?.hsr_target,  yestActual.hsr, 'm',  '#f59e0b', null)+
+            yestRow('Sprint', yesterdayBlockDay?.spr_target,  yestActual.spr, 'm',  '#ef4444', null)+
+            yestRow('가속',   yesterdayBlockDay?.acc_target,  yestActual.acc, '회', '#fb923c', null)+
+            yestRow('RHIE',   yesterdayBlockDay?.rhie_target, yestActual.rhie,'회', '#34d399', null)+
+          '</tbody></table>'+
+        '</div>'
+        : '<div></div>'
+      )+
+    '</div>';
 
   // ── 웰니스 + 미응답 ────────────────────────────────────────────
   const todayWellAll = todayWell||[];
@@ -9068,7 +9274,7 @@ async function loadMorningReport(){
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
       <div>
         <div style="font-size:15px;font-weight:600;color:var(--text)">데일리 브리핑</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${today} (${WEEK_DAYS[now.getDay()]}) · ${todayMD}${todayOpp2?' · vs '+todayOpp2:''}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${today} (${WEEK_DAYS[now.getDay()]}) · ${todayDayLabel}${todayOpp2?' · vs '+todayOpp2:''}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span style="font-size:11px;padding:3px 10px;border-radius:10px;background:var(--surface2);color:var(--text3);border:0.5px solid var(--border)">${nowStr}</span>
@@ -9076,79 +9282,41 @@ async function loadMorningReport(){
       </div>
     </div>
 
-
-    <!-- 섹션2: 주간 부하 흐름 + 전날 상세 -->
+    <!-- 섹션2: 오늘 권장 부하 + 경기 기준 + 이번 주 누적/어제 결과 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">이번 주 팀 부하 흐름</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--text3)">TD <strong style="color:var(--text)">${weekTotalTD.toFixed(1)}km</strong></span>
-          <span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${weekTotalHSR.toLocaleString()}m</strong></span>
-          <span style="font-size:11px;color:var(--text3)">Sprint <strong style="color:#ef4444">${weekTotalSprint.toLocaleString()}m</strong></span>
-          <span style="font-size:11px;color:var(--text3)">가속 <strong style="color:#fb923c">${weekTotalAccel}회</strong></span>
-          <span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">${weekTotalRHIE}회</strong></span>
-          <span style="font-size:11px;color:var(--text3)">sRPE <strong style="color:#a78bfa">${Math.round(weekTotalSRPE).toLocaleString()} AU</strong></span>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:520px">
-          <thead>
-            <tr style="background:var(--surface2)">
-              <th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">요일·날짜</th>
-              <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">주기</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">시간</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">TD</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">HSR</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">Sprint</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">sRPE</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">ACWR</th>
-              <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">상태</th>
-            </tr>
-          </thead>
-          <tbody>${weekRowsHtml}</tbody>
-        </table>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px">공식: (M선수 전체 팀 지표 총합) ÷ (M선수 전체 훈련시간 합) × M선수 다수의 높은 시간 — 선수 수·훈련시간 차이 보정</div>
-      <!-- 최근 3경기 기준선 -->
+      <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:10px;letter-spacing:.05em">🎯 오늘 권장 부하</div>
+      ${loadHtml}
+
       ${ref3Info.length ? `
-      <div style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;border:0.5px solid var(--border)">
-        <div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📊 % 기준: 최근 ${ref3Info.length}경기 팀 평균</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+      <div style="height:0.5px;background:var(--border2);margin:12px 0"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+        <div style="font-size:10px;font-weight:600;color:var(--text3)">📊 경기 기준 · 최근 ${ref3Info.length}경기 팀 평균</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
           ${ref3Info.map((m,i)=>`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#3b1219;color:#f87171;border:0.5px solid #7f1d1d">
-            ${i+1}. ${m.dayLabel} vs ${m.opp}${m.ha?' ('+m.ha+')':''}${m.resultLabel||(m.result==='W'?'  승':m.result==='L'?' 패':m.result==='D'?' 무':'')}${m.score?' '+m.score:''}
+            ${i+1}. ${m.dayLabel} vs ${m.opp}${m.ha?' ('+m.ha+')':''}${m.result==='W'?' 승':m.result==='L'?' 패':m.result==='D'?' 무':''}${m.score?' '+m.score:''}
           </span>`).join('')}
         </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${matchRef3.td?`<span style="font-size:10px;color:var(--text3)">TD <strong style="color:#60a5fa">${(matchRef3.td/1000).toFixed(1)}km</strong></span>`:''}
-          ${matchRef3.hsr?`<span style="font-size:10px;color:var(--text3)">HSR <strong style="color:#f59e0b">${Math.round(matchRef3.hsr)}m</strong></span>`:''}
-          ${matchRef3.sprint?`<span style="font-size:10px;color:var(--text3)">Sprint <strong style="color:#ef4444">${Math.round(matchRef3.sprint)}m</strong></span>`:''}
-          ${matchRef3.accel?`<span style="font-size:10px;color:var(--text3)">가속 <strong style="color:#fb923c">${Math.round(matchRef3.accel)}회</strong></span>`:''}
-          ${matchRef3.rhie?`<span style="font-size:10px;color:var(--text3)">RHIE <strong style="color:#34d399">${parseFloat(matchRef3.rhie.toFixed(1))}회</strong></span>`:''}
-        </div>
-        <div style="font-size:9px;color:var(--text3);margin-top:4px">🟢 ≥80% &nbsp; 🟡 60~79% &nbsp; 🔴 &lt;60% — 경기대비 훈련 부하 비율</div>
-      </div>` : ''}
-      ${yesterdayDetailHtml}
-    </div>
-
-    <!-- 권장 부하 슬림 바 -->
-    ${todayTarget ? `
-    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:8px;padding:8px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-      <span style="font-size:10px;font-weight:500;color:var(--text3)">오늘 목표 · <strong style="color:var(--text)">${todayMD}</strong>${todayOpp2?' · vs '+todayOpp2:''}</span>
-      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-        <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">TD ${todayTarget.td[0]}~${todayTarget.td[1]}km</span>
-        <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">HSR ${todayTarget.hsr[0].toLocaleString()}~${todayTarget.hsr[1].toLocaleString()}m</span>
-        <span style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:5px;padding:3px 9px;font-size:10px;color:#93c5fd">sRPE ${todayTarget.sRPE[0]}~${todayTarget.sRPE[1]} AU</span>
-        <span style="font-size:10px;color:${acwrColor(teamACWR)};margin-left:2px">ACWR ${teamACWR?teamACWR.toFixed(2):'—'} ${acwrLabel(teamACWR)}</span>
       </div>
-    </div>` : ''}
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:6px">
+        ${matchRef3.td?`<span style="font-size:11px;color:var(--text3)">TD <strong style="color:#60a5fa">${(matchRef3.td/1000).toFixed(1)}km</strong></span>`:''}
+        ${matchRef3.hsr?`<span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${Math.round(matchRef3.hsr)}m</strong></span>`:''}
+        ${matchRef3.sprint?`<span style="font-size:11px;color:var(--text3)">Sprint <strong style="color:#ef4444">${Math.round(matchRef3.sprint)}m</strong></span>`:''}
+        ${matchRef3.accel?`<span style="font-size:11px;color:var(--text3)">가속 <strong style="color:#fb923c">${Math.round(matchRef3.accel)}회</strong></span>`:''}
+        ${matchRef3.rhie?`<span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">${parseFloat(matchRef3.rhie.toFixed(1))}회</strong></span>`:''}
+        <span style="font-size:10px;color:var(--text3)">🟢 ≥80% · 🟡 60~79% · 🔴 &lt;60%</span>
+      </div>
+      <div style="font-size:9px;color:var(--text3);padding:5px 8px;background:var(--surface2);border-radius:6px;line-height:1.6">
+        <strong>팀 평균 공식:</strong> (M선수 전체 지표 총합) ÷ (M선수 전체 훈련시간 합) × M선수 다수의 높은 시간 — 선수 수·훈련시간 차이 보정
+      </div>` : ''}
+    </div>
 
     <!-- 섹션3: 부상자 현황 -->
     ${_injuredCardHtml}
 
-    <!-- 섹션4: 오늘 관리 우선순위 -->
+    <!-- 섹션4: 부상 위험 체크 -->
     ${priorityAlertHtml}
 
-    <!-- 섹션5: 웰니스 + RPE (모드에 따라 조건부 표시) -->
+    <!-- 섹션5: 웰니스 + RPE -->
     ${(currentUseWellness||currentUseRpe) ? `
     <div style="display:grid;grid-template-columns:${(currentUseWellness&&currentUseRpe)?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;align-items:start">
 
@@ -9210,7 +9378,9 @@ async function loadMorningReport(){
         ${noRpeRespHtml}
       </div>` : ''}
 
-    </div>` : ''}`;
+    </div>` : ''}
+
+    `;
 
   // 부상위험 상세 분석 자동 실행
   runInjuryRiskAnalysis();
