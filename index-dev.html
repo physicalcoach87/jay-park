@@ -11884,7 +11884,7 @@ async function loadTeamSummary(){
 
   const _rpeHtml = `
     <!-- ④ RPE/체중 입력 현황 -->
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">
           📋 ${[currentUseWellness?'웰니스':'', currentUseRpe?'RPE':''].filter(Boolean).join(' / ')} 현황
@@ -11928,7 +11928,7 @@ async function loadTeamSummary(){
   out.innerHTML = `
     <!-- ③ GPS 선수 테이블 (M그룹) -->
     ${hasGps ? `
-    <div style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
         M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
       </div>
@@ -18924,11 +18924,20 @@ function printTrainingReport(){
   [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{ border-color:#9ca3af !important }
   svg[style*="background:var(--surface2)"]{ background:#f4f5f6 !important }
   #training-report-action-bar, select, button{ display:none !important }
+  /* 페이지 나눔 제어 */
+  .print-page-start{
+    page-break-before: always !important;
+    break-before: page !important;
+    margin-top: 0 !important;
+  }
+  /* 주기화 섹션은 1페이지에 유지 */
   div[style*="border-radius:10px"]{
     break-inside:avoid;
     page-break-inside:avoid;
     margin-bottom:10px;
   }
+  /* 테이블 행 자르지 않기 */
+  tr{ break-inside:avoid; page-break-inside:avoid; }
   table{ border-collapse:collapse; width:100%; }
   tr[style*="background:var(--surface2)"]{ background:#f3f4f6 !important }
   td,th{ border-bottom:1px solid #d1d5db !important }
