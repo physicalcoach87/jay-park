@@ -8978,19 +8978,27 @@ async function loadMorningReport(){
     (hasAnyTarget ?
       '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px">'+
       [
-        {label:'TD',     t:tTD,   unit:'m',  color:'#60a5fa'},
-        {label:'HSR',    t:tHSR,  unit:'m',  color:'#f59e0b'},
-        {label:'Sprint', t:tSPR,  unit:'m',  color:'#ef4444'},
-        {label:'가속',   t:tACC,  unit:'회', color:'#fb923c'},
-        {label:'RHIE',   t:tRHIE, unit:'회', color:'#34d399'},
-        {label:'sRPE',   t:tSRPE, unit:'AU', color:'#a78bfa'},
-      ].map(({label,t,unit,color})=>{
+        {label:'TD',     t:tTD,   unit:'m',  color:'#60a5fa', ref:matchRef3.td},
+        {label:'HSR',    t:tHSR,  unit:'m',  color:'#f59e0b', ref:matchRef3.hsr},
+        {label:'Sprint', t:tSPR,  unit:'m',  color:'#ef4444', ref:matchRef3.sprint},
+        {label:'가속',   t:tACC,  unit:'회', color:'#fb923c', ref:matchRef3.accel},
+        {label:'RHIE',   t:tRHIE, unit:'회', color:'#34d399', ref:matchRef3.rhie},
+        {label:'sRPE',   t:tSRPE, unit:'AU', color:'#a78bfa', ref:null},
+      ].map(({label,t,unit,color,ref})=>{
+        const rawVal = !t ? null : Array.isArray(t.val) ? (t.val[0]+t.val[1])/2 : t.val;
         const v = !t ? '—' : Array.isArray(t.val) ? t.val[0].toLocaleString()+'~'+t.val[1].toLocaleString() : t.val.toLocaleString();
         const vc = !t ? 'var(--text3)' : 'var(--text)';
+        let pctLine = '';
+        if(rawVal && ref && ref>0) {
+          const pct = Math.round(rawVal/ref*100);
+          const pc = pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';
+          pctLine = '<div style="font-size:9px;color:'+pc+';margin-top:2px;font-weight:600">'+pct+'%</div>';
+        }
         return '<div style="background:var(--surface2);padding:10px 4px;text-align:center">'+
           '<div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:4px">'+label+'</div>'+
           '<div style="font-size:13px;font-weight:700;color:'+vc+';line-height:1.2">'+v+'</div>'+
           '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+unit+'</div>'+
+          pctLine+
           '</div>';
       }).join('')+
       '</div>'
