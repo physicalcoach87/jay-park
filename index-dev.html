@@ -8438,7 +8438,7 @@ async function loadMorningReport(){
       .limit(300),
     supa.from('block_days')
       .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
-      .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr),
+      .gte('plan_date', yesterdayStr).lte('plan_date', weekEndStr),
   ]);
 
   // ── 경기 팀 평균: (합계) / (출전시간 합) × max(출전시간) ──────
@@ -8848,12 +8848,15 @@ async function loadMorningReport(){
   const blockDayMap = {};
   (weekBlockDays||[]).forEach(r=>{ blockDayMap[r.plan_date]=r; });
 
-  // 오늘 block_days 우선, 없으면 GPS session_topic 기반 MD_LOAD_TARGETS fallback
+  // 오늘 / 어제 block_days
   const todayBlockDay = blockDayMap[today] || null;
+  const yesterdayBlockDay = blockDayMap[yesterdayStr] || null;
+
+  // MD fallback (오늘 라벨 or GPS topic 기반)
   const mdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(todayBlockDay?.day_label||todayTopic).toUpperCase().includes(k));
   const mdFallback = mdKey ? MD_LOAD_TARGETS[mdKey] : null;
 
-  // 목표 출처 판별 (주기화 설정 vs 하드코딩)
+  // 목표 출처 판별
   const hasBlockTarget = todayBlockDay && (todayBlockDay.td_target||todayBlockDay.hsr_target||todayBlockDay.spr_target||todayBlockDay.acc_target||todayBlockDay.rhie_target);
   const todayDayLabel = todayBlockDay?.day_label || (mdKey||'—');
   const todayAmSession = todayBlockDay?.am_session || '';
@@ -8865,54 +8868,170 @@ async function loadMorningReport(){
     if(mdRange) return { val: mdRange, isBlock: false };
     return null;
   };
-  const tTD    = getTarget(todayBlockDay?.td_target,    mdFallback?.td);
-  const tHSR   = getTarget(todayBlockDay?.hsr_target,   mdFallback?.hsr);
-  const tSPR   = getTarget(todayBlockDay?.spr_target,   null);
-  const tACC   = getTarget(todayBlockDay?.acc_target,   null);
-  const tRHIE  = getTarget(todayBlockDay?.rhie_target,  null);
-  const tSRPE  = getTarget(null, mdFallback?.sRPE);
+  const tTD   = getTarget(todayBlockDay?.td_target,   mdFallback?.td);
+  const tHSR  = getTarget(todayBlockDay?.hsr_target,  mdFallback?.hsr);
+  const tSPR  = getTarget(todayBlockDay?.spr_target,  null);
+  const tACC  = getTarget(todayBlockDay?.acc_target,  null);
+  const tRHIE = getTarget(todayBlockDay?.rhie_target, null);
+  const tSRPE = getTarget(null, mdFallback?.sRPE);
   const hasAnyTarget = tTD||tHSR||tSPR||tACC||tRHIE||tSRPE;
 
   const targetBadge = hasBlockTarget
-    ? `<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:0.5px solid rgba(99,102,241,0.3)">📅 주기화</span>`
+    ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(99,102,241,0.15);color:#a5b4fc;border:0.5px solid rgba(99,102,241,0.3)">📅 주기화</span>'
     : mdFallback
-    ? `<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(96,165,250,0.1);color:#60a5fa;border:0.5px solid rgba(96,165,250,0.2)">MD 기본값</span>`
+    ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(96,165,250,0.1);color:#60a5fa;border:0.5px solid rgba(96,165,250,0.2)">MD 기본값</span>'
     : '';
 
-  const targetCard = (label, t, unit, color) => {
-    if(!t) return '';
-    const valHtml = Array.isArray(t.val)
-      ? `${t.val[0].toLocaleString()}~${t.val[1].toLocaleString()}`
-      : t.val.toLocaleString();
-    return `<div style="background:#0c1a2e;border:0.5px solid #1d4ed8;border-radius:8px;padding:9px 8px;text-align:center">
-      <div style="font-size:10px;color:${color};margin-bottom:2px">${label}</div>
-      <div style="font-size:14px;font-weight:600;color:#e0eaff">${valHtml}<span style="font-size:9px;color:${color};margin-left:2px">${unit}</span></div>
-      ${!t.isBlock&&mdFallback?`<div style="font-size:9px;color:var(--text3);margin-top:1px">MD 기본</div>`:''}
-    </div>`;
+  // ── 주간 목표 합산 (REST 제외, 오늘까지만) ──
+  const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0, sRPE:0 };
+  let weekTargetDays = 0;
+  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=today&&r.day_label!=='REST').forEach(r=>{
+    if(r.td_target)   weekTargetSum.td   += r.td_target;
+    if(r.hsr_target)  weekTargetSum.hsr  += r.hsr_target;
+    if(r.spr_target)  weekTargetSum.spr  += r.spr_target;
+    if(r.acc_target)  weekTargetSum.acc  += r.acc_target;
+    if(r.rhie_target) weekTargetSum.rhie += r.rhie_target;
+    weekTargetDays++;
+  });
+  // sRPE 주간 목표: mdFallback 범위 중간값 × 훈련일 수
+  if(mdFallback?.sRPE && weekTargetDays>0)
+    weekTargetSum.sRPE = Math.round((mdFallback.sRPE[0]+mdFallback.sRPE[1])/2) * weekTargetDays;
+
+  // 주간 실제 (weekTotal* 는 km 단위라 m 변환)
+  const weekActual = {
+    td:   Math.round(weekTotalTD * 1000),
+    hsr:  weekTotalHSR,
+    spr:  weekTotalSprint,
+    acc:  weekTotalAccel,
+    rhie: weekTotalRHIE,
+    sRPE: Math.round(weekTotalSRPE),
   };
 
-  const loadHtml = hasAnyTarget ? `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px">
-      <div>
-        <span style="font-size:12px;font-weight:600;color:var(--text)">${todayDayLabel}</span>
-        ${todayAmSession?`<span style="font-size:10px;color:var(--text3);margin-left:6px">오전: ${todayAmSession}</span>`:''}
-        ${todayPmSession?`<span style="font-size:10px;color:var(--text3);margin-left:4px">오후: ${todayPmSession}</span>`:''}
-        ${todayOpp?`<span style="font-size:10px;color:var(--text3);margin-left:6px">vs ${todayOpp}</span>`:''}
-      </div>
-      ${targetBadge}
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(80px,1fr));gap:6px;margin-bottom:10px">
-      ${targetCard('TD', tTD, 'm', '#60a5fa')}
-      ${targetCard('HSR', tHSR, 'm', '#f59e0b')}
-      ${targetCard('Sprint', tSPR, 'm', '#ef4444')}
-      ${targetCard('가속', tACC, '회', '#fb923c')}
-      ${targetCard('RHIE', tRHIE, '회', '#34d399')}
-      ${targetCard('sRPE', tSRPE, 'AU', '#a78bfa')}
-    </div>
-    <div style="font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:3px">
-      <div>• 팀 ACWR <span style="color:${acwrColor(teamACWR)};font-weight:600">${teamACWR?teamACWR.toFixed(2):'—'}</span> — ${acwrLabel(teamACWR)}</div>
-      ${riskResults.filter(r=>r.risk.level==='red').map(r=>`<div style="color:#f87171">• ${r.player.name} 스프린트/고강도 제한 권고</div>`).join('')}
-    </div>` : `<div style="font-size:12px;color:var(--text3);text-align:center;padding:1rem">주기화 목표 미설정 — 주기화 탭에서 오늘 세션을 설정하세요</div>`;
+  // 달성률 배지 헬퍼
+  const achBadge = (actual, target) => {
+    if(!actual||!target) return '<span style="color:var(--text3)">—</span>';
+    const pct = Math.round(actual/target*100);
+    const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
+    const b = pct>=90?'rgba(34,197,94,0.1)':pct>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+    return '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:'+b+';color:'+c+';font-weight:600">'+pct+'%</span>';
+  };
+
+  // 주간 테이블 행 헬퍼
+  const weekRow = (label, actualVal, targetVal, unit, color) => {
+    if(!actualVal && !targetVal) return '';
+    const aDisp = actualVal ? actualVal.toLocaleString()+unit : '—';
+    const tDisp = targetVal ? targetVal.toLocaleString()+unit : '—';
+    return '<tr style="border-top:0.5px solid var(--border)">'+
+      '<td style="padding:5px 8px;color:var(--text3)">'+label+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:var(--text3)">'+tDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:'+color+';font-weight:600">'+aDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right">'+achBadge(actualVal,targetVal)+'</td>'+
+      '</tr>';
+  };
+
+  // 어제 실제값
+  const yestActual = { td:yTD, hsr:yHSR, spr:ySprint, acc:yAccel, rhie:yRHIE };
+  const yestMdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(yesterdayBlockDay?.day_label||'').toUpperCase().includes(k));
+  const yestMdFallback = yestMdKey ? MD_LOAD_TARGETS[yestMdKey] : null;
+
+  // 어제 비교 행 헬퍼
+  const yestRow = (label, target, actual, unit, color, mdRange) => {
+    const hasT = target!=null;
+    const ar = actual!=null ? Math.round(actual) : null;
+    if(!hasT && !mdRange && ar==null) return '';
+    const tDisp = hasT ? target.toLocaleString()+unit : mdRange ? mdRange[0]+'~'+mdRange[1]+unit : '—';
+    const aDisp = ar!=null ? ar.toLocaleString()+unit : '—';
+    let pctHtml = '<span style="color:var(--text3)">—</span>';
+    if(ar!=null) {
+      const ref = hasT ? target : (mdRange ? (mdRange[0]+mdRange[1])/2 : null);
+      if(ref && ref>0) {
+        const pct = Math.round(ar/ref*100);
+        const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
+        const b = pct>=90?'rgba(34,197,94,0.1)':pct>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+        pctHtml = '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:'+b+';color:'+c+';font-weight:600">'+pct+'%</span>';
+      }
+    }
+    return '<tr style="border-top:0.5px solid var(--border)">'+
+      '<td style="padding:5px 8px;color:var(--text3)">'+label+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:var(--text3)">'+tDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right;color:'+color+';font-weight:600">'+aDisp+'</td>'+
+      '<td style="padding:5px 8px;text-align:right">'+pctHtml+'</td>'+
+      '</tr>';
+  };
+
+  const tableThead = '<thead><tr>'+
+    '<th style="padding:4px 8px;text-align:left;font-weight:500;color:var(--text3);width:18%">지표</th>'+
+    '<th style="padding:4px 8px;text-align:right;font-weight:500;color:var(--text3);width:27%">목표</th>'+
+    '<th style="padding:4px 8px;text-align:right;font-weight:500;color:var(--text3);width:27%">실제</th>'+
+    '<th style="padding:4px 8px;text-align:right;font-weight:500;color:var(--text3);width:28%">달성</th>'+
+    '</tr></thead>';
+
+  const loadHtml =
+    // ── 오늘 목표 ──
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+
+      '<span style="font-size:13px;font-weight:700;color:var(--text)">'+todayDayLabel+'</span>'+
+      (todayAmSession?'<span style="font-size:11px;color:var(--text3)">오전: '+todayAmSession+'</span>':'')+
+      (todayPmSession?'<span style="font-size:11px;color:var(--text3)">오후: '+todayPmSession+'</span>':'')+
+      (todayOpp?'<span style="font-size:11px;color:var(--text3)">· vs '+todayOpp+'</span>':'')+
+      '<span style="margin-left:auto">'+targetBadge+'</span>'+
+    '</div>'+
+    (hasAnyTarget ?
+      '<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;margin-bottom:10px">'+
+      [
+        {label:'TD',     t:tTD,   unit:'m',  color:'#60a5fa'},
+        {label:'HSR',    t:tHSR,  unit:'m',  color:'#f59e0b'},
+        {label:'Sprint', t:tSPR,  unit:'m',  color:'#ef4444'},
+        {label:'가속',   t:tACC,  unit:'회', color:'#fb923c'},
+        {label:'RHIE',   t:tRHIE, unit:'회', color:'#34d399'},
+        {label:'sRPE',   t:tSRPE, unit:'AU', color:'#a78bfa'},
+      ].map(({label,t,unit,color})=>{
+        const v = !t ? '—' : Array.isArray(t.val) ? t.val[0].toLocaleString()+'~'+t.val[1].toLocaleString() : t.val.toLocaleString();
+        const vc = !t ? 'var(--text3)' : 'var(--text)';
+        return '<div style="background:var(--surface2);padding:10px 4px;text-align:center">'+
+          '<div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:4px">'+label+'</div>'+
+          '<div style="font-size:13px;font-weight:700;color:'+vc+';line-height:1.2">'+v+'</div>'+
+          '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+unit+'</div>'+
+          '</div>';
+      }).join('')+
+      '</div>'
+      : '<div style="font-size:12px;color:var(--text3);margin-bottom:10px">주기화 목표 미설정 — 주기화 탭에서 오늘 세션을 설정하세요</div>'
+    )+
+    '<div style="font-size:11px;color:var(--text3);margin-bottom:0">팀 ACWR '+
+      '<span style="color:'+acwrColor(teamACWR)+';font-weight:600">'+(teamACWR?teamACWR.toFixed(2):'—')+'</span> — '+acwrLabel(teamACWR)+
+    '</div>'+
+
+    // ── 이번 주 누적 ──
+    '<div style="height:0.5px;background:var(--border2);margin:12px 0"></div>'+
+    '<div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📅 이번 주 누적 · '+weekStartStr+' ~ '+today+'</div>'+
+    '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
+    tableThead+
+    '<tbody>'+
+      weekRow('TD',     weekActual.td,   weekTargetSum.td||null,   'm',  '#60a5fa')+
+      weekRow('HSR',    weekActual.hsr,  weekTargetSum.hsr||null,  'm',  '#f59e0b')+
+      weekRow('Sprint', weekActual.spr,  weekTargetSum.spr||null,  'm',  '#ef4444')+
+      weekRow('가속',   weekActual.acc,  weekTargetSum.acc||null,  '회', '#fb923c')+
+      weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie||null, '회', '#34d399')+
+      weekRow('sRPE',   weekActual.sRPE, weekTargetSum.sRPE||null, 'AU', '#a78bfa')+
+    '</tbody></table>'+
+
+    // ── 어제 결과 ──
+    (yGps.length ?
+      '<div style="height:0.5px;background:var(--border2);margin:12px 0"></div>'+
+      '<div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📊 어제 결과 · '+yesterdayStr+' ('+WEEK_DAYS[yesterday.getDay()]+')'+
+        (yesterdayBlockDay?.day_label ? ' <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--surface2);color:var(--text2)">'+yesterdayBlockDay.day_label+'</span>' : '')+
+      '</div>'+
+      '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
+      tableThead+
+      '<tbody>'+
+        yestRow('TD',     yesterdayBlockDay?.td_target,   yestActual.td,  'm',  '#60a5fa', null)+
+        yestRow('HSR',    yesterdayBlockDay?.hsr_target,  yestActual.hsr, 'm',  '#f59e0b', null)+
+        yestRow('Sprint', yesterdayBlockDay?.spr_target,  yestActual.spr, 'm',  '#ef4444', null)+
+        yestRow('가속',   yesterdayBlockDay?.acc_target,  yestActual.acc, '회', '#fb923c', null)+
+        yestRow('RHIE',   yesterdayBlockDay?.rhie_target, yestActual.rhie,'회', '#34d399', null)+
+        yestRow('sRPE',   null, ySRPE, 'AU', '#a78bfa', yestMdFallback?.sRPE)+
+      '</tbody></table>'
+      : ''
+    );
 
   // ── 웰니스 + 미응답 ────────────────────────────────────────────
   const todayWellAll = todayWell||[];
