@@ -8988,17 +8988,15 @@ async function loadMorningReport(){
         const rawVal = !t ? null : Array.isArray(t.val) ? (t.val[0]+t.val[1])/2 : t.val;
         const v = !t ? '—' : Array.isArray(t.val) ? t.val[0].toLocaleString()+'~'+t.val[1].toLocaleString() : t.val.toLocaleString();
         const vc = !t ? 'var(--text3)' : 'var(--text)';
-        let pctLine = '';
+        let pctSpan = '';
         if(rawVal && ref && ref>0) {
           const pct = Math.round(rawVal/ref*100);
           const pc = pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';
-          pctLine = '<div style="font-size:9px;color:'+pc+';margin-top:2px;font-weight:600">'+pct+'%</div>';
+          pctSpan = ' <span style="font-size:9px;color:'+pc+';font-weight:600">'+pct+'%</span>';
         }
         return '<div style="background:var(--surface2);padding:10px 4px;text-align:center">'+
-          '<div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:4px">'+label+'</div>'+
-          '<div style="font-size:13px;font-weight:700;color:'+vc+';line-height:1.2">'+v+'</div>'+
-          '<div style="font-size:9px;color:var(--text3);margin-top:1px">'+unit+'</div>'+
-          pctLine+
+          '<div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:5px">'+label+'</div>'+
+          '<div style="font-size:13px;font-weight:700;color:'+vc+';line-height:1.2">'+v+'<span style="font-size:9px;color:var(--text3);margin-left:1px">'+unit+'</span>'+pctSpan+'</div>'+
           '</div>';
       }).join('')+
       '</div>'
@@ -9013,7 +9011,7 @@ async function loadMorningReport(){
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start">'+
 
       // 왼쪽: 이번 주 누적
-      '<div>'+
+      '<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'+
         '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 <span style="font-weight:400;color:var(--text3);font-size:9px">(주기화 기준)</span></div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
         '<thead><tr>'+
@@ -9033,7 +9031,7 @@ async function loadMorningReport(){
 
       // 오른쪽: 어제 결과
       (yGps.length ?
-        '<div>'+
+        '<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'+
           '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📊 어제 결과 '+
             '<span style="font-weight:400;font-size:9px">('+WEEK_DAYS[yesterday.getDay()]+')'+
             (yesterdayBlockDay?.day_label?' · '+yesterdayBlockDay.day_label:'')+
