@@ -8883,9 +8883,15 @@ async function loadMorningReport(){
     : '';
 
   // ── 주간 목표 합산 (REST 제외, 오늘까지만) ──
-  // 주간 목표: 어제까지 block_days 합산 (REST 제외) — 지금까지 계획 대비 달성률 확인
+  // 오늘 GPS 유무에 따라 기준일 결정
+  // GPS 있음 → 오늘까지 목표 vs 오늘까지 실제
+  // GPS 없음 → 어제까지 목표 vs 어제까지 실제
+  const todayHasGps = (weekGps||[]).some(r=>r.session_date===today);
+  const weekCutDate = todayHasGps ? today : yesterdayStr;
+  const weekCutLabel = todayHasGps ? '오늘' : '어제';
+
   const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
-  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=today&&r.day_label!=='REST').forEach(r=>{
+  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=weekCutDate&&r.day_label!=='REST').forEach(r=>{
     if(r.td_target)   weekTargetSum.td   += r.td_target;
     if(r.hsr_target)  weekTargetSum.hsr  += r.hsr_target;
     if(r.spr_target)  weekTargetSum.spr  += r.spr_target;
@@ -8893,14 +8899,21 @@ async function loadMorningReport(){
     if(r.rhie_target) weekTargetSum.rhie += r.rhie_target;
   });
 
-  // 주간 실제 (weekTotal* 는 km 단위라 m 변환)
+  // 주간 실제 (weekCutDate까지의 GPS 기반)
+  const weekGpsCut = (weekGps||[]).filter(r=>r.session_date<=weekCutDate);
+  const weekCutDates = [...new Set(weekGpsCut.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M').map(r=>r.session_date))];
+  const weekActualTD   = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'td')||0); },0);
+  const weekActualHSR  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'running_high')||0); },0);
+  const weekActualSPR  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'sprint')||0); },0);
+  const weekActualACC  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'accel')||0); },0);
+  const weekActualRHIE = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'rhie')||0); },0);
+
   const weekActual = {
-    td:   Math.round(weekTotalTD * 1000),
-    hsr:  weekTotalHSR,
-    spr:  weekTotalSprint,
-    acc:  weekTotalAccel,
-    rhie: weekTotalRHIE,
-    sRPE: Math.round(weekTotalSRPE),
+    td:   Math.round(weekActualTD),
+    hsr:  Math.round(weekActualHSR),
+    spr:  Math.round(weekActualSPR),
+    acc:  Math.round(weekActualACC),
+    rhie: Math.round(weekActualRHIE),
   };
 
   // 달성률 배지 헬퍼
@@ -9007,7 +9020,7 @@ async function loadMorningReport(){
 
       // 왼쪽: 이번 주 누적
       '<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'+
-        '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 <span style="font-weight:400;color:var(--text3);font-size:9px">(주기화 기준)</span></div>'+
+        '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 <span style="font-weight:400;color:var(--text3);font-size:9px">('+weekStartStr+' ~ '+weekCutLabel+')</span></div>'+
         '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
         '<thead><tr>'+
           '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
