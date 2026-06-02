@@ -8883,9 +8883,9 @@ async function loadMorningReport(){
     : '';
 
   // ── 주간 목표 합산 (REST 제외, 오늘까지만) ──
-  // 주간 목표: 이번 주 전체 block_days 합산 (REST 제외) — 코치가 설정한 주간 플랜 전체
+  // 주간 목표: 어제까지 block_days 합산 (REST 제외) — 지금까지 계획 대비 달성률 확인
   const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
-  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=weekEndStr&&r.day_label!=='REST').forEach(r=>{
+  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=today&&r.day_label!=='REST').forEach(r=>{
     if(r.td_target)   weekTargetSum.td   += r.td_target;
     if(r.hsr_target)  weekTargetSum.hsr  += r.hsr_target;
     if(r.spr_target)  weekTargetSum.spr  += r.spr_target;
