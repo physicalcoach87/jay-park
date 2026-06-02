@@ -2131,7 +2131,13 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <!-- MD 라벨 -->
       <div style="margin-bottom:14px">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨 <span style="font-size:10px">(선택 또는 직접 입력)</span></div>
-        <input id="dm-day-label" type="text" list="dm-day-label-list" placeholder="예) MD-4, D-1, W1..." style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <input id="dm-day-label" type="text" list="dm-day-label-list" placeholder="예) MD-4, D-1, W1..." oninput="onDmLabelChange(this.value)" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <div id="dm-load-hint" style="display:none;margin-top:7px;padding:7px 10px;border-radius:7px;font-size:11px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc">✨ 추천 운동량이 적용됐어요. 팀 상황에 맞게 수정하세요.</div>
+        <div id="dm-mss-badge" style="display:none;margin-top:7px;padding:10px 12px;border-radius:8px;font-size:11px;border:1px solid">
+          <div id="dm-mss-title" style="font-size:12px;font-weight:700;margin-bottom:4px"></div>
+          <div id="dm-mss-detail" style="color:var(--text2);line-height:1.6;white-space:pre-line"></div>
+          <div id="dm-mss-source" style="font-size:10px;color:var(--text3);margin-top:5px;display:none"></div>
+        </div>
         <datalist id="dm-day-label-list">
           <option value="MD-5"></option>
           <option value="MD-4"></option>
@@ -22670,6 +22676,84 @@ async function deleteBlockFromList(blockId){
 
 // ── 날짜 세션 모달 ──
 // 지표 설정 정의
+const MD_LOAD_DEFAULTS = {
+  'MD+1': { td:15,  hsr:8,  spr:5,  acc:10, rhie:8  },
+  'MD-4': { td:60,  hsr:40, spr:35, acc:50, rhie:45 },
+  'MD-3': { td:65,  hsr:50, spr:45, acc:45, rhie:40 },
+  'MD-2': { td:32,  hsr:12, spr:10, acc:15, rhie:14 },
+  'MD-1': { td:38,  hsr:20, spr:15, acc:20, rhie:18 },
+};
+
+const MSS_GUIDE = {
+  'MD+1': { level:'danger',  title:'⚡ MSS 노출: ❌ 금지',      detail:'경기 후 회복 최우선\n고속 달리기 노출을 삼가세요.',                                         source:'' },
+  'MD-4': { level:'neutral', title:'⚡ MSS 노출: ◆ 보통',       detail:'>85~90% MSS 선택적 허용\n>95% MSS 금지',                                              source:'' },
+  'MD-3': { level:'ok',      title:'⚡ MSS 노출: ✅ 가능',       detail:'>85~90% MSS 권장\n>95% MSS 선택적 허용',                                              source:'' },
+  'MD-2': { level:'best',    title:'⚡ MSS 노출: ✅✅ 최적',     detail:'>90% MSS 권장  ·  >95% MSS 핵심\n햄스트링 보호 효과 최강\n경기 전 MSS 노출의 황금 타이밍', source:'📖 Buchheit et al. 2020 — 627명, MD-2 노출 시 경기 중 햄스트링 부상 0건' },
+  'MD-1': { level:'warn',    title:'⚡ MSS 노출: ⚠️ 주의',      detail:'>85% MSS 소량만 허용\n>90% 이상 역효과 — 피로 누적으로 부상 위험 증가',                    source:'' },
+};
+
+const MSS_LEVEL_STYLE = {
+  danger:  { bg:'rgba(239,68,68,0.1)',   border:'rgba(239,68,68,0.35)',   titleColor:'#f87171' },
+  neutral: { bg:'rgba(251,191,36,0.08)', border:'rgba(251,191,36,0.3)',   titleColor:'#fbbf24' },
+  ok:      { bg:'rgba(34,197,94,0.08)',  border:'rgba(34,197,94,0.3)',    titleColor:'#4ade80' },
+  best:    { bg:'rgba(34,197,94,0.12)',  border:'rgba(34,197,94,0.5)',    titleColor:'#22c55e' },
+  warn:    { bg:'rgba(251,146,60,0.1)',  border:'rgba(251,146,60,0.35)', titleColor:'#fb923c' },
+};
+
+function onDmLabelChange(val) {
+  const key = val.trim().toUpperCase();
+  const defKey = Object.keys(MD_LOAD_DEFAULTS).find(k => k.toUpperCase() === key);
+  const mssKey = Object.keys(MSS_GUIDE).find(k => k.toUpperCase() === key);
+
+  // 추천 부하 자동 적용
+  const hint = document.getElementById('dm-load-hint');
+  if (defKey) {
+    const pcts = MD_LOAD_DEFAULTS[defKey];
+    const avg  = _periodMatchAvg;
+    DM_METRICS.forEach(m => {
+      const pct    = pcts[m.id] ?? 0;
+      const avgVal = avg[m.avgKey] || 0;
+      const absVal = avgVal ? Math.round(avgVal * pct / 100) : 0;
+      const gw     = Math.min(100, pct);
+      const gc     = pct >= 150 ? '#ef4444' : pct >= 100 ? '#f97316' : m.color;
+      const gaugeEl = document.getElementById('dm-gauge-' + m.id);
+      const sliderEl = document.getElementById('dm-slider-' + m.id);
+      const pctEl    = document.getElementById('dm-pct-'    + m.id);
+      const absEl    = document.getElementById('dm-abs-'    + m.id);
+      if (!gaugeEl) return;
+      gaugeEl.style.width      = gw + '%';
+      gaugeEl.style.background = gc;
+      pctEl.style.color        = gc;
+      pctEl.value              = pct;
+      sliderEl.value           = Math.min(200, pct);
+      absEl.value              = absVal || '';
+    });
+    hint.style.display = 'block';
+  } else {
+    hint.style.display = 'none';
+  }
+
+  // MSS 배지
+  const badge = document.getElementById('dm-mss-badge');
+  if (mssKey) {
+    const g = MSS_GUIDE[mssKey];
+    const s = MSS_LEVEL_STYLE[g.level];
+    badge.style.display      = 'block';
+    badge.style.background   = s.bg;
+    badge.style.borderColor  = s.border;
+    const titleEl  = document.getElementById('dm-mss-title');
+    const detailEl = document.getElementById('dm-mss-detail');
+    const sourceEl = document.getElementById('dm-mss-source');
+    titleEl.style.color  = s.titleColor;
+    titleEl.textContent  = g.title;
+    detailEl.textContent = g.detail;
+    sourceEl.textContent = g.source;
+    sourceEl.style.display = g.source ? 'block' : 'none';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 const DM_METRICS = [
   {id:'td',   label:'TD',   color:'#60a5fa', unit:'m',  avgKey:'td'},
   {id:'hsr',  label:'HSR',  color:'#f97316', unit:'m',  avgKey:'hsr'},
