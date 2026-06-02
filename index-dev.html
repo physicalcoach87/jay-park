@@ -8949,7 +8949,8 @@ async function loadMorningReport(){
   // 어제 비교 행 헬퍼 (0 포함 처리)
   const yestRow = (label, target, actual, unit, color, mdRange) => {
     const hasT = target != null;
-    const ar = actual != null ? Math.round(actual) : null;
+    // 목표가 있으면 실제 null → 0으로 처리 (trainAvg가 0값 필터링해서 null 반환하는 경우 대비)
+    const ar = actual != null ? Math.round(actual) : (hasT ? 0 : null);
     if(!hasT && !mdRange && ar == null) return '';
     const tDisp = hasT ? target.toLocaleString()+unit : mdRange ? mdRange[0]+'~'+mdRange[1]+unit : '—';
     const aDisp = (ar != null && ar > 0) ? ar.toLocaleString()+unit : (hasT ? '0'+unit : '—');
