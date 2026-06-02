@@ -9008,38 +9008,56 @@ async function loadMorningReport(){
       '<span style="color:'+acwrColor(teamACWR)+';font-weight:600">'+(teamACWR?teamACWR.toFixed(2):'—')+'</span> — '+acwrLabel(teamACWR)+
     '</div>'+
 
-    // ── 이번 주 누적 ──
+    // ── 이번 주 누적 + 어제 결과 (나란히) ──
     '<div style="height:0.5px;background:var(--border2);margin:12px 0"></div>'+
-    '<div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📅 이번 주 누적 · '+weekStartStr+' ~ '+today+'</div>'+
-    '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
-    tableThead+
-    '<tbody>'+
-      weekRow('TD',     weekActual.td,   weekTargetSum.td||null,   'm',  '#60a5fa')+
-      weekRow('HSR',    weekActual.hsr,  weekTargetSum.hsr||null,  'm',  '#f59e0b')+
-      weekRow('Sprint', weekActual.spr,  weekTargetSum.spr||null,  'm',  '#ef4444')+
-      weekRow('가속',   weekActual.acc,  weekTargetSum.acc||null,  '회', '#fb923c')+
-      weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie||null, '회', '#34d399')+
-      weekRow('sRPE',   weekActual.sRPE, weekTargetSum.sRPE||null, 'AU', '#a78bfa')+
-    '</tbody></table>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:start">'+
 
-    // ── 어제 결과 ──
-    (yGps.length ?
-      '<div style="height:0.5px;background:var(--border2);margin:12px 0"></div>'+
-      '<div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📊 어제 결과 · '+yesterdayStr+' ('+WEEK_DAYS[yesterday.getDay()]+')'+
-        (yesterdayBlockDay?.day_label ? ' <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:var(--surface2);color:var(--text2)">'+yesterdayBlockDay.day_label+'</span>' : '')+
+      // 왼쪽: 이번 주 누적
+      '<div>'+
+        '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 <span style="font-weight:400;color:var(--text3);font-size:9px">(주기화 기준)</span></div>'+
+        '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
+        '<thead><tr>'+
+          '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
+          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">목표</th>'+
+          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">실제</th>'+
+          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
+        '</tr></thead>'+
+        '<tbody>'+
+          weekRow('TD',     weekActual.td,   weekTargetSum.td||null,   'm',  '#60a5fa')+
+          weekRow('HSR',    weekActual.hsr,  weekTargetSum.hsr||null,  'm',  '#f59e0b')+
+          weekRow('Sprint', weekActual.spr,  weekTargetSum.spr||null,  'm',  '#ef4444')+
+          weekRow('가속',   weekActual.acc,  weekTargetSum.acc||null,  '회', '#fb923c')+
+          weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie||null, '회', '#34d399')+
+          weekRow('sRPE',   weekActual.sRPE, weekTargetSum.sRPE||null, 'AU', '#a78bfa')+
+        '</tbody></table>'+
       '</div>'+
-      '<table style="width:100%;border-collapse:collapse;font-size:11px">'+
-      tableThead+
-      '<tbody>'+
-        yestRow('TD',     yesterdayBlockDay?.td_target,   yestActual.td,  'm',  '#60a5fa', null)+
-        yestRow('HSR',    yesterdayBlockDay?.hsr_target,  yestActual.hsr, 'm',  '#f59e0b', null)+
-        yestRow('Sprint', yesterdayBlockDay?.spr_target,  yestActual.spr, 'm',  '#ef4444', null)+
-        yestRow('가속',   yesterdayBlockDay?.acc_target,  yestActual.acc, '회', '#fb923c', null)+
-        yestRow('RHIE',   yesterdayBlockDay?.rhie_target, yestActual.rhie,'회', '#34d399', null)+
-        yestRow('sRPE',   null, ySRPE, 'AU', '#a78bfa', yestMdFallback?.sRPE)+
-      '</tbody></table>'
-      : ''
-    );
+
+      // 오른쪽: 어제 결과
+      (yGps.length ?
+        '<div>'+
+          '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📊 어제 결과 '+
+            '<span style="font-weight:400;font-size:9px">('+WEEK_DAYS[yesterday.getDay()]+')'+
+            (yesterdayBlockDay?.day_label?' · '+yesterdayBlockDay.day_label:'')+
+          '</span></div>'+
+          '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
+          '<thead><tr>'+
+            '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
+            '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">목표</th>'+
+            '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">실제</th>'+
+            '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
+          '</tr></thead>'+
+          '<tbody>'+
+            yestRow('TD',     yesterdayBlockDay?.td_target,   yestActual.td,  'm',  '#60a5fa', null)+
+            yestRow('HSR',    yesterdayBlockDay?.hsr_target,  yestActual.hsr, 'm',  '#f59e0b', null)+
+            yestRow('Sprint', yesterdayBlockDay?.spr_target,  yestActual.spr, 'm',  '#ef4444', null)+
+            yestRow('가속',   yesterdayBlockDay?.acc_target,  yestActual.acc, '회', '#fb923c', null)+
+            yestRow('RHIE',   yesterdayBlockDay?.rhie_target, yestActual.rhie,'회', '#34d399', null)+
+            yestRow('sRPE',   null, ySRPE, 'AU', '#a78bfa', yestMdFallback?.sRPE)+
+          '</tbody></table>'+
+        '</div>'
+        : '<div></div>'
+      )+
+    '</div>';
 
   // ── 웰니스 + 미응답 ────────────────────────────────────────────
   const todayWellAll = todayWell||[];
