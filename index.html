@@ -555,6 +555,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('match')" id="pvbtn-match">🏟️ 경기 데이터</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('training')" id="pvbtn-training">📋 훈련 데이터</button>
     </div>
   </div>
 
@@ -767,6 +768,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       </div>
     </div>
     <div id="player-dashboard-output"></div>
+  </div>
+
+  <!-- 훈련 데이터 뷰 -->
+  <div id="pv-training" style="display:none">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <input type="date" id="training-report-date" style="padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px">
+      <button onclick="runTrainingReport()" class="btn-exp pri" style="padding:7px 16px">📋 보고서 생성</button>
+    </div>
+    <div id="training-report-output">
+      <div style="text-align:center;padding:3rem;color:var(--text3);font-size:13px">날짜를 선택하고 보고서 생성을 클릭하세요</div>
+    </div>
   </div>
 
   <!-- GPS 업로드 뷰 -->
@@ -2601,28 +2613,25 @@ const ROLE_PERMISSIONS = {
   admin: {
     report:1, players:1, exercise:1, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
-    'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
+    'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,'pvbtn-training':1,
     'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-breakplan':1,'extab-progmgmt':1
   },
-  // 코치: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
   coach: {
     report:1, players:1, exercise:0, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
-    'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
+    'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,'pvbtn-training':1,
     'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-breakplan':0,'extab-progmgmt':0
   },
-  // 피지컬코치: 전체 권한
   physical: {
     report:1, players:1, exercise:1, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
-    'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,
+    'pvbtn-roster':1,'pvbtn-match':1,'pvbtn-upload':1,'pvbtn-training':1,
     'extab-gym':1,'extab-preact':1,'extab-cardio':1,'extab-test':1,'extab-breakplan':1,'extab-progmgmt':1
   },
-  // 의무팀: 데일리 브리핑, 선수통합관리(팀요약+선수개인데이터+웰니스+경기데이터), 알림/메시지
   medical: {
     report:1, players:1, exercise:0, notify:1,
     'pvbtn-team':1,'pvbtn-dashboard':1,'pvbtn-wellness':1,
-    'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,
+    'pvbtn-roster':0,'pvbtn-match':1,'pvbtn-upload':0,'pvbtn-training':1,
     'extab-gym':0,'extab-preact':0,'extab-cardio':0,'extab-test':0,'extab-breakplan':0,'extab-progmgmt':0
   }
 };
@@ -7517,7 +7526,7 @@ async function loadPlayerManagement(){
 }
 
 function setPlayerView(view){
-  ['team','wellness','roster','dashboard','upload','match'].forEach(v=>{
+  ['team','wellness','roster','dashboard','upload','match','training'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
     if(el) el.style.display = v===view ? 'block' : 'none';
     const btn = document.getElementById(`pvbtn-${v}`);
@@ -7562,6 +7571,21 @@ function setPlayerView(view){
       supa.from('player_profiles').select('id,name,position').eq('club_id', currentClubId).then(({data})=>{
         (data||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
       });
+    }
+  }
+  if(view==='training'){
+    const dateEl = document.getElementById('training-report-date');
+    if(dateEl && !dateEl.value){
+      // 마지막 훈련일 조회 후 바로 보고서 생성
+      supa.from('gps_records').select('session_date').eq('club_id', currentClubId)
+        .order('session_date',{ascending:false}).limit(1)
+        .then(({data})=>{
+          dateEl.value = data?.[0]?.session_date || getKSTDateStr();
+          runTrainingReport();
+        });
+    } else if(dateEl && dateEl.value) {
+      // 이미 날짜가 있으면 바로 보고서 생성
+      runTrainingReport();
     }
   }
 }
@@ -8920,7 +8944,7 @@ async function loadMorningReport(){
   // 달성률 배지 헬퍼 (0 포함 처리)
   const achBadge = (actual, target, targetSet) => {
     if(!targetSet && actual==null) return '<span style="color:var(--text3)">—</span>';
-    if(targetSet && target===0 && actual===0) return '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:600">100%</span>';
+    if(targetSet && target===0 && (actual===0||actual==null)) return '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:600">100%</span>';
     if(target==null || target===0) return '<span style="color:var(--text3)">—</span>';
     const pct = Math.round(actual/target*100);
     const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
@@ -11373,7 +11397,186 @@ async function buildWeeklyLoadHtml(forDate){
   const wkRpeRows=(rpe28w||[]).filter(r=>r.record_date>=weekStartStr&&r.record_date<=forDate&&wkTeamDates.has(r.record_date));
   const wkSRPE=Math.round(wkRpeRows.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0)).toLocaleString();
 
-  return `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
+  // 훈련 데이터 모드일 때 주기화 헤더 추가
+  let periodHeader = '';
+  if(window._trainingMode) {
+    const {data: bdWeek} = await supa.from('block_days')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
+    const bdMap = {};
+    (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
+    const DOW = ['일','월','화','수','목','금','토'];
+
+    // 팀 경기 평균 (accel, rhie 추가)
+    const _fullMAvg = (arr,field) => {
+      const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+      if(!vrs.length) return null;
+      const mx=Math.max(...vrs.map(r=>parseFloat(r.duration)));
+      const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+      const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+      return sd>0?sv/sd*mx:null;
+    };
+    const _allKeys=[...new Set((matchRaw||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
+    const _ref3=(matchRaw||[]).filter(r=>_allKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
+    const tMA = {
+      td:    _fullMAvg(_ref3,'td'),
+      hsr:   _fullMAvg(_ref3,'band4_td'),
+      sprint:_fullMAvg(_ref3,'band5_td'),
+      accel: _fullMAvg(_ref3,'accel'),
+      rhie:  _fullMAvg(_ref3,'rhie'),
+    };
+
+    // % 배지 헬퍼
+    // MD 단계별 핵심 지표 (빨간색 강조)
+    const MD_KEY_FIELDS = {
+      'MD-4':  ['td'],
+      'MD-3':  ['td','hsr','sprint','accel','rhie'],
+      'MD-2':  ['hsr','sprint'],
+      'MD-1':  [],
+      'MD+1':  [],
+      'MD':    ['td','hsr','sprint','accel','rhie'],
+      'MATCH': ['td','hsr','sprint','accel','rhie'],
+    };
+    const _pBadge = (target, avg, mdLabel, field) => {
+      if(!target || !avg) return '';
+      const p = Math.round(target/avg*100);
+      const md = (mdLabel||'').trim().toUpperCase().replace(/\s/g,'');
+      const keyFields = MD_KEY_FIELDS[md] || [];
+      const isKey = keyFields.includes(field);
+      const c = isKey ? '#ef4444' : 'var(--text3)';
+      return ' <span style="font-size:9px;color:'+c+';font-weight:'+(isKey?'700':'500')+';">('+p+'%)</span>';
+    };
+    const _achBadge = (actual, target, tgtSet) => {
+      const a = actual!=null ? Math.round(actual) : null;
+      if(!tgtSet && a==null) return '<span style="color:var(--text3)">—</span>';
+      if(tgtSet && target===0 && (a===0 || a==null))
+        return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:700">100%</span>';
+      if(target==null || target===0) return '<span style="color:var(--text3)">—</span>';
+      const p = Math.round(a/target*100);
+      const c = p>=90?'#22c55e':p>=70?'#eab308':'#ef4444';
+      const bg = p>=90?'rgba(34,197,94,0.1)':p>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+      return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+c+';font-weight:700">'+p+'%</span>';
+    };
+
+    // 이번 주 실제 누적 (M 기준)
+    const wkMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    const wkMDates = [...new Set(wkMGps.map(r=>r.session_date))];
+    const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
+    const wkTargetSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
+    const wkTargetSet = {td:false,hsr:false,spr:false,acc:false,rhie:false};
+    wkMDates.forEach(dd=>{
+      const dg=wkMGps.filter(r=>r.session_date===dd);
+      const _tAvg=(arr,f)=>{const vrs=arr.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return 0;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:0;};
+      wkSum.td  += _tAvg(dg,'td');
+      wkSum.hsr += _tAvg(dg,'running_high');
+      wkSum.spr += _tAvg(dg,'sprint');
+      wkSum.acc += _tAvg(dg,'accel');
+      wkSum.rhie+= _tAvg(dg,'rhie');
+      const bd2=bdMap[dd];
+      if(bd2?.td_target!=null){wkTargetSum.td+=bd2.td_target;wkTargetSet.td=true;}
+      if(bd2?.hsr_target!=null){wkTargetSum.hsr+=bd2.hsr_target;wkTargetSet.hsr=true;}
+      if(bd2?.spr_target!=null){wkTargetSum.spr+=bd2.spr_target;wkTargetSet.spr=true;}
+      if(bd2?.acc_target!=null){wkTargetSum.acc+=bd2.acc_target;wkTargetSet.acc=true;}
+      if(bd2?.rhie_target!=null){wkTargetSum.rhie+=bd2.rhie_target;wkTargetSet.rhie=true;}
+    });
+
+    // 오늘 목표
+    const todayBd = bdMap[forDate] || null;
+
+    // [1] 이번 주 훈련 목표 테이블 (% 포함)
+    const _makeRow = (dd, bd) => {
+      const isRest = bd.day_label==='REST';
+      const isSel = dd===forDate;
+      const dObj = new Date(dd+'T12:00:00');
+      const mdLbl = bd.day_label||'';
+      const tCell = (val, avg, field) => val!=null ? val.toLocaleString()+_pBadge(val,avg,mdLbl,field) : '—';
+      const rowStyle = isSel ? 'background:rgba(99,102,241,0.08);font-weight:600' : '';
+      return '<tr style="'+rowStyle+'">'
+        +'<td style="padding:5px 8px">'+DOW[dObj.getDay()]+' '+(dObj.getMonth()+1)+'/'+(dObj.getDate())+'</td>'
+        +'<td style="padding:5px 8px;font-weight:600;color:#a5b4fc">'+mdLbl+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.td_target,tMA.td,'td')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.hsr_target,tMA.hsr,'hsr')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.spr_target,tMA.sprint,'sprint')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.acc_target,tMA.accel,'accel')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.rhie_target,tMA.rhie,'rhie')+'</td>'
+        +'<td style="padding:5px 8px;font-size:10px;color:var(--text3)">'+([bd.am_session,bd.pm_session].filter(Boolean).join(' / ')||'—')+'</td>'
+        +'</tr>';
+    };
+    const trainRows = weekDates.filter(dd=>bdMap[dd]&&bdMap[dd].day_label!=='REST').map(dd=>_makeRow(dd,bdMap[dd])).join('');
+    const restRows  = weekDates.filter(dd=>bdMap[dd]&&bdMap[dd].day_label==='REST').map(dd=>_makeRow(dd,bdMap[dd])).join('');
+    const bdRows = trainRows; // 하위 호환용
+
+    // [2] 오늘 목표 vs 달성 + 이번 주 누적 (나란히)
+    const wkCutLabel = wkMDates.includes(forDate) ? '오늘' : '어제';
+    const todayActual = { // forDate GPS 팀 평균
+      td:null, hsr:null, spr:null, acc:null, rhie:null
+    };
+    const todayGpsList = (wkGps||[]).filter(r=>r.session_date===forDate&&(r.session_type2||'').trim().toUpperCase()==='M');
+    if(todayGpsList.length){
+      const _ta=(f)=>{const vrs=todayGpsList.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return null;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:null;};
+      todayActual.td  = _ta('td');
+      todayActual.hsr = _ta('running_high');
+      todayActual.spr = _ta('sprint');
+      todayActual.acc = _ta('accel');
+      todayActual.rhie= _ta('rhie');
+    }
+    const todayDayLabel = todayBd?.day_label || '—';
+    const _wRow = (label, act, tgt, tgtSet, unit, color) => {
+      if(!tgtSet && !act) return '';
+      const a = act!=null?Math.round(act):null;
+      const aDisp = (a!=null&&a>0)?a.toLocaleString()+unit:(tgtSet?'0'+unit:'—');
+      const tDisp = tgtSet?tgt.toLocaleString()+unit:'—';
+      return '<tr style="border-top:0.5px solid var(--border)">'
+        +'<td style="padding:4px 6px;color:var(--text3);font-size:10px">'+label+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;color:var(--text3);font-size:10px">'+tDisp+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;color:'+color+';font-weight:600;font-size:10px">'+aDisp+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:10px">'+_achBadge(a,tgtSet?tgt:null,tgtSet)+'</td>'
+        +'</tr>';
+    };
+    const todayVsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">'
+      // 오늘 목표 vs 달성
+      +'<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'
+      +'<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px">🎯 오늘 목표 vs 달성 · '+todayDayLabel+'</div>'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr><th style="padding:3px 6px;text-align:left;font-size:10px;color:var(--text3);font-weight:500"></th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">목표</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">실제</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">달성</th></tr></thead>'
+      +'<tbody>'
+      +_wRow('TD',  todayActual.td,  todayBd?.td_target,  todayBd?.td_target!=null,  'm','#60a5fa')
+      +_wRow('HSR', todayActual.hsr, todayBd?.hsr_target, todayBd?.hsr_target!=null, 'm','#f59e0b')
+      +_wRow('Sprint',todayActual.spr,todayBd?.spr_target,todayBd?.spr_target!=null, 'm','#ef4444')
+      +_wRow('가속',todayActual.acc, todayBd?.acc_target, todayBd?.acc_target!=null, '회','#fb923c')
+      +_wRow('RHIE', todayActual.rhie,todayBd?.rhie_target,todayBd?.rhie_target!=null,'회','#34d399')
+      +'</tbody></table></div>'
+      // 이번 주 누적
+      +'<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'
+      +'<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px">📅 이번 주 누적 <span style="font-weight:400">('+weekStartStr+' ~ '+wkCutLabel+')</span></div>'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr><th style="padding:3px 6px;text-align:left;font-size:10px;color:var(--text3);font-weight:500"></th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">목표</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">실제</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">달성</th></tr></thead>'
+      +'<tbody>'
+      +_wRow('TD',  Math.round(wkSum.td),  wkTargetSum.td,  wkTargetSet.td,  'm','#60a5fa')
+      +_wRow('HSR', Math.round(wkSum.hsr), wkTargetSum.hsr, wkTargetSet.hsr, 'm','#f59e0b')
+      +_wRow('Sprint',Math.round(wkSum.spr),wkTargetSum.spr,wkTargetSet.spr, 'm','#ef4444')
+      +_wRow('가속',Math.round(wkSum.acc), wkTargetSum.acc, wkTargetSet.acc, '회','#fb923c')
+      +_wRow('RHIE',Math.round(wkSum.rhie),wkTargetSum.rhie,wkTargetSet.rhie,'회','#34d399')
+      +'</tbody></table></div>'
+      +'</div>';
+
+    if(bdRows || todayBd) {
+      periodHeader = '<div style="background:var(--surface);border:0.5px solid rgba(99,102,241,0.4);border-radius:10px;padding:14px;margin-bottom:10px">'
+        +'<div style="font-size:12px;font-weight:600;color:#a5b4fc;margin-bottom:10px">📅 이번 주 훈련 목표 (주기화) · '+weekStartStr+' ~ '+weekEndStr+'</div>'
+        +((trainRows||restRows)?'<div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+        +'<thead><tr style="background:var(--surface2)">'+'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">날짜</th>'+'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">MD</th>'+'<th style="padding:5px 8px;text-align:right;color:#60a5fa;font-weight:500">TD 목표</th>'+'<th style="padding:5px 8px;text-align:right;color:#f59e0b;font-weight:500">HSR 목표</th>'+'<th style="padding:5px 8px;text-align:right;color:#ef4444;font-weight:500">Sprint 목표</th>'+'<th style="padding:5px 8px;text-align:right;color:#fb923c;font-weight:500">가속 목표</th>'+'<th style="padding:5px 8px;text-align:right;color:#34d399;font-weight:500">RHIE 목표</th>'+'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">세션</th>'+'</tr></thead>'
+        +'<tbody>'+trainRows+(restRows?restRows:'')+'</tbody></table></div></div>':'')
+        +todayVsHtml
+        +'<div style="font-size:9px;color:var(--text3);margin-top:8px;padding:5px 8px;background:var(--surface2);border-radius:5px">'
+        +'※ 목표 옆 % = 팀 경기 평균 대비 / 달성률 = 개인 Match Max × 주기화% 기준'
+        +'</div></div>';
+    }
+  }
+
+  // 훈련 데이터 모드: 주간 테이블 제외
+  if(window._trainingMode) return periodHeader;
+
+  return periodHeader + `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
       <div style="font-size:12px;font-weight:600;color:var(--text2)">📋 훈련 데이터 보고서 <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">${weekStartStr} ~ ${weekEndStr}</span></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
@@ -11414,7 +11617,7 @@ async function loadTeamSummary(){
   out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
   if(date) loadTwoWeekCal(date);
 
-  const [{data:gps},{data:sessions},{data:wellness}] = await Promise.all([
+  const [{data:gps},{data:sessions},{data:wellness},{data:blockDayRow},{data:matchRef}] = await Promise.all([
     supa.from('gps_records')
       .select('*, player_profiles(name, position, match_max_td, match_max_hsr, match_max_sprint, match_max_accel, match_max_rhie, match_max_speed, match_max_pl)')
       .eq('session_date', date)
@@ -11425,6 +11628,12 @@ async function loadTeamSummary(){
     supa.from('wellness_records')
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', date),
+    supa.from('block_days')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .eq('plan_date', date).maybeSingle(),
+    supa.from('match_records')
+      .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
+      .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
   ]);
 
   _lastGpsData = gps||[]; // 코치 RPE 모달에서 GPS duration 참조용
@@ -11566,13 +11775,48 @@ async function loadTeamSummary(){
     return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : '-';
   };
 
-  // Match Max % 배지 — ≥80% 🟢 / 60~79% 🟡 / <60% 🔴
-  const mmPct = (val, mx) => {
+  // ── 주기화 periodPct 계산 (훈련 데이터 모드) ──
+  const _mAvgTs = (arr, field) => {
+    const vrs = arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    if(!vrs.length) return null;
+    const mx = Math.max(...vrs.map(r=>parseFloat(r.duration)));
+    const sv = vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+    const sd = vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    return sd>0 ? sv/sd*mx : null;
+  };
+  const allMKeys = [...new Set((matchRef||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
+  const ref3RowsTs = (matchRef||[]).filter(r=>allMKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
+  const teamMAvg = {
+    td:    _mAvgTs(ref3RowsTs,'td'),
+    hsr:   _mAvgTs(ref3RowsTs,'band4_td'),
+    sprint:_mAvgTs(ref3RowsTs,'band5_td'),
+    accel: _mAvgTs(ref3RowsTs,'accel'),
+    rhie:  _mAvgTs(ref3RowsTs,'rhie'),
+  };
+  const bd = blockDayRow || null;
+  // periodPct: block_days 절대 목표 / 팀 경기 평균 (역산)
+  const periodPct = {
+    td:    (bd?.td_target   && teamMAvg.td)    ? bd.td_target   / teamMAvg.td    * 100 : null,
+    hsr:   (bd?.hsr_target  && teamMAvg.hsr)   ? bd.hsr_target  / teamMAvg.hsr   * 100 : null,
+    sprint:(bd?.spr_target  && teamMAvg.sprint) ? bd.spr_target  / teamMAvg.sprint * 100 : null,
+    accel: (bd?.acc_target  && teamMAvg.accel)  ? bd.acc_target  / teamMAvg.accel  * 100 : null,
+    rhie:  (bd?.rhie_target && teamMAvg.rhie)   ? bd.rhie_target / teamMAvg.rhie   * 100 : null,
+  };
+  const isTrainingMode = window._trainingMode === true;
+
+  // Match Max % 배지 — 훈련 데이터 모드: 개인 Match Max × periodPct% 기준 / 일반: Match Max 절대 기준
+  const mmPct = (val, mx, field) => {
     const v = parseFloat(val), m = parseFloat(mx);
     if(!v || !m || isNaN(v) || isNaN(m)) return '';
-    const pct = Math.round((v/m)*100);
-    const color = pct>=80?'#4ade80':pct>=60?'#fbbf24':'#f87171';
-    return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${pct}%</span>`;
+    let target = m;
+    if(isTrainingMode && field && periodPct[field] != null) {
+      target = m * periodPct[field] / 100;
+    }
+    if(!target) return '';
+    const pct = Math.round((v/target)*100);
+    const color = pct>=90?'#4ade80':pct>=70?'#fbbf24':'#f87171';
+    const label = isTrainingMode ? `${pct}%` : `${pct}%`;
+    return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${label}</span>`;
   };
 
   const renderTable = (arr) => arr.map(r=>{
@@ -11604,11 +11848,11 @@ async function loadTeamSummary(){
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
       </td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
-      <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel)}</td>
-      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie)}</td>`}
+      <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td, 'td')}</td>
+      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr, 'hsr')}</td>
+      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint, 'sprint')}</td>
+      <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel, 'accel')}</td>
+      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie, 'rhie')}</td>`}
       <td style="padding:7px 8px;text-align:right;color:#60a5fa">${r.max_speed||'-'}${mmPct(r.max_speed, mx.match_max_speed)}</td>
       ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#a78bfa">${r.player_load||'-'}${mmPct(r.player_load, mx.match_max_pl)}</td>`}
       ${currentUseRpe?`<td style="padding:7px 8px;text-align:right;color:#fbbf24;font-weight:600">${rpeVal||'—'}</td>`:''}
@@ -11640,7 +11884,7 @@ async function loadTeamSummary(){
 
   const _rpeHtml = `
     <!-- ④ RPE/체중 입력 현황 -->
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">
           📋 ${[currentUseWellness?'웰니스':'', currentUseRpe?'RPE':''].filter(Boolean).join(' / ')} 현황
@@ -11684,16 +11928,30 @@ async function loadTeamSummary(){
   out.innerHTML = `
     <!-- ③ GPS 선수 테이블 (M그룹) -->
     ${hasGps ? `
-    <div style="overflow-x:auto;margin-bottom:14px">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
-        ${tableHeader}
-        ${renderTable(sortRecordsByPos(fullGps))}
-      </table>
+    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
+        M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        팀 평균 · TD <strong style="color:var(--accent2)">${avgGroup(fullGps,'td',0)}m</strong>
+        · HSR <strong style="color:#f59e0b">${avgGroup(fullGps,'running_high',0)}m</strong>
+        · Sprint <strong style="color:#ef4444">${avgGroup(fullGps,'sprint',0)}m</strong>
+        · 가속 <strong style="color:#fb923c">${avgGroup(fullGps,'accel',0)}회</strong>
+        ${isV1plan?'':' · RHIE <strong style="color:#34d399">'+avgGroup(fullGps,'rhie',0)+'회</strong>'}
+        · 최고속도 <strong style="color:#60a5fa">${avgGroup(fullGps,'max_speed',1)}km/h</strong>
+        ${currentUseRpe?' · RPE <strong style="color:#fbbf24">'+mRpeAvg+'</strong> · sRPE <strong style="color:#c084fc">'+mSrpeAvg+'</strong>':''}
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+          ${tableHeader}
+          ${renderTable(sortRecordsByPos(fullGps))}
+        </table>
+      </div>
     </div>
 
     <!-- ④ 서브/미엔트리 그룹 -->
     ${indGps.length ? `
-    <div style="background:var(--surface);border:1px solid #7c3aed;border-radius:10px;padding:14px">
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         서브 평균 (${indGps.length}명)
       </div>
@@ -18599,7 +18857,11 @@ ${printContent}
 
 // ── 훈련 보고서 인쇄 콘텐츠 추출 ────────────────────────────────
 function _getTrainingReportPrintContent(){
-  const wrap = document.getElementById('team-summary-output');
+  // 훈련 데이터 탭에서 열었으면 training-report-output 우선
+  const trainOut = document.getElementById('training-report-output');
+  const teamOut  = document.getElementById('team-summary-output');
+  const wrap = (trainOut && trainOut.innerHTML && trainOut.innerHTML.trim().length > 50)
+    ? trainOut : teamOut;
   if(!wrap) return '';
   const clone = wrap.cloneNode(true);
   const bar = clone.querySelector('#training-report-action-bar');
@@ -18662,11 +18924,20 @@ function printTrainingReport(){
   [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{ border-color:#9ca3af !important }
   svg[style*="background:var(--surface2)"]{ background:#f4f5f6 !important }
   #training-report-action-bar, select, button{ display:none !important }
+  /* 페이지 나눔 제어 */
+  .print-page-start{
+    page-break-before: always !important;
+    break-before: page !important;
+    margin-top: 0 !important;
+  }
+  /* 주기화 섹션은 1페이지에 유지 */
   div[style*="border-radius:10px"]{
     break-inside:avoid;
     page-break-inside:avoid;
     margin-bottom:10px;
   }
+  /* 테이블 행 자르지 않기 */
+  tr{ break-inside:avoid; page-break-inside:avoid; }
   table{ border-collapse:collapse; width:100%; }
   tr[style*="background:var(--surface2)"]{ background:#f3f4f6 !important }
   td,th{ border-bottom:1px solid #d1d5db !important }
@@ -22526,6 +22797,42 @@ async function saveCoachWellnessBatch(){
   if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
   msgEl.style.color='#22c55e'; msgEl.textContent=`✅ ${records.length}명 저장 완료`;
   setTimeout(()=>{ closeCoachWellnessBatchModal(); loadTeamSummary(_coachWellBatchDate); }, 1000);
+}
+</script>
+
+
+<!-- ===== 훈련 데이터 보고서 JS ===== -->
+<script>
+// 훈련 데이터 탭 보고서 생성 — loadTeamSummary 기반 + 주기화 연동
+async function runTrainingReport(){
+  const dateEl = document.getElementById('training-report-date');
+  const date = dateEl?.value || getKSTDateStr();
+  if(!date) return;
+
+  // 1. 훈련 모드 플래그 설정
+  window._trainingMode = true;
+
+  // 2. team-date 동기화 후 loadTeamSummary 호출
+  const teamDateEl = document.getElementById('team-date');
+  if(teamDateEl) teamDateEl.value = date;
+
+  // 3. training-report-output에 렌더 (loadTeamSummary의 out을 임시 교체)
+  const origOut = document.getElementById('team-summary-output');
+  const trainOut = document.getElementById('training-report-output');
+  if(!origOut || !trainOut) return;
+
+  // team-summary-output을 훈련 출력 div로 임시 교체
+  const origId = origOut.id;
+  origOut.id = 'team-summary-output-hidden';
+  trainOut.id = 'team-summary-output';
+  trainOut.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 보고서 생성 중...</div>';
+
+  await loadTeamSummary();
+
+  // 복원
+  trainOut.id = 'training-report-output';
+  origOut.id = 'team-summary-output';
+  window._trainingMode = false;
 }
 </script>
 
