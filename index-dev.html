@@ -8891,12 +8891,13 @@ async function loadMorningReport(){
   const weekCutLabel = todayHasGps ? '오늘' : '어제';
 
   const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
+  const weekTargetSet = { td:false, hsr:false, spr:false, acc:false, rhie:false };
   (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=weekCutDate&&r.day_label!=='REST').forEach(r=>{
-    if(r.td_target)   weekTargetSum.td   += r.td_target;
-    if(r.hsr_target)  weekTargetSum.hsr  += r.hsr_target;
-    if(r.spr_target)  weekTargetSum.spr  += r.spr_target;
-    if(r.acc_target)  weekTargetSum.acc  += r.acc_target;
-    if(r.rhie_target) weekTargetSum.rhie += r.rhie_target;
+    if(r.td_target   != null){ weekTargetSum.td   += r.td_target;   weekTargetSet.td   = true; }
+    if(r.hsr_target  != null){ weekTargetSum.hsr  += r.hsr_target;  weekTargetSet.hsr  = true; }
+    if(r.spr_target  != null){ weekTargetSum.spr  += r.spr_target;  weekTargetSet.spr  = true; }
+    if(r.acc_target  != null){ weekTargetSum.acc  += r.acc_target;  weekTargetSet.acc  = true; }
+    if(r.rhie_target != null){ weekTargetSum.rhie += r.rhie_target; weekTargetSet.rhie = true; }
   });
 
   // 주간 실제 (weekCutDate까지의 GPS 기반)
@@ -8916,9 +8917,11 @@ async function loadMorningReport(){
     rhie: Math.round(weekActualRHIE),
   };
 
-  // 달성률 배지 헬퍼
-  const achBadge = (actual, target) => {
-    if(!actual||!target) return '<span style="color:var(--text3)">—</span>';
+  // 달성률 배지 헬퍼 (0 포함 처리)
+  const achBadge = (actual, target, targetSet) => {
+    if(!targetSet && actual==null) return '<span style="color:var(--text3)">—</span>';
+    if(targetSet && target===0 && actual===0) return '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:600">✅</span>';
+    if(target==null || target===0) return '<span style="color:var(--text3)">—</span>';
     const pct = Math.round(actual/target*100);
     const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
     const b = pct>=90?'rgba(34,197,94,0.1)':pct>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
@@ -8926,15 +8929,15 @@ async function loadMorningReport(){
   };
 
   // 주간 테이블 행 헬퍼
-  const weekRow = (label, actualVal, targetVal, unit, color) => {
-    if(!actualVal && !targetVal) return '';
-    const aDisp = actualVal ? actualVal.toLocaleString()+unit : '—';
-    const tDisp = targetVal ? targetVal.toLocaleString()+unit : '—';
+  const weekRow = (label, actualVal, targetVal, targetSet, unit, color) => {
+    if(!targetSet && !actualVal) return '';
+    const aDisp = (actualVal != null && actualVal > 0) ? actualVal.toLocaleString()+unit : (targetSet ? '0'+unit : '—');
+    const tDisp = targetSet ? targetVal.toLocaleString()+unit : '—';
     return '<tr style="border-top:0.5px solid var(--border)">'+
       '<td style="padding:5px 8px;color:var(--text3)">'+label+'</td>'+
       '<td style="padding:5px 8px;text-align:right;color:var(--text3)">'+tDisp+'</td>'+
       '<td style="padding:5px 8px;text-align:right;color:'+color+';font-weight:600">'+aDisp+'</td>'+
-      '<td style="padding:5px 8px;text-align:right">'+achBadge(actualVal,targetVal)+'</td>'+
+      '<td style="padding:5px 8px;text-align:right">'+achBadge(actualVal,targetVal,targetSet)+'</td>'+
       '</tr>';
   };
 
@@ -9029,11 +9032,11 @@ async function loadMorningReport(){
           '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
         '</tr></thead>'+
         '<tbody>'+
-          weekRow('TD',     weekActual.td,   weekTargetSum.td||null,   'm',  '#60a5fa')+
-          weekRow('HSR',    weekActual.hsr,  weekTargetSum.hsr||null,  'm',  '#f59e0b')+
-          weekRow('Sprint', weekActual.spr,  weekTargetSum.spr||null,  'm',  '#ef4444')+
-          weekRow('가속',   weekActual.acc,  weekTargetSum.acc||null,  '회', '#fb923c')+
-          weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie||null, '회', '#34d399')+
+          weekRow('TD',     weekActual.td,   weekTargetSum.td,   weekTargetSet.td,   'm',  '#60a5fa')+
+          weekRow('HSR',    weekActual.hsr,  weekTargetSum.hsr,  weekTargetSet.hsr,  'm',  '#f59e0b')+
+          weekRow('Sprint', weekActual.spr,  weekTargetSum.spr,  weekTargetSet.spr,  'm',  '#ef4444')+
+          weekRow('가속',   weekActual.acc,  weekTargetSum.acc,  weekTargetSet.acc,  '회', '#fb923c')+
+          weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie, weekTargetSet.rhie, '회', '#34d399')+
         '</tbody></table>'+
       '</div>'+
 
