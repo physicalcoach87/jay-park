@@ -7575,7 +7575,12 @@ function setPlayerView(view){
   }
   if(view==='training'){
     const dateEl = document.getElementById('training-report-date');
-    if(dateEl && !dateEl.value) dateEl.value = getKSTDateStr();
+    if(dateEl && !dateEl.value){
+      // 마지막 훈련일 조회
+      supa.from('gps_records').select('session_date').eq('club_id', currentClubId)
+        .order('session_date',{ascending:false}).limit(1)
+        .then(({data})=>{ dateEl.value = data?.[0]?.session_date || getKSTDateStr(); });
+    }
   }
 }
 
@@ -11395,26 +11400,143 @@ async function buildWeeklyLoadHtml(forDate){
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
     const DOW = ['일','월','화','수','목','금','토'];
+
+    // 팀 경기 평균 (accel, rhie 추가)
+    const _fullMAvg = (arr,field) => {
+      const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+      if(!vrs.length) return null;
+      const mx=Math.max(...vrs.map(r=>parseFloat(r.duration)));
+      const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+      const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+      return sd>0?sv/sd*mx:null;
+    };
+    const _allKeys=[...new Set((matchRaw||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
+    const _ref3=(matchRaw||[]).filter(r=>_allKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
+    const tMA = {
+      td:    _fullMAvg(_ref3,'td'),
+      hsr:   _fullMAvg(_ref3,'band4_td'),
+      sprint:_fullMAvg(_ref3,'band5_td'),
+      accel: _fullMAvg(_ref3,'accel'),
+      rhie:  _fullMAvg(_ref3,'rhie'),
+    };
+
+    // % 배지 헬퍼
+    const _pBadge = (target, avg) => {
+      if(!target || !avg) return '';
+      const p = Math.round(target/avg*100);
+      const c = p>=80?'#22c55e':p>=60?'#eab308':'#ef4444';
+      return ' <span style="font-size:9px;color:'+c+';font-weight:600">('+p+'%)</span>';
+    };
+    const _achBadge = (actual, target) => {
+      if(actual==null || !target) return '<span style="color:var(--text3)">—</span>';
+      const p = Math.round(actual/target*100);
+      const c = p>=90?'#22c55e':p>=70?'#eab308':'#ef4444';
+      const bg = p>=90?'rgba(34,197,94,0.1)':p>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
+      return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+c+';font-weight:700">'+p+'%</span>';
+    };
+
+    // 이번 주 실제 누적 (M 기준)
+    const wkMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    const wkMDates = [...new Set(wkMGps.map(r=>r.session_date))];
+    const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
+    const wkTargetSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
+    const wkTargetSet = {td:false,hsr:false,spr:false,acc:false,rhie:false};
+    wkMDates.forEach(dd=>{
+      const dg=wkMGps.filter(r=>r.session_date===dd);
+      const _tAvg=(arr,f)=>{const vrs=arr.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return 0;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:0;};
+      wkSum.td  += _tAvg(dg,'td');
+      wkSum.hsr += _tAvg(dg,'running_high');
+      wkSum.spr += _tAvg(dg,'sprint');
+      wkSum.acc += _tAvg(dg,'accel');
+      wkSum.rhie+= _tAvg(dg,'rhie');
+      const bd2=bdMap[dd];
+      if(bd2?.td_target!=null){wkTargetSum.td+=bd2.td_target;wkTargetSet.td=true;}
+      if(bd2?.hsr_target!=null){wkTargetSum.hsr+=bd2.hsr_target;wkTargetSet.hsr=true;}
+      if(bd2?.spr_target!=null){wkTargetSum.spr+=bd2.spr_target;wkTargetSet.spr=true;}
+      if(bd2?.acc_target!=null){wkTargetSum.acc+=bd2.acc_target;wkTargetSet.acc=true;}
+      if(bd2?.rhie_target!=null){wkTargetSum.rhie+=bd2.rhie_target;wkTargetSet.rhie=true;}
+    });
+
+    // 오늘 목표
+    const todayBd = bdMap[forDate] || null;
+
+    // [1] 이번 주 훈련 목표 테이블 (% 포함)
     const bdRows = weekDates.map(dd=>{
       const bd = bdMap[dd]; if(!bd) return '';
       const isRest = bd.day_label==='REST';
       const isSel = dd===forDate;
       const dObj = new Date(dd+'T12:00:00');
+      const tCell = (val, avg) => val!=null ? val.toLocaleString()+_pBadge(val,avg) : '—';
       return '<tr style="'+(isSel?'background:rgba(99,102,241,0.08);font-weight:600':'')+(isRest?'opacity:0.4':'')+'">'
         +'<td style="padding:5px 8px">'+DOW[dObj.getDay()]+' '+(dObj.getMonth()+1)+'/'+(dObj.getDate())+'</td>'
         +'<td style="padding:5px 8px;font-weight:600;color:#a5b4fc">'+(bd.day_label||'—')+'</td>'
-        +'<td style="padding:5px 8px;text-align:right">'+(bd.td_target!=null?bd.td_target.toLocaleString()+'m':'—')+'</td>'
-        +'<td style="padding:5px 8px;text-align:right">'+(bd.hsr_target!=null?bd.hsr_target.toLocaleString()+'m':'—')+'</td>'
-        +'<td style="padding:5px 8px;text-align:right">'+(bd.spr_target!=null?bd.spr_target.toLocaleString()+'m':'—')+'</td>'
-        +'<td style="padding:5px 8px;text-align:right">'+(bd.acc_target!=null?bd.acc_target+'회':'—')+'</td>'
-        +'<td style="padding:5px 8px;text-align:right">'+(bd.rhie_target!=null?bd.rhie_target+'회':'—')+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.td_target,tMA.td)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.hsr_target,tMA.hsr)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.spr_target,tMA.sprint)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.acc_target,tMA.accel)+'</td>'
+        +'<td style="padding:5px 8px;text-align:right">'+tCell(bd.rhie_target,tMA.rhie)+'</td>'
         +'<td style="padding:5px 8px;font-size:10px;color:var(--text3)">'+([bd.am_session,bd.pm_session].filter(Boolean).join(' / ')||'—')+'</td>'
         +'</tr>';
     }).filter(Boolean).join('');
-    if(bdRows) {
+
+    // [2] 오늘 목표 vs 달성 + 이번 주 누적 (나란히)
+    const wkCutLabel = wkMDates.includes(forDate) ? '오늘' : '어제';
+    const todayActual = { // forDate GPS 팀 평균
+      td:null, hsr:null, spr:null, acc:null, rhie:null
+    };
+    const todayGpsList = (wkGps||[]).filter(r=>r.session_date===forDate&&(r.session_type2||'').trim().toUpperCase()==='M');
+    if(todayGpsList.length){
+      const _ta=(f)=>{const vrs=todayGpsList.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return null;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:null;};
+      todayActual.td  = _ta('td');
+      todayActual.hsr = _ta('running_high');
+      todayActual.spr = _ta('sprint');
+      todayActual.acc = _ta('accel');
+      todayActual.rhie= _ta('rhie');
+    }
+    const todayDayLabel = todayBd?.day_label || '—';
+    const _wRow = (label, act, tgt, tgtSet, unit, color) => {
+      if(!tgtSet && !act) return '';
+      const a = act!=null?Math.round(act):null;
+      const aDisp = (a!=null&&a>0)?a.toLocaleString()+unit:(tgtSet?'0'+unit:'—');
+      const tDisp = tgtSet?tgt.toLocaleString()+unit:'—';
+      return '<tr style="border-top:0.5px solid var(--border)">'
+        +'<td style="padding:4px 6px;color:var(--text3);font-size:10px">'+label+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;color:var(--text3);font-size:10px">'+tDisp+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;color:'+color+';font-weight:600;font-size:10px">'+aDisp+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:10px">'+_achBadge(a,tgtSet?tgt:null)+'</td>'
+        +'</tr>';
+    };
+    const todayVsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">'
+      // 오늘 목표 vs 달성
+      +'<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'
+      +'<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px">🎯 오늘 목표 vs 달성 · '+todayDayLabel+'</div>'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr><th style="padding:3px 6px;text-align:left;font-size:10px;color:var(--text3);font-weight:500"></th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">목표</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">실제</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">달성</th></tr></thead>'
+      +'<tbody>'
+      +_wRow('TD',  todayActual.td,  todayBd?.td_target,  todayBd?.td_target!=null,  'm','#60a5fa')
+      +_wRow('HSR', todayActual.hsr, todayBd?.hsr_target, todayBd?.hsr_target!=null, 'm','#f59e0b')
+      +_wRow('Sprint',todayActual.spr,todayBd?.spr_target,todayBd?.spr_target!=null, 'm','#ef4444')
+      +_wRow('가속',todayActual.acc, todayBd?.acc_target, todayBd?.acc_target!=null, '회','#fb923c')
+      +_wRow('RHIE', todayActual.rhie,todayBd?.rhie_target,todayBd?.rhie_target!=null,'회','#34d399')
+      +'</tbody></table></div>'
+      // 이번 주 누적
+      +'<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'
+      +'<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px">📅 이번 주 누적 <span style="font-weight:400">('+weekStartStr+' ~ '+wkCutLabel+')</span></div>'
+      +'<table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr><th style="padding:3px 6px;text-align:left;font-size:10px;color:var(--text3);font-weight:500"></th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">목표</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">실제</th><th style="padding:3px 6px;text-align:right;font-size:10px;color:var(--text3);font-weight:500">달성</th></tr></thead>'
+      +'<tbody>'
+      +_wRow('TD',  Math.round(wkSum.td),  wkTargetSum.td,  wkTargetSet.td,  'm','#60a5fa')
+      +_wRow('HSR', Math.round(wkSum.hsr), wkTargetSum.hsr, wkTargetSet.hsr, 'm','#f59e0b')
+      +_wRow('Sprint',Math.round(wkSum.spr),wkTargetSum.spr,wkTargetSet.spr, 'm','#ef4444')
+      +_wRow('가속',Math.round(wkSum.acc), wkTargetSum.acc, wkTargetSet.acc, '회','#fb923c')
+      +_wRow('RHIE',Math.round(wkSum.rhie),wkTargetSum.rhie,wkTargetSet.rhie,'회','#34d399')
+      +'</tbody></table></div>'
+      +'</div>';
+
+    if(bdRows || todayBd) {
       periodHeader = '<div style="background:var(--surface);border:0.5px solid rgba(99,102,241,0.4);border-radius:10px;padding:14px;margin-bottom:10px">'
         +'<div style="font-size:12px;font-weight:600;color:#a5b4fc;margin-bottom:10px">📅 이번 주 훈련 목표 (주기화) · '+weekStartStr+' ~ '+weekEndStr+'</div>'
-        +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+        +(bdRows?'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
         +'<thead><tr style="background:var(--surface2)">'
         +'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">날짜</th>'
         +'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">MD</th>'
@@ -11425,12 +11547,16 @@ async function buildWeeklyLoadHtml(forDate){
         +'<th style="padding:5px 8px;text-align:right;color:#34d399;font-weight:500">RHIE 목표</th>'
         +'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500">세션</th>'
         +'</tr></thead>'
-        +'<tbody>'+bdRows+'</tbody></table></div>'
+        +'<tbody>'+bdRows+'</tbody></table></div>':'')
+        +todayVsHtml
         +'<div style="font-size:9px;color:var(--text3);margin-top:8px;padding:5px 8px;background:var(--surface2);border-radius:5px">'
-        +'※ % 기준: 개인 Match Max × 주기화 목표% — 선수별 경기 최대 데이터 대비 오늘 훈련 달성률'
+        +'※ 목표 옆 % = 팀 경기 평균 대비 / 달성률 = 개인 Match Max × 주기화% 기준'
         +'</div></div>';
     }
   }
+
+  // 훈련 데이터 모드: 주간 테이블 제외
+  if(window._trainingMode) return periodHeader;
 
   return periodHeader + `<div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
@@ -11784,11 +11910,25 @@ async function loadTeamSummary(){
   out.innerHTML = `
     <!-- ③ GPS 선수 테이블 (M그룹) -->
     ${hasGps ? `
-    <div style="overflow-x:auto;margin-bottom:14px">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
-        ${tableHeader}
-        ${renderTable(sortRecordsByPos(fullGps))}
-      </table>
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
+        M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        팀 평균 · TD <strong style="color:var(--accent2)">${avgGroup(fullGps,'td',0)}m</strong>
+        · HSR <strong style="color:#f59e0b">${avgGroup(fullGps,'running_high',0)}m</strong>
+        · Sprint <strong style="color:#ef4444">${avgGroup(fullGps,'sprint',0)}m</strong>
+        · 가속 <strong style="color:#fb923c">${avgGroup(fullGps,'accel',0)}회</strong>
+        ${isV1plan?'':' · RHIE <strong style="color:#34d399">'+avgGroup(fullGps,'rhie',0)+'회</strong>'}
+        · 최고속도 <strong style="color:#60a5fa">${avgGroup(fullGps,'max_speed',1)}km/h</strong>
+        ${currentUseRpe?' · RPE <strong style="color:#fbbf24">'+mRpeAvg+'</strong> · sRPE <strong style="color:#c084fc">'+mSrpeAvg+'</strong>':''}
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+          ${tableHeader}
+          ${renderTable(sortRecordsByPos(fullGps))}
+        </table>
+      </div>
     </div>
 
     <!-- ④ 서브/미엔트리 그룹 -->
