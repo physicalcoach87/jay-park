@@ -8883,19 +8883,15 @@ async function loadMorningReport(){
     : '';
 
   // ── 주간 목표 합산 (REST 제외, 오늘까지만) ──
-  const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0, sRPE:0 };
-  let weekTargetDays = 0;
-  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=today&&r.day_label!=='REST').forEach(r=>{
+  // 주간 목표: 이번 주 전체 block_days 합산 (REST 제외) — 코치가 설정한 주간 플랜 전체
+  const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
+  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=weekEndStr&&r.day_label!=='REST').forEach(r=>{
     if(r.td_target)   weekTargetSum.td   += r.td_target;
     if(r.hsr_target)  weekTargetSum.hsr  += r.hsr_target;
     if(r.spr_target)  weekTargetSum.spr  += r.spr_target;
     if(r.acc_target)  weekTargetSum.acc  += r.acc_target;
     if(r.rhie_target) weekTargetSum.rhie += r.rhie_target;
-    weekTargetDays++;
   });
-  // sRPE 주간 목표: mdFallback 범위 중간값 × 훈련일 수
-  if(mdFallback?.sRPE && weekTargetDays>0)
-    weekTargetSum.sRPE = Math.round((mdFallback.sRPE[0]+mdFallback.sRPE[1])/2) * weekTargetDays;
 
   // 주간 실제 (weekTotal* 는 km 단위라 m 변환)
   const weekActual = {
@@ -8983,7 +8979,6 @@ async function loadMorningReport(){
         {label:'Sprint', t:tSPR,  unit:'m',  color:'#ef4444', ref:matchRef3.sprint},
         {label:'가속',   t:tACC,  unit:'회', color:'#fb923c', ref:matchRef3.accel},
         {label:'RHIE',   t:tRHIE, unit:'회', color:'#34d399', ref:matchRef3.rhie},
-        {label:'sRPE',   t:tSRPE, unit:'AU', color:'#a78bfa', ref:null},
       ].map(({label,t,unit,color,ref})=>{
         const rawVal = !t ? null : Array.isArray(t.val) ? (t.val[0]+t.val[1])/2 : t.val;
         const v = !t ? '—' : Array.isArray(t.val) ? t.val[0].toLocaleString()+'~'+t.val[1].toLocaleString() : t.val.toLocaleString();
