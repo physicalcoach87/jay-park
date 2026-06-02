@@ -9380,39 +9380,7 @@ async function loadMorningReport(){
 
     </div>` : ''}
 
-    <!-- 섹션6: 이번 주 팀 부하 흐름 (참고용) -->
-    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">📊 이번 주 팀 부하 흐름</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--text3)">TD <strong style="color:var(--text)">${weekTotalTD.toFixed(1)}km</strong></span>
-          <span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${weekTotalHSR.toLocaleString()}m</strong></span>
-          <span style="font-size:11px;color:var(--text3)">Sprint <strong style="color:#ef4444">${weekTotalSprint.toLocaleString()}m</strong></span>
-          <span style="font-size:11px;color:var(--text3)">가속 <strong style="color:#fb923c">${weekTotalAccel}회</strong></span>
-          <span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">${weekTotalRHIE}회</strong></span>
-          <span style="font-size:11px;color:var(--text3)">sRPE <strong style="color:#a78bfa">${Math.round(weekTotalSRPE).toLocaleString()} AU</strong></span>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:520px">
-          <thead>
-            <tr style="background:var(--surface2)">
-              <th style="padding:6px 10px;text-align:left;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">요일·날짜</th>
-              <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">주기</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">시간</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">TD</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">HSR</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">Sprint</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">sRPE</th>
-              <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">ACWR</th>
-              <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;border-bottom:0.5px solid var(--border)">상태</th>
-            </tr>
-          </thead>
-          <tbody>${weekRowsHtml}</tbody>
-        </table>
-      </div>
-      ${yesterdayDetailHtml}
-    </div>`;
+    `;
 
   // 부상위험 상세 분석 자동 실행
   runInjuryRiskAnalysis();
