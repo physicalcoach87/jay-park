@@ -9028,7 +9028,6 @@ async function loadMorningReport(){
           weekRow('Sprint', weekActual.spr,  weekTargetSum.spr||null,  'm',  '#ef4444')+
           weekRow('가속',   weekActual.acc,  weekTargetSum.acc||null,  '회', '#fb923c')+
           weekRow('RHIE',   weekActual.rhie, weekTargetSum.rhie||null, '회', '#34d399')+
-          weekRow('sRPE',   weekActual.sRPE, weekTargetSum.sRPE||null, 'AU', '#a78bfa')+
         '</tbody></table>'+
       '</div>'+
 
@@ -9052,7 +9051,6 @@ async function loadMorningReport(){
             yestRow('Sprint', yesterdayBlockDay?.spr_target,  yestActual.spr, 'm',  '#ef4444', null)+
             yestRow('가속',   yesterdayBlockDay?.acc_target,  yestActual.acc, '회', '#fb923c', null)+
             yestRow('RHIE',   yesterdayBlockDay?.rhie_target, yestActual.rhie,'회', '#34d399', null)+
-            yestRow('sRPE',   null, ySRPE, 'AU', '#a78bfa', yestMdFallback?.sRPE)+
           '</tbody></table>'+
         '</div>'
         : '<div></div>'
