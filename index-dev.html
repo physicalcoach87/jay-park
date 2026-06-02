@@ -9288,6 +9288,30 @@ async function loadMorningReport(){
       ${loadHtml}
     </div>
 
+    <!-- 섹션2-1: 경기 기준 & 팀 평균 공식 -->
+    ${ref3Info.length ? `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em">📊 경기 기준 · 최근 ${ref3Info.length}경기 팀 평균</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          ${ref3Info.map((m,i)=>`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#3b1219;color:#f87171;border:0.5px solid #7f1d1d">
+            ${i+1}. ${m.dayLabel} vs ${m.opp}${m.ha?' ('+m.ha+')':''}${m.result==='W'?' 승':m.result==='L'?' 패':m.result==='D'?' 무':''}${m.score?' '+m.score:''}
+          </span>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:8px">
+        ${matchRef3.td?`<span style="font-size:11px;color:var(--text3)">TD <strong style="color:#60a5fa">${(matchRef3.td/1000).toFixed(1)}km</strong></span>`:''}
+        ${matchRef3.hsr?`<span style="font-size:11px;color:var(--text3)">HSR <strong style="color:#f59e0b">${Math.round(matchRef3.hsr)}m</strong></span>`:''}
+        ${matchRef3.sprint?`<span style="font-size:11px;color:var(--text3)">Sprint <strong style="color:#ef4444">${Math.round(matchRef3.sprint)}m</strong></span>`:''}
+        ${matchRef3.accel?`<span style="font-size:11px;color:var(--text3)">가속 <strong style="color:#fb923c">${Math.round(matchRef3.accel)}회</strong></span>`:''}
+        ${matchRef3.rhie?`<span style="font-size:11px;color:var(--text3)">RHIE <strong style="color:#34d399">${parseFloat(matchRef3.rhie.toFixed(1))}회</strong></span>`:''}
+        <span style="font-size:10px;color:var(--text3);margin-left:4px">🟢 ≥80% · 🟡 60~79% · 🔴 &lt;60%</span>
+      </div>
+      <div style="font-size:9px;color:var(--text3);padding:6px 8px;background:var(--surface2);border-radius:6px;line-height:1.6">
+        <strong style="color:var(--text3)">팀 평균 공식:</strong> (M선수 전체 지표 총합) ÷ (M선수 전체 훈련시간 합) × M선수 다수의 높은 시간 — 선수 수·훈련시간 차이 보정
+      </div>
+    </div>` : ''}
+
     <!-- 섹션3: 부상자 현황 -->
     ${_injuredCardHtml}
 
@@ -9389,24 +9413,6 @@ async function loadMorningReport(){
           <tbody>${weekRowsHtml}</tbody>
         </table>
       </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:6px">공식: (M선수 전체 팀 지표 총합) ÷ (M선수 전체 훈련시간 합) × M선수 다수의 높은 시간 — 선수 수·훈련시간 차이 보정</div>
-      ${ref3Info.length ? `
-      <div style="margin-top:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;border:0.5px solid var(--border)">
-        <div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📊 % 기준: 최근 ${ref3Info.length}경기 팀 평균</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px">
-          ${ref3Info.map((m,i)=>`<span style="font-size:10px;padding:2px 8px;border-radius:10px;background:#3b1219;color:#f87171;border:0.5px solid #7f1d1d">
-            ${i+1}. ${m.dayLabel} vs ${m.opp}${m.ha?' ('+m.ha+')':''}${m.result==='W'?' 승':m.result==='L'?' 패':m.result==='D'?' 무':''}${m.score?' '+m.score:''}
-          </span>`).join('')}
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:8px">
-          ${matchRef3.td?`<span style="font-size:10px;color:var(--text3)">TD <strong style="color:#60a5fa">${(matchRef3.td/1000).toFixed(1)}km</strong></span>`:''}
-          ${matchRef3.hsr?`<span style="font-size:10px;color:var(--text3)">HSR <strong style="color:#f59e0b">${Math.round(matchRef3.hsr)}m</strong></span>`:''}
-          ${matchRef3.sprint?`<span style="font-size:10px;color:var(--text3)">Sprint <strong style="color:#ef4444">${Math.round(matchRef3.sprint)}m</strong></span>`:''}
-          ${matchRef3.accel?`<span style="font-size:10px;color:var(--text3)">가속 <strong style="color:#fb923c">${Math.round(matchRef3.accel)}회</strong></span>`:''}
-          ${matchRef3.rhie?`<span style="font-size:10px;color:var(--text3)">RHIE <strong style="color:#34d399">${parseFloat(matchRef3.rhie.toFixed(1))}회</strong></span>`:''}
-        </div>
-        <div style="font-size:9px;color:var(--text3);margin-top:4px">🟢 ≥80% &nbsp; 🟡 60~79% &nbsp; 🔴 &lt;60% — 경기대비 훈련 부하 비율</div>
-      </div>` : ''}
       ${yesterdayDetailHtml}
     </div>`;
 
