@@ -8946,17 +8946,19 @@ async function loadMorningReport(){
   const yestMdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(yesterdayBlockDay?.day_label||'').toUpperCase().includes(k));
   const yestMdFallback = yestMdKey ? MD_LOAD_TARGETS[yestMdKey] : null;
 
-  // 어제 비교 행 헬퍼
+  // 어제 비교 행 헬퍼 (0 포함 처리)
   const yestRow = (label, target, actual, unit, color, mdRange) => {
-    const hasT = target!=null;
-    const ar = actual!=null ? Math.round(actual) : null;
-    if(!hasT && !mdRange && ar==null) return '';
+    const hasT = target != null;
+    const ar = actual != null ? Math.round(actual) : null;
+    if(!hasT && !mdRange && ar == null) return '';
     const tDisp = hasT ? target.toLocaleString()+unit : mdRange ? mdRange[0]+'~'+mdRange[1]+unit : '—';
-    const aDisp = ar!=null ? ar.toLocaleString()+unit : '—';
+    const aDisp = (ar != null && ar > 0) ? ar.toLocaleString()+unit : (hasT ? '0'+unit : '—');
     let pctHtml = '<span style="color:var(--text3)">—</span>';
-    if(ar!=null) {
+    if(ar != null) {
       const ref = hasT ? target : (mdRange ? (mdRange[0]+mdRange[1])/2 : null);
-      if(ref && ref>0) {
+      if(ref === 0 && ar === 0) {
+        pctHtml = '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:600">✅</span>';
+      } else if(ref > 0) {
         const pct = Math.round(ar/ref*100);
         const c = pct>=90?'#22c55e':pct>=70?'#eab308':'#ef4444';
         const b = pct>=90?'rgba(34,197,94,0.1)':pct>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
