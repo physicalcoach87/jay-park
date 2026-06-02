@@ -11427,9 +11427,13 @@ async function buildWeeklyLoadHtml(forDate){
       const c = p>=80?'#22c55e':p>=60?'#eab308':'#ef4444';
       return ' <span style="font-size:9px;color:'+c+';font-weight:600">('+p+'%)</span>';
     };
-    const _achBadge = (actual, target) => {
-      if(actual==null || !target) return '<span style="color:var(--text3)">—</span>';
-      const p = Math.round(actual/target*100);
+    const _achBadge = (actual, target, tgtSet) => {
+      const a = actual!=null ? Math.round(actual) : null;
+      if(!tgtSet && a==null) return '<span style="color:var(--text3)">—</span>';
+      if(tgtSet && target===0 && a===0)
+        return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(34,197,94,0.1);color:#22c55e;font-weight:700">100%</span>';
+      if(target==null || target===0) return '<span style="color:var(--text3)">—</span>';
+      const p = Math.round(a/target*100);
       const c = p>=90?'#22c55e':p>=70?'#eab308':'#ef4444';
       const bg = p>=90?'rgba(34,197,94,0.1)':p>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
       return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+c+';font-weight:700">'+p+'%</span>';
@@ -11503,7 +11507,7 @@ async function buildWeeklyLoadHtml(forDate){
         +'<td style="padding:4px 6px;color:var(--text3);font-size:10px">'+label+'</td>'
         +'<td style="padding:4px 6px;text-align:right;color:var(--text3);font-size:10px">'+tDisp+'</td>'
         +'<td style="padding:4px 6px;text-align:right;color:'+color+';font-weight:600;font-size:10px">'+aDisp+'</td>'
-        +'<td style="padding:4px 6px;text-align:right;font-size:10px">'+_achBadge(a,tgtSet?tgt:null)+'</td>'
+        +'<td style="padding:4px 6px;text-align:right;font-size:10px">'+_achBadge(a,tgtSet?tgt:null,tgtSet)+'</td>'
         +'</tr>';
     };
     const todayVsHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px">'
