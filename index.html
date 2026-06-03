@@ -8462,7 +8462,7 @@ async function loadMorningReport(){
       .limit(300),
     supa.from('block_days')
       .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
-      .gte('plan_date', yesterdayStr).lte('plan_date', weekEndStr),
+      .gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
   ]);
 
   // ── 경기 팀 평균: (합계) / (출전시간 합) × max(출전시간) ──────
