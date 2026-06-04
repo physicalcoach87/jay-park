@@ -21471,6 +21471,7 @@ function bpRenderEditor(){
         <div style="font-size:13px;font-weight:600;color:var(--text2)">플랜 정보</div>
         <div style="display:flex;gap:8px">
           <button onclick="bpLoadPlanList()" style="font-size:12px;padding:6px 12px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-family:inherit">← 목록</button>
+          <button onclick="bpGenerateReport()" style="font-size:12px;padding:6px 14px;border-radius:7px;border:1px solid #818cf8;background:rgba(129,140,248,.12);color:#818cf8;font-weight:600;cursor:pointer;font-family:inherit">📋 보고서</button>
           ${!pub?`<button onclick="bpPublish('${plan.id}','${plan.title.replace(/'/g,'')}')" style="font-size:12px;padding:6px 14px;border-radius:7px;border:none;background:#4ade80;color:#052e16;font-weight:700;cursor:pointer;font-family:inherit">📱 발송</button>`:'<span style="font-size:12px;color:#4ade80;padding:6px">✅ 발송 완료</span>'}
         </div>
       </div>
@@ -22138,6 +22139,243 @@ function bpCardioPersonalText(prog,mas,mss){
   return `🏃 ${name}`;
 }
 
+
+// ══════════════════════════════════════════════════════════════════
+// 휴식기 플랜 보고서 생성
+// ══════════════════════════════════════════════════════════════════
+async function bpGenerateReport(){
+  const plan = _bpPlan;
+  if(!plan){ alert('플랜을 먼저 선택하세요.'); return; }
+
+  const sessions = Object.values(_bpSessions).sort((a,b)=>a.session_date.localeCompare(b.session_date));
+
+  // 대상 선수 목록
+  let targets = _players || [];
+  if(plan.target_type==='player' && plan.target_player_id)
+    targets = targets.filter(p=>p.id===plan.target_player_id);
+  targets = targets.slice().sort((a,b)=>{
+    const pos=['GK','CB','LB','RB','DM','CM','AM','LW','RW','FW','ST'];
+    return (pos.indexOf(a.position)-pos.indexOf(b.position))||a.name.localeCompare(b.name,'ko');
+  });
+
+  // 세션 타입 레이블
+  const TYPE_LABEL={'rest':'완전 휴식','cardio':'유산소','gym':'근력','mixed':'복합(AM+PM)'};
+  const WEEK_KO=['일','월','화','수','목','금','토'];
+
+  // 날짜 포맷
+  const fmtDate=d=>{const o=new Date(d+'T12:00:00');return `${o.getFullYear()}.${String(o.getMonth()+1).padStart(2,'0')}.${String(o.getDate()).padStart(2,'0')} (${WEEK_KO[o.getDay()]})`; };
+
+  // 세션 구성 요약 집계
+  const counts={rest:0,cardio:0,gym:0,mixed:0};
+  sessions.forEach(s=>{ if(counts[s.session_type]!=null) counts[s.session_type]++; });
+  const totalDays = sessions.length;
+
+  // 선수별 개인화 처방 텍스트 → HTML로 변환
+  function cardioHtml(prog, mas, mss){
+    if(!prog) return '<span style="color:#94a3b8">—</span>';
+    const ex = prog.exercise_id ? bpFindEx(prog.exercise_id) : null;
+    const useVmax = prog.intensity_unit?.includes('Vmax')||prog.intensity_unit?.includes('MSS');
+    const base = useVmax ? mss : mas;
+    const name = ex?.name || prog.category_name || '유산소';
+    const int = prog.intensity || 90;
+    const pType = prog.param_type;
+    if(!base || !pType) return `<span style="color:#94a3b8">${name}</span>`;
+    let rows = '';
+    if(pType==='time_only'){
+      const spd=(base*int/100).toFixed(1);
+      const dist=Math.round(base*int/100*prog.duration_min/60*1000).toLocaleString();
+      rows=`${int}% → <b>${spd}km/h</b> · ${prog.duration_min}분 · ${dist}m`;
+    } else if(pType==='set_time_rest'){
+      const spd=(base*int/100).toFixed(1);
+      const sd=Math.round(base*int/100*prog.work_min/60*1000).toLocaleString();
+      rows=`${prog.sets}세트×${prog.work_min}분 · ${int}%→<b>${spd}km/h</b> · 세트 ${sd}m · 휴식 ${prog.rest_min}분`;
+    } else if(pType==='set_time_rest_perset'){
+      const pcts=prog.per_set_intensities?.length?prog.per_set_intensities:Array(prog.sets||4).fill(int);
+      rows=pcts.map((pct,i)=>{
+        const spd=(base*pct/100).toFixed(1);
+        const dist=Math.round(base*pct/100*(prog.work_min||4)/60*1000).toLocaleString();
+        return `${i+1}세트: ${pct}%→<b>${spd}km/h</b> ${dist}m`;
+      }).join(' / ')+` · 세트휴식 ${prog.rest_min}분`;
+    } else if(pType==='set_rep_rest'){
+      const ws=prog.work_sec||30;
+      const spd=(base*int/100).toFixed(1);
+      const rd=Math.round(base*int/100*ws/3600*1000);
+      rows=`${prog.sets}세트×${prog.reps}rep · ${ws}s · ${int}%→<b>${spd}km/h</b> · 1rep ${rd}m`;
+    } else if(pType==='dist_rep_rest'){
+      rows=`${prog.sets}세트×${prog.distance}m · ${int}% · 회복 ${prog.rep_rest_min}분`;
+    } else if(pType==='rhie_sprint'){
+      const ws=prog.work_sec||5;
+      const spd=(base*int/100).toFixed(1);
+      rows=`${prog.sets}세트×${prog.reps}rep · ${ws}s · ${int}%→<b>${spd}km/h</b>`;
+    } else rows=`${int}%`;
+    return `<span style="color:#38bdf8;font-weight:600">${name}</span><br><span style="font-size:11px">${rows}</span>`;
+  }
+
+  function gymHtml(prog){
+    if(!prog||!prog.exercises?.length) return '<span style="color:#94a3b8">—</span>';
+    return prog.exercises.map(ex=>`<span style="color:#a78bfa">${ex.name||ex.exercise_id||'운동'}</span> <span style="font-size:11px;color:#94a3b8">${ex.sets||''}세트×${ex.reps||''} · RPE ${ex.rpe||'—'}</span>`).join('<br>');
+  }
+
+  function sessDetailHtml(sess, mas, mss){
+    if(!sess) return '<span style="color:#94a3b8">REST</span>';
+    const t=sess.session_type;
+    if(t==='rest') return `<span style="color:#64748b">🛌 완전 휴식${sess.notes?' <span style="font-size:11px;color:#94a3b8">'+sess.notes+'</span>':''}</span>`;
+    if(t==='cardio') return `🏃 ${cardioHtml(sess.am_program,mas,mss)}`;
+    if(t==='gym') return `💪 ${gymHtml(sess.am_program)}`;
+    if(t==='mixed') return `<div><span style="font-size:10px;color:#94a3b8;font-weight:700">AM</span> 🏃 ${cardioHtml(sess.am_program,mas,mss)}</div><div style="margin-top:4px"><span style="font-size:10px;color:#94a3b8;font-weight:700">PM</span> 💪 ${gymHtml(sess.pm_program)}</div>`;
+    return t;
+  }
+
+  // ── 날짜별 일정표 HTML ──
+  const scheduleRows = sessions.map(s=>{
+    const d=new Date(s.session_date+'T12:00:00');
+    const isWknd=d.getDay()===0||d.getDay()===6;
+    const tColor={'rest':'#64748b','cardio':'#38bdf8','gym':'#a78bfa','mixed':'#f97316'}[s.session_type]||'#94a3b8';
+    const tLabel=TYPE_LABEL[s.session_type]||s.session_type;
+    return `<tr>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e293b;white-space:nowrap;color:${isWknd?'#f87171':'#cbd5e1'}">${fmtDate(s.session_date)}</td>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e293b;text-align:center"><span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${tColor}22;color:${tColor};font-weight:600">${tLabel}</span></td>
+      <td style="padding:8px 10px;border-bottom:1px solid #1e293b;font-size:12px;color:#cbd5e1">${s.notes||''}</td>
+    </tr>`;
+  }).join('');
+
+  // ── 선수별 처방 테이블 ──
+  const playerRows = targets.map(p=>{
+    const mas=parseFloat(p.mas)||0;
+    const mss=parseFloat(p.mss)||0;
+    const sessCells = sessions.map(s=>`<td style="padding:7px 8px;border:1px solid #1e293b;font-size:11px;vertical-align:top;min-width:160px">${sessDetailHtml(s,mas,mss)}</td>`).join('');
+    return `<tr>
+      <td style="padding:8px 10px;border:1px solid #1e293b;white-space:nowrap;font-weight:600;color:#f1f5f9;background:#1a2540;position:sticky;left:0">${p.name}<br><span style="font-size:10px;color:#94a3b8;font-weight:400">${p.position||'—'}</span></td>
+      <td style="padding:8px 10px;border:1px solid #1e293b;text-align:center;white-space:nowrap;background:#1a2540"><span style="color:#38bdf8;font-weight:700">${mas||'—'}</span><br><span style="font-size:10px;color:#94a3b8">MAS</span></td>
+      <td style="padding:8px 10px;border:1px solid #1e293b;text-align:center;white-space:nowrap;background:#1a2540"><span style="color:#f59e0b;font-weight:700">${mss||'—'}</span><br><span style="font-size:10px;color:#94a3b8">MSS</span></td>
+      ${sessCells}
+    </tr>`;
+  }).join('');
+
+  const sessionDateHeaders = sessions.map(s=>{
+    const d=new Date(s.session_date+'T12:00:00');
+    const isWknd=d.getDay()===0||d.getDay()===6;
+    const tColor={'rest':'#64748b','cardio':'#38bdf8','gym':'#a78bfa','mixed':'#f97316'}[s.session_type]||'#94a3b8';
+    return `<th style="padding:7px 8px;border:1px solid #1e293b;text-align:center;background:#1e293b;color:${isWknd?'#f87171':'#94a3b8'};font-size:11px;white-space:nowrap">
+      ${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}<br>
+      <span style="color:#475569">(${WEEK_KO[d.getDay()]})</span><br>
+      <span style="color:${tColor};font-size:10px">${{'rest':'휴식','cardio':'유산소','gym':'근력','mixed':'복합'}[s.session_type]||''}</span>
+    </th>`;
+  }).join('');
+
+  const now=new Date();
+  const printDate=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  const targetLabel = plan.target_type==='player'
+    ? (targets[0]?.name||'개인') + ' (개인)'
+    : `전체팀 (${targets.length}명)`;
+
+  const html=`<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>휴식기 플랜 보고서 — ${plan.title}</title>
+<style>
+  :root{--bg:#0f172a;--surface:#1e293b;--surface2:#263347;--border:#334155;--text:#f1f5f9;--text2:#cbd5e1;--text3:#94a3b8;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.6;}
+  .wrap{max-width:1200px;margin:0 auto;padding:2rem;}
+  .report-header{background:linear-gradient(135deg,#1e3a5f,#1e293b);border:1px solid var(--border);border-radius:14px;padding:1.5rem 2rem;margin-bottom:1.5rem;}
+  .report-title{font-size:22px;font-weight:800;color:#38bdf8;margin-bottom:.3rem;}
+  .report-sub{font-size:12px;color:var(--text3);}
+  .meta-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:1rem;}
+  .meta-box{background:rgba(0,0,0,.3);border-radius:8px;padding:10px 14px;border:1px solid var(--border);}
+  .meta-label{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;}
+  .meta-value{font-size:16px;font-weight:700;color:var(--text);}
+  .section{margin-bottom:1.5rem;}
+  .section-title{font-size:13px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:.8rem;padding-bottom:6px;border-bottom:1px solid var(--border);}
+  table{border-collapse:collapse;}
+  .print-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;background:#818cf8;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:1rem;}
+  .print-btn:hover{background:#6366f1;}
+  @media print{
+    body{background:#fff!important;color:#111!important;}
+    .print-btn{display:none!important;}
+    .report-header{background:#f8fafc!important;border:1px solid #e2e8f0!important;}
+    .report-title{color:#1e40af!important;}
+    .report-sub,.meta-label{color:#64748b!important;}
+    .meta-box{background:#f1f5f9!important;border:1px solid #e2e8f0!important;}
+    .meta-value,.section-title{color:#1e293b!important;}
+    td,th{color:#1e293b!important;border-color:#e2e8f0!important;background:#fff!important;}
+    .wrap{padding:.5rem;}
+    tr td:first-child,tr td:nth-child(2),tr td:nth-child(3){background:#f8fafc!important;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <button class="print-btn" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
+
+  <div class="report-header">
+    <div class="report-title">🏖️ 휴식기 플랜 보고서</div>
+    <div class="report-sub">부산아이파크 FC · 피지컬 코칭 스태프 · 작성일 ${printDate}</div>
+    <div class="meta-grid">
+      <div class="meta-box"><div class="meta-label">플랜명</div><div class="meta-value" style="font-size:14px">${plan.title}</div></div>
+      <div class="meta-box"><div class="meta-label">기간</div><div class="meta-value" style="font-size:13px">${plan.start_date} ~ ${plan.end_date}</div></div>
+      <div class="meta-box"><div class="meta-label">총 일수</div><div class="meta-value">${totalDays}일</div></div>
+      <div class="meta-box"><div class="meta-label">대상</div><div class="meta-value" style="font-size:13px">${targetLabel}</div></div>
+      <div class="meta-box"><div class="meta-label">휴식</div><div class="meta-value" style="color:#64748b">${counts.rest}일</div></div>
+      <div class="meta-box"><div class="meta-label">유산소</div><div class="meta-value" style="color:#38bdf8">${counts.cardio}일</div></div>
+      <div class="meta-box"><div class="meta-label">근력</div><div class="meta-value" style="color:#a78bfa">${counts.gym}일</div></div>
+      <div class="meta-box"><div class="meta-label">복합</div><div class="meta-value" style="color:#f97316">${counts.mixed}일</div></div>
+    </div>
+  </div>
+
+  <!-- 일정표 -->
+  <div class="section">
+    <div class="section-title">📅 날짜별 훈련 일정</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;font-size:12px">
+        <thead>
+          <tr style="background:#1e293b">
+            <th style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;color:var(--text3)">날짜</th>
+            <th style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:center;color:var(--text3)">세션 유형</th>
+            <th style="padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;color:var(--text3)">특이사항</th>
+          </tr>
+        </thead>
+        <tbody>${scheduleRows||'<tr><td colspan="3" style="padding:1rem;text-align:center;color:var(--text3)">세션 없음</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 선수별 개인화 처방 -->
+  <div class="section">
+    <div class="section-title">👤 선수별 개인 처방 (MAS·MSS 기반 자동 환산)</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+      <span style="color:#38bdf8">■</span> MAS 기반: 유산소 강도(km/h) = MAS × 처방% / 100 &nbsp;·&nbsp;
+      <span style="color:#f59e0b">■</span> MSS 기반: 스프린트 강도(km/h) = MSS × 처방% / 100
+    </div>
+    <div style="overflow-x:auto">
+      <table style="font-size:12px">
+        <thead>
+          <tr style="background:#1e293b">
+            <th style="padding:8px 10px;border:1px solid var(--border);text-align:left;color:var(--text3);position:sticky;left:0;background:#1e293b">선수</th>
+            <th style="padding:8px 10px;border:1px solid var(--border);text-align:center;color:#38bdf8;position:sticky;left:0">MAS<br><span style="font-size:10px;font-weight:400">km/h</span></th>
+            <th style="padding:8px 10px;border:1px solid var(--border);text-align:center;color:#f59e0b">MSS<br><span style="font-size:10px;font-weight:400">km/h</span></th>
+            ${sessionDateHeaders}
+          </tr>
+        </thead>
+        <tbody>${playerRows||'<tr><td style="padding:1rem;text-align:center;color:var(--text3)">선수 없음</td></tr>'}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;padding:1.5rem 0;font-size:11px;color:var(--text3)">
+    부산아이파크 FC · 피지컬 코칭 스태프 · ${printDate} 생성
+  </div>
+</div>
+</body>
+</html>`;
+
+  // 새 탭에서 열기
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  window.open(url,'_blank');
+}
 
 async function bpDelete(planId,title){
   if(!confirm(`"${title}" 플랜을 삭제할까요?`)) return;
