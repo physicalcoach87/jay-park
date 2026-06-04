@@ -2782,6 +2782,7 @@ async function showApp(user, preloadedRole){
     isTeamAdmin  = (prof?.role === 'admin' || prof?.role === 'superadmin');
     if(prof?.club_id){
       currentClubId = prof.club_id;
+      await loadClubSettings(); // 컬럼 매핑·별칭 DB에서 로드
       const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions,use_player_app,use_rpe,use_wellness').eq('id', prof.club_id).single();
       if(club){
         currentClubName     = club.name;
@@ -7854,7 +7855,7 @@ async function loadScheduleCalendar(){
   body.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:12px">⏳ 불러오는 중...</div>';
 
   const {data:events, error} = await supa.from('weekly_schedule')
-    .select('*').gte('event_date',from).lte('event_date',to)
+    .select('*').eq('club_id',currentClubId).gte('event_date',from).lte('event_date',to)
     .order('event_date',{ascending:true});
 
   if(error){
@@ -8064,7 +8065,8 @@ async function saveScheduleEvent(){
     title:       title||null,
     description: desc||null,
     team:        _calSchedTeam,
-    player_ids:  _schedSelectedPlayers.length ? _schedSelectedPlayers : null
+    player_ids:  _schedSelectedPlayers.length ? _schedSelectedPlayers : null,
+    club_id:     currentClubId
   };
   let error;
   if(_calEditId){
@@ -8181,7 +8183,7 @@ async function loadWeekGrid(){
   const from = _calDateStr(ws), to = _calDateStr(we);
   document.getElementById('wg-period-lbl').textContent = from + ' ~ ' + to;
   const {data} = await supa.from('weekly_schedule').select('*')
-    .gte('event_date', from).lte('event_date', to)
+    .eq('club_id', currentClubId).gte('event_date', from).lte('event_date', to)
     .order('start_time', {ascending:true, nullsFirst:true});
   _weekGridData = (data||[]).map(e=>({
     rowId:'r_'+e.id, id:e.id, date:e.event_date,
@@ -8309,7 +8311,8 @@ async function saveWeekGrid(){
   if(toIns.length){
     ({error}=await supa.from('weekly_schedule').insert(toIns.map(row=>({
       event_date:row.date, start_time:row.time||null, event_type:row.type,
-      md_stage:row.md||null, title:row.title||null, team:row.team, description:null
+      md_stage:row.md||null, title:row.title||null, team:row.team, description:null,
+      club_id:currentClubId
     }))));
     if(error){alert('저장 실패: '+error.message);return;}
   }
@@ -8402,7 +8405,7 @@ async function savePhotoSchedule(){
   cards.forEach(card=>{
     const g=f=>card.querySelector('[data-field="'+f+'"]').value;
     if(!g('event_date')) return;
-    rows.push({event_date:g('event_date'),start_time:g('start_time')||null,event_type:g('event_type'),title:g('title').trim()||null,team:g('team'),description:null,md_stage:null});
+    rows.push({event_date:g('event_date'),start_time:g('start_time')||null,event_type:g('event_type'),title:g('title').trim()||null,team:g('team'),description:null,md_stage:null,club_id:currentClubId});
   });
   if(!rows.length){alert('등록할 일정이 없습니다.');return;}
   const {error}=await supa.from('weekly_schedule').insert(rows);
@@ -8491,7 +8494,7 @@ async function loadMorningReport(){
       .order('injury_date',{ascending:false}),
     supa.from('weekly_schedule')
       .select('event_date,event_type,md_stage,team,title,start_time')
-      .gte('event_date', weekStartStr).lte('event_date', weekEndStr)
+      .eq('club_id', currentClubId).gte('event_date', weekStartStr).lte('event_date', weekEndStr)
       .order('event_date',{ascending:true}).order('start_time',{ascending:true,nullsFirst:false}),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
@@ -8500,7 +8503,7 @@ async function loadMorningReport(){
       .limit(300),
     supa.from('block_days')
       .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
-      .gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
+      .eq('club_id', currentClubId).gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
   ]);
 
   // ── 경기 팀 평균: (합계) / (출전시간 합) × max(출전시간) ──────
@@ -11360,7 +11363,7 @@ async function loadTeamOverview(){
   const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
-      .gte('plan_date',fromVal).lte('plan_date',toVal),
+      .eq('club_id',currentClubId).gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,player_profiles(name,position)')
       .gte('session_date',fromVal).lte('session_date',toVal),
@@ -11888,7 +11891,7 @@ async function buildWeeklyLoadHtml(forDate){
       .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
     supa.from('weekly_schedule')
       .select('event_date,md_stage,title,start_time')
-      .gte('event_date',weekStartStr).lte('event_date',weekEndStr),
+      .eq('club_id',currentClubId).gte('event_date',weekStartStr).lte('event_date',weekEndStr),
   ]);
 
   const weekDates=[];
@@ -12005,7 +12008,7 @@ async function buildWeeklyLoadHtml(forDate){
   if(window._trainingMode) {
     const {data: bdWeek} = await supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
-      .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
+      .eq('club_id',currentClubId).gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
     const DOW = ['일','월','화','수','목','금','토'];
@@ -12233,7 +12236,7 @@ async function loadTeamSummary(){
       .eq('record_date', date),
     supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
-      .eq('plan_date', date).maybeSingle(),
+      .eq('club_id',currentClubId).eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
       .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
@@ -13069,44 +13072,89 @@ const GPS_INTERNAL_FIELDS = [
   {key:'fmpDynHigh',label:'FMP Dynamic High',      unit:'sec'},
 ];
 
-function _colMapKey(){ return 'gps_colmap_' + (currentClubId||'default'); }
+// ── 컬럼 매핑 + 선수 별칭 → Supabase clubs 테이블 저장 ──────────
+// clubs.gps_col_map (jsonb), clubs.gps_alias (jsonb)
+// localStorage 폴백: 마이그레이션 전 기기 호환용
 
-function getColMap(){
-  try{ return JSON.parse(localStorage.getItem(_colMapKey())||'{}'); }
-  catch(e){ return {}; }
+let _cachedColMap  = null;
+let _cachedAlias   = null;
+
+function _colMapKey(){ return 'gps_colmap_' + (currentClubId||'default'); }
+function _aliasKey(){  return 'gps_alias_'  + (currentClubId||'default'); }
+
+// 앱 시작 시 clubs 테이블에서 설정 로드 → 캐시에 저장
+async function loadClubSettings(){
+  if(!currentClubId) return;
+  const {data} = await supa.from('clubs').select('gps_col_map,gps_alias').eq('id',currentClubId).single();
+  if(data){
+    _cachedColMap = data.gps_col_map || {};
+    _cachedAlias  = data.gps_alias  || {};
+    // localStorage도 같이 갱신 (오프라인 폴백)
+    localStorage.setItem(_colMapKey(), JSON.stringify(_cachedColMap));
+    localStorage.setItem(_aliasKey(),  JSON.stringify(_cachedAlias));
+  } else {
+    // DB 컬럼 없으면 localStorage 폴백
+    try{ _cachedColMap = JSON.parse(localStorage.getItem(_colMapKey())||'{}'); }catch(e){ _cachedColMap={}; }
+    try{ _cachedAlias  = JSON.parse(localStorage.getItem(_aliasKey()) ||'{}'); }catch(e){ _cachedAlias={}; }
+  }
 }
 
-function saveColMap(){
+function getColMap(){
+  if(_cachedColMap) return _cachedColMap;
+  try{ return JSON.parse(localStorage.getItem(_colMapKey())||'{}'); }catch(e){ return {}; }
+}
+
+function getAliasMap(){
+  if(_cachedAlias) return _cachedAlias;
+  try{ return JSON.parse(localStorage.getItem(_aliasKey())||'{}'); }catch(e){ return {}; }
+}
+
+async function saveColMap(){
   const map = {};
   GPS_INTERNAL_FIELDS.forEach(f=>{
     const el = document.getElementById('cm-input-'+f.key);
     if(el && el.value.trim()) map[f.key] = el.value.trim();
   });
+  _cachedColMap = map;
   localStorage.setItem(_colMapKey(), JSON.stringify(map));
+  // Supabase 저장
+  if(currentClubId){
+    await supa.from('clubs').update({gps_col_map: map}).eq('id', currentClubId);
+  }
   const msg = document.getElementById('colmap-msg');
-  if(msg){ msg.style.color='#4ade80'; msg.textContent='✅ 저장 완료! 다음 GPS 업로드부터 자동 적용됩니다.'; setTimeout(()=>{msg.textContent='';},3000); }
+  if(msg){ msg.style.color='#4ade80'; msg.textContent='✅ 저장 완료! 모든 기기에 적용됩니다.'; setTimeout(()=>{msg.textContent='';},3000); }
 }
 
-function resetColMap(){
+async function resetColMap(){
   if(!confirm('매핑 설정을 초기화하시겠습니까?')) return;
+  _cachedColMap = {};
   localStorage.removeItem(_colMapKey());
+  if(currentClubId){
+    await supa.from('clubs').update({gps_col_map: {}}).eq('id', currentClubId);
+  }
   renderColMapForm();
   const msg = document.getElementById('colmap-msg');
   if(msg){ msg.style.color='var(--text3)'; msg.textContent='초기화 완료'; setTimeout(()=>{msg.textContent='';},2000); }
 }
 
-// ── 선수 이름 별칭 ─────────────────────────────────────
-function _aliasKey(){ return 'gps_alias_' + (currentClubId||'default'); }
-function getAliasMap(){ try{ return JSON.parse(localStorage.getItem(_aliasKey())||'{}'); }catch(e){ return {}; } }
-function saveAlias(gpsName, profileName){
+async function saveAlias(gpsName, profileName){
   const map = getAliasMap();
   map[gpsName.trim()] = profileName;
+  _cachedAlias = map;
   localStorage.setItem(_aliasKey(), JSON.stringify(map));
+  if(currentClubId){
+    await supa.from('clubs').update({gps_alias: map}).eq('id', currentClubId);
+  }
 }
-function deleteAlias(gpsName){
+
+async function deleteAlias(gpsName){
   const map = getAliasMap();
   delete map[gpsName];
+  _cachedAlias = map;
   localStorage.setItem(_aliasKey(), JSON.stringify(map));
+  if(currentClubId){
+    await supa.from('clubs').update({gps_alias: map}).eq('id', currentClubId);
+  }
   renderColMapForm();
 }
 
@@ -23698,7 +23746,7 @@ async function loadPeriodTab() {
   const last=`${y}-${String(m+1).padStart(2,'0')}-${new Date(y,m+1,0).getDate()}`;
   const [{data:blocks},{data:days}] = await Promise.all([
     supa.from('blocks').select('*').order('start_date'),
-    supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
+    supa.from('block_days').select('*').eq('club_id',currentClubId).gte('plan_date',first).lte('plan_date',last)
   ]);
   _blocksData = blocks||[];
   _daysData={};
@@ -24259,6 +24307,7 @@ async function saveDayPlan(){
   const row={
     plan_date:_dmEditDate,
     block_id:block?.id||null,
+    club_id:currentClubId,
     day_label:isRest?'REST':(document.getElementById('dm-day-label').value.trim()||null),
     am_session:isRest?null:(document.getElementById('dm-am').value.trim()||null),
     pm_session:isRest?null:(document.getElementById('dm-pm').value.trim()||null),
@@ -24307,7 +24356,7 @@ async function openWeekDetail(blockId) {
   }
 
   // block_days 로드
-  const {data:days} = await supa.from('block_days').select('*').in('plan_date', dates);
+  const {data:days} = await supa.from('block_days').select('*').eq('club_id',currentClubId).in('plan_date', dates);
   const dayMap = {};
   (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
 
