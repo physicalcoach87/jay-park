@@ -13117,11 +13117,16 @@ async function saveColMap(){
   });
   _cachedColMap = map;
   localStorage.setItem(_colMapKey(), JSON.stringify(map));
+  const msg = document.getElementById('colmap-msg');
   // Supabase 저장
   if(currentClubId){
-    await supa.from('clubs').update({gps_col_map: map}).eq('id', currentClubId);
+    const {error} = await supa.from('clubs').update({gps_col_map: map}).eq('id', currentClubId);
+    if(error){
+      console.error('컬럼 매핑 DB 저장 실패:', error);
+      if(msg){ msg.style.color='#f59e0b'; msg.textContent='⚠️ 로컬 저장됨 (DB 오류: '+error.message+') — Supabase clubs 테이블 권한 확인 필요'; }
+      return;
+    }
   }
-  const msg = document.getElementById('colmap-msg');
   if(msg){ msg.style.color='#4ade80'; msg.textContent='✅ 저장 완료! 모든 기기에 적용됩니다.'; setTimeout(()=>{msg.textContent='';},3000); }
 }
 
