@@ -3056,20 +3056,99 @@ async function loadMgmt(mode){
     }
   });
   listEl.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>';
-  // 슈퍼어드민은 전체 팀 조회, 일반 admin은 자기 팀만
-  let query = supa.from('profiles').select('*').eq('approved', mode==='approved');
-  if(!isSuperAdmin && currentClubId) query = query.eq('club_id', currentClubId);
-  const {data, error} = await query;
-  if(error){
-    listEl.innerHTML=`<div style="padding:1rem;text-align:center">
-      <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">
-        스텝 목록 기능을 활성화하려면<br>아래 SQL을 Supabase에서 실행해주세요
-      </div>
-      <button onclick="showMgmtSetup()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit">설정 보기</button>
-    </div>`;
-    return;
+
+  const isApproved = mode === 'approved';
+
+  if(isSuperAdmin){
+    // ── 슈퍼어드민: 두 섹션으로 분리 ──────────────────────────
+    // 섹션1: admin 계정 (전체 팀)
+    // 섹션2: 내 팀(부산아이파크) 스텝
+    const [{data:adminData, error:e1}, {data:teamData, error:e2}] = await Promise.all([
+      supa.from('profiles').select('*').eq('approved', isApproved).in('role',['admin','superadmin']),
+      currentClubId
+        ? supa.from('profiles').select('*').eq('approved', isApproved).eq('club_id', currentClubId).not('role','in','("admin","superadmin")')
+        : Promise.resolve({data:[], error:null})
+    ]);
+    if(e1){ listEl.innerHTML=`<div style="padding:1rem;text-align:center"><div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">스텝 목록 기능을 활성화하려면<br>아래 SQL을 Supabase에서 실행해주세요</div><button onclick="showMgmtSetup()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit">설정 보기</button></div>`; return; }
+    window._mgmtUsers = [...(adminData||[]), ...(teamData||[])];
+    renderMgmtListSA(adminData||[], teamData||[], mode);
+  } else {
+    // ── 일반 admin: 자기 팀 스텝만 (admin 제외) ──────────────
+    let query = supa.from('profiles').select('*').eq('approved', isApproved).eq('club_id', currentClubId).not('role','in','("admin","superadmin")');
+    const {data, error} = await query;
+    if(error){ listEl.innerHTML=`<div style="padding:1rem;text-align:center"><div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">스텝 목록 기능을 활성화하려면<br>아래 SQL을 Supabase에서 실행해주세요</div><button onclick="showMgmtSetup()" style="padding:8px 16px;background:var(--accent);color:#fff;border:none;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit">설정 보기</button></div>`; return; }
+    window._mgmtUsers = data||[];
+    renderMgmtList(data||[], mode);
   }
-  renderMgmtList(data||[], mode);
+}
+
+// ── 슈퍼어드민 전용 렌더 (두 섹션) ──────────────────────────────
+function renderMgmtListSA(adminUsers, teamUsers, mode){
+  const listEl = document.getElementById('mgmt-list');
+  const clubsMap = {}; // club_id → club_name (나중에 clubs 테이블에서 로드)
+  window._mgmtUsers = [...adminUsers, ...teamUsers];
+
+  const sectionLabel = (text, color='#818cf8') =>
+    `<div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.8px;padding:10px 0 6px;border-bottom:1px solid var(--border);margin-bottom:4px">${text}</div>`;
+
+  // admin 섹션 렌더
+  const adminHtml = adminUsers.length
+    ? adminUsers.map((u,i)=>renderMgmtRow(u, i, mode, true)).join('')
+    : `<div style="font-size:12px;color:var(--text3);padding:8px 0">${mode==='pending'?'대기 중인 관리자 없음':'등록된 관리자 없음'}</div>`;
+
+  // 내 팀 스텝 섹션 렌더 (인덱스 이어받기)
+  const offset = adminUsers.length;
+  const teamHtml = teamUsers.length
+    ? teamUsers.map((u,i)=>renderMgmtRow(u, i+offset, mode, false)).join('')
+    : `<div style="font-size:12px;color:var(--text3);padding:8px 0">${mode==='pending'?'대기 중인 스텝 없음':'등록된 스텝 없음'}</div>`;
+
+  listEl.innerHTML =
+    sectionLabel('🏢 팀 관리자 (전체)','#818cf8') + adminHtml +
+    `<div style="height:16px"></div>` +
+    sectionLabel(`🏃 ${currentClubName||'내 팀'} 스텝`,'#38bdf8') + teamHtml;
+
+  // select 초기값 설정
+  [...adminUsers, ...teamUsers].forEach((u,i)=>{
+    const sel = document.getElementById('pending-role-'+i);
+    if(sel && u.role) sel.value = u.role;
+  });
+}
+
+// ── 단일 행 렌더 헬퍼 ────────────────────────────────────────────
+function renderMgmtRow(u, i, mode, isAdmin){
+  const roleOpts = isAdmin
+    ? `<option value="admin">🏢 팀 관리자</option><option value="superadmin">👑 슈퍼어드민</option>`
+    : ROLE_OPT_HTML;
+  if(mode==='pending'){
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${u.name||'이름 없음'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px">${u.email}${u.club_id?` · <span style="color:var(--text3)">${u.club_id.slice(0,8)}...</span>`:''}</div>
+        </div>
+        <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="pending-role-${i}" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${roleOpts}</select>
+        <button onclick="approvePendingUser(${i})" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;white-space:nowrap">✅ 승인</button>
+      </div>
+    </div>`;
+  } else {
+    return `<div style="padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:13px;font-weight:500;color:var(--text)">${u.name||'이름 없음'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:1px">${u.email}</div>
+        </div>
+        <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <select id="approved-role-${i}" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${roleOpts}</select>
+        <button onclick="changeApprovedRole(${i})" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">역할변경</button>
+        <button onclick="revokeApproval(window._mgmtUsers[${i}]?.id)" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;cursor:pointer;font-family:inherit">차단</button>
+      </div>
+    </div>`;
+  }
 }
 
 function showMgmtSetup(){
@@ -3148,7 +3227,6 @@ function renderMgmtList(users, mode){
     listEl.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">${mode==='pending'?'승인 대기 중인 스텝이 없습니다':'승인된 스텝이 없습니다'}</div>`;
     return;
   }
-  // 전역 변수에 users 저장 (onclick에서 안전하게 참조)
   window._mgmtUsers = users;
   if(mode==='pending'){
     listEl.innerHTML=users.map((u,i)=>`
@@ -3161,19 +3239,11 @@ function renderMgmtList(users, mode){
           <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
-          <select id="pending-role-${i}"
-            style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">
-            ${ROLE_OPT_HTML}
-          </select>
-          <button onclick="approvePendingUser(${i})"
-            style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;white-space:nowrap">✅ 승인</button>
+          <select id="pending-role-${i}" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${ROLE_OPT_HTML}</select>
+          <button onclick="approvePendingUser(${i})" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;white-space:nowrap">✅ 승인</button>
         </div>
       </div>`).join('');
-    // select 초기값 설정
-    users.forEach((u,i)=>{
-      const sel = document.getElementById('pending-role-'+i);
-      if(sel && u.role) sel.value = u.role;
-    });
+    users.forEach((u,i)=>{ const sel=document.getElementById('pending-role-'+i); if(sel&&u.role) sel.value=u.role; });
   } else {
     listEl.innerHTML=users.map((u,i)=>`
       <div style="padding:12px 0;border-bottom:1px solid var(--border)">
@@ -3182,23 +3252,15 @@ function renderMgmtList(users, mode){
             <div style="font-size:13px;font-weight:500;color:var(--text)">${u.name||'이름 없음'}</div>
             <div style="font-size:11px;color:var(--text3);margin-top:2px">${u.email}</div>
           </div>
+          <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <select id="approved-role-${i}" onchange="changeUserRole('${u.id}',this.value)"
-            style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">
-            ${ROLE_OPT_HTML}
-          </select>
-          <button onclick="openPermModal(${i})"
-            style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">🔐 탭 권한</button>
-          <button onclick="revokeUser('${u.id}')"
-            style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">🚫 차단</button>
+          <select id="approved-role-${i}" onchange="changeUserRole('${u.id}',this.value)" style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${ROLE_OPT_HTML}</select>
+          <button onclick="openPermModal(${i})" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">🔐 탭 권한</button>
+          <button onclick="revokeUser('${u.id}')" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">🚫 차단</button>
         </div>
       </div>`).join('');
-    // select 초기값
-    users.forEach((u,i)=>{
-      const sel = document.getElementById('approved-role-'+i);
-      if(sel && u.role) sel.value = u.role;
-    });
+    users.forEach((u,i)=>{ const sel=document.getElementById('approved-role-'+i); if(sel&&u.role) sel.value=u.role; });
   }
 }
 
