@@ -3143,7 +3143,8 @@ function renderMgmtRow(u, i, mode, isAdmin){
         <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <select id="approved-role-${i}" onchange="changeUserRole('${u.id}',this.value)" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${roleOpts}</select>
+        <select id="approved-role-${i}" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${roleOpts}</select>
+        <button onclick="changeUserRoleBtn('${u.id}','approved-role-${i}',this)" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;white-space:nowrap">역할 변경</button>
         <button onclick="revokeUser('${u.id}')" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;cursor:pointer;font-family:inherit">🚫 차단</button>
       </div>
     </div>`;
@@ -3254,7 +3255,8 @@ function renderMgmtList(users, mode){
           <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-          <select id="approved-role-${i}" onchange="changeUserRole('${u.id}',this.value)" style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${ROLE_OPT_HTML}</select>
+          <select id="approved-role-${i}" style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${ROLE_OPT_HTML}</select>
+          <button onclick="changeUserRoleBtn('${u.id}','approved-role-${i}',this)" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;white-space:nowrap">역할 변경</button>
           <button onclick="openPermModal(${i})" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">🔐 탭 권한</button>
           <button onclick="revokeUser('${u.id}')" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">🚫 차단</button>
         </div>
@@ -3290,6 +3292,30 @@ async function changeUserRole(uid, role){
     return;
   }
   if(error){ alert('역할 변경 오류: '+error.message); }
+}
+
+async function changeUserRoleBtn(uid, selectId, btn){
+  const sel = document.getElementById(selectId);
+  if(!sel) return;
+  const role = sel.value;
+  const origText = btn.textContent;
+  btn.textContent = '저장 중...'; btn.disabled = true;
+  const {error} = await supa.from('profiles').update({role}).eq('id', uid);
+  if(error){
+    btn.textContent = origText; btn.disabled = false;
+    alert('역할 변경 오류: '+error.message); return;
+  }
+  btn.textContent = '✅ 저장됨';
+  btn.style.borderColor = '#22c55e';
+  btn.style.color = '#22c55e';
+  btn.style.background = 'rgba(34,197,94,0.1)';
+  setTimeout(()=>{
+    btn.textContent = origText;
+    btn.style.borderColor = '';
+    btn.style.color = '';
+    btn.style.background = '';
+    btn.disabled = false;
+  }, 2000);
 }
 
 async function revokeUser(uid){
