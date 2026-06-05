@@ -3034,7 +3034,9 @@ function hideMgmt(){
 
 async function updatePendingBadge(){
   if(!isTeamAdmin) return;
-  const {data} = await supa.from('profiles').select('id').eq('approved', false);
+  let bq = supa.from('profiles').select('id').eq('approved', false);
+  if(!isSuperAdmin && currentClubId) bq = bq.eq('club_id', currentClubId);
+  const {data} = await bq;
   const cnt = data?.length || 0;
   const badge = document.getElementById('notify-tab-badge');
   if(badge){
@@ -3054,7 +3056,10 @@ async function loadMgmt(mode){
     }
   });
   listEl.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>';
-  const {data, error} = await supa.from('profiles').select('*').eq('approved', mode==='approved');
+  // 슈퍼어드민은 전체 팀 조회, 일반 admin은 자기 팀만
+  let query = supa.from('profiles').select('*').eq('approved', mode==='approved');
+  if(!isSuperAdmin && currentClubId) query = query.eq('club_id', currentClubId);
+  const {data, error} = await query;
   if(error){
     listEl.innerHTML=`<div style="padding:1rem;text-align:center">
       <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">
