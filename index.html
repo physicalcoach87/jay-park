@@ -7678,7 +7678,7 @@ async function initWellnessView(){
 
     // 오늘 이미 입력했는지 확인
     const {data:existing} = await supa.from('wellness_records')
-      .select('*').eq('player_id',profile.id).eq('record_date',today).single();
+      .select('*').eq('club_id',currentClubId).eq('player_id',profile.id).eq('record_date',today).single();
 
     renderWellnessForm(profile, existing);
   }
@@ -7762,6 +7762,7 @@ async function saveWellness(){
     stress:          parseInt(wrap.dataset.stress||3),
     muscle_soreness: parseInt(wrap.dataset.muscle_soreness||3),
     notes: document.getElementById('wellness-notes').value.trim()||null,
+    club_id: currentClubId,
   };
 
   // 총점 계산 (20점 만점)
@@ -8087,7 +8088,8 @@ async function saveScheduleEvent(){
       await supa.from('notifications').insert({
         title: notifTitle, body: notifBody,
         target_type:'player', target_value: pid,
-        created_by: currentUser?.email||'coach'
+        created_by: currentUser?.email||'coach',
+        club_id: currentClubId,
       });
       try{
         await fetch(SUPA_URL+'/functions/v1/send-push',{
@@ -8473,24 +8475,24 @@ async function loadMorningReport(){
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
-      .gte('session_date', weekStartStr).lte('session_date', today)
+      .eq('club_id',currentClubId).gte('session_date', weekStartStr).lte('session_date', today)
       .order('session_date',{ascending:true}),
     supa.from('gps_records')
       .select('*,player_profiles(name,position)')
-      .eq('session_date', yesterdayStr)
+      .eq('club_id',currentClubId).eq('session_date', yesterdayStr)
       .order('td',{ascending:false}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration,created_at')
-      .gte('record_date', since28Str),
+      .eq('club_id',currentClubId).gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
-      .eq('record_date', today),
+      .eq('club_id',currentClubId).eq('record_date', today),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
-      .gte('record_date', since7Str).order('record_date',{ascending:false}),
+      .eq('club_id',currentClubId).gte('record_date', since7Str).order('record_date',{ascending:false}),
     supa.from('injury_records')
       .select('id,player_id,body_part,injury_type,severity,status,injury_date,return_date,notes')
-      .in('status',['치료중','재활중','부분 참여'])
+      .eq('club_id',currentClubId).in('status',['치료중','재활중','부분 참여'])
       .order('injury_date',{ascending:false}),
     supa.from('weekly_schedule')
       .select('event_date,event_type,md_stage,team,title,start_time')
@@ -9510,12 +9512,12 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
   const [{data:gps14}, {data:rpe14}, {data:well14}, {data:inj}] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,td,running_high,sprint,accel,rhie,max_speed,duration,cycle,periodization,session_topic,opponent,session_type2')
-      .eq('player_id', playerId)
+      .eq('club_id',currentClubId).eq('player_id', playerId)
       .gte('session_date', since14Str)
       .order('session_date',{ascending:false}),
     supa.from('session_records')
       .select('record_date,rpe,duration')
-      .eq('player_id', playerId)
+      .eq('club_id',currentClubId).eq('player_id', playerId)
       .gte('record_date', since14Str),
     supa.from('wellness_records')
       .select('record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
@@ -9524,7 +9526,7 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
       .order('record_date',{ascending:false}),
     supa.from('injury_records')
       .select('body_part,injury_type,status,injury_date')
-      .eq('player_id', playerId)
+      .eq('club_id',currentClubId).eq('player_id', playerId)
       .in('status',['치료중','재활중','부분 참여','복귀'])
       .limit(1),
   ]);
@@ -9717,6 +9719,7 @@ async function sendWellnessReminder(playerId, playerName, btn){
     title, body,
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
+    club_id: currentClubId,
   });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
   btn.textContent='✅ 발송됨';
@@ -9732,6 +9735,7 @@ async function sendWellnessReminderAll(players, btn){
       title, body,
       target_type:'player', target_value:p.id,
       created_by: currentUser?.email||'coach',
+      club_id: currentClubId,
     });
     await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
   }));
@@ -9748,6 +9752,7 @@ async function sendRpeReminder(playerId, playerName, btn){
     title, body,
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
+    club_id: currentClubId,
   });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
   btn.textContent='✅ 발송됨';
@@ -9763,6 +9768,7 @@ async function sendRpeReminderAll(players, btn){
       title, body,
       target_type:'player', target_value:p.id,
       created_by: currentUser?.email||'coach',
+      club_id: currentClubId,
     });
     await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
   }));
@@ -9786,7 +9792,7 @@ async function loadWellnessTwoWeekCal(baseDate){
 
   const {data:wAll} = await supa.from('wellness_records')
     .select('record_date,player_id,fatigue,sleep_quality,stress,muscle_soreness,morning_weight')
-    .gte('record_date',startStr).lte('record_date',baseDate)
+    .eq('club_id',currentClubId).gte('record_date',startStr).lte('record_date',baseDate)
     .order('record_date',{ascending:true});
 
   const DOW = ['일','월','화','수','목','금','토'];
@@ -10054,7 +10060,8 @@ async function wellnessSaveRpe(){
   } else {
     ({error} = await supa.from('session_records').insert({
       player_id:opts.playerId, record_date:date, rpe:val,
-      session_type:sess, session_order:sess==='AM'?1:2
+      session_type:sess, session_order:sess==='AM'?1:2,
+      club_id: currentClubId
     }));
   }
   if(error){ alert('저장 실패: '+error.message); return; }
@@ -10098,10 +10105,10 @@ async function downloadDashboardExcel(){
       .order('match_date',{ascending:true}),
     supa.from('session_records')
       .select('record_date,rpe,duration')
-      .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true}),
+      .eq('club_id',currentClubId).eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true}),
     supa.from('wellness_records')
       .select('record_date,morning_weight')
-      .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true})
+      .eq('club_id',currentClubId).eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true})
   ]);
 
   const rpeMap={};
@@ -10255,7 +10262,7 @@ function switchWellTab(tab){
 async function syncRpeDurationsForDate(date){
   const {data:rpeRecs} = await supa.from('session_records')
     .select('id,player_id,rpe,duration,session_type')
-    .eq('record_date', date);
+    .eq('club_id',currentClubId).eq('record_date', date);
   const needSync = (rpeRecs||[]).filter(r=>!r.duration && parseFloat(r.rpe)>0);
   if(!needSync.length) return 0;
 
@@ -10295,7 +10302,7 @@ async function loadWellnessRpeView(){
 
   const {data:rpeRows} = await supa.from('session_records')
     .select('id,player_id,rpe,duration,session_type,session_order,created_at')
-    .eq('record_date',date)
+    .eq('club_id',currentClubId).eq('record_date',date)
     .order('session_order');
 
   const rpeColor = v=>!v?'var(--text3)':v>=8?'#ef4444':v>=6?'#f97316':v>=4?'#eab308':'#22c55e';
@@ -10376,7 +10383,7 @@ async function loadTeamWellness(){
 
   const {data:records} = await supa.from('wellness_records')
     .select('*, player_profiles(name,position)')
-    .eq('record_date',date)
+    .eq('club_id',currentClubId).eq('record_date',date)
     .order('created_at');
 
   if(!records?.length){
@@ -10682,8 +10689,8 @@ async function downloadRpeWeightExcel(){
   if(!date){ alert('날짜를 선택해주세요'); return; }
 
   const [{data:sessions},{data:wellness},{data:gps}] = await Promise.all([
-    supa.from('session_records').select('*, player_profiles(name)').eq('record_date',date).order('session_order'),
-    supa.from('wellness_records').select('player_id,morning_weight').eq('record_date',date),
+    supa.from('session_records').select('*, player_profiles(name)').eq('club_id',currentClubId).eq('record_date',date).order('session_order'),
+    supa.from('wellness_records').select('player_id,morning_weight').eq('club_id',currentClubId).eq('record_date',date),
     supa.from('gps_records').select('player_id,duration').eq('session_date',date),
   ]);
 
@@ -13574,7 +13581,7 @@ async function saveGpsData(){
   // _isMatch 플래그로 훈련/경기 분리 (_srcFile 등 내부 필드 제거)
   const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
-  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>r);
+  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>({...r, club_id: currentClubId}));
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, time_type, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
@@ -13591,6 +13598,7 @@ async function saveGpsData(){
       fmp_run_m: fmp_run_medium, fmp_run_h: fmp_run_high,
       fmp_dyn_m: fmp_dyn_medium, fmp_dyn_h: fmp_dyn_high,
       score: r.score, result: r.result,
+      club_id: currentClubId,
   }));
 
   let trainSaved = 0, matchSaved = 0;
@@ -13953,6 +13961,7 @@ async function autoUpdateMSS(gpsData){
       body: coachBody,
       target_type: 'admin',
       created_by: 'system',
+      club_id: currentClubId,
     });
 
     // 선수 개인 알림 (각각)
@@ -13963,6 +13972,7 @@ async function autoUpdateMSS(gpsData){
         target_type: 'player',
         target_value: u.pid,
         created_by: 'system',
+        club_id: currentClubId,
       })
     ));
 
@@ -14299,6 +14309,7 @@ async function sendRiskAlert(playerId, playerName, flagMsg){
     target_type: 'player',
     target_value: playerId,
     created_by: currentUser?.email || 'coach',
+    club_id: currentClubId,
   });
 
   try {
@@ -14442,7 +14453,7 @@ async function saveInjuryForm(){
   if(_injRecordId){
     ({error} = await supa.from('injury_records').update(payload).eq('id',_injRecordId));
   } else {
-    ({error} = await supa.from('injury_records').insert({...payload, created_at: new Date().toISOString()}));
+    ({error} = await supa.from('injury_records').insert({...payload, created_at: new Date().toISOString(), club_id: currentClubId}));
   }
 
   if(error){
@@ -14519,6 +14530,7 @@ async function sendNotification(){
   const {error} = await supa.from('notifications').insert({
     title, body, target_type:target, target_value:targetVal,
     created_by: currentUser?.email||'coach',
+    club_id: currentClubId,
   });
   if(error){ msg.textContent='오류: '+error.message; msg.style.color='var(--red)'; return; }
   // 푸시 알림 발송
@@ -16955,7 +16967,8 @@ async function sendCardioPrescription(){
   const {error} = await supa.from('notifications').insert({
     title, body,
     target_type: 'player', target_value: rx.playerId,
-    created_by: currentUser?.email || 'coach'
+    created_by: currentUser?.email || 'coach',
+    club_id: currentClubId,
   });
 
   if(error){
@@ -19835,6 +19848,7 @@ async function parseMatchFile(file){
       fmp_dyn_h:  parseFloat(row[COL.fmpDH])||null,
       score:      row[COL.score]||null,
       result:     row[COL.result]||null,
+      club_id:    currentClubId,
     });
   }
 
@@ -22070,7 +22084,7 @@ async function bpSaveSession(){
     notes=document.getElementById('bpsess-notes')?.value||'';
   }
   const existing=_bpSessions[date];
-  const payload={plan_id:_bpPlan.id,session_date:date,session_type:type,am_program:amProg,pm_program:pmProg,notes};
+  const payload={plan_id:_bpPlan.id,session_date:date,session_type:type,am_program:amProg,pm_program:pmProg,notes,club_id:currentClubId};
   let error;
   if(existing?.id){
     ({error}=await supa.from('break_plan_sessions').update(payload).eq('id',existing.id));
@@ -22102,7 +22116,8 @@ async function bpPublish(planId,title){
     const body=bpBuildPersonalBody(p,sessions||[],plan);
     return supa.from('notifications').insert({
       title:`🏖️ ${title}`,body,
-      target_type:'player',target_value:p.id,created_by:currentUser?.email||'coach'
+      target_type:'player',target_value:p.id,created_by:currentUser?.email||'coach',
+      club_id:currentClubId,
     });
   }));
   await supa.from('break_plans').update({status:'published'}).eq('id',planId);
@@ -22634,13 +22649,13 @@ async function saveTestResults(){
       return supa.from('notifications').insert({
         title: '💨 MAS 업데이트',
         body: `${r.name}님의 MAS가 ${dir}!\n${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h (${date} 측정)`,
-        target_type: 'player', target_value: r.pid, created_by: 'system'
+        target_type: 'player', target_value: r.pid, created_by: 'system', club_id: currentClubId,
       });
     }));
     await supa.from('notifications').insert({
       title: `💨 MAS 업데이트 (${changed.length}명)`,
       body: changed.map(r=>`${r.name}: ${r.oldMas>0?r.oldMas.toFixed(1)+' → ':''}${r.mas.toFixed(1)} km/h`).join('\n'),
-      target_type: 'admin', created_by: 'system'
+      target_type: 'admin', created_by: 'system', club_id: currentClubId,
     });
   }
 
