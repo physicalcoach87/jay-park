@@ -3143,9 +3143,8 @@ function renderMgmtRow(u, i, mode, isAdmin){
         <span style="font-size:11px;padding:3px 8px;border-radius:10px;background:var(--surface2);color:var(--text3);white-space:nowrap">${ROLE_LABELS[u.role]||'⚽ 코치'}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
-        <select id="approved-role-${i}" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${roleOpts}</select>
-        <button onclick="changeApprovedRole(${i})" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">역할변경</button>
-        <button onclick="revokeApproval(window._mgmtUsers[${i}]?.id)" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;cursor:pointer;font-family:inherit">차단</button>
+        <select id="approved-role-${i}" onchange="changeUserRole('${u.id}',this.value)" style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;cursor:pointer">${roleOpts}</select>
+        <button onclick="revokeUser('${u.id}')" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #f87171;background:rgba(248,113,113,0.1);color:#f87171;cursor:pointer;font-family:inherit">🚫 차단</button>
       </div>
     </div>`;
   }
@@ -3294,7 +3293,7 @@ async function changeUserRole(uid, role){
 }
 
 async function revokeUser(uid){
-  if(!confirm('이 스텝의 접속을 차단하시겠습니까?')) return;
+  if(!confirm('이 스텝의 접속을 차단하시겠습니까?\n\n※ 차단은 로그인만 막히며 계정은 삭제되지 않습니다.\n  승인 대기 탭에서 다시 승인 가능합니다.')) return;
   const {error} = await supa.from('profiles').update({approved:false}).eq('id',uid);
   if(error){ alert('오류: '+error.message); return; }
   loadMgmt('approved');
