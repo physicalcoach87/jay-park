@@ -2259,6 +2259,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <h3>🔔 알림 / 메시지</h3>
   </div>
 
+  <!-- 팀 관리자 전용 지원 요청 버튼 -->
+  <div id="support-request-section" style="display:none;margin-bottom:1rem">
+    <button onclick="requestSupportAccess()" style="width:100%;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#f87171;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">🆘 슈퍼어드민 지원 요청</button>
+  </div>
+
   <!-- 서브 탭 -->
   <div style="display:flex;gap:8px;margin-bottom:14px">
     <button class="btn-exp" id="ntab-notice" onclick="setNotifyTab('notice')"
@@ -2802,6 +2807,11 @@ async function showApp(user, preloadedRole){
   // 팀 권한 설정 탭 표시 (admin 이상)
   const permTab = document.getElementById('tab-btn-perms');
   if(permTab) permTab.style.display = isTeamAdmin ? '' : 'none';
+  // 팀 관리자 전용 지원 요청 버튼 표시 (슈퍼어드민 제외)
+  const supportReqEl = document.getElementById('support-request-section');
+  if(supportReqEl) supportReqEl.style.display = (isTeamAdmin && !isSuperAdmin) ? '' : 'none';
+  // 승인 대기 배지 업데이트
+  updatePendingBadge();
   // 클럽명 헤더 표시 (club_id 로드 후)
   if(currentClubName){
     const t = document.getElementById('club-title');
@@ -3002,6 +3012,14 @@ async function doSignup(){
   } else {
     document.getElementById('login-msg').textContent='✅ 가입 신청 완료! 관리자 승인 후 접속 가능합니다';
     document.getElementById('login-msg').style.color='var(--accent2)';
+    // 직접 가입 시 — superadmin에게 알림 발송
+    const roleName = {coach:'코치', physical:'피지컬코치', medical:'의무팀', admin:'팀 관리자'}[role]||role;
+    await supa.from('notifications').insert({
+      title: '🔔 스텝 가입 승인 대기',
+      body: `${name} (${email})\n역할: ${roleName}\n승인이 필요합니다.`,
+      target_type: 'admin',
+      created_by: 'system'
+    });
   }
 }
 
@@ -3012,6 +3030,17 @@ function openMgmt(){
 }
 function hideMgmt(){
   document.getElementById('mgmt-modal').style.display='none';
+}
+
+async function updatePendingBadge(){
+  if(!isTeamAdmin) return;
+  const {data} = await supa.from('profiles').select('id').eq('approved', false);
+  const cnt = data?.length || 0;
+  const badge = document.getElementById('notify-tab-badge');
+  if(badge){
+    if(cnt > 0){ badge.textContent = cnt > 99 ? '99+' : cnt; badge.style.display = 'inline-block'; }
+    // 미승인이 0이면 배지는 메시지 로직에 맡김 (초기화 안함)
+  }
 }
 
 async function loadMgmt(mode){
@@ -3185,6 +3214,7 @@ async function approveUser(uid){
   const {error} = await supa.from('profiles').update({approved:true}).eq('id',uid);
   if(error){ alert('오류: '+error.message); return; }
   loadMgmt('pending');
+  updatePendingBadge();
 }
 
 async function changeUserRole(uid, role){
@@ -14478,6 +14508,26 @@ async function deleteInjury(injuryId, bodyPart){
 let _msgPlayerId = null;
 let _msgInterval = null;
 
+async function requestSupportAccess(){
+  const note = prompt('지원 요청 내용을 입력하세요 (예: 컬럼 매핑 설정 문제)');
+  if(note === null) return;
+  await supa.from('support_access_requests').insert({
+    club_id: currentClubId,
+    club_name: currentClubName,
+    requested_by: currentUser?.id,
+    status: 'pending',
+    note: note || '지원 요청'
+  });
+  // 슈퍼어드민에게 알림
+  await supa.from('notifications').insert({
+    title: '🆘 팀 지원 요청',
+    body: `${currentClubName}팀에서 지원을 요청했습니다.\n${note||''}`,
+    target_type: 'superadmin',
+    created_by: currentUser?.email || 'admin'
+  });
+  alert('✅ 지원 요청이 전송됐습니다. 슈퍼어드민이 접근할 예정입니다.');
+}
+
 async function loadNotifyTab(){
   // 탭 진입 시 뱃지 클리어
   const badge = document.getElementById('notify-tab-badge');
@@ -22825,12 +22875,68 @@ async function saLoadClubs(){
             style="background:transparent;border:1px solid #60a5fa;color:#60a5fa;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">모드 변경</button>
           <button onclick="saEditClubPerms('${c.id}','${c.name}')"
             style="background:transparent;border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">탭 권한</button>
+          <button onclick="saAccessTeam('${c.id}','${c.name}')"
+            style="background:transparent;border:1px solid #a78bfa;color:#a78bfa;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">🔧 지원 접근</button>
           <button onclick="saDeleteClub('${c.id}','${c.name}')"
             style="background:transparent;border:1px solid #ef4444;color:#ef4444;border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">삭제</button>
         </div>
       </div>
     </div>`;
   }).join('');
+}
+
+async function saAccessTeam(clubId, clubName){
+  if(!confirm(`"${clubName}" 팀에 지원 접근합니다.\n접근 기록이 저장되며 해당 팀 관리자에게 알림이 발송됩니다.`)) return;
+
+  // 접근 로그 저장
+  await supa.from('support_access_requests').insert({
+    club_id: clubId,
+    club_name: clubName,
+    accessed_by: currentUser?.id,
+    status: 'active',
+    accessed_at: new Date().toISOString()
+  });
+
+  // 해당 팀 admin에게 알림
+  await supa.from('notifications').insert({
+    title: '🔧 슈퍼어드민 지원 접근',
+    body: `관리자가 "${clubName}" 팀에 지원 접근했습니다.\n${new Date().toLocaleString('ko-KR')}`,
+    target_type: 'admin',
+    club_id: clubId,
+    created_by: currentUser?.email || 'superadmin'
+  });
+
+  // currentClubId 전환
+  const prevClubId = currentClubId;
+  const prevClubName = currentClubName;
+  currentClubId = clubId;
+  currentClubName = clubName;
+  await loadClubSettings();
+  _players = [];
+
+  // 상단에 팀 전환 배너 표시
+  let banner = document.getElementById('sa-team-banner');
+  if(!banner){
+    banner = document.createElement('div');
+    banner.id = 'sa-team-banner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#7c3aed;color:#fff;padding:8px 16px;font-size:13px;font-weight:600;display:flex;justify-content:space-between;align-items:center';
+    document.body.prepend(banner);
+  }
+  banner.innerHTML = `🔧 지원 접근 중: <strong>${clubName}</strong> &nbsp;<button onclick="saExitTeamAccess('${prevClubId}','${prevClubName}')" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:3px 10px;border-radius:5px;font-size:12px;cursor:pointer;font-family:inherit">← 내 팀으로 복귀</button>`;
+
+  // Morning Report로 이동
+  switchTab('report');
+  alert(`✅ "${clubName}" 팀으로 전환됐습니다.`);
+}
+
+async function saExitTeamAccess(origClubId, origClubName){
+  currentClubId = origClubId;
+  currentClubName = origClubName;
+  await loadClubSettings();
+  _players = [];
+  const banner = document.getElementById('sa-team-banner');
+  if(banner) banner.remove();
+  switchTab('report');
 }
 
 function saShowAddClub(){ document.getElementById('sa-add-club-form').style.display='block'; }
