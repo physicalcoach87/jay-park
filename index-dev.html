@@ -12715,14 +12715,26 @@ async function loadTeamSummary(){
     }).filter(v=>v>0);
     return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '-';
   };
+  // GPS records sorted AM→PM for a player (raw, unmerged)
+  const _playerGpsSorted = (pid) => fullGpsRaw.filter(g=>g.player_id===pid)
+    .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
+  // session_records가 GPS보다 적을 때, 마지막 GPS에서 offset으로 매칭
+  const _matchedGpsDur = (pid, ssArr) => {
+    const gList = _playerGpsSorted(pid);
+    if(!gList.length) return 0;
+    if(ssArr.length >= gList.length) return 0; // 정상 케이스는 각 세션이 자체 duration 사용
+    const offset = gList.length - ssArr.length;
+    // 단일 check → 마지막 GPS duration 사용
+    return parseFloat(gList[offset]?.duration)||0;
+  };
   const calcAvgSrpe = (gpsArr) => {
     const vals = gpsArr.map(r=>{
       const ss = sessMap[r.player_id]||[];
       if(!ss.length) return 0;
-      const totalGpsDur = parseFloat(r.duration)||0;
       if(ss.length === 1) {
         const rpe = parseFloat(ss[0].rpe)||0;
-        return rpe && totalGpsDur ? rpe * totalGpsDur : 0;
+        const dur = _matchedGpsDur(r.player_id, ss) || parseFloat(r.duration)||0;
+        return rpe && dur ? rpe * dur : 0;
       }
       return ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0; return a+(rpe&&dur?rpe*dur:0); },0);
     }).filter(v=>v>0);
@@ -12788,10 +12800,10 @@ async function loadTeamSummary(){
     const rpeDisp = rpeVals.length ? rpeVals.join('/') : null;
     const sRPE = (() => {
       if(!ss.length) return null;
-      const totalGpsDur = parseFloat(r.duration)||0;
       if(ss.length === 1) {
         const rpe = parseFloat(ss[0].rpe)||0;
-        return rpe && totalGpsDur ? Math.round(rpe * totalGpsDur) : null;
+        const dur = _matchedGpsDur(r.player_id, ss) || parseFloat(r.duration)||0;
+        return rpe && dur ? Math.round(rpe * dur) : null;
       }
       const total = ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0; return a+(rpe&&dur?rpe*dur:0); },0);
       return total || null;
@@ -23452,9 +23464,12 @@ function openCoachRpeModal(date, playerId, playerName){
   // 해당 선수 기존 session_records (session_order 순)
   const playerSess = (_lastSessData||[]).filter(s=>s.player_id===playerId)
     .sort((a,b)=>(a.session_order||0)-(b.session_order||0));
-  // 해당 선수 GPS 기록 (duration 참조용)
+  // 해당 선수 GPS 기록 (AM→PM 순 정렬)
   const playerGps = (_lastGpsData||[]).filter(r=>r.player_id===playerId)
-    .sort((a,b)=>(a.session_date||'').localeCompare(b.session_date||''));
+    .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
+
+  // GPS가 session_records보다 많으면 뒤에서부터 매칭 (선수가 마지막 세션에 체크한 경우)
+  const gpsOffset = Math.max(0, playerGps.length - playerSess.length);
 
   // 세션 목록 구성: 기존 session_records 우선, GPS 세션 수만큼 확보
   // origRpe/origDur/origTime: 선수가 체크한 원본값
@@ -23463,15 +23478,21 @@ function openCoachRpeModal(date, playerId, playerName){
         id: s.id||null,
         order: s.session_order||i+1,
         rpe: s.rpe||'',
-        dur: s.duration||(playerGps[i]?.duration)||'',
+        dur: playerGps[gpsOffset+i]?.duration || s.duration || '',
         origRpe: s.rpe||null,
         origDur: s.duration||null,
         origTime: _toKSTHHMM(s.created_at),
       }))
-    : [{ id:null, order:1, rpe:'', dur:playerGps[0]?.duration||'', origRpe:null, origDur:null, origTime:null }];
-  for(let i=sessions.length; i<playerGps.length; i++){
+    : [{ id:null, order:1, rpe:'', dur:playerGps[playerGps.length-1]?.duration||'', origRpe:null, origDur:null, origTime:null }];
+  // GPS 앞부분(offset) 세션은 선수 미입력 행으로 추가
+  for(let i=0; i<gpsOffset; i++){
+    sessions.unshift({ id:null, order:i+1, rpe:'', dur:playerGps[i]?.duration||'', origRpe:null, origDur:null, origTime:null });
+  }
+  // GPS offset 이후 남은 세션 추가
+  for(let i=playerSess.length+gpsOffset; i<playerGps.length; i++){
     sessions.push({ id:null, order:i+1, rpe:'', dur:playerGps[i]?.duration||'', origRpe:null, origDur:null, origTime:null });
   }
+  sessions.forEach((s,i)=>{ s.order = i+1; });
   window._crpeSessionMeta = sessions;
   window._crpePlayerName = playerName;
 
