@@ -8436,6 +8436,30 @@ async function savePhotoSchedule(){
   loadScheduleCalendar();
 }
 
+// ── 마이크로사이클 시작일 계산 ─────────────────────────────────────
+// 가장 최근 MATCH일 + 1일 = 사이클 시작. MATCH 없으면 캘린더 월요일 fallback.
+async function getMicrocycleStart(todayStr) {
+  const {data} = await supa.from('weekly_schedule')
+    .select('event_date')
+    .eq('md_stage', 'MATCH')
+    .lte('event_date', todayStr)
+    .order('event_date', {ascending: false})
+    .limit(1)
+    .maybeSingle();
+  if (data?.event_date) {
+    // MATCH일 다음날부터 새 사이클
+    const d = new Date(data.event_date);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split('T')[0];
+  }
+  // fallback: 이번주 월요일
+  const now = getKSTNow();
+  const dow = now.getDay();
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - (dow === 0 ? 6 : dow - 1));
+  return mon.toISOString().split('T')[0];
+}
+
 // ══════════════════════════════════════════════════════════════════
 // Morning Report — 로그인 첫 화면 레포트
 // ══════════════════════════════════════════════════════════════════
@@ -8462,11 +8486,9 @@ async function loadMorningReport(){
   const yesterday = new Date(now); yesterday.setDate(now.getDate()-1);
   const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-  // 이번주 월요일 계산
-  const weekStart = new Date(now);
-  const dow = weekStart.getDay();
-  weekStart.setDate(weekStart.getDate() - (dow === 0 ? 6 : dow - 1));
-  const weekStartStr = weekStart.toISOString().split('T')[0];
+  // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
+  const weekStartStr = await getMicrocycleStart(today);
+  const weekStart = new Date(weekStartStr);
   const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
   const weekEndStr = weekEnd.toISOString().split('T')[0];
 
@@ -12037,11 +12059,9 @@ async function showTeamVariance(date, dateLabel){
 
 // ── 팀 요약 (날짜 조회) ────────────────────────────────────────────
 async function buildWeeklyLoadHtml(forDate){
-  const selDate=new Date(forDate+'T12:00:00');
-  const weekStart=new Date(selDate);
-  const dow=weekStart.getDay();
-  weekStart.setDate(weekStart.getDate()-(dow===0?6:dow-1));
-  const weekStartStr=weekStart.toISOString().split('T')[0];
+  // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
+  const weekStartStr=await getMicrocycleStart(forDate);
+  const weekStart=new Date(weekStartStr);
   const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+6);
   const weekEndStr=weekEnd.toISOString().split('T')[0];
   const since28=new Date(selDate);since28.setDate(selDate.getDate()-28);
