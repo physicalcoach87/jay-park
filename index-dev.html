@@ -12552,7 +12552,7 @@ async function loadTeamSummary(){
       .eq('session_date', date)
       .order('td', {ascending:false}),
     supa.from('session_records')
-      .select('id,player_id,rpe,post_weight,session_order,duration,created_at')
+      .select('id,player_id,rpe,post_weight,session_order,duration,created_at,coach_edited')
       .eq('record_date', date),
     supa.from('wellness_records')
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
@@ -12612,7 +12612,8 @@ async function loadTeamSummary(){
       const r=parseFloat(s.rpe)||0;
       const label=ssSorted.length===1?'':(i===0?'AM ':'PM ');
       const t=toKSTHHMM(s.created_at);
-      return r ? `<div style="font-size:11px;display:flex;align-items:center;gap:4px;justify-content:flex-end"><span style="color:var(--text3);font-size:10px;width:20px;text-align:left">${label.trim()}</span><span style="color:#fbbf24;font-weight:700;width:14px;text-align:right">${r}</span><span style="color:var(--text3);font-size:10px;width:36px;text-align:right">${t}</span></div>` : '';
+      const coachBadge = s.coach_edited ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(99,102,241,0.15);color:#a5b4fc;margin-left:2px">코치</span>` : '';
+      return r ? `<div style="font-size:11px;display:flex;align-items:center;gap:4px;justify-content:flex-end"><span style="color:var(--text3);font-size:10px;width:20px;text-align:left">${label.trim()}</span><span style="color:#fbbf24;font-weight:700;width:14px;text-align:right">${r}</span>${coachBadge}<span style="color:var(--text3);font-size:10px;width:36px;text-align:right">${t}</span></div>` : '';
     }).join('') : '<span style="color:var(--text3)">—</span>';
     // 웰니스 점수 계산
     const wf=parseFloat(w.fatigue)||0, ws2=parseFloat(w.sleep_quality)||0, wst=parseFloat(w.stress)||0, wm=parseFloat(w.muscle_soreness)||0;
@@ -23589,7 +23590,7 @@ async function saveCoachRpe(){
     let error;
     if(meta.id){
       // 기존 레코드 UPDATE (created_at 유지 → 선수 체크 시간 보존)
-      ({error} = await supa.from('session_records').update({ rpe, duration: dur }).eq('id', meta.id));
+      ({error} = await supa.from('session_records').update({ rpe, duration: dur, coach_edited: true }).eq('id', meta.id));
     } else {
       // 신규 INSERT
       ({error} = await supa.from('session_records').insert({
@@ -23597,6 +23598,7 @@ async function saveCoachRpe(){
         player_id: _coachRpePlayerId,
         rpe, duration: dur,
         session_order: meta.order||i+1,
+        coach_edited: true,
       }));
     }
     if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
