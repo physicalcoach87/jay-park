@@ -10279,11 +10279,11 @@ async function loadBodyComp(){
   summaryEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">로딩 중...</div>';
 
   // 전체 체성분 기록 조회 (muscle_mass 또는 body_fat_pct 있는 것만)
-  const {data:allRecs} = await supa.from('wellness_records')
+  const {data:allRecs0} = await supa.from('wellness_records')
     .select('player_id,record_date,morning_weight,muscle_mass,body_fat_pct')
     .in('player_id', _players.map(p=>p.id))
-    .or('muscle_mass.not.is.null,body_fat_pct.not.is.null')
     .order('record_date', {ascending:false});
+  const allRecs = (allRecs0||[]).filter(r=>r.muscle_mass!=null||r.body_fat_pct!=null);
 
   if(!allRecs || !allRecs.length){
     summaryEl.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:12px 0">체성분 측정 기록이 없습니다.</div>';
@@ -10363,12 +10363,12 @@ async function loadBodyCompHistory(){
   if(!from || !to){ outEl.innerHTML='<div style="font-size:12px;color:#ef4444">날짜를 선택하세요.</div>'; return; }
   outEl.innerHTML = '<div style="font-size:12px;color:var(--text3)">로딩 중...</div>';
 
-  const {data:recs} = await supa.from('wellness_records')
+  const {data:recs0} = await supa.from('wellness_records')
     .select('player_id,record_date,morning_weight,muscle_mass,body_fat_pct')
     .in('player_id', _players.map(p=>p.id))
-    .or('muscle_mass.not.is.null,body_fat_pct.not.is.null')
     .gte('record_date', from).lte('record_date', to)
     .order('record_date', {ascending:false});
+  const recs = (recs0||[]).filter(r=>r.muscle_mass!=null||r.body_fat_pct!=null);
 
   if(!recs || !recs.length){
     outEl.innerHTML='<div style="font-size:12px;color:var(--text3);padding:12px 0">해당 기간 측정 기록 없음</div>';
