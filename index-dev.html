@@ -8437,8 +8437,40 @@ async function savePhotoSchedule(){
 }
 
 // ── 마이크로사이클 시작일 계산 ─────────────────────────────────────
-// 가장 최근 MATCH일 + 1일 = 사이클 시작. MATCH 없으면 캘린더 월요일 fallback.
+// block_days의 연속 훈련 블록 시작일 우선 탐색.
+// 3일 이상 gap → 새 블록으로 판단. fallback: MATCH+1 → 캘린더 월요일.
 async function getMicrocycleStart(todayStr) {
+  // 1. block_days: 최근 28일 REST 제외 훈련일 조회
+  const since28d = new Date(todayStr + 'T12:00:00');
+  since28d.setDate(since28d.getDate() - 28);
+  const since28Str = since28d.toISOString().split('T')[0];
+
+  const {data: bdRows} = await supa.from('block_days')
+    .select('plan_date')
+    .lte('plan_date', todayStr)
+    .gte('plan_date', since28Str)
+    .neq('day_label', 'REST')
+    .order('plan_date', {ascending: false});
+
+  if (bdRows && bdRows.length) {
+    // 오늘부터 역방향으로 연속 블록 추적 (3일 이상 gap이면 새 블록)
+    const dates = bdRows.map(r => r.plan_date); // already desc order
+    let blockStart = dates[0];
+    for (let i = 0; i < dates.length - 1; i++) {
+      const curr = new Date(dates[i] + 'T12:00:00');
+      const prev = new Date(dates[i+1] + 'T12:00:00');
+      const gapDays = (curr - prev) / (1000 * 60 * 60 * 24);
+      if (gapDays >= 3) {
+        // dates[i]가 현재 블록의 시작
+        blockStart = dates[i];
+        break;
+      }
+      blockStart = dates[i+1]; // 더 앞 날짜로 확장
+    }
+    return blockStart;
+  }
+
+  // 2. block_days 없으면 → 최근 MATCH+1
   const {data} = await supa.from('weekly_schedule')
     .select('event_date')
     .eq('md_stage', 'MATCH')
@@ -8447,12 +8479,12 @@ async function getMicrocycleStart(todayStr) {
     .limit(1)
     .maybeSingle();
   if (data?.event_date) {
-    // MATCH일 다음날부터 새 사이클
-    const d = new Date(data.event_date);
+    const d = new Date(data.event_date + 'T12:00:00');
     d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
   }
-  // fallback: 이번주 월요일
+
+  // 3. 최종 fallback: 캘린더 월요일
   const now = getKSTNow();
   const dow = now.getDay();
   const mon = new Date(now);
@@ -11546,10 +11578,33 @@ async function loadTeamOverview(){
   let fromVal = document.getElementById('overview-from')?.value;
   let toVal   = document.getElementById('overview-to')?.value;
   if(!fromVal && !toVal){
-    const f=new Date(now); f.setDate(now.getDate()-13);
-    fromVal=f.toISOString().split('T')[0]; toVal=today;
+    // 기본: 이전 블록 시작 ~ 오늘 (현재+이전 2블록)
+    // 이전 블록 시작 = 현재 블록 시작 바로 전 MATCH일 + 1일
+    const curBlockStart = await getMicrocycleStart(today);
+    const prevMatchDay = new Date(curBlockStart + 'T12:00:00');
+    prevMatchDay.setDate(prevMatchDay.getDate() - 1); // curBlockStart 하루 전
+    const {data: prevMatch} = await supa.from('weekly_schedule')
+      .select('event_date').eq('md_stage','MATCH')
+      .lte('event_date', prevMatchDay.toISOString().split('T')[0])
+      .order('event_date',{ascending:false}).limit(1).maybeSingle();
+    if(prevMatch?.event_date){
+      const d = new Date(prevMatch.event_date + 'T12:00:00');
+      d.setDate(d.getDate() + 1);
+      fromVal = d.toISOString().split('T')[0]; // 이전 MATCH+1 = 이전 블록 시작
+    } else {
+      fromVal = curBlockStart; // 이전 경기 없으면 현재 블록만
+    }
+    // 현재 블록 종료일: block_days에서 curBlockStart 이후 최대 plan_date
+    const blockEnd = new Date(curBlockStart + 'T12:00:00');
+    blockEnd.setDate(blockEnd.getDate() + 21); // 최대 3주 앞까지 탐색
+    const {data: bdEnd} = await supa.from('block_days')
+      .select('plan_date')
+      .gte('plan_date', curBlockStart)
+      .lte('plan_date', blockEnd.toISOString().split('T')[0])
+      .order('plan_date', {ascending:false}).limit(1).maybeSingle();
+    toVal = bdEnd?.plan_date || today;
   } else if(fromVal && !toVal){ toVal=today; }
-  else if(!fromVal && toVal){ const f=new Date(toVal+'T12:00:00');f.setDate(f.getDate()-13);fromVal=f.toISOString().split('T')[0]; }
+  else if(!fromVal && toVal){ fromVal = await getMicrocycleStart(toVal); }
 
   const blockSel=document.getElementById('overview-block');
   const selectedBlockId=blockSel?.value||'';
@@ -11674,7 +11729,7 @@ async function loadTeamOverview(){
     // 그룹 헤더 (그룹이 바뀔 때) — 무거운 행 대신 얇은 구분선
     const isNewBlock=blockKey!==prevBlockId;
     prevBlockId=blockKey;
-    const colSpan=isV1?10:11;
+    const colSpan=isV1?9:10;
     const blkLabel=acc.label;
     const blockHeader=isNewBlock?`<tr><td colspan="${colSpan}" style="padding:2px 10px 2px 8px;border-top:2px solid rgba(99,102,241,0.35);border-bottom:0"><span style="font-size:10px;font-weight:700;color:#a5b4fc">${blkLabel}</span>${blockObj?`<span style="font-size:9px;color:var(--text3);margin-left:6px">${blockObj.start_date} ~ ${blockObj.end_date}</span>`:''}</td></tr>`:'';
 
@@ -11709,13 +11764,31 @@ async function loadTeamOverview(){
     // ── 훈련 행 ──
     let trainRowHtml='';
     if(hasBd||hasGps){
-      const td_act=hasGps?_tAvg(mGps,'td'):null;
-      const hsr_act=hasGps?_tAvg(mGps,'running_high'):null;
-      const spr_act=hasGps?_tAvg(mGps,'sprint'):null;
-      const acc_act=hasGps?_tAvg(mGps,'accel'):null;
-      const dec_act=hasGps?_tAvg(mGps,'decel'):null;
-      const rhie_act=hasGps?_tAvg(mGps,'rhie'):null;
-      const durVals=mGps.map(r=>parseFloat(r.duration)||0).filter(v=>v>0);
+      // AM+PM 병합: 같은 날 같은 선수 세션 합산 후 팀 평균
+      const _mergeM = rows => {
+        const mp = {};
+        rows.forEach(r => {
+          const pid = r.player_id;
+          if(!mp[pid]) mp[pid] = {...r, td:0, running_high:0, sprint:0, accel:0, decel:0, rhie:0, duration:0};
+          const m = mp[pid];
+          m.td           += parseFloat(r.td)||0;
+          m.running_high += parseFloat(r.running_high)||0;
+          m.sprint       += parseFloat(r.sprint)||0;
+          m.accel        += parseFloat(r.accel)||0;
+          m.decel        += parseFloat(r.decel)||0;
+          m.rhie         += parseFloat(r.rhie)||0;
+          m.duration     += parseFloat(r.duration)||0;
+        });
+        return Object.values(mp);
+      };
+      const mGpsM = hasGps ? _mergeM(mGps) : [];
+      const td_act=hasGps?_tAvg(mGpsM,'td'):null;
+      const hsr_act=hasGps?_tAvg(mGpsM,'running_high'):null;
+      const spr_act=hasGps?_tAvg(mGpsM,'sprint'):null;
+      const acc_act=hasGps?_tAvg(mGpsM,'accel'):null;
+      const dec_act=hasGps?_tAvg(mGpsM,'decel'):null;
+      const rhie_act=hasGps?_tAvg(mGpsM,'rhie'):null;
+      const durVals=mGpsM.map(r=>parseFloat(r.duration)||0).filter(v=>v>0);
       const dur_act=durVals.length?Math.round(durVals.reduce((a,b)=>a+b,0)/durVals.length):null;
       const readyLabel=opp||(blockObj?acc.label:null)||rawReady||null;
       const readyBadge=readyLabel?`<span style="font-size:10px;color:var(--text2)">${opp?'vs ':''} ${readyLabel}</span>`:'<span style="color:var(--text3)">—</span>';
@@ -11747,11 +11820,11 @@ async function loadTeamOverview(){
         onclick="showTeamVariance('${date}','${(d.getMonth()+1)+'/'+d.getDate()+' ('+DOW[dow]+')'}')">
         <td style="padding:6px 8px;white-space:nowrap">
           <span style="color:${isToday?'#4ade80':'var(--text2)'};font-weight:${isToday?'600':'400'}">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span>
-          ${hasGps?`<span style="font-size:9px;color:var(--text3);margin-left:4px">${mGps.length}명</span>`:''}
+          ${hasGps?`<span style="font-size:9px;color:var(--text3);margin-left:4px">${mGpsM.length}명</span>`:''}
+          ${sessText?`<div style="font-size:9px;color:var(--text3);margin-top:2px">${sessText}</div>`:''}
         </td>
         <td style="padding:6px 8px;text-align:center">${readyBadge}</td>
         <td style="padding:6px 8px;text-align:center">${mdBadge}</td>
-        <td style="padding:6px 8px;font-size:10px;color:var(--text3)">${sessText||'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:var(--text2)">${dur_act!=null?dur_act+'min':'—'}</td>
         <td style="padding:6px 8px;text-align:right;line-height:1.4">${_ach(td_act,hasBd?bd.td_target:null)}</td>
         <td style="padding:6px 8px;text-align:right;line-height:1.4">${_ach(hsr_act,hasBd?bd.hsr_target:null)}</td>
@@ -11821,7 +11894,6 @@ async function loadTeamOverview(){
           <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:500">날짜</th>
           <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">준비상태</th>
           <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500">MD단계</th>
-          <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:500">세션</th>
           <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500">운동시간</th>
           <th style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:500">TD (m)</th>
           <th style="padding:6px 8px;text-align:right;color:#f59e0b;font-weight:500">HSR (m)</th>
