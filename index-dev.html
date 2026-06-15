@@ -12539,13 +12539,13 @@ async function buildWeeklyLoadHtml(forDate){
   </div>`;
 }
 
-async function loadTeamSummary(forceDate){
+async function loadTeamSummary(forceDate, quiet=false){
   const dateEl = document.getElementById('team-date');
   if(forceDate && dateEl) dateEl.value = forceDate;
   const date = forceDate || dateEl?.value;
   const out = document.getElementById('team-summary-output');
   if(!out||!date) return;
-  out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
+  if(!quiet) out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
   if(date) loadTwoWeekCal(date);
 
   const [{data:gps},{data:sessions},{data:wellness},{data:blockDayRow},{data:matchRef}] = await Promise.all([
@@ -23625,7 +23625,22 @@ async function saveCoachRpe(){
     }
     if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
   }
-  // 저장 즉시 버튼 UI 업데이트 (Supabase 재조회 없이)
+  // _lastSessData 메모리 업데이트 (재조회 없이 즉시 반영)
+  const mSaved = window._crpeSessionMeta||[];
+  rpeInputs.forEach((inp,i)=>{
+    const rpe = parseFloat(inp.value)||null;
+    const dur = parseFloat(durInputs[i]?.value)||null;
+    if(!rpe) return;
+    const meta = mSaved[i]||{};
+    if(meta.id){
+      const idx = (_lastSessData||[]).findIndex(s=>s.id===meta.id);
+      if(idx>=0){ _lastSessData[idx].rpe=rpe; _lastSessData[idx].duration=dur; _lastSessData[idx].session_order=meta.order||i+1; _lastSessData[idx].coach_edited=true; }
+    } else {
+      // 새로 추가된 세션은 _lastSessData에 임시 추가 (id 없이)
+      (_lastSessData||[]).push({ player_id:_coachRpePlayerId, record_date:_coachRpeDate, rpe, duration:dur, session_order:meta.order||i+1, coach_edited:true, created_at:new Date().toISOString() });
+    }
+  });
+  // 버튼 즉시 업데이트
   const btn = document.querySelector(`[data-rpe-btn="${_coachRpePlayerId}"]`);
   if(btn){
     btn.textContent = '수정✓';
@@ -23634,7 +23649,8 @@ async function saveCoachRpe(){
     btn.style.color = '#a5b4fc';
   }
   closeCoachRpeModal();
-  loadTeamSummary(_coachRpeDate);
+  // 백그라운드에서 조용히 갱신 (로딩 표시 없이)
+  loadTeamSummary(_coachRpeDate, true);
 }
 
 // ── 코치 RPE 일괄 입력 ────────────────────────────────────────────
