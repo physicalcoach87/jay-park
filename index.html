@@ -12612,8 +12612,7 @@ async function loadTeamSummary(){
       const r=parseFloat(s.rpe)||0;
       const label=ssSorted.length===1?'':(i===0?'AM ':'PM ');
       const t=toKSTHHMM(s.created_at);
-      const coachBadge = s.coach_edited ? `<span style="font-size:9px;padding:1px 4px;border-radius:3px;background:rgba(99,102,241,0.15);color:#a5b4fc;margin-left:2px">코치</span>` : '';
-      return r ? `<div style="font-size:11px;display:flex;align-items:center;gap:4px;justify-content:flex-end"><span style="color:var(--text3);font-size:10px;width:20px;text-align:left">${label.trim()}</span><span style="color:#fbbf24;font-weight:700;width:14px;text-align:right">${r}</span>${coachBadge}<span style="color:var(--text3);font-size:10px;width:36px;text-align:right">${t}</span></div>` : '';
+      return r ? `<div style="font-size:11px;display:flex;align-items:center;gap:4px;justify-content:flex-end"><span style="color:var(--text3);font-size:10px;width:20px;text-align:left">${label.trim()}</span><span style="color:#fbbf24;font-weight:700;width:14px;text-align:right">${r}</span><span style="color:var(--text3);font-size:10px;width:36px;text-align:right">${t}</span></div>` : '';
     }).join('') : '<span style="color:var(--text3)">—</span>';
     // 웰니스 점수 계산
     const wf=parseFloat(w.fatigue)||0, ws2=parseFloat(w.sleep_quality)||0, wst=parseFloat(w.stress)||0, wm=parseFloat(w.muscle_soreness)||0;
@@ -12639,7 +12638,8 @@ async function loadTeamSummary(){
     const gpsDot = hasGpsP
       ? `<span style="color:#22c55e;font-size:10px">GPS✓</span>`
       : `<span style="color:#6b7280;font-size:10px">GPS-</span>`;
-    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe, wf, ws2, wst, wm, hasWell, wellTotal, wFatC, wSlpC, wStC, wMuC, wellStatus, wellStatusColor, wellStatusDot, wellTimeStr, rpeTimeStr, sessRpeDisp };
+    const hasCoachEdit = ss.some(s=>s.coach_edited);
+    return { p, rpe, postW, preW, wDiff, wDiffColor, sRPE, statusDot, gpsDot, hasRpe, hasCoachEdit, wf, ws2, wst, wm, hasWell, wellTotal, wFatC, wSlpC, wStC, wMuC, wellStatus, wellStatusColor, wellStatusDot, wellTimeStr, rpeTimeStr, sessRpeDisp };
   }).filter(r => {
     // GPS 없는 모드(선수앱 미사용)는 전체 선수 표시, 그 외는 데이터 있는 선수만
     if(!currentUsePlayerApp) return true;
@@ -12673,8 +12673,8 @@ async function loadTeamSummary(){
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
       ${currentUseRpe?`<td style="padding:6px 4px;text-align:center">
         <button onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}')"
-          style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasRpe?'#fbbf24':'#4ade80'}">
-          ${r.hasRpe?'수정':'입력'}</button></td>`:''}
+          style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasCoachEdit?'rgba(99,102,241,0.5)':r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasCoachEdit?'rgba(99,102,241,0.12)':r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasCoachEdit?'#a5b4fc':r.hasRpe?'#fbbf24':'#4ade80'}">
+          ${r.hasCoachEdit?'수정✓':r.hasRpe?'수정':'입력'}</button></td>`:''}
       ${(!currentUsePlayerApp&&currentUseWellness)?`<td style="padding:6px 4px;text-align:center">
         <button onclick="openCoachWellnessModal('${date}','${r.p.id}','${r.p.name}')"
           style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasWell?'rgba(34,197,94,0.4)':'rgba(96,165,250,0.4)'};background:${r.hasWell?'rgba(34,197,94,0.08)':'rgba(96,165,250,0.08)'};color:${r.hasWell?'#4ade80':'#60a5fa'}">
@@ -12719,14 +12719,11 @@ async function loadTeamSummary(){
   // GPS records sorted AM→PM for a player (raw, unmerged)
   const _playerGpsSorted = (pid) => fullGpsRaw.filter(g=>g.player_id===pid)
     .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
-  // session_records가 GPS보다 적을 때, 마지막 GPS에서 offset으로 매칭
-  const _matchedGpsDur = (pid, ssArr) => {
+  // session_order 기반 GPS duration 조회 (session_order 1 → GPS[0], 2 → GPS[1])
+  const _gpsDurByOrder = (pid, sessionOrder) => {
     const gList = _playerGpsSorted(pid);
-    if(!gList.length) return 0;
-    if(ssArr.length >= gList.length) return 0; // 정상 케이스는 각 세션이 자체 duration 사용
-    const offset = gList.length - ssArr.length;
-    // 단일 check → 마지막 GPS duration 사용
-    return parseFloat(gList[offset]?.duration)||0;
+    const idx = Math.min((sessionOrder||1)-1, gList.length-1);
+    return parseFloat(gList[idx]?.duration)||0;
   };
   const calcAvgSrpe = (gpsArr) => {
     const vals = gpsArr.map(r=>{
@@ -12734,7 +12731,8 @@ async function loadTeamSummary(){
       if(!ss.length) return 0;
       if(ss.length === 1) {
         const rpe = parseFloat(ss[0].rpe)||0;
-        const dur = _matchedGpsDur(r.player_id, ss) || parseFloat(r.duration)||0;
+        // session_records.duration 우선, 없으면 session_order 기반 GPS duration
+        const dur = parseFloat(ss[0].duration)||0 || _gpsDurByOrder(r.player_id, ss[0].session_order);
         return rpe && dur ? rpe * dur : 0;
       }
       return ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0; return a+(rpe&&dur?rpe*dur:0); },0);
@@ -12803,7 +12801,7 @@ async function loadTeamSummary(){
       if(!ss.length) return null;
       if(ss.length === 1) {
         const rpe = parseFloat(ss[0].rpe)||0;
-        const dur = _matchedGpsDur(r.player_id, ss) || parseFloat(r.duration)||0;
+        const dur = parseFloat(ss[0].duration)||0 || _gpsDurByOrder(r.player_id, ss[0].session_order);
         return rpe && dur ? Math.round(rpe * dur) : null;
       }
       const total = ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0; return a+(rpe&&dur?rpe*dur:0); },0);
@@ -23469,31 +23467,28 @@ function openCoachRpeModal(date, playerId, playerName){
   const playerGps = (_lastGpsData||[]).filter(r=>r.player_id===playerId)
     .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
 
-  // GPS가 session_records보다 많으면 뒤에서부터 매칭 (선수가 마지막 세션에 체크한 경우)
-  const gpsOffset = Math.max(0, playerGps.length - playerSess.length);
-
   // 세션 목록 구성: 기존 session_records 우선, GPS 세션 수만큼 확보
+  // duration: session_records 값 우선, 없으면 session_order 기반 GPS duration
   // origRpe/origDur/origTime: 선수가 체크한 원본값
   const sessions = playerSess.length > 0
     ? playerSess.map((s,i)=>({
         id: s.id||null,
         order: s.session_order||i+1,
         rpe: s.rpe||'',
-        dur: playerGps[gpsOffset+i]?.duration || s.duration || '',
+        // session_order 기반 GPS duration 매칭 (AM=order1→GPS[0], PM=order2→GPS[1])
+        dur: s.duration || playerGps[(s.session_order||i+1)-1]?.duration || '',
         origRpe: s.rpe||null,
         origDur: s.duration||null,
         origTime: _toKSTHHMM(s.created_at),
       }))
-    : [{ id:null, order:1, rpe:'', dur:playerGps[playerGps.length-1]?.duration||'', origRpe:null, origDur:null, origTime:null }];
-  // GPS 앞부분(offset) 세션은 선수 미입력 행으로 추가
-  for(let i=0; i<gpsOffset; i++){
-    sessions.unshift({ id:null, order:i+1, rpe:'', dur:playerGps[i]?.duration||'', origRpe:null, origDur:null, origTime:null });
-  }
-  // GPS offset 이후 남은 세션 추가
-  for(let i=playerSess.length+gpsOffset; i<playerGps.length; i++){
-    sessions.push({ id:null, order:i+1, rpe:'', dur:playerGps[i]?.duration||'', origRpe:null, origDur:null, origTime:null });
-  }
-  sessions.forEach((s,i)=>{ s.order = i+1; });
+    : [{ id:null, order:1, rpe:'', dur:playerGps[0]?.duration||'', origRpe:null, origDur:null, origTime:null }];
+  // 남은 GPS 세션(선수 미입력) 추가
+  const usedOrders = new Set(sessions.map(s=>s.order));
+  playerGps.forEach((g,i)=>{
+    const order = i+1;
+    if(!usedOrders.has(order)) sessions.push({ id:null, order, rpe:'', dur:g.duration||'', origRpe:null, origDur:null, origTime:null });
+  });
+  sessions.sort((a,b)=>a.order-b.order);
   window._crpeSessionMeta = sessions;
   window._crpePlayerName = playerName;
 
@@ -23503,19 +23498,27 @@ function openCoachRpeModal(date, playerId, playerName){
 
 function _crpeRender(){
   const metas = window._crpeSessionMeta||[];
-  const sessLabel = (i, total) => total===1 ? '단일 세션' : i===0 ? 'AM 세션' : `PM 세션${total>2?' '+(i):''}`;
+  const totalSess = metas.length;
 
   const rows = metas.map((s,i)=>{
-    const label = sessLabel(i, metas.length);
-    // 선수 원본 체크값 표시
+    // AM/PM 선택: order=1→AM, order=2→PM (선수가 잘못 체크한 것 코치가 수정 가능)
+    const isAM = (s.order||i+1) === 1;
+    const ampmSel = totalSess > 1 || s.origRpe!=null ? `
+      <select class="crpe-ampm-sel" data-idx="${i}"
+        onchange="crpeChangeAmPm(${i},this.value)"
+        style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:${isAM?'#60a5fa':'#f97316'};font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">
+        <option value="1" ${isAM?'selected':''}>AM</option>
+        <option value="2" ${!isAM?'selected':''}>PM</option>
+      </select>` : `<span style="font-size:11px;color:var(--text3);font-weight:600">단일 세션</span>`;
+    // 선수 원본 체크값
     const origBadge = s.origRpe!=null
-      ? `<span style="font-size:10px;color:var(--text3)">선수 체크: <span style="color:#fbbf24;font-weight:700">${s.origRpe}</span>${s.origDur!=null?' · '+s.origDur+'분':''}${s.origTime?' · '+s.origTime:''}</span>`
+      ? `<span style="font-size:10px;color:var(--text3)">선수: <span style="color:#fbbf24;font-weight:700">${s.origRpe}</span>${s.origDur!=null?' · '+s.origDur+'분':''}${s.origTime?' · '+s.origTime:''}</span>`
       : `<span style="font-size:10px;color:var(--text3)">선수 미입력</span>`;
     return `
     <div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;color:var(--text3);font-weight:600">${label}</span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          ${ampmSel}
           ${origBadge}
         </div>
         ${s.id ? `<button onclick="deleteCoachRpeSess('${s.id}')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);color:#ef4444;cursor:pointer;font-family:inherit;flex-shrink:0">🗑 삭제</button>` : ''}
@@ -23558,6 +23561,23 @@ function _crpeRender(){
   updatePreview();
 }
 
+function crpeChangeAmPm(idx, orderVal){
+  const metas = window._crpeSessionMeta||[];
+  if(!metas[idx]) return;
+  const newOrder = parseInt(orderVal)||1;
+  // 같은 order 값이 다른 세션에 있으면 swap
+  const conflict = metas.findIndex((s,i)=>i!==idx && s.order===newOrder);
+  if(conflict>=0) metas[conflict].order = metas[idx].order;
+  metas[idx].order = newOrder;
+  // order에 맞는 GPS duration 자동 업데이트
+  const playerGps = (_lastGpsData||[]).filter(r=>r.player_id===_coachRpePlayerId)
+    .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
+  const gpsDur = parseFloat(playerGps[newOrder-1]?.duration)||0;
+  if(gpsDur) metas[idx].dur = gpsDur;
+  window._crpeSessionMeta = metas;
+  _crpeRender();
+}
+
 function addCoachRpeSess(){
   const metas = window._crpeSessionMeta||[];
   const nextOrder = metas.length + 1;
@@ -23589,8 +23609,8 @@ async function saveCoachRpe(){
     const meta = metas[i]||{};
     let error;
     if(meta.id){
-      // 기존 레코드 UPDATE (created_at 유지 → 선수 체크 시간 보존)
-      ({error} = await supa.from('session_records').update({ rpe, duration: dur, coach_edited: true }).eq('id', meta.id));
+      // 기존 레코드 UPDATE (created_at 유지 → 선수 체크 시간 보존, session_order 수정 포함)
+      ({error} = await supa.from('session_records').update({ rpe, duration: dur, session_order: meta.order||i+1, coach_edited: true }).eq('id', meta.id));
     } else {
       // 신규 INSERT
       ({error} = await supa.from('session_records').insert({
