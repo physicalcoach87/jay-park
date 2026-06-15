@@ -12539,10 +12539,12 @@ async function buildWeeklyLoadHtml(forDate){
   </div>`;
 }
 
-async function loadTeamSummary(){
-  const date = document.getElementById('team-date')?.value;
+async function loadTeamSummary(forceDate){
+  const dateEl = document.getElementById('team-date');
+  if(forceDate && dateEl) dateEl.value = forceDate;
+  const date = forceDate || dateEl?.value;
   const out = document.getElementById('team-summary-output');
-  if(!out) return;
+  if(!out||!date) return;
   out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
   if(date) loadTwoWeekCal(date);
 
