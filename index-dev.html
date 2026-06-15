@@ -11763,7 +11763,7 @@ async function loadTeamOverview(){
     prevBlockId=blockKey;
     const colSpan=isV1?8:9;
     const blkLabel=acc.label;
-    const blockHeader=isNewBlock?`<tr><td colspan="${colSpan}" style="padding:2px 10px 2px 8px;border-top:2px solid rgba(99,102,241,0.35);border-bottom:0"><span style="font-size:10px;font-weight:700;color:#a5b4fc">${blkLabel}</span>${blockObj?`<span style="font-size:9px;color:var(--text3);margin-left:6px">${blockObj.start_date} ~ ${blockObj.end_date}</span>`:''}</td></tr>`:'';
+    const blockHeader='';
 
     // ── 경기 행 ──
     let matchRowHtml='';
@@ -11847,19 +11847,19 @@ async function loadTeamOverview(){
       trainRowHtml=`<tr class="overview-row" data-date="${date}"
         style="border-bottom:0.5px solid var(--border);cursor:pointer;background:${isToday?'rgba(34,197,94,0.08)':trainBg};${isToday?'outline:1px solid rgba(34,197,94,0.3)':''}"
         onclick="showTeamVariance('${date}','${(d.getMonth()+1)+'/'+d.getDate()+' ('+DOW[dow]+')'}')">
-        <td style="padding:6px 8px;white-space:nowrap;min-width:90px">
+        <td style="padding:5px 6px;white-space:nowrap;min-width:72px">
           <span style="color:${isToday?'#4ade80':'var(--text2)'};font-weight:${isToday?'600':'400'}">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span>
           ${hasGps?`<span style="font-size:9px;color:var(--text3);margin-left:4px">${mGpsM.length}명</span>`:''}
           ${sessText?`<div style="font-size:9px;color:var(--text3);margin-top:2px">${sessText}</div>`:''}
         </td>
-        <td style="padding:6px 8px;text-align:left;min-width:160px">${readyBadge}</td>
-        <td style="padding:6px 8px;text-align:center;white-space:nowrap;min-width:60px">${mdBadge}</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--text2);white-space:nowrap;min-width:64px">${dur_act!=null?dur_act+'min':'—'}</td>
-        <td style="padding:6px 8px;text-align:right;line-height:1.4;min-width:80px">${_ach(td_act,hasBd?bd.td_target:null)}</td>
-        <td style="padding:6px 8px;text-align:right;line-height:1.4;min-width:72px">${_ach(hsr_act,hasBd?bd.hsr_target:null)}</td>
-        <td style="padding:6px 8px;text-align:right;line-height:1.4;min-width:72px">${_ach(spr_act,hasBd?bd.spr_target:null)}</td>
-        <td style="padding:6px 8px;text-align:right;line-height:1.4;min-width:60px">${_ach(acc_act,hasBd?bd.acc_target:null)}</td>
-        ${isV1?'': `<td style="padding:6px 8px;text-align:right;line-height:1.4;min-width:60px">${_ach(rhie_act,hasBd?bd.rhie_target:null)}</td>`}
+        <td style="padding:5px 6px;text-align:left;min-width:130px">${readyBadge}</td>
+        <td style="padding:5px 6px;text-align:center;white-space:nowrap;min-width:52px">${mdBadge}</td>
+        <td style="padding:5px 6px;text-align:center;color:var(--text2);white-space:nowrap;min-width:52px">${dur_act!=null?dur_act+'min':'—'}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:68px">${_ach(td_act,hasBd?bd.td_target:null)}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:60px">${_ach(hsr_act,hasBd?bd.hsr_target:null)}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:60px">${_ach(spr_act,hasBd?bd.spr_target:null)}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:48px">${_ach(acc_act,hasBd?bd.acc_target:null)}</td>
+        ${isV1?'': `<td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:48px">${_ach(rhie_act,hasBd?bd.rhie_target:null)}</td>`}
       </tr>`;
     }
 
@@ -11898,7 +11898,48 @@ async function loadTeamOverview(){
       </tr>`;
     }
 
-    return blockHeader + trainRowHtml + matchRowHtml + blockSumHtml;
+    return { blockKey, blkLabel, blockObj, rowHtml: trainRowHtml + matchRowHtml, sumHtml: blockSumHtml };
+  }).filter(r=>r&&r.rowHtml!==undefined);
+
+  // 블록별로 그룹화
+  const blockOrder=[];
+  const blockGroups={};
+  dateRows.forEach(r=>{
+    if(!blockGroups[r.blockKey]){
+      blockGroups[r.blockKey]={ label:r.blkLabel, blockObj:r.blockObj, rows:[], sumHtml:'' };
+      blockOrder.push(r.blockKey);
+    }
+    if(r.rowHtml) blockGroups[r.blockKey].rows.push(r.rowHtml);
+    if(r.sumHtml) blockGroups[r.blockKey].sumHtml=r.sumHtml;
+  });
+
+  const theadHtml=`<thead style="position:sticky;top:0;z-index:2"><tr style="background:var(--surface2);box-shadow:0 1px 0 var(--border2)">
+    <th style="padding:5px 6px;text-align:left;color:var(--text3);font-weight:500;white-space:nowrap;min-width:72px">날짜</th>
+    <th style="padding:5px 6px;text-align:left;color:var(--text3);font-weight:500;min-width:130px">준비상태</th>
+    <th style="padding:5px 6px;text-align:center;color:var(--text3);font-weight:500;white-space:nowrap;min-width:52px">MD단계</th>
+    <th style="padding:5px 6px;text-align:center;color:var(--text3);font-weight:500;white-space:nowrap;min-width:52px">운동시간</th>
+    <th style="padding:5px 6px;text-align:center;color:#60a5fa;font-weight:500;min-width:68px">TD (m)</th>
+    <th style="padding:5px 6px;text-align:center;color:#f59e0b;font-weight:500;min-width:60px">HSR (m)</th>
+    <th style="padding:5px 6px;text-align:center;color:#ef4444;font-weight:500;min-width:60px">Sprint</th>
+    <th style="padding:5px 6px;text-align:center;color:#fb923c;font-weight:500;min-width:48px">가속</th>
+    ${isV1?'':'<th style="padding:5px 6px;text-align:center;color:#34d399;font-weight:500;min-width:48px">RHIE</th>'}
+  </tr></thead>`;
+
+  const groupedHtml=blockOrder.map(key=>{
+    const grp=blockGroups[key];
+    const bo=grp.blockObj;
+    const dateRange=bo?`${bo.start_date} ~ ${bo.end_date}`:'';
+    return `
+      <div style="margin-bottom:4px;padding:7px 10px;background:rgba(99,102,241,0.1);border-left:3px solid #6366f1;border-radius:0 6px 6px 0;display:flex;align-items:center;gap:10px">
+        <span style="font-size:12px;font-weight:700;color:#a5b4fc">${grp.label}</span>
+        ${dateRange?`<span style="font-size:10px;color:var(--text3)">${dateRange}</span>`:''}
+      </div>
+      <div style="overflow-x:auto;margin-bottom:12px">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px">
+          ${theadHtml}
+          <tbody>${grp.rows.join('')}${grp.sumHtml}</tbody>
+        </table>
+      </div>`;
   }).join('');
 
   if(!hasAnyData){
@@ -11915,21 +11956,8 @@ async function loadTeamOverview(){
       기간: <strong>${fromVal}</strong> ~ <strong>${toVal}</strong>${periodLabel}
       <span style="margin-left:8px;font-size:9px">※ 훈련 행 클릭 시 선수 간 부하 편차 표시</span>
     </div>
-    <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:820px">
-        <thead style="position:sticky;top:0;z-index:2"><tr style="background:var(--surface2);box-shadow:0 1px 0 var(--border2)">
-          <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:500;white-space:nowrap;min-width:90px">날짜</th>
-          <th style="padding:6px 8px;text-align:left;color:var(--text3);font-weight:500;min-width:160px">준비상태</th>
-          <th style="padding:6px 8px;text-align:center;color:var(--text3);font-weight:500;white-space:nowrap;min-width:60px">MD단계</th>
-          <th style="padding:6px 8px;text-align:right;color:var(--text3);font-weight:500;white-space:nowrap;min-width:64px">운동시간</th>
-          <th style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:500;min-width:80px">TD (m)</th>
-          <th style="padding:6px 8px;text-align:right;color:#f59e0b;font-weight:500;min-width:72px">HSR (m)</th>
-          <th style="padding:6px 8px;text-align:right;color:#ef4444;font-weight:500;min-width:72px">Sprint</th>
-          <th style="padding:6px 8px;text-align:right;color:#fb923c;font-weight:500;min-width:60px">가속</th>
-          ${isV1?'':'<th style="padding:6px 8px;text-align:right;color:#34d399;font-weight:500;min-width:60px">RHIE</th>'}
-        </tr></thead>
-        <tbody id="overview-tbody">${dateRows}</tbody>
-      </table>
+    <div style="max-height:600px;overflow-y:auto">
+      ${groupedHtml}
     </div>`;
 
   // 섹션 B 고정 패널: 오늘 날짜 기준 블록 자동 로드 (최초 1회)
