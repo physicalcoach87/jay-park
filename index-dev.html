@@ -12674,7 +12674,7 @@ async function loadTeamSummary(forceDate){
       </td>`:''}
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
       ${currentUseRpe?`<td style="padding:6px 4px;text-align:center">
-        <button onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}')"
+        <button data-rpe-btn="${r.p.id}" onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}')"
           style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasCoachEdit?'rgba(99,102,241,0.5)':r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasCoachEdit?'rgba(99,102,241,0.12)':r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasCoachEdit?'#a5b4fc':r.hasRpe?'#fbbf24':'#4ade80'}">
           ${r.hasCoachEdit?'수정✓':r.hasRpe?'수정':'입력'}</button></td>`:''}
       ${(!currentUsePlayerApp&&currentUseWellness)?`<td style="padding:6px 4px;text-align:center">
@@ -23624,6 +23624,14 @@ async function saveCoachRpe(){
       }));
     }
     if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
+  }
+  // 저장 즉시 버튼 UI 업데이트 (Supabase 재조회 없이)
+  const btn = document.querySelector(`[data-rpe-btn="${_coachRpePlayerId}"]`);
+  if(btn){
+    btn.textContent = '수정✓';
+    btn.style.border = '1px solid rgba(99,102,241,0.5)';
+    btn.style.background = 'rgba(99,102,241,0.12)';
+    btn.style.color = '#a5b4fc';
   }
   closeCoachRpeModal();
   loadTeamSummary(_coachRpeDate);
