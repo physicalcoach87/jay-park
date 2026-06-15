@@ -23437,6 +23437,12 @@ async function permsSaveCoach(profileId){
 let _coachRpeDate = null;
 let _coachRpePlayerId = null;
 
+const _toKSTHHMM = iso => {
+  if(!iso) return null;
+  const d = new Date(new Date(iso).getTime() + 9*3600*1000);
+  return d.toISOString().substr(11,5);
+};
+
 function openCoachRpeModal(date, playerId, playerName){
   _coachRpeDate = date;
   _coachRpePlayerId = playerId;
@@ -23446,25 +23452,51 @@ function openCoachRpeModal(date, playerId, playerName){
   // 해당 선수 기존 session_records (session_order 순)
   const playerSess = (_lastSessData||[]).filter(s=>s.player_id===playerId)
     .sort((a,b)=>(a.session_order||0)-(b.session_order||0));
-  // 해당 선수 GPS 기록 (duration 참조용, td 내림차순이므로 AM이 앞일 수 있음)
-  const playerGps = (_lastGpsData||[]).filter(r=>r.player_id===playerId);
+  // 해당 선수 GPS 기록 (duration 참조용)
+  const playerGps = (_lastGpsData||[]).filter(r=>r.player_id===playerId)
+    .sort((a,b)=>(a.session_date||'').localeCompare(b.session_date||''));
 
   // 세션 목록 구성: 기존 session_records 우선, GPS 세션 수만큼 확보
+  // origRpe/origDur/origTime: 선수가 체크한 원본값
   const sessions = playerSess.length > 0
-    ? playerSess.map((s,i)=>({ id:s.id||null, order:s.session_order||i+1, rpe:s.rpe||'', dur:s.duration||(playerGps[i]?.duration)||'' }))
-    : [{ id:null, order:1, rpe:'', dur:playerGps[0]?.duration||'' }];
+    ? playerSess.map((s,i)=>({
+        id: s.id||null,
+        order: s.session_order||i+1,
+        rpe: s.rpe||'',
+        dur: s.duration||(playerGps[i]?.duration)||'',
+        origRpe: s.rpe||null,
+        origDur: s.duration||null,
+        origTime: _toKSTHHMM(s.created_at),
+      }))
+    : [{ id:null, order:1, rpe:'', dur:playerGps[0]?.duration||'', origRpe:null, origDur:null, origTime:null }];
   for(let i=sessions.length; i<playerGps.length; i++){
-    sessions.push({ id:null, order:i+1, rpe:'', dur:playerGps[i]?.duration||'' });
+    sessions.push({ id:null, order:i+1, rpe:'', dur:playerGps[i]?.duration||'', origRpe:null, origDur:null, origTime:null });
   }
   window._crpeSessionMeta = sessions;
+  window._crpePlayerName = playerName;
 
-  const sessLabel = (i, total) => total===1 ? '단일 세션' : i===0 ? 'AM 세션' : `PM 세션 ${total>2?i:''}`.trim();
+  _crpeRender();
+  modal.style.display='flex';
+}
 
-  const renderRows = () => (window._crpeSessionMeta||[]).map((s,i)=>`
+function _crpeRender(){
+  const metas = window._crpeSessionMeta||[];
+  const sessLabel = (i, total) => total===1 ? '단일 세션' : i===0 ? 'AM 세션' : `PM 세션${total>2?' '+(i):''}`;
+
+  const rows = metas.map((s,i)=>{
+    const label = sessLabel(i, metas.length);
+    // 선수 원본 체크값 표시
+    const origBadge = s.origRpe!=null
+      ? `<span style="font-size:10px;color:var(--text3)">선수 체크: <span style="color:#fbbf24;font-weight:700">${s.origRpe}</span>${s.origDur!=null?' · '+s.origDur+'분':''}${s.origTime?' · '+s.origTime:''}</span>`
+      : `<span style="font-size:10px;color:var(--text3)">선수 미입력</span>`;
+    return `
     <div style="background:var(--surface2);border-radius:8px;padding:10px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-        <span style="font-size:11px;color:var(--text3);font-weight:600">${sessLabel(i,(window._crpeSessionMeta||[]).length)}</span>
-        ${s.id ? `<button onclick="deleteCoachRpeSess('${s.id}')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);color:#ef4444;cursor:pointer;font-family:inherit">🗑 삭제</button>` : ''}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--text3);font-weight:600">${label}</span>
+          ${origBadge}
+        </div>
+        ${s.id ? `<button onclick="deleteCoachRpeSess('${s.id}')" style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid rgba(239,68,68,0.4);background:rgba(239,68,68,0.08);color:#ef4444;cursor:pointer;font-family:inherit;flex-shrink:0">🗑 삭제</button>` : ''}
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div>
@@ -23478,10 +23510,12 @@ function openCoachRpeModal(date, playerId, playerName){
             style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:15px;text-align:center;box-sizing:border-box;font-family:inherit">
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   document.getElementById('coach-rpe-modal-body').innerHTML = `
-    <div id="crpe-sessions">${renderRows()}</div>
+    <div id="crpe-sessions">${rows}</div>
+    <button onclick="addCoachRpeSess()" style="width:100%;padding:8px;border-radius:8px;border:1px dashed var(--border2);background:transparent;color:var(--text3);font-size:12px;cursor:pointer;font-family:inherit;margin-bottom:10px">+ 세션 추가</button>
     <div style="background:var(--surface2);border-radius:8px;padding:10px;font-size:12px;color:var(--text3);margin-bottom:14px">
       sRPE 합산: <span id="crpe-srpe-preview" style="color:#c084fc;font-weight:700">—</span>
     </div>
@@ -23500,8 +23534,16 @@ function openCoachRpeModal(date, playerId, playerName){
   };
   document.querySelectorAll('.crpe-rpe-inp,.crpe-dur-inp').forEach(inp=>inp.addEventListener('input',updatePreview));
   updatePreview();
-  modal.style.display='flex';
 }
+
+function addCoachRpeSess(){
+  const metas = window._crpeSessionMeta||[];
+  const nextOrder = metas.length + 1;
+  metas.push({ id:null, order:nextOrder, rpe:'', dur:'', origRpe:null, origDur:null, origTime:null });
+  window._crpeSessionMeta = metas;
+  _crpeRender();
+}
+
 function closeCoachRpeModal(){
   document.getElementById('coach-rpe-modal').style.display='none';
 }
@@ -23509,9 +23551,8 @@ async function deleteCoachRpeSess(sessId){
   if(!confirm('이 세션 RPE를 삭제할까요?')) return;
   const {error} = await supa.from('session_records').delete().eq('id', sessId);
   if(error){ alert('삭제 실패: '+error.message); return; }
-  // 모달 데이터 갱신 후 재오픈
   _lastSessData = (_lastSessData||[]).filter(s=>s.id!==sessId);
-  openCoachRpeModal(_coachRpeDate, _coachRpePlayerId, document.getElementById('coach-rpe-modal-date').textContent.split(' · ')[1]);
+  openCoachRpeModal(_coachRpeDate, _coachRpePlayerId, window._crpePlayerName||'');
 }
 async function saveCoachRpe(){
   const rpeInputs = [...document.querySelectorAll('.crpe-rpe-inp')];
@@ -23523,12 +23564,20 @@ async function saveCoachRpe(){
     const rpe = parseFloat(rpeInputs[i].value)||null;
     const dur = parseFloat(durInputs[i].value)||null;
     if(!rpe) continue;
-    const {error} = await supa.from('session_records').upsert({
-      record_date: _coachRpeDate,
-      player_id: _coachRpePlayerId,
-      rpe, duration: dur,
-      session_order: metas[i]?.order||i+1,
-    },{onConflict:'record_date,player_id,session_order'});
+    const meta = metas[i]||{};
+    let error;
+    if(meta.id){
+      // 기존 레코드 UPDATE (created_at 유지 → 선수 체크 시간 보존)
+      ({error} = await supa.from('session_records').update({ rpe, duration: dur }).eq('id', meta.id));
+    } else {
+      // 신규 INSERT
+      ({error} = await supa.from('session_records').insert({
+        record_date: _coachRpeDate,
+        player_id: _coachRpePlayerId,
+        rpe, duration: dur,
+        session_order: meta.order||i+1,
+      }));
+    }
     if(error){ msgEl.style.color='#ef4444'; msgEl.textContent='저장 실패: '+error.message; return; }
   }
   closeCoachRpeModal();
