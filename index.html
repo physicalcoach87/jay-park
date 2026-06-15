@@ -8489,8 +8489,9 @@ async function loadMorningReport(){
   // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
   const weekStartStr = await getMicrocycleStart(today);
   const weekStart = new Date(weekStartStr);
-  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate()+6);
-  const weekEndStr = weekEnd.toISOString().split('T')[0];
+  // schedEnd: 스케줄/block_days 조회용 — 오늘부터 최소 6일 앞까지 (사이클 길이 무관)
+  const schedEnd = new Date(now); schedEnd.setDate(now.getDate()+6);
+  const weekEndStr = schedEnd.toISOString().split('T')[0];
 
   // 28일 ACWR용
   const since28 = new Date(now); since28.setDate(now.getDate()-28);
@@ -12066,9 +12067,11 @@ async function buildWeeklyLoadHtml(forDate){
   // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
   const weekStartStr=await getMicrocycleStart(forDate);
   const weekStart=new Date(weekStartStr);
-  const weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+6);
-  const weekEndStr=weekEnd.toISOString().split('T')[0];
-  const since28=new Date(selDate);since28.setDate(selDate.getDate()-28);
+  // schedEnd: block_days/스케줄 조회용 — forDate 기준 최소 6일 앞까지
+  const _schedEnd=new Date(forDate+'T12:00:00'); _schedEnd.setDate(_schedEnd.getDate()+6);
+  const weekEndStr=_schedEnd.toISOString().split('T')[0];
+  const _fd=new Date(forDate+'T12:00:00');
+  const since28=new Date(_fd);since28.setDate(_fd.getDate()-28);
   const since28Str=since28.toISOString().split('T')[0];
 
   const [{data:wkGps},{data:rpe28w},{data:matchRaw},{data:weekSched}]=await Promise.all([
