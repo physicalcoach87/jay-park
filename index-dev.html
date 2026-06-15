@@ -7640,17 +7640,9 @@ function setPlayerView(view){
   if(view==='training'){
     const dateEl = document.getElementById('training-report-date');
     if(dateEl && !dateEl.value){
-      // 마지막 훈련일 조회 후 바로 보고서 생성
-      supa.from('gps_records').select('session_date').eq('club_id', currentClubId)
-        .order('session_date',{ascending:false}).limit(1)
-        .then(({data})=>{
-          dateEl.value = data?.[0]?.session_date || getKSTDateStr();
-          runTrainingReport();
-        });
-    } else if(dateEl && dateEl.value) {
-      // 이미 날짜가 있으면 바로 보고서 생성
-      runTrainingReport();
+      dateEl.value = getKSTDateStr();
     }
+    runTrainingReport();
   }
 }
 
