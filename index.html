@@ -8614,17 +8614,21 @@ async function loadMorningReport(){
   // 훈련 팀 평균: (M 지표 총합) / (M 훈련시간 총합) × mode(M 훈련시간)
   // mode = 가장 많은 선수가 공유하는 훈련시간 (다수의 높은 시간)
   const trainAvg = (arr,field) => {
-    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    // AM+PM 복수 세션 대응: 선수별로 먼저 합산 후 팀 평균 계산
+    const merged={};
+    arr.forEach(r=>{
+      const pid=r.player_id||r.id||JSON.stringify(r);
+      if(!merged[pid]) merged[pid]={...r,_td:parseFloat(r.td)||0,_running_high:parseFloat(r.running_high)||0,_sprint:parseFloat(r.sprint)||0,_accel:parseFloat(r.accel)||0,_rhie:parseFloat(r.rhie)||0,_duration:parseFloat(r.duration)||0};
+      else { ['td','running_high','sprint','accel','rhie','duration'].forEach(f=>{ merged[pid]['_'+f]=(merged[pid]['_'+f]||0)+(parseFloat(r[f])||0); }); }
+    });
+    const vrs=Object.values(merged).map(r=>({...r,[field]:r['_'+field],duration:r._duration})).filter(r=>parseFloat(r[field])>0&&r.duration>0);
     if(!vrs.length) return null;
     // 최빈값(mode) 계산
     const durCount={};
-    vrs.forEach(r=>{
-      const d=Math.round(parseFloat(r.duration));
-      durCount[d]=(durCount[d]||0)+1;
-    });
+    vrs.forEach(r=>{ const d=Math.round(r.duration); durCount[d]=(durCount[d]||0)+1; });
     const modeDur=parseFloat(Object.entries(durCount).sort((a,b)=>b[1]-a[1]||parseFloat(b[0])-parseFloat(a[0]))[0][0]);
     const sumVal=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sumDur=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    const sumDur=vrs.reduce((a,r)=>a+(r.duration||0),0);
     return sumDur>0?sumVal/sumDur*modeDur:null;
   };
   // 팀 평균 /100분: 총합 / 출전시간 총합 × 100
@@ -12087,12 +12091,19 @@ async function buildWeeklyLoadHtml(forDate){
   for(let i=0;i<7;i++){const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);weekDates.push(d.toISOString().split('T')[0]);}
 
   const _trainAvg=(arr,field)=>{
-    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    // AM+PM 복수 세션 대응: 선수별로 먼저 합산 후 팀 평균 계산
+    const merged={};
+    arr.forEach(r=>{
+      const pid=r.player_id||JSON.stringify(r);
+      if(!merged[pid]) merged[pid]={...r,_td:parseFloat(r.td)||0,_running_high:parseFloat(r.running_high)||0,_sprint:parseFloat(r.sprint)||0,_accel:parseFloat(r.accel)||0,_rhie:parseFloat(r.rhie)||0,_duration:parseFloat(r.duration)||0};
+      else { ['td','running_high','sprint','accel','rhie','duration'].forEach(f=>{ merged[pid]['_'+f]=(merged[pid]['_'+f]||0)+(parseFloat(r[f])||0); }); }
+    });
+    const vrs=Object.values(merged).map(r=>({...r,[field]:r['_'+field],duration:r._duration})).filter(r=>parseFloat(r[field])>0&&r.duration>0);
     if(!vrs.length) return null;
-    const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});
+    const dc={};vrs.forEach(r=>{const d=Math.round(r.duration);dc[d]=(dc[d]||0)+1;});
     const mode=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1]||parseFloat(b[0])-parseFloat(a[0]))[0][0]);
     const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    const sd=vrs.reduce((a,r)=>a+(r.duration||0),0);
     return sd>0?sv/sd*mode:null;
   };
   const _avgF=(arr,field)=>{const v=arr.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
