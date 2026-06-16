@@ -8996,6 +8996,16 @@ async function loadMorningReport(){
   const todayBlockDay = blockDayMap[today] || null;
   const yesterdayBlockDay = blockDayMap[yesterdayStr] || null;
 
+  // ── PM RPE 미입력 선수: 오늘 block_days에 pm_session 있고, session_records가 1개(AM만)인 선수 ──
+  const todayHasPmSession = !!(todayBlockDay?.pm_session);
+  const pmNoRpeResp = todayHasPmSession
+    ? _players.filter(p=>{
+        const cnt = todayRpeRows.filter(r=>r.player_id===p.id).length;
+        return cnt===1; // AM만 입력, PM 미입력
+      })
+    : [];
+  window._pmNoRpeRespPlayers = pmNoRpeResp.map(p=>({id:p.id,name:p.name}));
+
   // MD fallback (오늘 라벨 or GPS topic 기반)
   const mdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(todayBlockDay?.day_label||todayTopic).toUpperCase().includes(k));
   const mdFallback = mdKey ? MD_LOAD_TARGETS[mdKey] : null;
@@ -9296,6 +9306,28 @@ async function loadMorningReport(){
       </button>
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 RPE 입력 완료</div>`;
 
+  // ── PM RPE 미입력 HTML (오전 입력 완료, 오후 미입력) ─────────────
+  const pmNoRpeHtml = pmNoRpeResp.length ? `
+    <div style="height:0.5px;background:var(--border2);margin:10px 0"></div>
+    <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">🌙 PM RPE 미입력 (${pmNoRpeResp.length}명) <span style="font-size:10px;color:var(--text3);font-weight:400">· AM 완료, PM 대기</span></div>
+    <div style="display:flex;flex-direction:column;gap:5px">
+      ${pmNoRpeResp.map(p=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:8px">
+          <div>
+            <span style="font-size:12px;font-weight:500;color:var(--text)">${p.name}</span>
+            <span style="font-size:10px;color:var(--text3);margin-left:6px">${p.position}</span>
+          </div>
+          <button onclick="sendPmRpeReminder('${p.id}','${p.name}',this)"
+            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #f59e0b;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">
+            📨 PM RPE 요청
+          </button>
+        </div>`).join('')}
+      <button onclick="sendRpeReminderAll(window._pmNoRpeRespPlayers,this)"
+        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #f59e0b;background:rgba(245,158,11,0.08);color:#fbbf24;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit">
+        📨 PM 미입력 전원에게 발송
+      </button>
+    </div>` : (todayHasPmSession && noTodayRpeResp.length===0 ? `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ PM RPE 전원 입력 완료</div>` : '');
+
   // ── Priority Alert 계산 ──────────────────────────────────────
   const _paList = [];
   const _injuredActiveIds = new Set(
@@ -9538,6 +9570,7 @@ async function loadMorningReport(){
             }).join('')}
           </div>` : ''}
         ${noRpeRespHtml}
+        ${pmNoRpeHtml}
       </div>` : ''}
 
     </div>` : ''}
@@ -9846,6 +9879,18 @@ async function sendRpeReminder(playerId, playerName, btn){
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
   });
+  await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
+  btn.textContent='✅ 발송됨';
+}
+
+// PM RPE 입력 요청 발송 (개별)
+async function sendPmRpeReminder(playerId, playerName, btn){
+  btn.textContent='⏳ 발송 중...'; btn.disabled=true;
+  const { data: pd } = await supa.from('player_profiles').select('preferred_lang').eq('id', playerId).single();
+  const lang = pd?.preferred_lang||'ko';
+  const title = lang==='en'?'💪 PM RPE Input Request':lang==='pt'?'💪 Registro de RPE (PM)':'💪 PM RPE 입력 요청';
+  const body  = lang==='en'?`${playerName}, please enter your PM session RPE now!`:lang==='pt'?`${playerName}, registre seu RPE da sessão PM agora!`:`${playerName} 선수, 오후 훈련 후 RPE를 입력해주세요!`;
+  await supa.from('notifications').insert({ title, body, target_type:'player', target_value:playerId, created_by:currentUser?.email||'coach' });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
   btn.textContent='✅ 발송됨';
 }
@@ -12703,9 +12748,15 @@ async function loadTeamSummary(forceDate, quiet=false){
       </td>`:''}
       <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
       ${currentUseRpe?`<td style="padding:6px 4px;text-align:center">
-        <button data-rpe-btn="${r.p.id}" onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}')"
-          style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasCoachEdit?'rgba(99,102,241,0.5)':r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasCoachEdit?'rgba(99,102,241,0.12)':r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasCoachEdit?'#a5b4fc':r.hasRpe?'#fbbf24':'#4ade80'}">
-          ${r.hasCoachEdit?'수정✓':r.hasRpe?'수정':'입력'}</button></td>`:''}
+        <div style="display:flex;gap:4px;align-items:center;justify-content:center">
+          <button data-rpe-btn="${r.p.id}" onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}')"
+            style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasCoachEdit?'rgba(99,102,241,0.5)':r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasCoachEdit?'rgba(99,102,241,0.12)':r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasCoachEdit?'#a5b4fc':r.hasRpe?'#fbbf24':'#4ade80'}">
+            ${r.hasCoachEdit?'수정✓':r.hasRpe?'수정':'입력'}</button>
+          <button onclick="sendRpeReminder('${r.p.id}','${r.p.name}',this)"
+            title="RPE 입력 요청 알림 발송"
+            style="font-size:11px;padding:3px 6px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid rgba(167,139,250,0.3);background:transparent;color:#a78bfa">
+            🔔</button>
+        </div></td>`:''}
       ${(!currentUsePlayerApp&&currentUseWellness)?`<td style="padding:6px 4px;text-align:center">
         <button onclick="openCoachWellnessModal('${date}','${r.p.id}','${r.p.name}')"
           style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasWell?'rgba(34,197,94,0.4)':'rgba(96,165,250,0.4)'};background:${r.hasWell?'rgba(34,197,94,0.08)':'rgba(96,165,250,0.08)'};color:${r.hasWell?'#4ade80':'#60a5fa'}">
