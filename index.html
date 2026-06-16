@@ -8570,7 +8570,7 @@ async function loadMorningReport(){
     {data:weekBlockDays},
   ] = await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent,session_label')
       .gte('session_date', weekStartStr).lte('session_date', today)
       .order('session_date',{ascending:true}),
     supa.from('gps_records')
@@ -8578,7 +8578,7 @@ async function loadMorningReport(){
       .eq('session_date', yesterdayStr)
       .order('td',{ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe,duration,created_at')
+      .select('player_id,record_date,rpe,duration,session_type,session_order,created_at')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness,morning_weight,created_at')
@@ -8699,6 +8699,12 @@ async function loadMorningReport(){
     if(!rpeMap28[r.player_id]) rpeMap28[r.player_id]=[];
     rpeMap28[r.player_id].push({date:r.record_date, rpe:parseFloat(r.rpe)||0, dur:parseFloat(r.duration)||0});
   });
+  // GPS duration 폴백 맵 (player__date__label) — 주간 sRPE 계산용
+  const _wkGpsDur = {};
+  (weekGps||[]).forEach(r=>{
+    const key=r.player_id+'__'+r.session_date+'__'+(r.session_label||'AM').toUpperCase();
+    if(!_wkGpsDur[key]) _wkGpsDur[key]=parseFloat(r.duration)||0;
+  });
 
   // 팀 ACWR 계산 (전체 선수 평균)
   const teamACWR = (() => {
@@ -8738,11 +8744,24 @@ async function loadMorningReport(){
     const td   = dayGpsForRow.length ? trainAvg(dayGpsForRow,'td') : null;
     const hsr  = dayGpsForRow.length ? trainAvg(dayGpsForRow,'running_high') : null;
     const sp   = dayGpsForRow.length ? trainAvg(dayGpsForRow,'sprint') : null;
-    // sRPE from session_records (M 날만)
+    // sRPE: 선수별 AM+PM 세션 합산(rpe×duration, GPS 폴백) 후 선수 평균 (M 날만)
     const dayRpe28 = (rpe28||[]).filter(r=>r.record_date===date);
     const avgRpe = isTeamDay2&&dayRpe28.length ? dayRpe28.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/dayRpe28.length : 0;
     const avgDur = dayGpsForRow.length ? avgFields(dayGpsForRow,'duration') : 0;
-    const sRPE  = (avgRpe&&avgDur) ? Math.round(avgRpe*avgDur) : null;
+    const sRPE = (() => {
+      if(!isTeamDay2 || !dayRpe28.length) return null;
+      const byP={};
+      dayRpe28.forEach(r=>{ (byP[r.player_id]=byP[r.player_id]||[]).push(r); });
+      const totals=Object.entries(byP).map(([pid,recs])=>
+        recs.reduce((a,s)=>{
+          const rv=parseFloat(s.rpe)||0;
+          const lbl=(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase();
+          const du=parseFloat(s.duration)||_wkGpsDur[pid+'__'+date+'__'+lbl]||0;
+          return a+(rv&&du?rv*du:0);
+        },0)
+      ).filter(v=>v>0);
+      return totals.length ? Math.round(totals.reduce((a,v)=>a+v,0)/totals.length) : null;
+    })();
 
     // ACWR 당일 계산
     let dayACWR = null;
@@ -8953,10 +8972,18 @@ async function loadMorningReport(){
     const pgps = (gps28||[]).filter(r=>r.player_id===pid); // 개인 데이터 전체 포함
     const prpe = (rpeMap28[pid]||[]);
     if(!pgps.length&&!prpe.length) continue;
-    const rpeMap2={};
-    prpe.forEach(r=>{rpeMap2[r.date]={rpe:r.rpe,dur:r.dur};});
-    pgps.forEach(r=>{if(!rpeMap2[r.session_date])rpeMap2[r.session_date]={rpe:0,dur:parseFloat(r.duration)||0};});
-    const sessForACWR = Object.entries(rpeMap2).map(([d,v])=>({date:d,rpe:v.rpe,dur:v.dur}));
+    // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×dur, GPS duration 폴백)
+    const _pGpsDurD={};
+    pgps.forEach(r=>{ if(!_pGpsDurD[r.session_date]) _pGpsDurD[r.session_date]=parseFloat(r.duration)||0; });
+    const srpeByDate2={};
+    prpe.forEach(r=>{
+      const rv=parseFloat(r.rpe)||0;
+      const du=parseFloat(r.dur)||_pGpsDurD[r.date]||0;
+      srpeByDate2[r.date]=(srpeByDate2[r.date]||0)+(rv&&du?rv*du:0);
+    });
+    pgps.forEach(r=>{ if(!(r.session_date in srpeByDate2)) srpeByDate2[r.session_date]=0; });
+    // calcACWR는 rpe×dur로 sRPE 계산 → dur=1, rpe=합산sRPE 로 전달
+    const sessForACWR = Object.entries(srpeByDate2).map(([d,srpe])=>({date:d,rpe:srpe,dur:1}));
     const sessForMV   = pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0}));
     const acwrData  = calcACWR(sessForACWR,today);
     const mvExp     = mss>0?calcMVExposure(sessForMV,mss,today):null;
@@ -9662,12 +9689,12 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
 
   const [{data:gps14}, {data:rpe14}, {data:well14}, {data:inj}] = await Promise.all([
     supa.from('gps_records')
-      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,duration,cycle,periodization,session_topic,opponent,session_type2')
+      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,duration,cycle,periodization,session_topic,opponent,session_type2,session_label')
       .eq('player_id', playerId)
       .gte('session_date', since14Str)
       .order('session_date',{ascending:false}),
     supa.from('session_records')
-      .select('record_date,rpe,duration')
+      .select('record_date,rpe,duration,session_type,session_order')
       .eq('player_id', playerId)
       .gte('record_date', since14Str),
     supa.from('wellness_records')
@@ -9682,8 +9709,20 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
       .limit(1),
   ]);
 
-  const rpeMap14 = {};
-  (rpe14||[]).forEach(r=>{ rpeMap14[r.record_date]=r; });
+  // GPS duration 폴백 맵 (date__label)
+  const _gpsDur14 = {};
+  (gps14||[]).forEach(r=>{
+    const key=r.session_date+'__'+(r.session_label||'AM').toUpperCase();
+    if(!_gpsDur14[key]) _gpsDur14[key]=parseFloat(r.duration)||0;
+  });
+  const rpeMap14 = {};       // date__LABEL → rpe record (+ date 폴백)
+  const rpe14ByDate = {};    // date → [session rows]
+  (rpe14||[]).forEach(r=>{
+    const lbl=(r.session_type||((r.session_order||1)===1?'AM':'PM')).toUpperCase();
+    rpeMap14[r.record_date+'__'+lbl]=r;
+    if(!rpeMap14[r.record_date]) rpeMap14[r.record_date]=r;
+    (rpe14ByDate[r.record_date]=rpe14ByDate[r.record_date]||[]).push(r);
+  });
   const wellMap14 = {};
   (well14||[]).forEach(r=>{ wellMap14[r.record_date]=r; });
 
@@ -9706,11 +9745,17 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
 
   // ACWR (14일 기준)
   const now = new Date();
-  const rpe28data = (rpe14||[]).map(r=>({date:r.record_date, rpe:parseFloat(r.rpe)||0, dur:parseFloat(r.duration)||0}));
   const gpsForDur = sessions.map(r=>({date:r.session_date, dur:parseFloat(r.duration)||0}));
-  // sRPE 세션 합산
+  // sRPE 날짜별 합산 (AM+PM 모든 세션 rpe×duration, GPS 폴백)
   const sessionSRPE = {};
-  rpe28data.forEach(r=>{sessionSRPE[r.date]=(r.rpe*r.dur);});
+  Object.entries(rpe14ByDate).forEach(([d,recs])=>{
+    sessionSRPE[d] = recs.reduce((a,s)=>{
+      const rv=parseFloat(s.rpe)||0;
+      const lbl=(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase();
+      const du=parseFloat(s.duration)||_gpsDur14[d+'__'+lbl]||0;
+      return a+(rv&&du?rv*du:0);
+    },0);
+  });
   gpsForDur.forEach(r=>{if(!sessionSRPE[r.date]) sessionSRPE[r.date]=0;});
   let acute=0, chronic=0, cDays=0;
   Object.entries(sessionSRPE).forEach(([d,s])=>{
@@ -9736,7 +9781,8 @@ async function toggleRiskDetail(playerId, playerName, position, borderColor, tex
   };
 
   const rows = sessions.map(r=>{
-    const rpe = rpeMap14[r.session_date];
+    const _lbl = (r.session_label||'AM').toUpperCase();
+    const rpe = rpeMap14[r.session_date+'__'+_lbl] || rpeMap14[r.session_date];
     const rpeVal = parseFloat(rpe?.rpe)||null;
     const dur = parseFloat(r.duration)||parseFloat(rpe?.duration)||null;
     const sRPE = rpeVal&&dur?Math.round(rpeVal*dur):null;
@@ -10254,7 +10300,7 @@ async function downloadDashboardExcel(){
 
   const [{data:gps},{data:matchData},{data:rpeRows},{data:wellRows}] = await Promise.all([
     supa.from('gps_records')
-      .select('session_date,opponent,cycle,periodization,session_topic,duration,td,hsr_total,running_medium,running_high,sprint,running_high_n,sprint_n,accel,decel,max_speed,player_load,rhie,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high')
+      .select('session_date,opponent,cycle,periodization,session_topic,duration,td,hsr_total,running_medium,running_high,sprint,running_high_n,sprint_n,accel,decel,max_speed,player_load,rhie,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,session_label')
       .eq('player_id',playerId).gte('session_date',sinceStr).order('session_date',{ascending:true}),
     supa.from('match_records')
       .select('match_date,opponent,home_away,time_type,duration,td,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,max_speed,player_load,rhie,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h,result,score')
@@ -10262,7 +10308,7 @@ async function downloadDashboardExcel(){
       .in('time_type',['FT','Top-up'])
       .order('match_date',{ascending:true}),
     supa.from('session_records')
-      .select('record_date,rpe,duration')
+      .select('record_date,rpe,duration,session_type,session_order')
       .eq('player_id',playerId).gte('record_date',sinceStr).order('record_date',{ascending:true}),
     supa.from('wellness_records')
       .select('record_date,morning_weight')
@@ -10270,7 +10316,11 @@ async function downloadDashboardExcel(){
   ]);
 
   const rpeMap={};
-  (rpeRows||[]).forEach(r=>{ rpeMap[r.record_date]=r; });
+  (rpeRows||[]).forEach(r=>{
+    const lbl=(r.session_type||((r.session_order||1)===1?'AM':'PM')).toUpperCase();
+    rpeMap[r.record_date+'__'+lbl]=r;
+    if(!rpeMap[r.record_date]) rpeMap[r.record_date]=r;
+  });
   const wellMap={};
   (wellRows||[]).forEach(r=>{ wellMap[r.record_date]=r; });
 
@@ -10285,7 +10335,8 @@ async function downloadDashboardExcel(){
 
   // 훈련 rows
   const trainRows=(gps||[]).map(r=>{
-    const rpe  = rpeMap[r.session_date];
+    const _lbl = (r.session_label||'AM').toUpperCase();
+    const rpe  = rpeMap[r.session_date+'__'+_lbl] || rpeMap[r.session_date];
     const well = wellMap[r.session_date];
     const rpeVal = parseFloat(rpe?.rpe)||'';
     const dur    = parseFloat(r.duration)||parseFloat(rpe?.duration)||'';
@@ -10981,6 +11032,11 @@ async function downloadDailyExcel(){
     };
   });
 
+  const gpsDurByLabel = {}; // player__LABEL → duration
+  (gps||[]).forEach(r=>{
+    const _k=r.player_id+'__'+(r.session_label||'AM').toUpperCase();
+    if(!gpsDurByLabel[_k]) gpsDurByLabel[_k]=parseFloat(r.duration)||0;
+  });
   (gps||[]).forEach(r=>{
     if(!playerMap[r.player_id]) playerMap[r.player_id]={name:r.player_profiles?.name||'-',position:r.player_profiles?.position||'-',gps:{},wellness:{},sessions:[]};
     playerMap[r.player_id].gps = r;
@@ -11020,10 +11076,16 @@ async function downloadDailyExcel(){
       const s1 = p.sessions.find(s=>s.session_order===1)||{};
       const s2 = p.sessions.find(s=>s.session_order===2)||{};
       const s3 = p.sessions.find(s=>s.session_order===3)||{};
-      const dur = parseFloat(g.duration)||0;
-      const srpe1 = s1.rpe && dur ? Math.round(s1.rpe * dur) : '';
-      const srpe2 = s2.rpe && dur ? Math.round(s2.rpe * dur) : '';
-      const srpe3 = s3.rpe && dur ? Math.round(s3.rpe * dur) : '';
+      // 세션별 duration: 세션 자체 → GPS(라벨별) → 단일 GPS 순 폴백
+      const sDur = (s,fallbackLabel) => {
+        const pid = s.player_id;
+        const lbl = (s.session_type||fallbackLabel).toUpperCase();
+        return parseFloat(s.duration) || (pid?gpsDurByLabel[pid+'__'+lbl]:0) || parseFloat(g.duration) || 0;
+      };
+      const d1=sDur(s1,'AM'), d2=sDur(s2,'PM'), d3=sDur(s3,'PM');
+      const srpe1 = s1.rpe && d1 ? Math.round(s1.rpe * d1) : '';
+      const srpe2 = s2.rpe && d2 ? Math.round(s2.rpe * d2) : '';
+      const srpe3 = s3.rpe && d3 ? Math.round(s3.rpe * d3) : '';
       const totalSrpe = (srpe1||0)+(srpe2||0)+(srpe3||0)||'';
 
       return [
@@ -11059,7 +11121,7 @@ async function downloadRpeWeightExcel(){
   const [{data:sessions},{data:wellness},{data:gps}] = await Promise.all([
     supa.from('session_records').select('*, player_profiles(name)').eq('record_date',date).order('session_order'),
     supa.from('wellness_records').select('player_id,morning_weight').eq('record_date',date),
-    supa.from('gps_records').select('player_id,duration').eq('session_date',date),
+    supa.from('gps_records').select('player_id,duration,session_label').eq('session_date',date),
   ]);
 
   if(!sessions?.length && !wellness?.length){
@@ -11069,7 +11131,12 @@ async function downloadRpeWeightExcel(){
   const wellMap = {};
   (wellness||[]).forEach(r=>{ wellMap[r.player_id] = r.morning_weight||''; });
   const gpsDurMap = {};
-  (gps||[]).forEach(r=>{ gpsDurMap[r.player_id] = parseFloat(r.duration)||0; });
+  (gps||[]).forEach(r=>{ if(!gpsDurMap[r.player_id]) gpsDurMap[r.player_id] = parseFloat(r.duration)||0; });
+  const gpsDurByLabel = {}; // player__LABEL → duration
+  (gps||[]).forEach(r=>{
+    const _k=r.player_id+'__'+(r.session_label||'AM').toUpperCase();
+    if(!gpsDurByLabel[_k]) gpsDurByLabel[_k]=parseFloat(r.duration)||0;
+  });
 
   const playerMap = {};
   (_players||[]).forEach(p=>{ playerMap[p.id]={name:p.name,sessions:[]}; });
@@ -11087,9 +11154,14 @@ async function downloadRpeWeightExcel(){
       const s2 = p.sessions.find(s=>s.session_order===2)||{};
       const s3 = p.sessions.find(s=>s.session_order===3)||{};
       const dur = gpsDurMap[id]||0;
-      const srpe1 = s1.rpe&&dur ? Math.round(s1.rpe*dur) : '';
-      const srpe2 = s2.rpe&&dur ? Math.round(s2.rpe*dur) : '';
-      const srpe3 = s3.rpe&&dur ? Math.round(s3.rpe*dur) : '';
+      const sDur = (s,fallbackLabel) => {
+        const lbl=(s.session_type||fallbackLabel).toUpperCase();
+        return parseFloat(s.duration) || gpsDurByLabel[id+'__'+lbl] || dur || 0;
+      };
+      const d1=sDur(s1,'AM'), d2=sDur(s2,'PM'), d3=sDur(s3,'PM');
+      const srpe1 = s1.rpe&&d1 ? Math.round(s1.rpe*d1) : '';
+      const srpe2 = s2.rpe&&d2 ? Math.round(s2.rpe*d2) : '';
+      const srpe3 = s3.rpe&&d3 ? Math.round(s3.rpe*d3) : '';
       return [
         p.name,
         dur?`${dur}min`:'GPS없음',
@@ -11171,11 +11243,11 @@ async function loadTwoWeekCal(baseDate){
   // gps_records + match_records 병렬 조회
   const [{data: gpsAll}, {data: rpeAll}, {data: matchFT}] = await Promise.all([
     supa.from('gps_records')
-      .select('session_date,session_type2,td,running_high,sprint,accel,rhie,duration,opponent,home_away,session_topic,player_id')
+      .select('session_date,session_type2,td,running_high,sprint,accel,rhie,duration,opponent,home_away,session_topic,player_id,session_label')
       .gte('session_date', startStr).lte('session_date', endStr)
       .order('session_date', {ascending:true}),
     supa.from('session_records')
-      .select('record_date,rpe,player_id')
+      .select('record_date,rpe,player_id,duration,session_type,session_order')
       .gte('record_date', startStr).lte('record_date', endStr),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
@@ -11212,6 +11284,22 @@ async function loadTwoWeekCal(baseDate){
       _matchByDate[r.match_date].push(r);
     }
   });
+
+  // GPS duration 폴백 맵: player_id__date__label → duration
+  const gpsDurMap2 = {};
+  (gpsAll||[]).forEach(r=>{
+    const key = r.player_id+'__'+r.session_date+'__'+(r.session_label||'AM').toUpperCase();
+    if(!gpsDurMap2[key]) gpsDurMap2[key] = parseFloat(r.duration)||0;
+  });
+  // 선수별 일자 sRPE 합산 (AM+PM 모든 세션 rpe×duration, duration 없으면 GPS 폴백)
+  const playerDaySRPE = (date, playerId, recs) => {
+    return recs.reduce((a,s)=>{
+      const rv=parseFloat(s.rpe)||0;
+      const lbl=(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase();
+      const d=parseFloat(s.duration)||gpsDurMap2[playerId+'__'+date+'__'+lbl]||0;
+      return a+(rv&&d?rv*d:0);
+    },0);
+  };
 
   // 날짜별 집계
   const DOW = ['일','월','화','수','목','금','토'];
@@ -11251,7 +11339,15 @@ async function loadTwoWeekCal(baseDate){
     };
     const rpeAvg = dayRpe.length ? parseFloat((dayRpe.reduce((s,r)=>s+(parseFloat(r.rpe)||0),0)/dayRpe.length).toFixed(1)) : null;
     const durAvg = avg(dayBase, 'duration');
-    const sRPE   = (durAvg && rpeAvg) ? Math.round(durAvg * rpeAvg) : null;
+    // sRPE: 선수별 AM+PM 세션 합산 후 선수 평균 (rpe×duration)
+    const sRPE = (() => {
+      const byPlayer = {};
+      dayRpe.forEach(r=>{ (byPlayer[r.player_id]=byPlayer[r.player_id]||[]).push(r); });
+      const totals = Object.entries(byPlayer)
+        .map(([pid,recs])=>playerDaySRPE(ymd, pid, recs))
+        .filter(v=>v>0);
+      return totals.length ? Math.round(totals.reduce((a,v)=>a+v,0)/totals.length) : null;
+    })();
 
     // 세션명: 기준 그룹(M 또는 S) 중 최빈값
     const topicCount = {};
@@ -11525,12 +11621,25 @@ async function renderTwoWeekDetail(idx){
       .order('session_type2', {ascending:true})
       .order('td', {ascending: false}),
     supa.from('session_records')
-      .select('player_id, rpe')
+      .select('player_id, rpe, duration, session_type, session_order')
       .eq('record_date', s.ymd)
   ]);
 
-  const rpeMap = {};
-  (dayRpe||[]).forEach(r => { rpeMap[r.player_id] = r; });
+  // 선수+세션라벨 키 맵 (행별 매칭용) + 선수별 전체 세션 리스트
+  const rpeMap = {};          // player_id__LABEL → rpe record
+  const rpeByPlayer = {};     // player_id → [session rows]
+  (dayRpe||[]).forEach(r => {
+    const lbl=(r.session_type||((r.session_order||1)===1?'AM':'PM')).toUpperCase();
+    rpeMap[r.player_id+'__'+lbl] = r;
+    if(!rpeMap[r.player_id]) rpeMap[r.player_id] = r; // 단일 세션 폴백
+    (rpeByPlayer[r.player_id]=rpeByPlayer[r.player_id]||[]).push(r);
+  });
+  // GPS duration 폴백 맵
+  const _gpsDurMap = {};
+  (dayGps||[]).forEach(r=>{
+    const key=r.player_id+'__'+(r.session_label||'AM').toUpperCase();
+    if(!_gpsDurMap[key]) _gpsDurMap[key]=parseFloat(r.duration)||0;
+  });
 
   // SS(스페셜 세션), X(엔트리 제외)는 팀 상세 뷰에서도 제외 → 개인 데이터 탭에서만 확인
   // session_type2 = 'M'  → 팀 전체훈련(주전/엔트리) → 팀 평균에 포함
@@ -11578,9 +11687,19 @@ async function renderTwoWeekDetail(idx){
   const mAccel  = avgM('accel');
   const mRHIE   = avgM('rhie');
 
-  // M 기준 sRPE: durAvg(M) × rpeAvg(session_records)
+  // M 기준 sRPE: 선수별 AM+PM 세션 합산(rpe×duration, GPS 폴백) 후 선수 평균
   const mRpeAvg = dayRpe?.length ? parseFloat((dayRpe.reduce((a,r)=>a+(parseFloat(r.rpe)||0),0)/dayRpe.length).toFixed(1)) : null;
-  const mSRPE   = (durAvg && mRpeAvg) ? Math.round(durAvg * mRpeAvg) : null;
+  const mSRPE = (() => {
+    const totals = Object.entries(rpeByPlayer).map(([pid,recs])=>
+      recs.reduce((a,s)=>{
+        const rv=parseFloat(s.rpe)||0;
+        const sl=(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase();
+        const d=parseFloat(s.duration)||_gpsDurMap[pid+'__'+sl]||0;
+        return a+(rv&&d?rv*d:0);
+      },0)
+    ).filter(v=>v>0);
+    return totals.length ? Math.round(totals.reduce((a,v)=>a+v,0)/totals.length) : null;
+  })();
 
   const avgCards = [
     {label:'운동시간', val: durAvg  ? durAvg+'min'                  : '—'},
@@ -11597,7 +11716,8 @@ async function renderTwoWeekDetail(idx){
     </div>`).join('');
 
   const makeRow = (r, isInd=false) => {
-    const rpe    = rpeMap[r.player_id];
+    const lbl    = (r.session_label||'AM').toUpperCase();
+    const rpe    = rpeMap[r.player_id+'__'+lbl] || rpeMap[r.player_id];
     const dur    = r.duration || rpe?.duration || null;
     const rpeVal = parseFloat(rpe?.rpe) || null;
     const sRPE   = (dur && rpeVal) ? Math.round(dur * rpeVal) : '—';
@@ -12707,7 +12827,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .eq('session_date', date)
       .order('td', {ascending:false}),
     supa.from('session_records')
-      .select('id,player_id,rpe,post_weight,session_order,duration,created_at,coach_edited')
+      .select('id,player_id,rpe,post_weight,session_order,duration,session_type,created_at,coach_edited')
       .eq('record_date', date),
     supa.from('wellness_records')
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
@@ -12734,6 +12854,12 @@ async function loadTeamSummary(forceDate, quiet=false){
   // ── 맵 구성 ──
   const gpsMap = {};
   (gps||[]).forEach(r=>{ gpsMap[r.player_id]=r; });
+  // GPS duration 폴백: player_id+session_label 키로 매핑
+  const gpsDurMap = {};
+  (gps||[]).forEach(r=>{
+    const key = r.player_id + '_' + (r.session_label||'AM').toUpperCase();
+    if(!gpsDurMap[key]) gpsDurMap[key] = parseFloat(r.duration)||0;
+  });
   const sessMap = {};
   (sessions||[]).forEach(s=>{
     if(!sessMap[s.player_id]) sessMap[s.player_id]=[];
@@ -12760,10 +12886,12 @@ async function loadTeamSummary(forceDate, quiet=false){
     const wDiff  = preW&&postW ? (parseFloat(postW)-parseFloat(preW)).toFixed(1) : null;
     const wDiffColor = wDiff===null?'var(--text3)':parseFloat(wDiff)<=-1?'#ef4444':parseFloat(wDiff)<0?'#f59e0b':'#34d399';
     const dur    = parseFloat(s1.duration)||parseFloat(g?.duration)||null;
-    // sRPE: 모든 세션(AM+PM) rpe×duration 합산
+    // sRPE: 모든 세션(AM+PM) rpe×duration 합산 (duration 없으면 GPS 폴백)
     const sRPE = (() => {
       const total = ss.reduce((a,s)=>{
-        const r=parseFloat(s.rpe)||0, d=parseFloat(s.duration)||0;
+        const r=parseFloat(s.rpe)||0;
+        const sessLabel=(s.session_type||( (s.session_order||1)===1?'AM':'PM')).toUpperCase();
+        const d=parseFloat(s.duration)||gpsDurMap[p.id+'_'+sessLabel]||0;
         return a+(r&&d?r*d:0);
       },0);
       return total>0?Math.round(total):null;
@@ -12851,7 +12979,6 @@ async function loadTeamSummary(forceDate, quiet=false){
 
   // ── GPS 기반 팀 평균 / 테이블 (GPS 있을 때만) ──
   const isV1plan = currentGpsPlan === 'V1';
-  const fullGpsRaw = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'M');
   // AM+PM 복수 세션 → 선수별 합산 머지
   const _mergeGps = (arr) => {
     const map = {};
@@ -12865,10 +12992,35 @@ async function loadTeamSummary(forceDate, quiet=false){
     });
     return Object.values(map);
   };
-  const fullGps = _mergeGps(fullGpsRaw);
-  const indGps  = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() !== 'M');
-  const ssGps   = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'SS');
-  const xGps    = (gps||[]).filter(r => (r.session_type2||'').trim().toUpperCase() === 'X');
+  const _g2 = r => (r.session_type2||'').trim().toUpperCase() || 'S';
+  // 세션 필터 (AM/PM/ALL) — 훈련 모드일 때만
+  const _tSessFilter = window._trainingMode ? (window._trainingSessionFilter || 'ALL') : 'ALL';
+  const _gpsBase = _tSessFilter === 'ALL'
+    ? (gps||[])
+    : (gps||[]).filter(r => (r.session_label||'AM').toUpperCase() === _tSessFilter);
+
+  // 선수별 그날 세션 그룹 분류
+  const _playerGroups = {};   // pid → Set(session_type2)
+  _gpsBase.forEach(r=>{ (_playerGroups[r.player_id]=_playerGroups[r.player_id]||new Set()).add(_g2(r)); });
+  const _isPureM  = pid => { const s=_playerGroups[pid]; return s && s.size===1 && s.has('M'); };
+  const _hasMixed = pid => { const s=_playerGroups[pid]; return s && s.size>1 && s.has('M'); }; // M 포함하나 전부 M은 아님
+
+  let fullGpsRaw, mixedGpsRaw, indGps;
+  if(_tSessFilter === 'ALL'){
+    // 통합: 오전·오후 모두 M인 선수만 M그룹 / 그룹 다른 선수는 혼합 / 나머지는 서브
+    fullGpsRaw  = _gpsBase.filter(r => _g2(r)==='M' && _isPureM(r.player_id));
+    mixedGpsRaw = _gpsBase.filter(r => _hasMixed(r.player_id));
+    indGps      = _gpsBase.filter(r => _g2(r)!=='M' && !_hasMixed(r.player_id));
+  } else {
+    // 세션별(AM/PM): 해당 세션의 session_type2 그대로 분류 (혼합 없음)
+    fullGpsRaw  = _gpsBase.filter(r => _g2(r)==='M');
+    mixedGpsRaw = [];
+    indGps      = _gpsBase.filter(r => _g2(r)!=='M');
+  }
+  const fullGps  = _mergeGps(fullGpsRaw);
+  const mixedGps = _mergeGps(mixedGpsRaw);
+  const ssGps   = indGps.filter(r => _g2(r) === 'SS');
+  const xGps    = indGps.filter(r => _g2(r) === 'X');
 
   const avgGroup = (arr, field, dec=0) => {
     const vals = arr.filter(r=>parseFloat(r[field])>0);
@@ -12876,34 +13028,47 @@ async function loadTeamSummary(forceDate, quiet=false){
     return (vals.reduce((s,r)=>s+(parseFloat(r[field])||0),0)/vals.length).toFixed(dec);
   };
 
+  // 세션 필터(AM/PM) 적용된 선수 세션 목록
+  const _ssFiltered = pid => {
+    const all = sessMap[pid]||[];
+    return _tSessFilter==='ALL' ? all
+      : all.filter(s=>(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase()===_tSessFilter);
+  };
   const calcAvgRpe = (gpsArr) => {
     const vals = gpsArr.map(r=>{
-      const ss = sessMap[r.player_id]||[];
+      const ss = _ssFiltered(r.player_id);
       const rpes = ss.map(s=>parseFloat(s.rpe)||0).filter(v=>v>0);
       return rpes.length ? rpes.reduce((a,b)=>a+b,0)/rpes.length : 0;
     }).filter(v=>v>0);
     return vals.length ? (vals.reduce((a,b)=>a+b,0)/vals.length).toFixed(1) : '-';
   };
   // GPS records sorted AM→PM for a player (raw, unmerged)
-  const _playerGpsSorted = (pid) => fullGpsRaw.filter(g=>g.player_id===pid)
-    .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
-  // session_order 기반 GPS duration 조회 (session_order 1 → GPS[0], 2 → GPS[1])
-  const _gpsDurByOrder = (pid, sessionOrder) => {
+  const _lblRank = g => (g.session_label||'AM').toUpperCase()==='PM'?1:0;
+  const _playerGpsSorted = (pid) => _gpsBase.filter(g=>g.player_id===pid)
+    .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:(a.session_date||'')>(b.session_date||'')?1:_lblRank(a)-_lblRank(b)));
+  // session_order/라벨 기반 GPS duration 조회
+  const _gpsDurByOrder = (pid, sessionOrder, sessionType) => {
     const gList = _playerGpsSorted(pid);
+    // session_type(AM/PM) 우선 매칭, 없으면 order 인덱스
+    const want = (sessionType||'').toUpperCase();
+    if(want){
+      const m = gList.find(g=>(g.session_label||'AM').toUpperCase()===want);
+      if(m) return parseFloat(m.duration)||0;
+    }
     const idx = Math.min((sessionOrder||1)-1, gList.length-1);
     return parseFloat(gList[idx]?.duration)||0;
   };
   const calcAvgSrpe = (gpsArr) => {
     const vals = gpsArr.map(r=>{
-      const ss = sessMap[r.player_id]||[];
+      const ss = _ssFiltered(r.player_id);
       if(!ss.length) return 0;
       if(ss.length === 1) {
         const rpe = parseFloat(ss[0].rpe)||0;
         // session_records.duration 우선, 없으면 session_order 기반 GPS duration
-        const dur = parseFloat(ss[0].duration)||0 || _gpsDurByOrder(r.player_id, ss[0].session_order);
+        const dur = parseFloat(ss[0].duration)||0 || _gpsDurByOrder(r.player_id, ss[0].session_order, ss[0].session_type);
         return rpe && dur ? rpe * dur : 0;
       }
-      return ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0; return a+(rpe&&dur?rpe*dur:0); },0);
+      return ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0||_gpsDurByOrder(r.player_id, s.session_order, s.session_type); return a+(rpe&&dur?rpe*dur:0); },0);
     }).filter(v=>v>0);
     return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : '-';
   };
@@ -12961,7 +13126,10 @@ async function loadTeamSummary(forceDate, quiet=false){
       : rt2 === 'S'
       ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#1a1a2e;color:#9ca3af;font-weight:700;margin-left:4px">S</span>'
       : '';
-    const ss = sessMap[r.player_id]||[];
+    const _ssAll = sessMap[r.player_id]||[];
+    // 세션 필터(AM/PM) 적용 — 통합이면 전체
+    const ss = _tSessFilter==='ALL' ? _ssAll
+      : _ssAll.filter(s=>(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase()===_tSessFilter);
     const s1 = ss.find(s=>s.session_order===1)||ss[0]||{};
     const rpeVals = ss.map(s=>parseFloat(s.rpe)||0).filter(v=>v>0);
     const rpeDisp = rpeVals.length ? rpeVals.join('/') : null;
@@ -12969,10 +13137,10 @@ async function loadTeamSummary(forceDate, quiet=false){
       if(!ss.length) return null;
       if(ss.length === 1) {
         const rpe = parseFloat(ss[0].rpe)||0;
-        const dur = parseFloat(ss[0].duration)||0 || _gpsDurByOrder(r.player_id, ss[0].session_order);
+        const dur = parseFloat(ss[0].duration)||0 || _gpsDurByOrder(r.player_id, ss[0].session_order, ss[0].session_type);
         return rpe && dur ? Math.round(rpe * dur) : null;
       }
-      const total = ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0; return a+(rpe&&dur?rpe*dur:0); },0);
+      const total = ss.reduce((a,s)=>{ const rpe=parseFloat(s.rpe)||0; const dur=parseFloat(s.duration)||0||_gpsDurByOrder(r.player_id, s.session_order, s.session_type); return a+(rpe&&dur?rpe*dur:0); },0);
       return total || null;
     })();
     const w = wellMap[r.player_id]||{};
@@ -13090,7 +13258,24 @@ async function loadTeamSummary(forceDate, quiet=false){
       </div>
     </div>
 
-    <!-- ④ 서브/미엔트리 그룹 -->
+    <!-- ④ 혼합 그룹 (오전/오후 그룹 상이) -->
+    ${mixedGps.length ? `
+    <div style="background:var(--surface);border:1px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:#fbbf24;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
+        ⚠️ 혼합 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(오전/오후 그룹 상이 · ${mixedGps.length}명 — 팀 평균 미반영)</span>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
+        오전·오후 분류가 다른 선수 (예: 오전 S / 오후 M). 하루 전체 합산 기준이며 M그룹 평균에는 포함하지 않습니다.
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+          ${tableHeader}
+          ${renderTable(sortRecordsByPos(mixedGps))}
+        </table>
+      </div>
+    </div>` : ''}
+
+    <!-- ⑤ 서브/미엔트리 그룹 -->
     ${indGps.length ? `
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
@@ -13184,7 +13369,7 @@ async function loadPlayerDashboard(){
 
   const [{data:gps},{data:matchGps},{data:rpeRows},{data:wellRows},{data:injuries},{data:fitnessData}] = await Promise.all([
     supa.from('gps_records')
-      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2')
+      .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2,session_label')
       .eq('player_id',playerId)
       .gte('session_date',sinceStr)
       .order('session_date',{ascending:false}),
@@ -13195,7 +13380,7 @@ async function loadPlayerDashboard(){
       .gte('match_date',sinceStr)
       .order('match_date',{ascending:false}),
     supa.from('session_records')
-      .select('record_date,rpe')
+      .select('record_date,rpe,duration,session_type,session_order')
       .eq('player_id',playerId)
       .gte('record_date',sinceStr)
       .order('record_date',{ascending:false}),
@@ -13266,8 +13451,31 @@ async function loadPlayerDashboard(){
   // 날짜 내림차순 정렬 병합 (같은 날 gps 먼저, 경기 뒤)
   const sessions = [...gpsSessions, ...matchSessions]
     .sort((a,b)=> b.session_date.localeCompare(a.session_date) || (a._source==='match'?1:-1));
-  const rpeMap    = {};
-  (rpeRows||[]).forEach(r=>{ rpeMap[r.record_date]=r; });
+  // GPS duration 폴백 맵 (date__label)
+  const _indGpsDur = {};
+  (gps||[]).forEach(r=>{
+    const key=r.session_date+'__'+(r.session_label||'AM').toUpperCase();
+    if(!_indGpsDur[key]) _indGpsDur[key]=parseFloat(r.duration)||0;
+  });
+  const rpeMap    = {};   // date__LABEL → rpe record (+ date 폴백)
+  const rpeByDate = {};   // date → [session rows]
+  (rpeRows||[]).forEach(r=>{
+    const lbl=(r.session_type||((r.session_order||1)===1?'AM':'PM')).toUpperCase();
+    rpeMap[r.record_date+'__'+lbl]=r;
+    if(!rpeMap[r.record_date]) rpeMap[r.record_date]=r;
+    (rpeByDate[r.record_date]=rpeByDate[r.record_date]||[]).push(r);
+  });
+  // 날짜별 sRPE 합산 (AM+PM rpe×duration, GPS 폴백)
+  const dateSRPE = {};
+  Object.entries(rpeByDate).forEach(([d,recs])=>{
+    const t=recs.reduce((a,s)=>{
+      const rv=parseFloat(s.rpe)||0;
+      const lbl=(s.session_type||((s.session_order||1)===1?'AM':'PM')).toUpperCase();
+      const du=parseFloat(s.duration)||_indGpsDur[d+'__'+lbl]||0;
+      return a+(rv&&du?rv*du:0);
+    },0);
+    if(t>0) dateSRPE[d]=Math.round(t);
+  });
   const wellMap = {};
   (wellRows||[]).forEach(r=>{ wellMap[r.record_date]=r; });
   const wellAvgF = field => {
@@ -13307,7 +13515,9 @@ async function loadPlayerDashboard(){
   const avgPL   = avgF(sessions,'player_load',1);
   const rpeVals = (rpeRows||[]).map(r=>parseFloat(r.rpe)||0).filter(v=>v>0);
   const avgRPE  = rpeVals.length ? parseFloat((rpeVals.reduce((a,b)=>a+b,0)/rpeVals.length).toFixed(1)) : null;
-  const avgSRPE = avgDur&&avgRPE ? Math.round(avgDur*avgRPE) : null;
+  // 일자별 AM+PM 합산 sRPE의 평균
+  const _srpeVals = Object.values(dateSRPE);
+  const avgSRPE = _srpeVals.length ? Math.round(_srpeVals.reduce((a,b)=>a+b,0)/_srpeVals.length) : null;
   const avgFmpRM = avgF(sessions,'fmp_run_medium',1);
   const avgFmpRH = avgF(sessions,'fmp_run_high',1);
   const avgFmpDM = avgF(sessions,'fmp_dyn_medium',1);
@@ -13346,7 +13556,8 @@ async function loadPlayerDashboard(){
 
   const sessionRows = sessions.map(r=>{
     const isMatch = r._source === 'match';
-    const rpe    = rpeMap[r.session_date];
+    const _lbl   = (r.session_label||'AM').toUpperCase();
+    const rpe    = rpeMap[r.session_date+'__'+_lbl] || rpeMap[r.session_date];
     const rpeVal = parseFloat(rpe?.rpe)||null;
     const dur    = parseFloat(r.duration)||null;
     const sRPE   = rpeVal&&dur ? Math.round(dur*rpeVal) : null;
@@ -14589,10 +14800,10 @@ async function runInjuryRiskAnalysis(){
   // 데이터 병렬 조회
   const [{data:gpsAll}, {data:rpeAll}, {data:wellAll}, {data:injuredNow}] = await Promise.all([
     supa.from('gps_records')
-      .select('player_id,session_date,max_speed,duration,session_type2')
+      .select('player_id,session_date,max_speed,duration,session_type2,session_label')
       .gte('session_date', since28Str).order('session_date', {ascending:false}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe,duration')
+      .select('player_id,record_date,rpe,duration,session_type,session_order')
       .gte('record_date', since28Str),
     supa.from('wellness_records')
       .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
@@ -14619,16 +14830,24 @@ async function runInjuryRiskAnalysis(){
 
     if(!pgps.length && !prpe.length) continue; // 데이터 없는 선수 스킵
 
-    // session별 sRPE 집계 (date → {rpe, dur})
-    const rpeMap = {};
-    prpe.forEach(r => { rpeMap[r.record_date] = { rpe: parseFloat(r.rpe)||0, dur: parseFloat(r.duration)||0 }; });
-    // GPS에서도 duration 보완
-    pgps.forEach(r => {
-      if(!rpeMap[r.session_date]) rpeMap[r.session_date] = { rpe:0, dur: parseFloat(r.duration)||0 };
-      else if(!rpeMap[r.session_date].dur) rpeMap[r.session_date].dur = parseFloat(r.duration)||0;
+    // GPS duration 폴백 맵 (date__label)
+    const _pGpsDur = {};
+    pgps.forEach(r=>{
+      const key=r.session_date+'__'+(r.session_label||'AM').toUpperCase();
+      if(!_pGpsDur[key]) _pGpsDur[key]=parseFloat(r.duration)||0;
     });
+    // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×duration, GPS 폴백)
+    const srpeByDate = {};
+    prpe.forEach(r => {
+      const rv=parseFloat(r.rpe)||0;
+      const lbl=(r.session_type||((r.session_order||1)===1?'AM':'PM')).toUpperCase();
+      const du=parseFloat(r.duration)||_pGpsDur[r.record_date+'__'+lbl]||0;
+      srpeByDate[r.record_date]=(srpeByDate[r.record_date]||0)+(rv&&du?rv*du:0);
+    });
+    pgps.forEach(r => { if(!(r.session_date in srpeByDate)) srpeByDate[r.session_date]=0; });
 
-    const sessionsForACWR = Object.entries(rpeMap).map(([date, v]) => ({ date, rpe: v.rpe, dur: v.dur }));
+    // calcACWR는 rpe×dur로 sRPE 계산 → dur=1, rpe=합산sRPE 로 전달
+    const sessionsForACWR = Object.entries(srpeByDate).map(([date, srpe]) => ({ date, rpe: srpe, dur: 1 }));
     const sessionsForMV   = pgps.map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed)||0 }));
 
     // 모듈 계산
