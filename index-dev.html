@@ -839,6 +839,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div id="pv-training" style="display:none">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
       <input type="date" id="training-report-date" style="padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px">
+      <select id="training-session-filter" style="padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:13px">
+        <option value="ALL">통합 (AM+PM)</option>
+        <option value="AM">오전 (AM)</option>
+        <option value="PM">오후 (PM)</option>
+      </select>
       <button onclick="runTrainingReport()" class="btn-exp pri" style="padding:7px 16px">📋 보고서 생성</button>
     </div>
     <div id="training-report-output">
@@ -9036,17 +9041,15 @@ async function loadMorningReport(){
     rhie: Math.round(trainAvg(todayGpsM,'rhie')||0),
   };
 
-  // ── 주간 목표 합산 (REST 제외, 오늘까지만) ──
-  // 오늘 GPS 유무에 따라 기준일 결정
-  // GPS 있음 → 오늘까지 목표 vs 오늘까지 실제
-  // GPS 없음 → 어제까지 목표 vs 어제까지 실제
+  // ── 주간 목표 합산 (REST 제외, 항상 오늘까지) ──
+  // 목표: 항상 오늘까지 합산 (GPS 유무 무관)
+  // 실제: GPS 있는 날까지만 합산
   const todayHasGps = todayGpsM.length > 0;
-  const weekCutDate = todayHasGps ? today : yesterdayStr;
-  const weekCutLabel = todayHasGps ? '오늘' : '어제';
+  const weekCutLabel = todayHasGps ? '오늘' : '오늘';
 
   const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
   const weekTargetSet = { td:false, hsr:false, spr:false, acc:false, rhie:false };
-  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=weekCutDate&&r.day_label!=='REST').forEach(r=>{
+  (weekBlockDays||[]).filter(r=>r.plan_date>=weekStartStr&&r.plan_date<=today&&r.day_label!=='REST').forEach(r=>{
     if(r.td_target   != null){ weekTargetSum.td   += r.td_target;   weekTargetSet.td   = true; }
     if(r.hsr_target  != null){ weekTargetSum.hsr  += r.hsr_target;  weekTargetSet.hsr  = true; }
     if(r.spr_target  != null){ weekTargetSum.spr  += r.spr_target;  weekTargetSet.spr  = true; }
@@ -9054,8 +9057,9 @@ async function loadMorningReport(){
     if(r.rhie_target != null){ weekTargetSum.rhie += r.rhie_target; weekTargetSet.rhie = true; }
   });
 
-  // 주간 실제 (weekCutDate까지의 GPS 기반)
-  const weekGpsCut = (weekGps||[]).filter(r=>r.session_date<=weekCutDate);
+  // 주간 실제 (GPS 있는 날까지만, 오늘 GPS 없어도 목표는 오늘 포함)
+  const weekActualCutDate = todayHasGps ? today : yesterdayStr;
+  const weekGpsCut = (weekGps||[]).filter(r=>r.session_date<=weekActualCutDate);
   const weekCutDates = [...new Set(weekGpsCut.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M').map(r=>r.session_date))];
   const weekActualTD   = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'td')||0); },0);
   const weekActualHSR  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'running_high')||0); },0);
@@ -12194,9 +12198,9 @@ async function buildWeeklyLoadHtml(forDate){
 
   const [{data:wkGps},{data:rpe28w},{data:matchRaw},{data:weekSched}]=await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label')
       .gte('session_date',weekStartStr).lte('session_date',forDate)
-      .order('session_date',{ascending:true}),
+      .order('session_date',{ascending:true}).order('session_label',{ascending:true}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration')
       .gte('record_date',since28Str),
@@ -12207,6 +12211,14 @@ async function buildWeeklyLoadHtml(forDate){
       .select('event_date,md_stage,title,start_time')
       .gte('event_date',weekStartStr).lte('event_date',weekEndStr),
   ]);
+
+  // 훈련 모드 세션 필터 (AM/PM/ALL) — _trainingMode일 때만 적용
+  const _sessFilter = window._trainingMode ? (window._trainingSessionFilter || 'ALL') : 'ALL';
+  const _filteredWkGps = _sessFilter === 'ALL'
+    ? (wkGps||[])
+    : (wkGps||[]).filter(r => (r.session_label||'AM').toUpperCase() === _sessFilter);
+  // 이하 wkGps 참조를 _filteredWkGps로 사용 (훈련 모드 한정)
+  const _wkGps = window._trainingMode ? _filteredWkGps : (wkGps||[]);
 
   const weekDates=[];
   for(let i=0;i<7;i++){const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);weekDates.push(d.toISOString().split('T')[0]);}
@@ -12387,12 +12399,10 @@ async function buildWeeklyLoadHtml(forDate){
       return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+c+';font-weight:700">'+p+'%</span>';
     };
 
-    // 이번 주 실제 누적 (M 기준)
-    const wkMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    // 이번 주 실제 누적 (M 기준, GPS 있는 날만, 세션 필터 적용)
+    const wkMGps = _wkGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
     const wkMDates = [...new Set(wkMGps.map(r=>r.session_date))];
     const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
-    const wkTargetSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
-    const wkTargetSet = {td:false,hsr:false,spr:false,acc:false,rhie:false};
     wkMDates.forEach(dd=>{
       const dg=wkMGps.filter(r=>r.session_date===dd);
       const _tAvg=(arr,f)=>{const vrs=arr.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return 0;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:0;};
@@ -12401,6 +12411,11 @@ async function buildWeeklyLoadHtml(forDate){
       wkSum.spr += _tAvg(dg,'sprint');
       wkSum.acc += _tAvg(dg,'accel');
       wkSum.rhie+= _tAvg(dg,'rhie');
+    });
+    // 이번 주 목표 누적 (오늘까지의 block_days 기준, GPS 유무 무관)
+    const wkTargetSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
+    const wkTargetSet = {td:false,hsr:false,spr:false,acc:false,rhie:false};
+    weekDates.filter(dd=>dd<=forDate&&bdMap[dd]&&bdMap[dd].day_label!=='REST').forEach(dd=>{
       const bd2=bdMap[dd];
       if(bd2?.td_target!=null){wkTargetSum.td+=bd2.td_target;wkTargetSet.td=true;}
       if(bd2?.hsr_target!=null){wkTargetSum.hsr+=bd2.hsr_target;wkTargetSet.hsr=true;}
@@ -12436,11 +12451,11 @@ async function buildWeeklyLoadHtml(forDate){
     const bdRows = trainRows; // 하위 호환용
 
     // [2] 오늘 목표 vs 달성 + 이번 주 누적 (나란히)
-    const wkCutLabel = wkMDates.includes(forDate) ? '오늘' : '어제';
+    const wkCutLabel = '오늘';
     const todayActual = { // forDate GPS 팀 평균
       td:null, hsr:null, spr:null, acc:null, rhie:null
     };
-    const todayGpsList = (wkGps||[]).filter(r=>r.session_date===forDate&&(r.session_type2||'').trim().toUpperCase()==='M');
+    const todayGpsList = _wkGps.filter(r=>r.session_date===forDate&&(r.session_type2||'').trim().toUpperCase()==='M');
     if(todayGpsList.length){
       const _ta=(f)=>{const vrs=todayGpsList.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return null;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:null;};
       todayActual.td  = _ta('td');
@@ -12491,7 +12506,7 @@ async function buildWeeklyLoadHtml(forDate){
 
     if(bdRows || todayBd) {
       periodHeader = '<div style="background:var(--surface);border:0.5px solid rgba(99,102,241,0.4);border-radius:10px;padding:14px;margin-bottom:10px">'
-        +'<div style="font-size:12px;font-weight:600;color:#a5b4fc;margin-bottom:10px">📅 이번 주 훈련 목표 (주기화) · '+weekStartStr+' ~ '+weekEndStr+'</div>'
+        +'<div style="font-size:12px;font-weight:600;color:#a5b4fc;margin-bottom:10px">📅 이번 주 훈련 목표 (주기화) · '+weekStartStr+' ~ '+weekEndStr+(_sessFilter!=='ALL'?(' <span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(99,102,241,0.15);color:#c4b5fd;font-weight:700;margin-left:4px">'+_sessFilter+'</span>'):'')+'</div>'
         +((trainRows||restRows)?'<div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:8px"><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
         +'<thead><tr style="background:var(--surface2)">'+'<th style="padding:5px 8px;text-align:left;color:var(--text3);font-weight:500;white-space:nowrap;width:1%">날짜</th>'+'<th style="padding:5px 8px;text-align:center;color:var(--text3);font-weight:500;white-space:nowrap;width:1%">MD</th>'+'<th style="padding:5px 8px;text-align:center;color:#60a5fa;font-weight:500">TD 목표</th>'+'<th style="padding:5px 8px;text-align:center;color:#f59e0b;font-weight:500">HSR 목표</th>'+'<th style="padding:5px 8px;text-align:center;color:#ef4444;font-weight:500">Sprint 목표</th>'+'<th style="padding:5px 8px;text-align:center;color:#fb923c;font-weight:500">가속 목표</th>'+'<th style="padding:5px 8px;text-align:center;color:#34d399;font-weight:500">RHIE 목표</th>'+'</tr></thead>'
         +'<tbody>'+trainRows+(restRows?restRows:'')+'</tbody></table></div></div>':'')
@@ -12949,10 +12964,13 @@ async function loadTeamSummary(forceDate, quiet=false){
 
   // ── 훈련 보고서 액션바 ──
   window._trainingReportDate = date;
+  const _sessLabel = window._trainingSessionFilter==='AM' ? ' · <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:rgba(99,102,241,0.15);color:#a5b4fc">AM 오전</span>'
+    : window._trainingSessionFilter==='PM' ? ' · <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:rgba(99,102,241,0.15);color:#a5b4fc">PM 오후</span>'
+    : ' · <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.1);color:#4ade80">통합</span>';
   const tPrintBar = `
     <div id="training-report-action-bar" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:600;color:var(--text2)">
-        📋 훈련 데이터 보고서 &nbsp;—&nbsp; <span style="color:var(--accent2)">${date}</span>
+        📋 훈련 데이터 보고서 &nbsp;—&nbsp; <span style="color:var(--accent2)">${date}</span>${_sessLabel}
       </div>
       <div style="display:flex;gap:8px">
         <button onclick="printTrainingReport()" style="font-size:12px;padding:7px 14px;border-radius:7px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-family:inherit;font-weight:600">
@@ -19852,6 +19870,8 @@ function printTrainingReport(){
   if(!w){ alert('팝업이 차단되어 있습니다. 팝업을 허용한 후 다시 시도하세요.'); return; }
   const now = new Date();
   const printDate = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  const _sf = window._trainingSessionFilter||'ALL';
+  const _sfLabel = _sf==='AM' ? ' · AM 오전' : _sf==='PM' ? ' · PM 오후' : '';
   w.document.write(`<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -19958,7 +19978,7 @@ function printTrainingReport(){
       <div class="report-logo">⚽</div>
       <div>
         <div class="report-org">Busan IPark FC &nbsp;·&nbsp; Physical Performance</div>
-        <div class="report-title">훈련 데이터 보고서</div>
+        <div class="report-title">훈련 데이터 보고서${_sfLabel}</div>
         <div class="report-sub">${date}</div>
       </div>
     </div>
@@ -19986,6 +20006,8 @@ function downloadTrainingReportHTML(){
   const printContent = _getTrainingReportPrintContent();
   const now = new Date();
   const printDate = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}`;
+  const _sf2 = window._trainingSessionFilter||'ALL';
+  const _sfLabel2 = _sf2==='AM' ? ' · AM 오전' : _sf2==='PM' ? ' · PM 오후' : '';
   const html = `<!DOCTYPE html>
 <html lang="ko"><head>
 <meta charset="UTF-8">
@@ -20027,7 +20049,7 @@ function downloadTrainingReportHTML(){
     <div class="lh-ico">⚽</div>
     <div>
       <div style="font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px">Busan IPark FC · Physical Performance</div>
-      <div class="lh-t">훈련 데이터 보고서</div>
+      <div class="lh-t">훈련 데이터 보고서${_sfLabel2}</div>
       <div class="lh-s">${date}</div>
     </div>
   </div>
@@ -23918,6 +23940,7 @@ async function runTrainingReport(){
 
   // 1. 훈련 모드 플래그 설정
   window._trainingMode = true;
+  window._trainingSessionFilter = document.getElementById('training-session-filter')?.value || 'ALL';
 
   // 2. team-date 동기화 후 loadTeamSummary 호출
   const teamDateEl = document.getElementById('team-date');
