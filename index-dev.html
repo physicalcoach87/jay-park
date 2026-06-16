@@ -12405,17 +12405,19 @@ async function buildWeeklyLoadHtml(forDate){
     const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
     wkMDates.forEach(dd=>{
       const dg=wkMGps.filter(r=>r.session_date===dd);
-      const _tAvg=(arr,f)=>{const vrs=arr.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return 0;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:0;};
-      wkSum.td  += _tAvg(dg,'td');
-      wkSum.hsr += _tAvg(dg,'running_high');
-      wkSum.spr += _tAvg(dg,'sprint');
-      wkSum.acc += _tAvg(dg,'accel');
-      wkSum.rhie+= _tAvg(dg,'rhie');
+      wkSum.td  += _trainAvg(dg,'td')||0;
+      wkSum.hsr += _trainAvg(dg,'running_high')||0;
+      wkSum.spr += _trainAvg(dg,'sprint')||0;
+      wkSum.acc += _trainAvg(dg,'accel')||0;
+      wkSum.rhie+= _trainAvg(dg,'rhie')||0;
     });
-    // 이번 주 목표 누적 (오늘까지의 block_days 기준, GPS 유무 무관)
+    // 이번 주 목표 누적: AM/PM 필터시 해당 세션 GPS 있는 날만, 통합은 모든 훈련일
     const wkTargetSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
     const wkTargetSet = {td:false,hsr:false,spr:false,acc:false,rhie:false};
-    weekDates.filter(dd=>dd<=forDate&&bdMap[dd]&&bdMap[dd].day_label!=='REST').forEach(dd=>{
+    const wkDaysWithSessData = _sessFilter==='ALL'
+      ? null  // null = 제한 없음
+      : new Set(wkMGps.map(r=>r.session_date));
+    weekDates.filter(dd=>dd<=forDate&&bdMap[dd]&&bdMap[dd].day_label!=='REST'&&(wkDaysWithSessData===null||wkDaysWithSessData.has(dd))).forEach(dd=>{
       const bd2=bdMap[dd];
       if(bd2?.td_target!=null){wkTargetSum.td+=bd2.td_target;wkTargetSet.td=true;}
       if(bd2?.hsr_target!=null){wkTargetSum.hsr+=bd2.hsr_target;wkTargetSet.hsr=true;}
@@ -12457,12 +12459,11 @@ async function buildWeeklyLoadHtml(forDate){
     };
     const todayGpsList = _wkGps.filter(r=>r.session_date===forDate&&(r.session_type2||'').trim().toUpperCase()==='M');
     if(todayGpsList.length){
-      const _ta=(f)=>{const vrs=todayGpsList.filter(r=>parseFloat(r[f])>0&&parseFloat(r.duration)>0);if(!vrs.length)return null;const dc={};vrs.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});const md=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1])[0][0]);const sv=vrs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*md:null;};
-      todayActual.td  = _ta('td');
-      todayActual.hsr = _ta('running_high');
-      todayActual.spr = _ta('sprint');
-      todayActual.acc = _ta('accel');
-      todayActual.rhie= _ta('rhie');
+      todayActual.td  = _trainAvg(todayGpsList,'td');
+      todayActual.hsr = _trainAvg(todayGpsList,'running_high');
+      todayActual.spr = _trainAvg(todayGpsList,'sprint');
+      todayActual.acc = _trainAvg(todayGpsList,'accel');
+      todayActual.rhie= _trainAvg(todayGpsList,'rhie');
     }
     const todayDayLabel = todayBd?.day_label || '—';
     const _wRow = (label, act, tgt, tgtSet, unit, color) => {
