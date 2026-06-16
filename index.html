@@ -12399,12 +12399,18 @@ async function buildWeeklyLoadHtml(forDate){
       return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+c+';font-weight:700">'+p+'%</span>';
     };
 
-    // 이번 주 실제 누적 (M 기준, GPS 있는 날만, 세션 필터 적용)
+    // 이번 주 실제 누적:
+    // - 오늘(forDate): 선택한 세션 필터 적용 (AM/PM/통합)
+    // - 이전 날짜: 항상 전체 세션(통합) — 완료된 하루 전체를 반영
+    const wkAllMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
     const wkMGps = _wkGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
-    const wkMDates = [...new Set(wkMGps.map(r=>r.session_date))];
+    const wkAllDates = [...new Set(wkAllMGps.map(r=>r.session_date))];
     const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
-    wkMDates.forEach(dd=>{
-      const dg=wkMGps.filter(r=>r.session_date===dd);
+    wkAllDates.forEach(dd=>{
+      // 오늘은 선택 세션 필터 적용, 이전 날은 전체
+      const dg = (dd===forDate)
+        ? wkMGps.filter(r=>r.session_date===dd)
+        : wkAllMGps.filter(r=>r.session_date===dd);
       wkSum.td  += _trainAvg(dg,'td')||0;
       wkSum.hsr += _trainAvg(dg,'running_high')||0;
       wkSum.spr += _trainAvg(dg,'sprint')||0;
