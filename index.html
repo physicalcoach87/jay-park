@@ -16618,14 +16618,14 @@ async function generateGroupCardio(){
     });
 
     // 선수 명단
-    const playerRows = g.players.map(p=>
-      `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#f9fafb;border-radius:5px;border:1px solid #e5e7eb;font-size:12px">
-        <span style="font-weight:600;color:#111">${p.name}</span>
-        <span style="font-size:11px;color:${pc.tc};font-weight:700">${p.mas}</span>
-      </span>`
+    const playerRows = g.players.map((p,pi)=>
+      `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;${pi>0?'border-top:1px solid #f3f4f6;':''}">
+        <span style="font-size:12px;font-weight:600;color:#111">${p.name}</span>
+        <span style="font-size:12px;font-weight:700;color:${pc.tc}">${p.mas}</span>
+      </div>`
     ).join('');
 
-    html += `<div style="padding:10px 16px;border-top:1px solid #e5e7eb;background:#fafafa;display:flex;flex-wrap:wrap;gap:6px">
+    html += `<div style="padding:8px 14px;border-top:1px solid #e5e7eb;background:#fafafa">
       ${playerRows}
     </div>`;
 
