@@ -1161,19 +1161,20 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="group-player-list"></div>
   </div>
 
-  <!-- ① 컨트롤 -->
-  <div id="cardio-ind-controls" class="ctrls g4" style="margin-bottom:12px;align-items:end">
+  <!-- ① 컨트롤 — 시즌/단계/목적은 개인·단체 공통, 선수선택은 개인 전용 -->
+  <div class="ctrls g3" style="margin-bottom:12px;align-items:end">
     <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end">
-      <label>선수 선택
-        <button onclick="openPlayerMgmt()" style="margin-left:6px;font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:inherit">관리</button>
-      </label>
-      <select id="cardio-player" onchange="onCardioPlayerSelect()">
-        <option value="">선수를 선택하세요</option>
+      <label>시즌 단계</label>
+      <select id="cardio-season" onchange="onCardioSeasonChange()">
+        <option value="inseason">시즌 중</option>
+        <option value="preseason">프리시즌</option>
+        <option value="offseason">오프시즌</option>
+        <option value="rehab">재활기</option>
       </select>
     </div>
     <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end">
-      <label>MD 단계</label>
-      <select id="cardio-md" onchange="renderCardioRecommendation()">
+      <label>세부 단계</label>
+      <select id="cardio-phase" onchange="renderCardioRecommendation()">
         <option value="MD5">MD-5 — 회복 / 유지</option>
         <option value="MD4">MD-4 — 볼륨 축적</option>
         <option value="MD3" selected>MD-3 — 최대 부하</option>
@@ -1181,7 +1182,31 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <option value="MD1">MD-1 — 테이퍼링</option>
       </select>
     </div>
+    <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end">
+      <label>훈련 목적</label>
+      <select id="cardio-purpose" onchange="renderCardioRecommendation()">
+        <option value="recovery">회복</option>
+        <option value="aerobic">유산소 기반</option>
+        <option value="threshold">젖산 역치</option>
+        <option value="vo2max" selected>VO₂max</option>
+        <option value="speed_endurance">속도 지구력</option>
+        <option value="alactic">알락틱 스프린트</option>
+      </select>
+    </div>
   </div>
+  <!-- 개인 처방 전용: 선수 선택 -->
+  <div id="cardio-ind-controls" style="margin-bottom:12px">
+    <div class="ctrl" style="display:flex;flex-direction:column;justify-content:flex-end;max-width:240px">
+      <label>선수 선택
+        <button onclick="openPlayerMgmt()" style="margin-left:6px;font-size:10px;padding:2px 7px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);cursor:pointer;font-family:inherit">관리</button>
+      </label>
+      <select id="cardio-player" onchange="onCardioPlayerSelect()">
+        <option value="">선수를 선택하세요</option>
+      </select>
+    </div>
+  </div>
+  <!-- 숨겨진 MD 호환용 (기존 코드 참조용) -->
+  <input type="hidden" id="cardio-md" value="MD3">
 
   <!-- ② 선수 피지컬 패널 -->
   <div id="cardio-player-info" style="display:none;background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:12px">
@@ -16196,6 +16221,7 @@ function setCardioMode(mode){
   const out = document.getElementById('cardio-output');
   if(out) out.innerHTML = '';
   if(isGroup){ renderCardioPlayerChecks(); computeGroupAssignments(); renderGroupPlayerList(); }
+  onCardioSeasonChange();
 }
 
 // 포지션 → 그룹 매핑
@@ -16413,8 +16439,13 @@ async function generateGroupCardio(){
   }
   if(allBlocks.length===0){ alert('운동 유형을 선택하거나 블록을 추가해주세요'); return; }
 
-  const md      = document.getElementById('cardio-md')?.value||'MD3';
-  const mdLabel = {'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
+  const seasonVal2  = document.getElementById('cardio-season')?.value  || 'inseason';
+  const purposeVal2 = document.getElementById('cardio-purpose')?.value || 'vo2max';
+  const phaseEl2    = document.getElementById('cardio-phase');
+  const phaseLabel2 = phaseEl2?.options[phaseEl2?.selectedIndex]?.text?.split('—')[0]?.trim() || 'MD-3';
+  const seasonLabel2= {inseason:'시즌 중', preseason:'프리시즌', offseason:'오프시즌', rehab:'재활기'}[seasonVal2]||seasonVal2;
+  const purposeLabel2={recovery:'회복', aerobic:'유산소 기반', threshold:'젖산 역치', vo2max:'VO₂max', speed_endurance:'속도 지구력', alactic:'알락틱'}[purposeVal2]||purposeVal2;
+  const mdLabel = `${seasonLabel2} · ${phaseLabel2} · ${purposeLabel2}`;
 
   // 시간 문자열 → "X min Y sec" 정규화
   function fmtTime(str){
@@ -16451,9 +16482,11 @@ async function generateGroupCardio(){
     if(ex.paramType==='set_rep_rest'){
       const d = spd ? calcDist(spd, ws) : null;
       const total = sets*reps;
+      // 총시간 = work + rep간 휴식(work:rest 1:1) + 세트간 휴식
+      const totalSec = ws*sets*(2*reps-1) + (sets-1)*(setRestMin*60);
       m.structure = `${sets}세트 × ${reps}rep`;
       m.distPerRep= d ? `${d} m` : '—';
-      m.totalWork = `${ws*total} 초`;
+      m.totalWork = `${totalSec} 초`;
       m.setRest   = `${setRestMin} min`;
       m.totalDist = d ? `${(d*total).toLocaleString()} m` : '—';
     } else if(ex.paramType==='time_only'){
@@ -16540,7 +16573,8 @@ async function generateGroupCardio(){
     const stat1Label   = b.ex.paramType==='set_rep_rest'||b.ex.paramType==='rhie_sprint' ? `${b.ex.workSec}초 거리`
                        : b.ex.paramType==='set_time_rest'        ? '세트 거리'
                        : b.ex.paramType==='set_time_rest_perset' ? `${b.workMin}분 거리` : '';
-    return {b, locLabel, structureStr, setRestStr, useThreeStat, stat1Label};
+    const codStr = (b.codAngle > 0) ? ` · ${b.codAngle}° 턴 ${b.codCount}회/rep` : '';
+    return {b, locLabel, structureStr, setRestStr, useThreeStat, stat1Label, codStr};
   });
 
   // ② 그룹별 카드 (그룹 헤더 → 블록별 행 → 선수 명단)
@@ -16560,7 +16594,7 @@ async function generateGroupCardio(){
     html += `<div style="background:#fff">`;
 
     // 블록별 행
-    blockMeta.forEach(({b, locLabel, structureStr, setRestStr, useThreeStat, stat1Label}, bi)=>{
+    blockMeta.forEach(({b, locLabel, structureStr, setRestStr, useThreeStat, stat1Label, codStr}, bi)=>{
       // 세트별 강도인 경우 평균으로 대표 속도 계산
       const effIntensity = b.intensity || (b.perSetIntensities?.length
         ? b.perSetIntensities.reduce((a,v)=>a+v,0)/b.perSetIntensities.length : 0);
@@ -16593,7 +16627,8 @@ async function generateGroupCardio(){
       } else if(m.distPerRep && m.distPerRep!=='—'){
         statCells.push({val:m.distPerRep.replace(' m','').replace(',',''), unit:'m', label:stat1Label||'세트 거리'});
       }
-      if(pace100)  statCells.push({val:pace100, unit:'', label:'100m 페이스'});
+      if(pace100) statCells.push({val:pace100, unit:'', label:'100m 페이스'});
+      else if(b.ex.paramType==='set_rep_rest') statCells.push({val: b.codAngle > 0 ? `${b.codAngle}° × ${b.codCount}회` : '없음 (직선)', unit:'', label:'방향전환 (rep당)'});
       if(speedKmh) statCells.push({val:`${speedKmh}`, unit:'km/h', label:`목표속도 (${effIntLabel}%)`});
       if(m.totalDist && m.totalDist!=='—') statCells.push({val:m.totalDist, unit:'', label:'총 거리', highlight:true});
       if(m.totalWork && m.totalWork!=='—') statCells.push({val:fmtTime(m.totalWork), unit:'', label:'총 시간'});
@@ -16601,7 +16636,7 @@ async function generateGroupCardio(){
       const statGrid = statCells.map((c,ci)=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;${ci>0?'border-top:1px solid #f3f4f6;':''}">
           <span style="font-size:10px;color:#9ca3af">${c.label}</span>
-          <span style="font-size:12px;font-weight:800;color:${c.highlight?pc.tc:'#111'};white-space:nowrap">${c.val}<span style="font-size:9px;font-weight:400;color:#6b7280;margin-left:2px">${c.unit}</span></span>
+          <span style="font-size:11px;font-weight:700;color:${c.highlight?pc.tc:'#111'};white-space:nowrap">${c.val}<span style="font-size:9px;font-weight:400;color:#6b7280;margin-left:2px">${c.unit}</span></span>
         </div>`).join('');
 
       const blockBadge = allBlocks.length>1
@@ -16611,7 +16646,7 @@ async function generateGroupCardio(){
       html += `<div style="margin:8px 10px;${bi>0?'margin-top:0':''}border-radius:8px;background:#f8fafc;border:1px solid #e5e7eb;overflow:hidden">
         <div style="padding:8px 12px;background:${pc.bg||'#f1f5f9'};border-bottom:1px solid #e5e7eb">
           <div style="font-size:11px;font-weight:700;color:#111">${blockBadge}${b.ex.name}</div>
-          <div style="font-size:9px;color:#6b7280;margin-top:2px">${structureStr}${setRestStr?` · ${setRestStr}`:''}</div>
+          <div style="font-size:9px;color:#6b7280;margin-top:2px">${structureStr}${setRestStr?` · ${setRestStr}`:''}${codStr||''}</div>
         </div>
         <div style="padding:8px 12px">${statGrid}</div>
       </div>`;
@@ -16634,7 +16669,7 @@ async function generateGroupCardio(){
   html += `</div>`;
 
   // ④ 코칭 포인트
-  const coachNote = getCardioCoachNote(allBlocks[allBlocks.length-1].ex.id, md);
+  const coachNote = getCardioCoachNote(allBlocks[allBlocks.length-1].ex.id, document.getElementById('cardio-phase')?.value||'MD3');
   html += `<div style="padding:9px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;line-height:1.7;margin-top:14px;margin-bottom:8px">💬 ${coachNote}</div>`;
   html += `<div class="export-bar no-print" style="display:flex;gap:8px;flex-wrap:wrap">
     <button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button>
@@ -16708,10 +16743,10 @@ const CARDIO_EX_DATA = {
       domain:'90–105% MAS', mdOptimal:'MD-3~4',
       exercises: [
         {id:'vo2_4min', name:'4분 인터벌', paramType:'set_time_rest_perset',
-         intensityUnit:'% MAS', intensityRange:[95,105],
+         intensityUnit:'% MAS', intensityRange:[100,105],
          desc:'Cardiac output 최대화. 4분 연속 운동.'},
         {id:'vo2_2min', name:'2분 인터벌', paramType:'set_time_rest_perset',
-         intensityUnit:'% MAS', intensityRange:[95,110],
+         intensityUnit:'% MAS', intensityRange:[105,110],
          desc:'VO₂max 간헐적 자극. 더 높은 강도 가능.'}
       ]
     },
@@ -16720,16 +16755,16 @@ const CARDIO_EX_DATA = {
       domain:'100–130% MAS', mdOptimal:'MD-2~3',
       exercises: [
         {id:'vo2_30s', name:'30-30', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[115,130], workSec:30,
+         intensityUnit:'% MAS', intensityRange:[110,130], workSec:30,
          desc:'VO₂max 누적 자극. Work:Rest = 30:30초.'},
         {id:'vo2_20s', name:'20-20', paramType:'set_rep_rest',
          intensityUnit:'% MAS', intensityRange:[115,130], workSec:20,
          desc:'짧은 반복 VO₂max. Work:Rest = 20:20초.'},
         {id:'vo2_15s', name:'15-15', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[115,130], workSec:15,
+         intensityUnit:'% MAS', intensityRange:[120,130], workSec:15,
          desc:'PCr + VO₂max 혼합. Work:Rest = 15:15초.'},
         {id:'vo2_10s', name:'10-10', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[115,130], workSec:10,
+         intensityUnit:'% MAS', intensityRange:[120,130], workSec:10,
          desc:'신경근 + VO₂max. Work:Rest = 10:10초.'}
       ]
     },
@@ -16800,10 +16835,10 @@ const CARDIO_EX_DATA = {
       domain:'90–105% MAS 상당', mdOptimal:'MD-3~4',
       exercises: [
         {id:'tm_vo2_4min', name:'4분 인터벌', paramType:'set_time_rest_perset',
-         intensityUnit:'% MAS', intensityRange:[90,105],
+         intensityUnit:'% MAS', intensityRange:[100,105],
          desc:'4분 고강도 + 휴식. VO₂max 자극.'},
         {id:'tm_vo2_2min', name:'2분 인터벌', paramType:'set_time_rest_perset',
-         intensityUnit:'% MAS', intensityRange:[90,105],
+         intensityUnit:'% MAS', intensityRange:[105,110],
          desc:'2분 고강도 반복. RPE 8–9.'}
       ]
     },
@@ -16812,16 +16847,16 @@ const CARDIO_EX_DATA = {
       domain:'100–130% MAS 상당', mdOptimal:'MD-2~3',
       exercises: [
         {id:'tm_30s', name:'30-30', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[100,130], workSec:30,
+         intensityUnit:'% MAS', intensityRange:[110,130], workSec:30,
          desc:'30초 고강도 / 30초 회복.'},
         {id:'tm_20s', name:'20-20', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[100,130], workSec:20,
+         intensityUnit:'% MAS', intensityRange:[115,130], workSec:20,
          desc:'20초 고강도 / 20초 회복.'},
         {id:'tm_15s', name:'15-15', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[100,130], workSec:15,
+         intensityUnit:'% MAS', intensityRange:[120,130], workSec:15,
          desc:'15초 고강도 / 15초 회복.'},
         {id:'tm_10s', name:'10-10', paramType:'set_rep_rest',
-         intensityUnit:'% MAS', intensityRange:[100,130], workSec:10,
+         intensityUnit:'% MAS', intensityRange:[120,130], workSec:10,
          desc:'10초 고강도 / 10초 회복.'}
       ]
     }
@@ -17024,79 +17059,221 @@ function setCardioEx(exId){
 }
 
 // ── 시스템 추천 렌더 ──────────────────────────
+// ── 시즌 단계 변경 → 세부 단계 옵션 업데이트 ──
+function onCardioSeasonChange(){
+  const season = document.getElementById('cardio-season')?.value;
+  const phaseEl = document.getElementById('cardio-phase');
+  if(!phaseEl) return;
+  const opts = {
+    inseason: [
+      {v:'MD5', l:'MD-5 — 회복 / 유지'},
+      {v:'MD4', l:'MD-4 — 볼륨 축적'},
+      {v:'MD3', l:'MD-3 — 최대 부하', sel:true},
+      {v:'MD2', l:'MD-2 — 고강도 / 저볼륨'},
+      {v:'MD1', l:'MD-1 — 테이퍼링'},
+    ],
+    preseason: [
+      {v:'pre_early',  l:'초기 — 체력 기반 구축', sel:true},
+      {v:'pre_mid',    l:'중기 — 강도 축적'},
+      {v:'pre_late',   l:'후기 — 시합 준비'},
+    ],
+    offseason: [
+      {v:'off_rest',   l:'완전 휴식 후 복귀', sel:true},
+      {v:'off_base',   l:'일반 체력 유지'},
+    ],
+    rehab: [
+      {v:'rehab_early', l:'초기 재활 — 저강도', sel:true},
+      {v:'rehab_late',  l:'후기 재활 — 복귀 준비'},
+    ],
+  };
+  phaseEl.innerHTML = (opts[season]||opts.inseason).map(o=>`<option value="${o.v}"${o.sel?' selected':''}>${o.l}</option>`).join('');
+  renderCardioRecommendation();
+}
+
+// ── 추천 데이터 ──────────────────────────────
+const CARDIO_REC_DB = {
+  // [season_phase_purpose] → {exId, category, sets, workMin/workSec, restMin, intensity, note}
+  // 시즌 중
+  inseason_MD5_recovery:        {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:20, restMin:0,  intensity:65,  note:'MD-5 회복. 저강도 조깅으로 피로 제거 및 혈류 촉진.'},
+  inseason_MD5_aerobic:         {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:25, restMin:0,  intensity:70,  note:'MD-5 유산소. 낮은 강도로 기본 유산소 유지.'},
+  inseason_MD5_threshold:       {loc:'outdoor', cat:'Extensive Aerobic',       ex:'tempo_run',   sets:1,  workMin:20, restMin:0,  intensity:80,  note:'MD-5는 역치 훈련 비추천. 볼륨 낮게 유지.'},
+  inseason_MD5_vo2max:          {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:20, restMin:0,  intensity:65,  note:'MD-5는 VO₂max 훈련 금지. 회복 우선.'},
+  inseason_MD5_speed_endurance: {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:15, restMin:0,  intensity:60,  note:'MD-5 속도지구력 금지. 가벼운 조깅으로 대체.'},
+  inseason_MD5_alactic:         {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:10, restMin:0,  intensity:60,  note:'MD-5 알락틱 금지. 회복만.'},
+
+  inseason_MD4_recovery:        {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:25, restMin:0,  intensity:68,  note:'MD-4 회복 세션. 가벼운 조깅.'},
+  inseason_MD4_aerobic:         {loc:'outdoor', cat:'Extensive Aerobic',       ex:'tempo_run',   sets:1,  workMin:30, restMin:0,  intensity:80,  note:'MD-4 유산소 기반. 템포런으로 볼륨 축적.'},
+  inseason_MD4_threshold:       {loc:'outdoor', cat:'Threshold',              ex:'tempo_run',   sets:3,  workMin:8,  restMin:3,  intensity:85,  note:'MD-4 역치. 중간 강도 반복으로 LT2 자극.'},
+  inseason_MD4_vo2max:          {loc:'outdoor', cat:'VO2max Long Interval',   ex:'vo2_4min',    sets:4,  workMin:4,  restMin:4,  intensity:100, note:'MD-4 VO₂max. 4분 인터벌로 산소 섭취 극대화.'},
+  inseason_MD4_speed_endurance: {loc:'outdoor', cat:'VO2max Long Interval',   ex:'vo2_2min',    sets:5,  workMin:2,  restMin:2,  intensity:105, note:'MD-4 속도지구력. 2분 인터벌 고볼륨.'},
+  inseason_MD4_alactic:         {loc:'outdoor', cat:'Speed Endurance',        ex:'se_30m',      sets:3,  reps:4,     restMin:3,  intensity:95,  note:'MD-4 알락틱. 최대 스프린트 짧게.'},
+
+  inseason_MD3_recovery:        {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:20, restMin:0,  intensity:65,  note:'MD-3 회복 세션. 부상 위험 고려.'},
+  inseason_MD3_aerobic:         {loc:'outdoor', cat:'Extensive Aerobic',       ex:'tempo_run',   sets:2,  workMin:10, restMin:3,  intensity:82,  note:'MD-3 유산소. 적당한 볼륨 유지.'},
+  inseason_MD3_threshold:       {loc:'outdoor', cat:'Threshold',              ex:'tempo_run',   sets:3,  workMin:6,  restMin:2,  intensity:87,  note:'MD-3 역치. 최대 부하 타이밍, 강도 집중.'},
+  inseason_MD3_vo2max:          {loc:'outdoor', cat:'VO2max Long Interval',   ex:'vo2_4min',    sets:4,  workMin:4,  restMin:4,  intensity:100, note:'MD-3 VO₂max 핵심 세션. 4분 인터벌 최대 자극.'},
+  inseason_MD3_speed_endurance: {loc:'outdoor', cat:'VO2max Short Interval',  ex:'vo2_15s',     sets:3,  reps:8,     restMin:3,  intensity:120, note:'MD-3 속도지구력. 15-15로 고밀도 자극.'},
+  inseason_MD3_alactic:         {loc:'outdoor', cat:'Speed Endurance',        ex:'se_30m',      sets:4,  reps:4,     restMin:3,  intensity:100, note:'MD-3 알락틱. 최고속도 스프린트.'},
+
+  inseason_MD2_recovery:        {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:15, restMin:0,  intensity:60,  note:'MD-2 회복. 볼륨 최소화.'},
+  inseason_MD2_aerobic:         {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:20, restMin:0,  intensity:70,  note:'MD-2 유산소. 가볍게 유지.'},
+  inseason_MD2_threshold:       {loc:'outdoor', cat:'VO2max Short Interval',  ex:'vo2_20s',     sets:3,  reps:6,     restMin:3,  intensity:115, note:'MD-2 역치. 짧고 강하게.'},
+  inseason_MD2_vo2max:          {loc:'outdoor', cat:'VO2max Short Interval',  ex:'vo2_15s',     sets:3,  reps:6,     restMin:3,  intensity:120, note:'MD-2 VO₂max. 짧은 인터벌 고강도.'},
+  inseason_MD2_speed_endurance: {loc:'outdoor', cat:'Speed Endurance',        ex:'se_30m',      sets:4,  reps:5,     restMin:3,  intensity:100, note:'MD-2 속도지구력. 스프린트 반복.'},
+  inseason_MD2_alactic:         {loc:'outdoor', cat:'Pure Speed',             ex:'acc_10m',     sets:4,  reps:5,     restMin:3,  intensity:100, note:'MD-2 알락틱. 최대 가속.'},
+
+  inseason_MD1_recovery:        {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:15, restMin:0,  intensity:60,  note:'MD-1 테이퍼링. 완전 회복 우선.'},
+  inseason_MD1_aerobic:         {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:15, restMin:0,  intensity:65,  note:'MD-1 유산소. 가볍게만.'},
+  inseason_MD1_threshold:       {loc:'outdoor', cat:'Extensive Aerobic',       ex:'jog_easy',    sets:1,  workMin:12, restMin:0,  intensity:65,  note:'MD-1 역치 금지. 회복 세션으로.'},
+  inseason_MD1_vo2max:          {loc:'outdoor', cat:'VO2max Short Interval',  ex:'vo2_10s',     sets:2,  reps:6,     restMin:3,  intensity:120, note:'MD-1 활성화. 10-10 짧게 신경근 자극만.'},
+  inseason_MD1_speed_endurance: {loc:'outdoor', cat:'Pure Speed',             ex:'acc_10m',     sets:3,  reps:4,     restMin:3,  intensity:95,  note:'MD-1 활성화. 짧은 스프린트로 신경계 깨우기.'},
+  inseason_MD1_alactic:         {loc:'outdoor', cat:'Pure Speed',             ex:'acc_10m',     sets:3,  reps:3,     restMin:3,  intensity:95,  note:'MD-1 알락틱. 최소 볼륨 최대 속도.'},
+
+  // 프리시즌
+  preseason_pre_early_recovery:        {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:30, restMin:0,  intensity:65,  note:'프리시즌 초기 회복. 기초 유산소 형성 시작.'},
+  preseason_pre_early_aerobic:         {loc:'outdoor', cat:'Extensive Aerobic', ex:'tempo_run',  sets:2,  workMin:15, restMin:4,  intensity:78,  note:'프리시즌 초기 유산소 기반. 볼륨 중심으로 축적.'},
+  preseason_pre_early_threshold:       {loc:'outdoor', cat:'Threshold',        ex:'tempo_run',  sets:3,  workMin:8,  restMin:3,  intensity:85,  note:'프리시즌 초기 역치. LT2 상향 목표.'},
+  preseason_pre_early_vo2max:          {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_4min', sets:3, workMin:4, restMin:4,  intensity:100, note:'프리시즌 초기 VO₂max. 낮은 세트 수로 적응.'},
+  preseason_pre_early_speed_endurance: {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_2min', sets:4, workMin:2, restMin:2,  intensity:105, note:'프리시즌 초기 속도지구력. 볼륨 점진적 증가.'},
+  preseason_pre_early_alactic:         {loc:'outdoor', cat:'Speed Endurance',  ex:'se_30m',     sets:3,  reps:4,     restMin:4,  intensity:95,  note:'프리시즌 초기 알락틱. 최대 속도 기초 자극.'},
+
+  preseason_pre_mid_recovery:          {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:25, restMin:0,  intensity:65,  note:'프리시즌 중기 회복. 고볼륨 주간 사이 회복.'},
+  preseason_pre_mid_aerobic:           {loc:'outdoor', cat:'Extensive Aerobic', ex:'tempo_run',  sets:3,  workMin:12, restMin:3,  intensity:82,  note:'프리시즌 중기 유산소. 볼륨+강도 동시 증가.'},
+  preseason_pre_mid_threshold:         {loc:'outdoor', cat:'Threshold',        ex:'tempo_run',  sets:4,  workMin:8,  restMin:3,  intensity:88,  note:'프리시즌 중기 역치. 최대 볼륨 역치 자극.'},
+  preseason_pre_mid_vo2max:            {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_4min', sets:4, workMin:4, restMin:4,  intensity:100, note:'프리시즌 중기 VO₂max. 세트 증가로 최대 자극.'},
+  preseason_pre_mid_speed_endurance:   {loc:'outdoor', cat:'VO2max Short Interval', ex:'vo2_15s', sets:4, reps:8,    restMin:3,  intensity:120, note:'프리시즌 중기 속도지구력. 15-15 고밀도.'},
+  preseason_pre_mid_alactic:           {loc:'outdoor', cat:'Speed Endurance',  ex:'se_30m',     sets:4,  reps:5,     restMin:4,  intensity:100, note:'프리시즌 중기 알락틱. 볼륨 최대.'},
+
+  preseason_pre_late_recovery:         {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:20, restMin:0,  intensity:62,  note:'프리시즌 후기 회복. 시합 준비를 위한 컨디션 조절.'},
+  preseason_pre_late_aerobic:          {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:20, restMin:0,  intensity:70,  note:'프리시즌 후기 유산소. 볼륨 줄이고 신선도 유지.'},
+  preseason_pre_late_threshold:        {loc:'outdoor', cat:'Threshold',        ex:'tempo_run',  sets:2,  workMin:8,  restMin:3,  intensity:87,  note:'프리시즌 후기 역치. 강도 유지, 볼륨 감소.'},
+  preseason_pre_late_vo2max:           {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_4min', sets:3, workMin:4, restMin:4,  intensity:100, note:'프리시즌 후기 VO₂max. 세트 줄여 테이퍼.'},
+  preseason_pre_late_speed_endurance:  {loc:'outdoor', cat:'VO2max Short Interval', ex:'vo2_15s', sets:3, reps:6,    restMin:3,  intensity:120, note:'프리시즌 후기 속도지구력. 활성화 중심.'},
+  preseason_pre_late_alactic:          {loc:'outdoor', cat:'Pure Speed',        ex:'acc_10m',    sets:3,  reps:4,     restMin:4,  intensity:100, note:'프리시즌 후기 알락틱. 최고속도 활성화.'},
+
+  // 오프시즌
+  offseason_off_rest_recovery:         {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:20, restMin:0,  intensity:60,  note:'오프시즌 복귀 초기. 아주 가벼운 유산소로 재활성화.'},
+  offseason_off_rest_aerobic:          {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:25, restMin:0,  intensity:65,  note:'오프시즌 유산소 기반 재건.'},
+  offseason_off_rest_threshold:        {loc:'outdoor', cat:'Extensive Aerobic', ex:'tempo_run',  sets:1,  workMin:20, restMin:0,  intensity:75,  note:'오프시즌 초기 역치. 낮은 강도로 시작.'},
+  offseason_off_rest_vo2max:           {loc:'outdoor', cat:'Extensive Aerobic', ex:'tempo_run',  sets:2,  workMin:12, restMin:4,  intensity:80,  note:'오프시즌 VO₂max 시작. 강도 낮게 점진적으로.'},
+  offseason_off_rest_speed_endurance:  {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:20, restMin:0,  intensity:65,  note:'오프시즌 초기 속도지구력 금지. 기초부터.'},
+  offseason_off_rest_alactic:          {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:15, restMin:0,  intensity:60,  note:'오프시즌 알락틱 금지. 회복 우선.'},
+
+  offseason_off_base_recovery:         {loc:'outdoor', cat:'Extensive Aerobic', ex:'jog_easy',   sets:1,  workMin:25, restMin:0,  intensity:65,  note:'오프시즌 유지기 회복.'},
+  offseason_off_base_aerobic:          {loc:'outdoor', cat:'Extensive Aerobic', ex:'tempo_run',  sets:2,  workMin:15, restMin:4,  intensity:78,  note:'오프시즌 유지기 유산소. 기반 유지.'},
+  offseason_off_base_threshold:        {loc:'outdoor', cat:'Threshold',        ex:'tempo_run',  sets:3,  workMin:8,  restMin:3,  intensity:85,  note:'오프시즌 유지기 역치. 시즌 중 수준 유지.'},
+  offseason_off_base_vo2max:           {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_4min', sets:3, workMin:4, restMin:4,  intensity:100, note:'오프시즌 유지기 VO₂max. 기본 세션 유지.'},
+  offseason_off_base_speed_endurance:  {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_2min', sets:4, workMin:2, restMin:2,  intensity:105, note:'오프시즌 유지기 속도지구력.'},
+  offseason_off_base_alactic:          {loc:'outdoor', cat:'Speed Endurance',  ex:'se_30m',     sets:3,  reps:4,     restMin:4,  intensity:95,  note:'오프시즌 유지기 알락틱.'},
+
+  // 재활기
+  rehab_rehab_early_recovery:          {loc:'cycle',   cat:'Active Recovery',  ex:'cy_recovery', sets:1, workMin:20, restMin:0,  intensity:55,  note:'재활 초기. 사이클 저강도 능동 회복.'},
+  rehab_rehab_early_aerobic:           {loc:'cycle',   cat:'Active Recovery',  ex:'cy_recovery', sets:1, workMin:25, restMin:0,  intensity:60,  note:'재활 초기 유산소. 관절 무부하 사이클.'},
+  rehab_rehab_early_threshold:         {loc:'cycle',   cat:'Active Recovery',  ex:'cy_recovery', sets:1, workMin:20, restMin:0,  intensity:60,  note:'재활 초기 역치 금지. 가벼운 사이클만.'},
+  rehab_rehab_early_vo2max:            {loc:'cycle',   cat:'Active Recovery',  ex:'cy_recovery', sets:1, workMin:20, restMin:0,  intensity:60,  note:'재활 초기 VO₂max 금지.'},
+  rehab_rehab_early_speed_endurance:   {loc:'cycle',   cat:'Active Recovery',  ex:'cy_recovery', sets:1, workMin:15, restMin:0,  intensity:55,  note:'재활 초기 속도지구력 금지.'},
+  rehab_rehab_early_alactic:           {loc:'cycle',   cat:'Active Recovery',  ex:'cy_recovery', sets:1, workMin:15, restMin:0,  intensity:55,  note:'재활 초기 알락틱 금지.'},
+
+  rehab_rehab_late_recovery:           {loc:'treadmill', cat:'Extensive Aerobic', ex:'tm_jog',   sets:1,  workMin:20, restMin:0,  intensity:65,  note:'재활 후기 회복. 트레드밀 저강도 보행/조깅.'},
+  rehab_rehab_late_aerobic:            {loc:'treadmill', cat:'Extensive Aerobic', ex:'tm_jog',   sets:1,  workMin:25, restMin:0,  intensity:70,  note:'재활 후기 유산소. 트레드밀로 점진적 복귀.'},
+  rehab_rehab_late_threshold:          {loc:'treadmill', cat:'Threshold',        ex:'tm_tempo',  sets:2,  workMin:8,  restMin:3,  intensity:82,  note:'재활 후기 역치. 안전한 환경에서 강도 상승.'},
+  rehab_rehab_late_vo2max:             {loc:'treadmill', cat:'VO2max Long Interval', ex:'tm_vo2_4min', sets:3, workMin:4, restMin:4, intensity:100, note:'재활 후기 VO₂max. 복귀 전 최종 검증.'},
+  rehab_rehab_late_speed_endurance:    {loc:'outdoor', cat:'VO2max Long Interval', ex:'vo2_2min', sets:3, workMin:2, restMin:2,  intensity:100, note:'재활 후기 속도지구력. 야외 복귀 시작.'},
+  rehab_rehab_late_alactic:            {loc:'outdoor', cat:'Pure Speed',         ex:'acc_10m',   sets:3,  reps:4,     restMin:4,  intensity:90,  note:'재활 후기 알락틱. 부분 속도로 신경계 테스트.'},
+};
+
+function getCardioRecKey(){
+  const season  = document.getElementById('cardio-season')?.value  || 'inseason';
+  const phase   = document.getElementById('cardio-phase')?.value   || 'MD3';
+  const purpose = document.getElementById('cardio-purpose')?.value || 'vo2max';
+  return `${season}_${phase}_${purpose}`;
+}
+
+function applyCardioRecommendation(){
+  const key = getCardioRecKey();
+  const rec = CARDIO_REC_DB[key];
+  if(!rec) return;
+  // 장소 설정
+  setCardioLocation(rec.loc || 'outdoor');
+  // 카테고리 설정
+  setTimeout(()=>{
+    _cardioCategory = rec.cat || '';
+    renderCardioCategoryButtons();
+    // 운동 설정
+    setTimeout(()=>{
+      if(rec.ex){
+        setCardioEx(rec.ex);
+      }
+    }, 50);
+  }, 50);
+}
+
 function renderCardioRecommendation(){
+  // hidden MD 필드 동기화 (기존 처방 생성 로직 호환)
+  const phase = document.getElementById('cardio-phase')?.value || 'MD3';
+  const mdEl  = document.getElementById('cardio-md');
+  if(mdEl) mdEl.value = phase.startsWith('MD') ? phase.replace('MD','MD') : 'MD3';
+
   const recEl = document.getElementById('cardio-recommend');
   if(!recEl) return;
-  recEl.style.display = 'block';
+
+  const key = getCardioRecKey();
+  const rec = CARDIO_REC_DB[key];
 
   const playerId = document.getElementById('cardio-player')?.value;
   const player   = _players.find(p=>p.id===playerId);
-  const md       = document.getElementById('cardio-md')?.value||'MD3';
+  const ft       = player ? getCardioFitnessType(player) : null;
+  const mas      = player ? parseFloat(player.mas) : null;
 
-  // MD별 권장 카테고리 (장소에 따라 다름)
-  const mdRecOutdoor = {
-    MD5:['Extensive Aerobic'],
-    MD4:['Threshold','VO2max Long Interval'],
-    MD3:['VO2max Long Interval','VO2max Short Interval','Speed Endurance'],
-    MD2:['VO2max Short Interval','Speed Endurance','Pure Speed','RHIE'],
-    MD1:['Extensive Aerobic'],
-  };
-  const mdRecTreadmill = {
-    MD5:['Extensive Aerobic'],
-    MD4:['Threshold','VO2max Long Interval'],
-    MD3:['VO2max Long Interval','VO2max Short Interval'],
-    MD2:['VO2max Short Interval'],
-    MD1:['Extensive Aerobic'],
-  };
-  const mdRecCycle = {
-    MD5:['Active Recovery','Cadence Drill'],
-    MD4:['Threshold / Sweet Spot','Cadence Drill'],
-    MD3:['VO2max Interval','Threshold / Sweet Spot'],
-    MD2:['Supramaximal Sprint','VO2max Interval'],
-    MD1:['Active Recovery'],
-  };
+  const seasonLabel  = {inseason:'시즌 중', preseason:'프리시즌', offseason:'오프시즌', rehab:'재활기'}[document.getElementById('cardio-season')?.value]||'';
+  const purposeLabel = {recovery:'회복', aerobic:'유산소 기반', threshold:'젖산 역치', vo2max:'VO₂max', speed_endurance:'속도 지구력', alactic:'알락틱 스프린트'}[document.getElementById('cardio-purpose')?.value]||'';
 
-  const mdRecMap = {outdoor:mdRecOutdoor, treadmill:mdRecTreadmill, cycle:mdRecCycle};
-  const mdRec    = mdRecMap[_cardioLocation] || mdRecOutdoor;
-  const mdCats   = mdRec[md] || [];
-
-  const ft = player ? getCardioFitnessType(player) : null;
-
-  let html = `<div style="font-size:11px;color:var(--accent2);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px">💡 시스템 추천</div>
-    <div style="font-size:12px;color:var(--text2);line-height:1.9">`;
+  let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:11px;color:var(--accent2);font-weight:700;text-transform:uppercase;letter-spacing:.6px">💡 추천 프로그램</div>
+    <button onclick="applyCardioRecommendation()" style="font-size:11px;padding:4px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit;font-weight:600">✓ 추천 적용</button>
+  </div>`;
 
   if(ft){
-    html += `<strong style="color:${ft.color}">${ft.icon} ${ft.type}</strong> (ASR ${ft.asr.toFixed(1)} km/h) &nbsp;·&nbsp; `;
+    html += `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">${ft.icon} <strong style="color:${ft.color}">${ft.type}</strong> · MAS ${mas} km/h · ASR ${ft.asr.toFixed(1)} km/h</div>`;
   }
-  html += `${md.replace('MD','MD-')} 권장 카테고리: <strong style="color:var(--text)">${mdCats.join(' / ')}</strong><br>`;
 
+  if(rec){
+    const locLabel = {outdoor:'🏃 야외', treadmill:'🏃 트레드밀', cycle:'🚴 사이클'}[rec.loc]||'';
+    const structStr = rec.reps
+      ? `${rec.sets}세트 × ${rec.reps}rep`
+      : rec.workMin ? `${rec.sets}세트 × ${rec.workMin}min` : '';
+    const restStr = rec.restMin ? `휴식 ${rec.restMin}min` : '';
+    const spdStr  = mas && rec.intensity ? `→ ${+(mas*rec.intensity/100).toFixed(1)} km/h` : '';
+
+    html += `<div style="background:var(--surface2);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:700;color:var(--text)">${rec.ex ? (CARDIO_EX_DATA[rec.loc]||{})[rec.cat]?.exercises?.find(e=>e.id===rec.ex)?.name || rec.ex : rec.cat}</span>
+        <span style="font-size:11px;color:var(--text3)">${locLabel}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:11px;color:var(--text2)">
+        <div>📐 ${structStr}${restStr?' · '+restStr:''}</div>
+        <div>⚡ ${rec.intensity}% MAS ${spdStr}</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);line-height:1.6;border-left:2px solid var(--accent);padding-left:8px">${rec.note}</div>`;
+  } else {
+    html += `<div style="font-size:12px;color:var(--text3)">해당 조합의 추천 데이터가 없습니다.</div>`;
+  }
+
+  // 현재 선택된 운동 피드백
   if(_cardioCategory && _cardioExId){
     const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
-    const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
+    const ex = catData?.exercises?.find(e=>e.id===_cardioExId);
     if(ex){
-      const isMdFit = mdCats.includes(_cardioCategory);
-      if(isMdFit){
-        html += `<span style="color:#4ade80">✅ <strong>${ex.name}</strong> — ${md.replace('MD','MD-')} 최적 조합</span><br>`;
-      } else {
-        html += `<span style="color:#fb923c">⚠️ <strong>${ex.name}</strong> — ${md.replace('MD','MD-')}에서 주의. 권장: ${mdCats[0]||'-'}</span><br>`;
-      }
-      if(player && ex.intensityUnit && ex.intensityUnit.includes('MAS') && ex.intensityRange && ex.intensityRange[0]>0){
-        const mas=parseFloat(player.mas);
-        const lo=+(mas*ex.intensityRange[0]/100).toFixed(1);
-        const hi=+(mas*ex.intensityRange[1]/100).toFixed(1);
-        html += `강도 범위: <strong style="color:var(--accent2)">${ex.intensityRange[0]}–${ex.intensityRange[1]}% MAS</strong> = <strong style="color:#4ade80">${lo}–${hi} km/h</strong><br>`;
-      }
-      if(player && ex.intensityUnit && (ex.intensityUnit.includes('Vmax')||ex.intensityUnit.includes('MSS')) && ex.intensityRange && ex.intensityRange[0]>0){
-        const mss=parseFloat(player.mss);
-        const lo=+(mss*ex.intensityRange[0]/100).toFixed(1);
-        const hi=+(mss*ex.intensityRange[1]/100).toFixed(1);
-        html += `강도 범위: <strong style="color:var(--accent2)">${ex.intensityRange[0]}–${ex.intensityRange[1]}% MSS</strong> = <strong style="color:#fbbf24">${lo}–${hi} km/h</strong><br>`;
-      }
+      const isMatch = rec && rec.ex === _cardioExId;
+      html += `<div style="margin-top:8px;font-size:11px;padding:6px 10px;border-radius:6px;background:${isMatch?'rgba(74,222,128,0.1)':'rgba(251,146,60,0.1)'};color:${isMatch?'#4ade80':'#fb923c'}">
+        ${isMatch ? '✅' : '⚠️'} 현재 선택: <strong>${ex.name}</strong> ${isMatch?'— 추천과 일치':'— 추천과 다름'}
+      </div>`;
     }
-  } else {
-    html += `<span style="color:var(--text3)">카테고리 → 운동 유형을 선택하면 처방 설정이 활성화됩니다.</span>`;
   }
-  html += `</div>`;
+
+  html += ``;
+  recEl.style.display = 'block';
   recEl.innerHTML = html;
 }
 
@@ -17669,8 +17846,13 @@ async function generateCardio(){
 
   const playerId = document.getElementById('cardio-player')?.value;
   const player   = _players.find(p=>p.id===playerId);
-  const md       = document.getElementById('cardio-md')?.value||'MD3';
-  const mdLabel  = {'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
+  const md       = document.getElementById('cardio-phase')?.value || document.getElementById('cardio-md')?.value || 'MD3';
+  const seasonVal   = document.getElementById('cardio-season')?.value  || 'inseason';
+  const purposeVal  = document.getElementById('cardio-purpose')?.value || 'vo2max';
+  const seasonLabel = {inseason:'시즌 중', preseason:'프리시즌', offseason:'오프시즌', rehab:'재활기'}[seasonVal]||seasonVal;
+  const phaseLabel  = document.getElementById('cardio-phase')?.options[document.getElementById('cardio-phase')?.selectedIndex]?.text?.split('—')[0]?.trim() || md;
+  const purposeLabel= {recovery:'회복', aerobic:'유산소 기반', threshold:'젖산 역치', vo2max:'VO₂max', speed_endurance:'속도 지구력', alactic:'알락틱'}[purposeVal]||purposeVal;
+  const mdLabel     = `${seasonLabel} · ${phaseLabel} · ${purposeLabel}`;
 
   const mas = player ? parseFloat(player.mas)  : null;
   const mss = player ? parseFloat(player.mss)  : null;
