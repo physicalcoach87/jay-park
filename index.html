@@ -47,6 +47,8 @@
 
 <!-- Supabase 인증 -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -1220,6 +1222,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
   <!-- ⑦ 처방 파라미터 (코치 직접 입력) -->
   <div id="cardio-param-config" style="display:none;background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px"></div>
+
+  <!-- ⑧ 블록 추가 버튼 -->
+  <div id="cardio-add-block-wrap" style="display:none;margin-bottom:12px">
+    <button onclick="addCardioBlock()" style="width:100%;padding:10px;border-radius:8px;border:2px dashed var(--border2);background:transparent;color:var(--accent2);font-size:13px;font-weight:600;cursor:pointer;font-family:inherit">+ 이 운동 블록 추가</button>
+  </div>
+
+  <!-- ⑨ 추가된 블록 목록 -->
+  <div id="cardio-blocks-list" style="display:none;margin-bottom:12px">
+    <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">구성된 블록</div>
+    <div id="cardio-blocks-items"></div>
+  </div>
 
   <button class="btn-gen" onclick="generateCardio()">처방 생성</button>
   <div id="cardio-output"></div>
@@ -16392,69 +16405,53 @@ function renderGroupPlayerList(){
 }
 
 async function generateGroupCardio(){
-  if(!_cardioExId){ alert('운동 유형을 선택해주세요'); return; }
-  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
-  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
-  if(!ex){ alert('운동 데이터를 찾을 수 없습니다'); return; }
+  // 현재 선택된 운동이 있으면 마지막 블록으로 포함
+  const allBlocks = [..._cardioBlocks];
+  if(_cardioExId){
+    const cur = collectCardioParams();
+    if(cur) allBlocks.push(cur);
+  }
+  if(allBlocks.length===0){ alert('운동 유형을 선택하거나 블록을 추가해주세요'); return; }
 
-  const md       = document.getElementById('cardio-md')?.value||'MD3';
-  const mdLabel  = {'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
-  const locLabel = {outdoor:'야외',treadmill:'트레드밀',cycle:'사이클'}[_cardioLocation]||'';
+  const md      = document.getElementById('cardio-md')?.value||'MD3';
+  const mdLabel = {'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
 
-  const intensity   = parseFloat(document.getElementById('cp-intensity')?.value||0);
-  const sets        = parseInt(document.getElementById('cp-sets')?.value||0);
-  const reps        = parseInt(document.getElementById('cp-reps')?.value||0);
-  const durationMin = parseFloat(document.getElementById('cp-duration')?.value||0);
-  const workMin     = parseFloat(document.getElementById('cp-work-min')?.value||0);
-  const restMin     = parseFloat(document.getElementById('cp-rest-min')?.value||0);
-  const distance    = parseInt(document.getElementById('cp-distance')?.value||0);
-  const repRest     = parseInt(document.getElementById('cp-rep-rest')?.value||0);
-  const setRestSec  = parseInt(document.getElementById('cp-set-rest-sec')?.value||0);
-  const setRestMin  = parseFloat(document.getElementById('cp-set-rest')?.value||0);
-  const codAngle    = parseInt(document.getElementById('cp-cod-angle')?.value||0);
-  const codCount    = parseInt(document.getElementById('cp-cod-count')?.value||1);
-  const perSetIntensities = [];
-  if(ex.paramType==='set_time_rest_perset'){
-    for(let i=0;i<sets;i++){
-      perSetIntensities.push(parseFloat(document.getElementById(`cp-set-intensity-${i}`)?.value||intensity));
-    }
+  // 시간 문자열 → "X min Y sec" 정규화
+  function fmtTime(str){
+    if(!str || str==='—') return str;
+    let totalSec = 0;
+    if(str.includes('초')) totalSec = parseFloat(str);
+    else if(str.includes('min')) totalSec = parseFloat(str) * 60;
+    else return str;
+    const m = Math.floor(totalSec / 60);
+    const s = Math.round(totalSec % 60);
+    if(m === 0) return `${s} sec`;
+    if(s === 0) return `${m} min`;
+    return `${m} min ${s} sec`;
   }
 
-  const activeGroups = activeGroupDefs().map(gDef=>{
-    const pool = _cardioSelPlayers === null ? _players : _players.filter(p=>_cardioSelPlayers.has(p.id));
-    const players = pool.filter(p=>_groupAssignments[p.id]===gDef.id && parseFloat(p.mas)>0);
-    if(!players.length) return null;
-    const avgMas = players.reduce((s,p)=>s+parseFloat(p.mas||0),0)/players.length;
-    const mssArr = players.filter(p=>parseFloat(p.mss)>0);
-    const avgMss = mssArr.length ? mssArr.reduce((s,p)=>s+parseFloat(p.mss||0),0)/mssArr.length : null;
-    let speedKmh = null;
-    if(intensity && avgMas && ex.intensityUnit.includes('MAS'))
-      speedKmh = +(avgMas*intensity/100).toFixed(1);
-    if(intensity && avgMss && (ex.intensityUnit.includes('MSS')||ex.intensityUnit.includes('Vmax')))
-      speedKmh = +(avgMss*intensity/100).toFixed(1);
-    return {...gDef, players, avgMas:+avgMas.toFixed(1), avgMss:avgMss?+avgMss.toFixed(1):null, speedKmh};
-  }).filter(Boolean);
-
-  if(!activeGroups.length){ alert('MAS 데이터가 있는 선수가 그룹에 배정되지 않았습니다'); return; }
-
-  // 인쇄 친화적 그룹 색상 (밝은 배경 + 진한 텍스트)
+  // 인쇄 친화적 그룹 색상
   const PC = {
     A:{tc:'#14532d',bc:'#16a34a',bg:'#f0fdf4',hbg:'#dcfce7'},
     B:{tc:'#1e3a8a',bc:'#2563eb',bg:'#eff6ff',hbg:'#dbeafe'},
     C:{tc:'#7c2d12',bc:'#ea580c',bg:'#fff7ed',hbg:'#fed7aa'},
     D:{tc:'#7f1d1d',bc:'#dc2626',bg:'#fef2f2',hbg:'#fecaca'},
   };
+  const HEAD_BG = {A:'#15803d', B:'#1d4ed8', C:'#c2410c', D:'#991b1b'};
 
-  // 그룹별 처방 핵심 지표 계산
-  function calcMetrics(g){
-    const spd = g.speedKmh;
+  // 그룹별 처방 핵심 지표 계산 (블록 파라미터를 명시적으로 받음)
+  function calcMetrics(g, b){
+    const ex=b.ex, intensity=b.intensity, sets=b.sets, reps=b.reps,
+          durationMin=b.durationMin, workMin=b.workMin, restMin=b.restMin,
+          distance=b.distance, repRest=b.repRest, setRestSec=b.setRestSec,
+          setRestMin=b.setRestMin, perSetIntensities=b.perSetIntensities;
+    const spd = g.speedKmhByBlock ? g.speedKmhByBlock[allBlocks.indexOf(b)] : g.speedKmh;
     const ws  = ex.workSec||0;
     const m   = {mas:g.avgMas, speed:spd?`${spd} km/h`:(intensity?`${intensity}% MAS`:'—')};
     if(ex.paramType==='set_rep_rest'){
       const d = spd ? calcDist(spd, ws) : null;
       const total = sets*reps;
       m.structure = `${sets}세트 × ${reps}rep`;
-      m.workRest  = `${ws}s : ${ws}s`;
       m.distPerRep= d ? `${d} m` : '—';
       m.totalWork = `${ws*total} 초`;
       m.setRest   = `${setRestMin} min`;
@@ -16478,14 +16475,13 @@ async function generateGroupCardio(){
       const ints = perSetIntensities.length===sets ? perSetIntensities : Array(sets).fill(intensity);
       const dists = ints.map(i=>g.avgMas ? calcDist(+(g.avgMas*i/100).toFixed(1), sec) : null);
       m.structure = `${sets}세트 × ${workMin}min`;
-      // 카드용: 세트별 강도가 같으면 단일값, 다르면 배열로 저장
       const validDists = dists.filter(Boolean);
       const allSame = validDists.every(d=>d===validDists[0]);
       m.distPerRep    = validDists.length ? (allSame ? `${validDists[0]} m` : null) : '—';
       m.distPerRepArr = (!allSame && validDists.length) ? validDists : null;
       m.totalWork = `${sets*workMin} min`;
       m.setRest   = `${restMin} min`;
-      m.totalDist = validDists.length ? `${validDists.reduce((a,b)=>a+b,0).toLocaleString()} m` : '—';
+      m.totalDist = validDists.length ? `${validDists.reduce((a,c)=>a+c,0).toLocaleString()} m` : '—';
     } else if(ex.paramType==='dist_rep_rest'){
       const t = spd ? Math.round(distance/(spd/3.6)) : null;
       m.structure = `${distance}m × ${reps}rep`;
@@ -16504,109 +16500,180 @@ async function generateGroupCardio(){
     return m;
   }
 
-  const gData = activeGroups.map(g=>({...g, pc:PC[g.id]||PC.D, metrics:calcMetrics(g)}));
+  // 그룹 구성 (블록 무관하게 한 번만 계산)
+  const baseActiveGroups = activeGroupDefs().map(gDef=>{
+    const pool = _cardioSelPlayers === null ? _players : _players.filter(p=>_cardioSelPlayers.has(p.id));
+    const players = pool.filter(p=>_groupAssignments[p.id]===gDef.id && parseFloat(p.mas)>0);
+    if(!players.length) return null;
+    const avgMas = players.reduce((s,p)=>s+parseFloat(p.mas||0),0)/players.length;
+    const mssArr = players.filter(p=>parseFloat(p.mss)>0);
+    const avgMss = mssArr.length ? mssArr.reduce((s,p)=>s+parseFloat(p.mss||0),0)/mssArr.length : null;
+    return {...gDef, players, avgMas:+avgMas.toFixed(1), avgMss:avgMss?+avgMss.toFixed(1):null, pc:PC[gDef.id]||PC.D};
+  }).filter(Boolean);
+
+  if(!baseActiveGroups.length){ alert('MAS 데이터가 있는 선수가 그룹에 배정되지 않았습니다'); return; }
+
   const today = new Date().toLocaleDateString('ko-KR');
+  const exNames = allBlocks.map(b=>b.ex.name).join(' + ');
 
-  // ── HTML 생성 (Sample B: 그룹 카드 + 빅 넘버) ──────────────────────────────
-  const ref = gData[0].metrics;
-  const structureStr = ref.structure || '';
-  const setRestStr   = ref.setRest   ? `세트간 ${ref.setRest}` : '';
-
-  // 헤더 darkBg 색상 (진한 배경, 카드 상단)
-  const HEAD_BG = {A:'#15803d', B:'#1d4ed8', C:'#c2410c', D:'#991b1b'};
-
-  // paramType별 stat 구성 결정
-  const useThreeStat = ['set_rep_rest','rhie_sprint','set_time_rest','set_time_rest_perset'].includes(ex.paramType);
-  const stat1Label = ex.paramType==='set_rep_rest'         ? `${ex.workSec}초 거리`
-                   : ex.paramType==='rhie_sprint'          ? `${ex.workSec}초 거리`
-                   : ex.paramType==='set_time_rest'        ? '세트 거리'
-                   : ex.paramType==='set_time_rest_perset' ? `${workMin}분 거리`
-                   : '';
-
-  // 웹: 흰 카드로 감싸 다크 테마 위에서도 가독성 확보
-  // 인쇄: @media print 에서 border-radius/shadow 제거, 그대로 흰 배경
   let html = `<div class="group-cardio-output" style="font-family:inherit;background:#fff;color:#111;border-radius:12px;padding:20px 22px;margin-top:8px">`;
 
   // ① 헤더
   html += `<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;padding-bottom:12px;border-bottom:2.5px solid #111">
     <div>
       <div style="font-size:20px;font-weight:900;color:#111">단체 유산소 훈련 처방</div>
-      <div style="font-size:12px;color:#6b7280;margin-top:4px">${ex.name}</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:4px">${exNames}</div>
     </div>
     <div style="font-size:11px;color:#6b7280;text-align:right;line-height:1.8">
-      ${today}<br>
-      ${mdLabel} &nbsp;·&nbsp; ${locLabel}<br>
-      <span style="font-size:11px;font-weight:700;color:#111">${structureStr}${setRestStr ? ` &nbsp;·&nbsp; ${setRestStr}` : ''}</span>
+      ${today}<br>${mdLabel}
     </div>
   </div>`;
 
-  // ② 그룹 카드 그리드
-  html += `<div style="display:grid;grid-template-columns:repeat(${gData.length},1fr);gap:12px;margin-bottom:16px">`;
-
-  gData.forEach(g => {
-    const m  = g.metrics;
-    const pc = g.pc;
-    const headBg = HEAD_BG[g.id] || '#374151';
-
-    const speedNum   = g.speedKmh !== null ? g.speedKmh : '—';
-    const speedLabel = g.speedKmh !== null ? `km/h &nbsp;목표 속도 (${intensity}% MAS)` : '목표 속도';
-
-    // 스탯 행
-    let statHtml = '';
-    if(useThreeStat && (m.distPerRep || m.distPerRepArr)){
-      const distCell = m.distPerRepArr
-        ? `<div style="font-size:11px;font-weight:700;line-height:1.6">${m.distPerRepArr.map((d,i)=>`<span style="display:block">Set${i+1}: ${d} m</span>`).join('')}</div>`
-        : `<div style="font-size:13px;font-weight:700">${m.distPerRep}</div>`;
-      statHtml = `
-        <div style="text-align:center">${distCell}<div style="font-size:9px;color:#9ca3af;margin-top:1px">${stat1Label}</div></div>
-        <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.totalWork||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 Work</div></div>
-        <div style="text-align:center"><div style="font-size:13px;font-weight:700;color:${pc.tc}">${m.totalDist||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 거리</div></div>`;
-    } else {
-      statHtml = `
-        <div style="text-align:center"><div style="font-size:13px;font-weight:700">${m.totalWork||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 Work</div></div>
-        <div style="text-align:center"><div style="font-size:13px;font-weight:700;color:${pc.tc}">${m.totalDist||'—'}</div><div style="font-size:9px;color:#9ca3af;margin-top:1px">총 거리</div></div>`;
-    }
-
-    // 선수 목록 (이름 | 개인 MAS)
-    const playerRows = g.players.map(p =>
-      `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f3f4f6;font-size:12px">
-        <span style="font-weight:600;color:#111">${p.name}</span>
-        <span style="font-size:12px;font-weight:700;color:${pc.tc}">${p.mas}</span>
-      </div>`
-    ).join('');
-
-    html += `
-      <div style="border-radius:8px;overflow:hidden;border:1.5px solid ${pc.bc}">
-        <div style="padding:10px 14px;background:${headBg};color:#fff;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:16px;font-weight:900">${g.label}</span>
-          <span style="font-size:11px;font-weight:500;opacity:.85">MAS ${g.avgMas} km/h</span>
-        </div>
-        <div style="padding:10px 14px;background:#fff">
-          <div style="font-size:26px;font-weight:900;line-height:1;margin-bottom:2px;color:${pc.tc}">${speedNum}</div>
-          <div style="font-size:10px;color:#6b7280;margin-bottom:8px">${speedLabel}</div>
-          <div style="display:flex;justify-content:space-between;font-size:11px;border-top:1px solid #e5e7eb;padding-top:7px;margin-top:7px">
-            ${statHtml}
-          </div>
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e5e7eb">
-            ${playerRows}
-          </div>
-        </div>
-      </div>`;
+  // ② 블록별 그룹 카드 섹션
+  // 블록별 메타 사전계산
+  const blockMeta = allBlocks.map(b=>{
+    const locLabel = {outdoor:'야외',treadmill:'트레드밀',cycle:'사이클'}[b.location]||'';
+    const ref = calcMetrics(baseActiveGroups[0], b);
+    const structureStr = ref.structure||'';
+    const setRestStr   = ref.setRest ? `세트간 휴식 ${ref.setRest}` : '';
+    const useThreeStat = ['set_rep_rest','rhie_sprint','set_time_rest','set_time_rest_perset'].includes(b.ex.paramType);
+    const stat1Label   = b.ex.paramType==='set_rep_rest'||b.ex.paramType==='rhie_sprint' ? `${b.ex.workSec}초 거리`
+                       : b.ex.paramType==='set_time_rest'        ? '세트 거리'
+                       : b.ex.paramType==='set_time_rest_perset' ? `${b.workMin}분 거리` : '';
+    return {b, locLabel, structureStr, setRestStr, useThreeStat, stat1Label};
   });
 
+  // ② 그룹별 카드 (그룹 헤더 → 블록별 행 → 선수 명단)
+  html += `<div style="display:grid;grid-template-columns:repeat(${baseActiveGroups.length},1fr);gap:10px">`;
+  baseActiveGroups.forEach(g=>{
+    const pc = g.pc;
+    const headBg = HEAD_BG[g.id]||'#374151';
+
+    html += `<div style="margin-bottom:16px;border-radius:10px;overflow:hidden;border:2px solid ${pc.bc}">`;
+
+    // 그룹 헤더
+    html += `<div style="padding:10px 16px;background:${headBg};color:#fff;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:17px;font-weight:900">${g.label}</span>
+      <span style="font-size:11px;opacity:.85">평균 MAS ${g.avgMas} km/h</span>
+    </div>`;
+
+    html += `<div style="background:#fff">`;
+
+    // 블록별 행
+    blockMeta.forEach(({b, locLabel, structureStr, setRestStr, useThreeStat, stat1Label}, bi)=>{
+      // 세트별 강도인 경우 평균으로 대표 속도 계산
+      const effIntensity = b.intensity || (b.perSetIntensities?.length
+        ? b.perSetIntensities.reduce((a,v)=>a+v,0)/b.perSetIntensities.length : 0);
+      let speedKmh = null;
+      if(effIntensity && g.avgMas && b.ex.intensityUnit.includes('MAS'))
+        speedKmh = +(g.avgMas*effIntensity/100).toFixed(1);
+      if(effIntensity && g.avgMss && (b.ex.intensityUnit.includes('MSS')||b.ex.intensityUnit.includes('Vmax')))
+        speedKmh = +(g.avgMss*effIntensity/100).toFixed(1);
+      const gWithSpd = {...g, speedKmh};
+      const m = calcMetrics(gWithSpd, b);
+      const borderTop = bi>0 ? 'border-top:1px solid #e5e7eb;' : '';
+
+      // 100m 페이스 계산 (장거리 지속성 운동)
+      const isLongDuration = ['time_only','set_time_rest','set_time_rest_perset'].includes(b.ex.paramType);
+      let pace100 = null;
+      if(speedKmh && isLongDuration){
+        const secPer100m = 100 / (speedKmh / 3.6);
+        const mm = Math.floor(secPer100m / 60);
+        const ss = (secPer100m % 60).toFixed(1);
+        pace100 = mm > 0 ? `${mm}'${ss}"` : `${secPer100m.toFixed(1)}"`;
+      }
+
+      // 지표 셀 순서: 세트거리 | 100m페이스 | 목표속도 | 총거리 | 총시간
+      const effIntLabel = Math.round(effIntensity);
+      const statCells = [];
+      if(m.distPerRepArr){
+        // 세트별 다른 거리 → 평균으로 표시
+        const avg = Math.round(m.distPerRepArr.reduce((a,v)=>a+v,0)/m.distPerRepArr.length);
+        statCells.push({val:`${avg}`, unit:'m', label:'세트 거리(평균)'});
+      } else if(m.distPerRep && m.distPerRep!=='—'){
+        statCells.push({val:m.distPerRep.replace(' m','').replace(',',''), unit:'m', label:stat1Label||'세트 거리'});
+      }
+      if(pace100)  statCells.push({val:pace100, unit:'', label:'100m 페이스'});
+      if(speedKmh) statCells.push({val:`${speedKmh}`, unit:'km/h', label:`목표속도 (${effIntLabel}%)`});
+      if(m.totalDist && m.totalDist!=='—') statCells.push({val:m.totalDist, unit:'', label:'총 거리', highlight:true});
+      if(m.totalWork && m.totalWork!=='—') statCells.push({val:fmtTime(m.totalWork), unit:'', label:'총 시간'});
+
+      const statGrid = statCells.map((c,ci)=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;${ci>0?'border-top:1px solid #f3f4f6;':''}">
+          <span style="font-size:10px;color:#9ca3af">${c.label}</span>
+          <span style="font-size:12px;font-weight:800;color:${c.highlight?pc.tc:'#111'};white-space:nowrap">${c.val}<span style="font-size:9px;font-weight:400;color:#6b7280;margin-left:2px">${c.unit}</span></span>
+        </div>`).join('');
+
+      const blockBadge = allBlocks.length>1
+        ? `<span style="display:inline-block;font-size:9px;font-weight:700;color:#fff;background:${pc.bc};border-radius:4px;padding:1px 6px;margin-right:6px">블록 ${bi+1}</span>`
+        : '';
+
+      html += `<div style="margin:8px 10px;${bi>0?'margin-top:0':''}border-radius:8px;background:#f8fafc;border:1px solid #e5e7eb;overflow:hidden">
+        <div style="padding:8px 12px;background:${pc.bg||'#f1f5f9'};border-bottom:1px solid #e5e7eb">
+          <div style="font-size:11px;font-weight:700;color:#111">${blockBadge}${b.ex.name}</div>
+          <div style="font-size:9px;color:#6b7280;margin-top:2px">${structureStr}${setRestStr?` · ${setRestStr}`:''}</div>
+        </div>
+        <div style="padding:8px 12px">${statGrid}</div>
+      </div>`;
+    });
+
+    // 선수 명단
+    const playerRows = g.players.map(p=>
+      `<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#f9fafb;border-radius:5px;border:1px solid #e5e7eb;font-size:12px">
+        <span style="font-weight:600;color:#111">${p.name}</span>
+        <span style="font-size:11px;color:${pc.tc};font-weight:700">${p.mas}</span>
+      </span>`
+    ).join('');
+
+    html += `<div style="padding:10px 16px;border-top:1px solid #e5e7eb;background:#fafafa;display:flex;flex-wrap:wrap;gap:6px">
+      ${playerRows}
+    </div>`;
+
+    html += `</div></div>`;
+  });
   html += `</div>`;
 
-  // ③ 코칭 포인트
-  const coachNote = getCardioCoachNote(ex.id, md);
-  html += `<div style="padding:9px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;line-height:1.7;margin-bottom:8px">💬 ${coachNote}</div>`;
-  html += `<div class="export-bar no-print"><button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button></div>`;
+  // ④ 코칭 포인트
+  const coachNote = getCardioCoachNote(allBlocks[allBlocks.length-1].ex.id, md);
+  html += `<div style="padding:9px 14px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:6px;font-size:11px;color:#374151;line-height:1.7;margin-top:14px;margin-bottom:8px">💬 ${coachNote}</div>`;
+  html += `<div class="export-bar no-print" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn-exp" onclick="window.print()" style="font-weight:600">🖨️ 인쇄</button>
+    <button class="btn-exp" onclick="downloadGroupCardioPDF()" style="font-weight:600">📄 PDF 저장</button>
+    <button class="btn-exp" onclick="downloadGroupCardioImage()" style="font-weight:600">🖼️ 이미지 저장</button>
+  </div>`;
   html += `</div>`;
 
   document.getElementById('cardio-output').innerHTML = html;
   document.getElementById('cardio-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+
+  // 생성 후 블록 초기화
+  _cardioBlocks = [];
+  renderCardioBlocksList();
+}
+
+async function downloadGroupCardioImage(){
+  const el = document.querySelector('#cardio-output .group-cardio-output');
+  if(!el){ alert('처방을 먼저 생성해주세요'); return; }
+  const canvas = await html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+  const a = document.createElement('a');
+  a.download = `유산소처방_${new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','')}.png`;
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+}
+
+async function downloadGroupCardioPDF(){
+  const el = document.querySelector('#cardio-output .group-cardio-output');
+  if(!el){ alert('처방을 먼저 생성해주세요'); return; }
+  const canvas = await html2canvas(el, {scale:2, backgroundColor:'#ffffff', useCORS:true});
+  const imgData = canvas.toDataURL('image/png');
+  const {jsPDF} = window.jspdf;
+  const pdf = new jsPDF({orientation: canvas.width > canvas.height ? 'landscape' : 'portrait', unit:'px', format:[canvas.width/2, canvas.height/2]});
+  pdf.addImage(imgData, 'PNG', 0, 0, canvas.width/2, canvas.height/2);
+  pdf.save(`유산소처방_${new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','')}.pdf`);
 }
 let _cardioCategory = '';
 let _cardioExId = '';
+let _cardioBlocks = []; // 멀티블록 처방용
 
 function toMs(kmh){ return kmh/3.6; }
 function calcDist(kmh,sec){ return Math.round(toMs(kmh)*sec); }
@@ -17038,6 +17105,8 @@ function renderCardioParamConfig(ex, catData){
   const cfg = document.getElementById('cardio-param-config');
   if(!cfg || !ex || !catData) return;
   cfg.style.display = 'block';
+  const addWrap = document.getElementById('cardio-add-block-wrap');
+  if(addWrap) addWrap.style.display = 'block';
 
   const playerId = document.getElementById('cardio-player')?.value;
   const player   = _players.find(p=>p.id===playerId);
@@ -17518,50 +17587,106 @@ function updateCardioIntensityPreview(){
   }
 }
 
+// ── 멀티블록 ─────────────────────────────────
+function collectCardioParams(){
+  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
+  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
+  if(!ex) return null;
+  const intensity   = parseFloat(document.getElementById('cp-intensity')?.value||0);
+  const sets        = parseInt(document.getElementById('cp-sets')?.value||0);
+  const reps        = parseInt(document.getElementById('cp-reps')?.value||0);
+  const durationMin = parseFloat(document.getElementById('cp-duration')?.value||0);
+  const workMin     = parseFloat(document.getElementById('cp-work-min')?.value||0);
+  const restMin     = parseFloat(document.getElementById('cp-rest-min')?.value||0);
+  const distance    = parseInt(document.getElementById('cp-distance')?.value||0);
+  const repRest     = parseInt(document.getElementById('cp-rep-rest')?.value||0);
+  const setRestSec  = parseInt(document.getElementById('cp-set-rest-sec')?.value||0);
+  const setRestMin  = parseFloat(document.getElementById('cp-set-rest')?.value||0);
+  const codAngle    = parseInt(document.getElementById('cp-cod-angle')?.value||0);
+  const codCount    = parseInt(document.getElementById('cp-cod-count')?.value||1);
+  const perSetIntensities = [];
+  if(ex.paramType==='set_time_rest_perset'){
+    for(let i=0;i<sets;i++){
+      perSetIntensities.push(parseFloat(document.getElementById(`cp-set-intensity-${i}`)?.value||intensity));
+    }
+  }
+  return { ex, catData, location:_cardioLocation, category:_cardioCategory, exId:_cardioExId,
+    intensity, sets, reps, durationMin, workMin, restMin, distance,
+    repRest, setRestSec, setRestMin, codAngle, codCount, perSetIntensities };
+}
+
+function addCardioBlock(){
+  if(!_cardioExId){ alert('운동 유형을 선택해주세요'); return; }
+  const params = collectCardioParams();
+  if(!params) return;
+  _cardioBlocks.push(params);
+  renderCardioBlocksList();
+  // 선택 초기화
+  _cardioCategory=''; _cardioExId='';
+  document.getElementById('cardio-param-config').style.display='none';
+  document.getElementById('cardio-add-block-wrap').style.display='none';
+  document.getElementById('cardio-ex-select').style.display='none';
+  document.getElementById('cardio-recommend').style.display='none';
+  renderCardioCategoryButtons();
+}
+
+function removeCardioBlock(idx){
+  _cardioBlocks.splice(idx,1);
+  renderCardioBlocksList();
+}
+
+function renderCardioBlocksList(){
+  const wrap = document.getElementById('cardio-blocks-list');
+  const items = document.getElementById('cardio-blocks-items');
+  if(!wrap||!items) return;
+  if(_cardioBlocks.length===0){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  items.innerHTML = _cardioBlocks.map((b,i)=>{
+    const setInfo = b.sets ? `${b.sets}세트` : '';
+    const workInfo = b.workMin ? `${b.workMin}분` : b.durationMin ? `${b.durationMin}분` : '';
+    const restInfo = b.restMin ? `휴식 ${b.restMin}분` : '';
+    const intInfo  = b.intensity ? `${b.intensity}${b.ex.intensityUnit}` : '';
+    const desc = [setInfo, workInfo&&`Work ${workInfo}`, restInfo, intInfo].filter(Boolean).join(' · ');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px;margin-bottom:6px">
+      <span style="font-size:12px;font-weight:700;color:var(--accent2);min-width:18px">${i+1}</span>
+      <span style="font-size:12px;color:${b.catData.color};flex:1"><strong>${b.ex.name}</strong> <span style="color:var(--text3)">${desc}</span></span>
+      <button onclick="removeCardioBlock(${i})" style="font-size:11px;padding:2px 8px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer">✕</button>
+    </div>`;
+  }).join('');
+}
+
 // ── 처방 생성 ─────────────────────────────────
 async function generateCardio(){
   if(_cardioMode==='group'){ await generateGroupCardio(); return; }
-  if(!_cardioExId){ alert('운동 유형을 선택해주세요'); return; }
-  const catData = (CARDIO_EX_DATA[_cardioLocation]||{})[_cardioCategory];
-  const ex = catData ? catData.exercises.find(e=>e.id===_cardioExId) : null;
-  if(!ex){ alert('운동 데이터를 찾을 수 없습니다'); return; }
+
+  // 현재 선택된 운동이 있으면 마지막 블록으로 자동 포함
+  const allBlocks = [..._cardioBlocks];
+  if(_cardioExId){
+    const cur = collectCardioParams();
+    if(cur) allBlocks.push(cur);
+  }
+  if(allBlocks.length===0){ alert('운동 유형을 선택하거나 블록을 추가해주세요'); return; }
 
   const playerId = document.getElementById('cardio-player')?.value;
   const player   = _players.find(p=>p.id===playerId);
   const md       = document.getElementById('cardio-md')?.value||'MD3';
   const mdLabel  = {'MD5':'MD-5','MD4':'MD-4','MD3':'MD-3','MD2':'MD-2','MD1':'MD-1'}[md];
-  const locLabel = {outdoor:'🏃 야외', treadmill:'🏃 트레드밀', cycle:'🚴 사이클'}[_cardioLocation]||'';
 
   const mas = player ? parseFloat(player.mas)  : null;
   const mss = player ? parseFloat(player.mss)  : null;
   const ft  = player ? getCardioFitnessType(player) : null;
 
-  // 파라미터 수집
-  const intensity    = parseFloat(document.getElementById('cp-intensity')?.value||0);
-  const sets         = parseInt(document.getElementById('cp-sets')?.value||0);
-  const reps         = parseInt(document.getElementById('cp-reps')?.value||0);
-  const durationMin  = parseFloat(document.getElementById('cp-duration')?.value||0);
-  const workMin      = parseFloat(document.getElementById('cp-work-min')?.value||0);
-  const restMin      = parseFloat(document.getElementById('cp-rest-min')?.value||0);
-  const distance     = parseInt(document.getElementById('cp-distance')?.value||0);
-  const repRest      = parseInt(document.getElementById('cp-rep-rest')?.value||0);
-  const setRestSec   = parseInt(document.getElementById('cp-set-rest-sec')?.value||0);
-  const setRestMin   = parseFloat(document.getElementById('cp-set-rest')?.value||0);
-  const codAngle     = parseInt(document.getElementById('cp-cod-angle')?.value||0);
-  const codCount     = parseInt(document.getElementById('cp-cod-count')?.value||1);
-
-  // 속도 계산 (야외 + %단위)
-  let speedKmh = null;
-  if(intensity && mas && ex.intensityUnit.includes('MAS'))  speedKmh = +(mas*intensity/100).toFixed(1);
-  if(intensity && mss && (ex.intensityUnit.includes('MSS')||ex.intensityUnit.includes('Vmax'))) speedKmh = +(mss*intensity/100).toFixed(1);
-
   // 헤더
   let html = `<div class="chips" style="margin-top:1rem">`;
   if(player) html += `<span class="chip">${player.name}</span><span class="chip">${player.position}</span>`;
-  html += `<span class="chip">${mdLabel}</span>
-    <span class="chip" style="color:${catData.color};border-color:${catData.border};background:${catData.bg}">🏃 ${ex.name}</span>
-    <span class="chip">${locLabel}</span>
-  </div>`;
+  html += `<span class="chip">${mdLabel}</span>`;
+  if(allBlocks.length>1) html += `<span class="chip">복합 ${allBlocks.length}블록</span>`;
+  else {
+    const b0 = allBlocks[0];
+    const locLabel = {outdoor:'🏃 야외', treadmill:'🏃 트레드밀', cycle:'🚴 사이클'}[b0.location]||'';
+    html += `<span class="chip" style="color:${b0.catData.color};border-color:${b0.catData.border};background:${b0.catData.bg}">🏃 ${b0.ex.name}</span><span class="chip">${locLabel}</span>`;
+  }
+  html += `</div>`;
 
   // 선수 데이터 요약
   if(player){
@@ -17573,22 +17698,25 @@ async function generateCardio(){
     </div>`;
   }
 
-  // 세트별 강도 수집 (set_time_rest_perset 전용)
-  const perSetIntensities = [];
-  if(ex.paramType==='set_time_rest_perset'){
-    for(let i=0;i<sets;i++){
-      const v = parseFloat(document.getElementById(`cp-set-intensity-${i}`)?.value||intensity);
-      perSetIntensities.push(v);
-    }
-  }
+  // 블록별 처방 출력
+  allBlocks.forEach((b, idx)=>{
+    let speedKmh = null;
+    if(b.intensity && mas && b.ex.intensityUnit.includes('MAS'))  speedKmh = +(mas*b.intensity/100).toFixed(1);
+    if(b.intensity && mss && (b.ex.intensityUnit.includes('MSS')||b.ex.intensityUnit.includes('Vmax'))) speedKmh = +(mss*b.intensity/100).toFixed(1);
 
-  html += buildCardioPrescriptionBlock(ex, catData, {
-    intensity, sets, reps, durationMin, workMin, restMin,
-    distance, repRest, setRestSec, setRestMin, speedKmh, mas, mss,
-    perSetIntensities, codAngle, codCount
+    if(allBlocks.length>1){
+      const locLabel = {outdoor:'야외', treadmill:'트레드밀', cycle:'사이클'}[b.location]||'';
+      html += `<div style="font-size:11px;font-weight:700;color:${b.catData.color};text-transform:uppercase;letter-spacing:.06em;margin:${idx===0?'0':'16px'} 0 6px">블록 ${idx+1} — ${b.ex.name} <span style="color:var(--text3);font-weight:400">${locLabel}</span></div>`;
+    }
+    html += buildCardioPrescriptionBlock(b.ex, b.catData, {
+      intensity:b.intensity, sets:b.sets, reps:b.reps, durationMin:b.durationMin,
+      workMin:b.workMin, restMin:b.restMin, distance:b.distance, repRest:b.repRest,
+      setRestSec:b.setRestSec, setRestMin:b.setRestMin, speedKmh, mas, mss,
+      perSetIntensities:b.perSetIntensities, codAngle:b.codAngle, codCount:b.codCount
+    });
   });
 
-  const coachNote = getCardioCoachNote(ex.id, md);
+  const coachNote = getCardioCoachNote(allBlocks[allBlocks.length-1].ex.id, md);
   html += `<div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
     <div class="coaching-box"><p>${coachNote}</p></div>
     <div class="export-bar">
@@ -17597,17 +17725,26 @@ async function generateCardio(){
     </div>
     <div id="cardio-send-msg" style="text-align:center;font-size:12px;min-height:16px;margin-top:6px"></div>`;
 
-  // 전송용 처방 데이터 저장
+  // 전송용 처방 데이터 저장 (마지막 블록 기준)
+  const lastB = allBlocks[allBlocks.length-1];
+  let lastSpeedKmh = null;
+  if(lastB.intensity && mas && lastB.ex.intensityUnit.includes('MAS')) lastSpeedKmh = +(mas*lastB.intensity/100).toFixed(1);
+  if(lastB.intensity && mss && (lastB.ex.intensityUnit.includes('MSS')||lastB.ex.intensityUnit.includes('Vmax'))) lastSpeedKmh = +(mss*lastB.intensity/100).toFixed(1);
   window._cardioPrescription = {
     playerId, player,
-    exName: ex.name, mdLabel, paramType: ex.paramType,
-    intensityUnit: ex.intensityUnit, ws: ex.workSec || null,
-    intensity, sets, reps, durationMin, workMin, restMin,
-    speedKmh, codAngle, codCount, coachNote
+    exName: allBlocks.map(b=>b.ex.name).join(' + '), mdLabel, paramType: lastB.ex.paramType,
+    intensityUnit: lastB.ex.intensityUnit, ws: lastB.ex.workSec || null,
+    intensity:lastB.intensity, sets:lastB.sets, reps:lastB.reps,
+    durationMin:lastB.durationMin, workMin:lastB.workMin, restMin:lastB.restMin,
+    speedKmh:lastSpeedKmh, codAngle:lastB.codAngle, codCount:lastB.codCount, coachNote
   };
 
   document.getElementById('cardio-output').innerHTML = html;
   document.getElementById('cardio-output').querySelectorAll('.admin-only').forEach(e=>{e.style.display=isAdmin?'':'none';});
+
+  // 생성 후 블록 초기화
+  _cardioBlocks = [];
+  renderCardioBlocksList();
 }
 
 async function sendCardioPrescription(){
