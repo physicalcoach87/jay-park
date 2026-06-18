@@ -6149,10 +6149,12 @@ async function generateGym(){
       const idx=gi;gi++;
       const pool=GYM_POOL[item.partKey];
       _currentMultiPicked.push({ex:item.ex,partKey:item.partKey,color:pool.color});
-      cardsHtml+=`<div id="gym-multi-ex-${idx}" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:8px;border-left:3px solid ${pool.color}">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      const pBadge=item.ex.p==='main'?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700;flex-shrink:0">주운동</span>`:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(156,163,175,0.2);color:var(--text3);font-weight:700;flex-shrink:0">보조</span>`;
+      cardsHtml+=`<div id="gym-multi-ex-${idx}" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:8px;border-left:5px solid ${pool.color}">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <div style="width:20px;height:20px;border-radius:5px;background:${pool.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${idx}</div>
           <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${pool.color}22;color:${pool.color};font-weight:700;flex-shrink:0">${GYM_PART_KOR[item.partKey]||item.partKey}</span>
+          ${pBadge}
           <span style="font-size:14px;font-weight:700;color:var(--text)">${item.ex.n}</span>
           <button onclick="showMultiAlternatives(${idx},'${item.partKey}')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
         </div>
@@ -6325,14 +6327,16 @@ function showGymAlternatives(pairIdx, slot){
   const curEx=slot==='a'?pair.a:pair.b;
   if(!curEx) return;
 
-  // 대안 풀: 같은 body_part 우선, 현재 운동 제외
+  // 대안 풀: 같은 body_part만 — 5개 미만이면 다른 부위로 보충
   const pool=(pair.type==='contrast'&&slot==='b')?_gymPowerExercises:_gymAllExercises;
   const samePart=pool.filter(e=>e.id!==curEx.id&&e.body_part===curEx.body_part);
-  const anyPart=pool.filter(e=>e.id!==curEx.id&&e.body_part!==curEx.body_part);
-  const candidates=[...samePart,...anyPart];
-  // 셔플
-  for(let i=candidates.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[candidates[i],candidates[j]]=[candidates[j],candidates[i]];}
-  const shown=candidates.slice(0,5);
+  for(let i=samePart.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[samePart[i],samePart[j]]=[samePart[j],samePart[i]];}
+  let shown=samePart.slice(0,5);
+  if(shown.length<5){
+    const anyPart=pool.filter(e=>e.id!==curEx.id&&e.body_part!==curEx.body_part);
+    for(let i=anyPart.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[anyPart[i],anyPart[j]]=[anyPart[j],anyPart[i]];}
+    shown=[...shown,...anyPart].slice(0,5);
+  }
 
   const panel=document.createElement('div');
   panel.className='gym-alt-panel';
@@ -6422,11 +6426,26 @@ function showMultiAlternatives(gi, partKey){
   const pool=GYM_POOL[partKey];
   if(!pool) return;
 
-  // 같은 부위 풀에서 현재 운동 제외 후 셔플
-  const allAvail=[];
-  Object.values(pool.subs).forEach(sub=>{
-    sub.ex.filter(e=>gymEquipOk(e.equip)&&e.n!==cur.ex.n).forEach(e=>allAvail.push(e));
-  });
+  // 현재 운동의 세부 근육 그룹(subKey)과 타입(p) 파악
+  let curSubKey=null;
+  for(const [sk,sub] of Object.entries(pool.subs)){
+    if(sub.ex.find(e=>e.n===cur.ex.n)){curSubKey=sk;break;}
+  }
+  const curPType=cur.ex.p;
+
+  // 같은 세부 근육 + 같은 p타입 우선, 없으면 같은 세부 근육, 그것도 없으면 전체
+  let allAvail=[];
+  if(curSubKey){
+    allAvail=pool.subs[curSubKey].ex.filter(e=>gymEquipOk(e.equip)&&e.n!==cur.ex.n&&e.p===curPType);
+    if(!allAvail.length){
+      allAvail=pool.subs[curSubKey].ex.filter(e=>gymEquipOk(e.equip)&&e.n!==cur.ex.n);
+    }
+  }
+  if(!allAvail.length){
+    Object.values(pool.subs).forEach(sub=>{
+      sub.ex.filter(e=>gymEquipOk(e.equip)&&e.n!==cur.ex.n&&e.p===curPType).forEach(e=>allAvail.push(e));
+    });
+  }
   for(let i=allAvail.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[allAvail[i],allAvail[j]]=[allAvail[j],allAvail[i]];}
   _gymMultiAltShown=allAvail.slice(0,5);
 
@@ -6463,10 +6482,12 @@ function doMultiSwap(gi, altIdx){
   const slotEl=document.getElementById(`gym-multi-ex-${gi}`);
   if(!slotEl) return;
   const purpT=_currentGymPurpT;
+  const swapPBadge=newEx.p==='main'?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(239,68,68,0.15);color:#f87171;font-weight:700;flex-shrink:0">주운동</span>`:`<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(156,163,175,0.2);color:var(--text3);font-weight:700;flex-shrink:0">보조</span>`;
   slotEl.innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
       <div style="width:20px;height:20px;border-radius:5px;background:${cur.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${gi}</div>
       <span style="font-size:10px;padding:1px 6px;border-radius:4px;background:${cur.color}22;color:${cur.color};font-weight:700;flex-shrink:0">${GYM_PART_KOR[cur.partKey]||cur.partKey}</span>
+      ${swapPBadge}
       <span style="font-size:14px;font-weight:700;color:var(--text)">${newEx.n}</span>
       <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(74,222,128,0.15);color:#4ade80">✓ 변경됨</span>
       <button onclick="showMultiAlternatives(${gi},'${cur.partKey}')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
