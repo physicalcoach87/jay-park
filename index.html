@@ -20682,13 +20682,18 @@ function printTrainingReport(){
     box-shadow:0 4px 20px rgba(22,163,74,.35);
     z-index:9999;
   }
-  @page{ size:A4 portrait; margin:12mm 0 8mm 0; }
+  @page{ size:A4 landscape; margin:8mm 0 6mm 0; }
   @media print{
-    body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
-    .report-logo{ background:#16a34a !important; }
-    div[style*="border-radius:10px"]{ break-inside:avoid; page-break-inside:avoid; }
+    body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; font-size:10px; }
+    .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; padding:10px 20px 8px !important; }
+    .report-logo{ background:#16a34a !important; width:34px !important; height:34px !important; font-size:16px !important; }
+    .report-title{ font-size:14px !important; }
+    .report-body{ padding:10px 20px 10px !important; }
+    .report-footer{ padding:6px 20px !important; }
+    div[style*="border-radius:10px"]{ break-inside:avoid; page-break-inside:avoid; margin-bottom:6px !important; }
     .screen-print-btn{ display:none !important }
+    table{ font-size:10px !important; }
+    td,th{ padding:3px 5px !important; }
   }
 </style>
 </head>
