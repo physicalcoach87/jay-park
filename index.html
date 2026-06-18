@@ -12715,8 +12715,11 @@ async function buildWeeklyLoadHtml(forDate){
       if(target==null||a==null) return '<span style="color:var(--text3)">—</span>';
       const p = Math.round(a/target*100);
       const c = p>130?'#ef4444':p>=110?'#f97316':p>=90?'#22c55e':p>=70?'#eab308':'#ef4444';
-      const bg = p>130?'rgba(239,68,68,0.1)':p>=110?'rgba(249,115,22,0.1)':p>=90?'rgba(34,197,94,0.1)':p>=70?'rgba(234,179,8,0.1)':'rgba(239,68,68,0.1)';
-      return '<span style="font-size:10px;padding:1px 6px;border-radius:4px;background:'+bg+';color:'+c+';font-weight:700">'+p+'%</span>';
+      const w = Math.min(p,100);
+      return '<div style="display:flex;align-items:center;gap:5px;justify-content:flex-end">'
+        +'<div style="width:42px;height:6px;border-radius:3px;background:rgba(120,120,120,0.18);overflow:hidden;flex-shrink:0"><div style="width:'+w+'%;height:100%;background:'+c+';border-radius:3px"></div></div>'
+        +'<span style="font-size:10px;color:'+c+';font-weight:700;min-width:30px;text-align:right">'+p+'%</span>'
+        +'</div>';
     };
 
     // 이번 주 실제 누적:
@@ -13009,28 +13012,32 @@ async function loadTeamSummary(forceDate, quiet=false){
   const rpeTotal    = rpeStatusRows.length;
 
   // 통합 행 렌더 (currentUseWellness / currentUseRpe 플래그로 컬럼 제어)
-  const rpeStatusHtml = rpeStatusRows.map(r=>`
-    <tr style="border-bottom:1px solid var(--border)">
-      <td style="padding:6px 8px">
-        <div style="font-weight:600;color:var(--text);font-size:12px">${r.p.name}</div>
+  const rpeStatusHtml = rpeStatusRows.map((r,idx)=>{
+    const _risk = r.wellTotal==null ? null : r.wellTotal<9 ? 'danger' : r.wellTotal<13 ? 'warn' : null;
+    const _rowBg = _risk==='danger' ? 'rgba(239,68,68,0.10)' : _risk==='warn' ? 'rgba(245,158,11,0.10)' : (idx%2?'var(--surface2)':'transparent');
+    const _rowBorder = _risk==='danger' ? '3px solid #ef4444' : _risk==='warn' ? '3px solid #f59e0b' : '3px solid transparent';
+    return `
+    <tr style="border-bottom:1px solid var(--border);background:${_rowBg}">
+      <td style="padding:3px 8px;border-left:${_rowBorder};white-space:nowrap">
+        <div style="font-weight:600;color:var(--text);font-size:12px;white-space:nowrap">${r.p.name}${_risk==='danger'?' <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#ef4444;color:#fff;font-weight:700;white-space:nowrap;display:inline-block">위험</span>':_risk==='warn'?' <span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#f59e0b;color:#fff;font-weight:700;white-space:nowrap;display:inline-block">주의</span>':''}</div>
         <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
       </td>
       ${currentUseWellness?`
-      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wFatC}">${r.hasWell?r.wf:'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wSlpC}">${r.hasWell?r.ws2:'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wStC}">${r.hasWell?r.wst:'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wMuC}">${r.hasWell?r.wm:'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:12px;font-weight:700;color:${r.wellStatusColor}">${r.wellTotal!=null?r.wellTotal+'/20':'—'}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:600;color:${r.wellStatusColor}">${r.wellStatus}${r.wellStatusDot}</td>
-      <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.wellTimeStr}</td>`:''}
-      ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;line-height:1.6">${r.sessRpeDisp}</td>`:''}
-      ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>`:''}
-      ${currentUseWellness?`<td style="padding:6px 8px;text-align:right;font-size:11px">
+      <td style="padding:3px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wFatC}">${r.hasWell?r.wf:'—'}</td>
+      <td style="padding:3px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wSlpC}">${r.hasWell?r.ws2:'—'}</td>
+      <td style="padding:3px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wStC}">${r.hasWell?r.wst:'—'}</td>
+      <td style="padding:3px 8px;text-align:center;font-size:13px;font-weight:700;color:${r.wMuC}">${r.hasWell?r.wm:'—'}</td>
+      <td style="padding:3px 8px;text-align:center;font-size:12px;font-weight:700;color:${r.wellStatusColor}">${r.wellTotal!=null?r.wellTotal+'/20':'—'}</td>
+      <td style="padding:3px 8px;text-align:center;font-size:11px;font-weight:600;color:${r.wellStatusColor};white-space:nowrap">${r.wellStatus}${r.wellStatusDot}</td>
+      <td style="padding:3px 8px;text-align:center;font-size:11px;color:var(--text3);white-space:nowrap">${r.wellTimeStr}</td>`:''}
+      ${currentUseRpe?`<td style="padding:3px 8px;text-align:right;line-height:1.5;white-space:nowrap">${r.sessRpeDisp}</td>`:''}
+      ${currentUseRpe?`<td style="padding:3px 8px;text-align:right;color:#c084fc;font-size:12px">${r.sRPE||'—'}</td>`:''}
+      ${currentUseWellness?`<td style="padding:3px 8px;text-align:right;font-size:11px;white-space:nowrap">
         <div style="color:var(--text3)">${r.preW ? r.preW+' kg' : '—'}</div>
         <div style="color:${r.wDiffColor}">${r.postW ? r.postW+' kg'+(r.wDiff!==null?' ('+( parseFloat(r.wDiff)>0?'+':'')+r.wDiff+')':'') : '—'}</div>
       </td>`:''}
-      <td style="padding:6px 8px;text-align:center">${r.gpsDot}</td>
-      ${currentUseRpe?`<td style="padding:6px 4px;text-align:center">
+      <td style="padding:3px 8px;text-align:center">${r.gpsDot}</td>
+      ${currentUseRpe?`<td class="wreport-edit-col" style="padding:3px 4px;text-align:center">
         <div style="display:flex;gap:4px;align-items:center;justify-content:center">
           <button data-rpe-btn="${r.p.id}" onclick="openCoachRpeModal('${date}','${r.p.id}','${r.p.name}')"
             style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasCoachEdit?'rgba(99,102,241,0.5)':r.hasRpe?'rgba(251,191,36,0.4)':'rgba(74,222,128,0.4)'};background:${r.hasCoachEdit?'rgba(99,102,241,0.12)':r.hasRpe?'rgba(251,191,36,0.08)':'rgba(74,222,128,0.08)'};color:${r.hasCoachEdit?'#a5b4fc':r.hasRpe?'#fbbf24':'#4ade80'}">
@@ -13040,11 +13047,11 @@ async function loadTeamSummary(forceDate, quiet=false){
             style="font-size:11px;padding:3px 6px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid rgba(167,139,250,0.3);background:transparent;color:#a78bfa">
             🔔</button>
         </div></td>`:''}
-      ${(!currentUsePlayerApp&&currentUseWellness)?`<td style="padding:6px 4px;text-align:center">
+      ${(!currentUsePlayerApp&&currentUseWellness)?`<td class="wreport-edit-col" style="padding:3px 4px;text-align:center">
         <button onclick="openCoachWellnessModal('${date}','${r.p.id}','${r.p.name}')"
           style="font-size:11px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:inherit;border:1px solid ${r.hasWell?'rgba(34,197,94,0.4)':'rgba(96,165,250,0.4)'};background:${r.hasWell?'rgba(34,197,94,0.08)':'rgba(96,165,250,0.08)'};color:${r.hasWell?'#4ade80':'#60a5fa'}">
           ${r.hasWell?'수정':'입력'}</button></td>`:''}
-    </tr>`).join('');
+    </tr>`;}).join('');
 
   // ── GPS 기반 팀 평균 / 테이블 (GPS 있을 때만) ──
   const isV1plan = currentGpsPlan === 'V1';
@@ -13186,7 +13193,7 @@ async function loadTeamSummary(forceDate, quiet=false){
     return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${label}</span>`;
   };
 
-  const renderTable = (arr) => arr.map(r=>{
+  const renderTable = (arr) => arr.map((r,idx)=>{
     const rt2 = (r.session_type2||'').trim().toUpperCase();
     const rtBadge = rt2 === 'SS'
       ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#2a1a00;color:#fbbf24;font-weight:700;margin-left:4px">SS</span>'
@@ -13221,7 +13228,7 @@ async function loadTeamSummary(forceDate, quiet=false){
     const hsrVal = parseFloat(r.running_high)||0;
     const sprVal = parseFloat(r.sprint)||0;
     return `
-    <tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="selectDashboardPlayer('${r.player_id}')">
+    <tr style="border-bottom:1px solid var(--border);cursor:pointer;background:${idx%2?'var(--surface2)':'transparent'}" onclick="selectDashboardPlayer('${r.player_id}')">
       <td style="padding:7px 8px">
         <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}${rtBadge}</div>
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
@@ -13243,6 +13250,7 @@ async function loadTeamSummary(forceDate, quiet=false){
     </tr>`;}).join('');
 
   const tableHeader = `
+    <thead style="display:table-header-group">
     <tr style="background:var(--surface2)">
       <th style="padding:7px 8px;text-align:left;color:var(--text3)">선수</th>
       <th style="padding:7px 8px;text-align:right;color:var(--text3)">시간(분)</th>
@@ -13256,10 +13264,61 @@ async function loadTeamSummary(forceDate, quiet=false){
       ${currentUseRpe?'<th style="padding:7px 8px;text-align:right;color:#fbbf24">RPE</th>':''}
       ${currentUseRpe?'<th style="padding:7px 8px;text-align:right;color:#c084fc">sRPE</th>':''}
       ${(currentUseRpe&&currentUseWellness)?'<th style="padding:7px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>':''}
-    </tr>`;
+    </tr>
+    </thead>`;
 
   const mRpeAvg  = calcAvgRpe(fullGps);
   const mSrpeAvg = calcAvgSrpe(fullGps);
+
+  // 그룹 통계 한 줄 텍스트 (M/혼합/서브 공통)
+  const groupStatChips = (arr) => {
+    if(!arr.length) return '';
+    const parts = [
+      `TD <strong style="color:var(--accent2)">${avgGroup(arr,'td',0)}m</strong>`,
+      `HSR <strong style="color:#f59e0b">${avgGroup(arr,'running_high',0)}m</strong>`,
+      `Sprint <strong style="color:#ef4444">${avgGroup(arr,'sprint',0)}m</strong>`,
+      `가속 <strong style="color:#fb923c">${avgGroup(arr,'accel',0)}회</strong>`,
+      isV1plan?'':`RHIE <strong style="color:#34d399">${avgGroup(arr,'rhie',0)}회</strong>`,
+      `최고속도 <strong style="color:#60a5fa">${avgGroup(arr,'max_speed',1)}km/h</strong>`,
+      currentUseRpe?`RPE <strong style="color:#fbbf24">${calcAvgRpe(arr)}</strong>`:'',
+      currentUseRpe?`sRPE <strong style="color:#c084fc">${calcAvgSrpe(arr)}</strong>`:''
+    ].filter(Boolean);
+    return `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">팀 평균 · ${parts.join(' · ')}</div>`;
+  };
+
+  // ── 웰니스 요약 통계 ──
+  const _wellRows = rpeStatusRows.filter(r=>r.wellTotal!=null);
+  const _wBest = _wellRows.filter(r=>r.wellTotal>=17).length;
+  const _wGood = _wellRows.filter(r=>r.wellTotal>=13&&r.wellTotal<17).length;
+  const _wWarn = _wellRows.filter(r=>r.wellTotal>=9&&r.wellTotal<13).length;
+  const _wDanger = _wellRows.filter(r=>r.wellTotal<9).length;
+  const _wAvg = _wellRows.length ? (_wellRows.reduce((a,r)=>a+r.wellTotal,0)/_wellRows.length).toFixed(1) : '—';
+  const _wDangerNames = _wellRows.filter(r=>r.wellTotal<9).map(r=>r.p.name);
+  const _wWarnNames = _wellRows.filter(r=>r.wellTotal>=9&&r.wellTotal<13).map(r=>r.p.name);
+  const _wellSummaryCard = currentUseWellness ? `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <div style="flex:1;min-width:90px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:2px">평균 총점</div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">${_wAvg}<span style="font-size:11px;color:var(--text3)">/20</span></div>
+      </div>
+      <div style="flex:1;min-width:70px;background:rgba(34,197,94,0.10);border:1px solid rgba(34,197,94,0.3);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;color:#22c55e;margin-bottom:2px">🟢 최상·양호</div>
+        <div style="font-size:18px;font-weight:700;color:#22c55e">${_wBest+_wGood}<span style="font-size:11px">명</span></div>
+      </div>
+      <div style="flex:1;min-width:70px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.3);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;color:#f59e0b;margin-bottom:2px">🟡 주의</div>
+        <div style="font-size:18px;font-weight:700;color:#f59e0b">${_wWarn}<span style="font-size:11px">명</span></div>
+      </div>
+      <div style="flex:1;min-width:70px;background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.3);border-radius:8px;padding:8px 10px;text-align:center">
+        <div style="font-size:10px;color:#ef4444;margin-bottom:2px">🔴 위험</div>
+        <div style="font-size:18px;font-weight:700;color:#ef4444">${_wDanger}<span style="font-size:11px">명</span></div>
+      </div>
+    </div>
+    ${(_wDangerNames.length||_wWarnNames.length) ? `<div style="font-size:11px;color:var(--text2);margin-bottom:12px;padding:8px 10px;background:rgba(239,68,68,0.06);border-left:3px solid #ef4444;border-radius:4px">
+      ${_wDangerNames.length?`<span style="color:#ef4444;font-weight:700">🔴 위험:</span> ${_wDangerNames.join(', ')}`:''}
+      ${(_wDangerNames.length&&_wWarnNames.length)?'<br>':''}
+      ${_wWarnNames.length?`<span style="color:#f59e0b;font-weight:700">🟡 주의:</span> ${_wWarnNames.join(', ')}`:''}
+    </div>`:''}` : '';
 
   const _rpeHtml = `
     <!-- ④ RPE/체중 입력 현황 -->
@@ -13279,8 +13338,10 @@ async function loadTeamSummary(forceDate, quiet=false){
           </div>
         </div>
       </div>
+      ${_wellSummaryCard}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead class="print-thead" style="display:table-header-group">
           <tr style="background:var(--surface2)">
             <th style="padding:5px 6px;text-align:left;color:var(--text3);font-size:11px;white-space:nowrap">선수</th>
             ${currentUseWellness ? `
@@ -13295,10 +13356,11 @@ async function loadTeamSummary(forceDate, quiet=false){
             ${currentUseRpe?`<th style="padding:5px 4px;text-align:right;color:#c084fc;font-size:10px;white-space:nowrap">sRPE</th>`:''}
             ${currentUseWellness ? `<th style="padding:5px 4px;text-align:right;color:var(--text3);font-size:10px;white-space:nowrap">전/후체중(kg)</th>` : ''}
             <th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">GPS</th>
-            ${currentUseRpe ? `<th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">RPE편집</th>` : ''}
-            ${(!currentUsePlayerApp&&currentUseWellness) ? `<th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">웰니스편집</th>` : ''}
+            ${currentUseRpe ? `<th class="wreport-edit-col" style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">RPE편집</th>` : ''}
+            ${(!currentUsePlayerApp&&currentUseWellness) ? `<th class="wreport-edit-col" style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">웰니스편집</th>` : ''}
           </tr>
-          ${rpeStatusHtml}
+          </thead>
+          <tbody>${rpeStatusHtml}</tbody>
         </table>
       </div>
     </div>`;
@@ -13310,15 +13372,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
         M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
       </div>
-      <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
-        팀 평균 · TD <strong style="color:var(--accent2)">${avgGroup(fullGps,'td',0)}m</strong>
-        · HSR <strong style="color:#f59e0b">${avgGroup(fullGps,'running_high',0)}m</strong>
-        · Sprint <strong style="color:#ef4444">${avgGroup(fullGps,'sprint',0)}m</strong>
-        · 가속 <strong style="color:#fb923c">${avgGroup(fullGps,'accel',0)}회</strong>
-        ${isV1plan?'':' · RHIE <strong style="color:#34d399">'+avgGroup(fullGps,'rhie',0)+'회</strong>'}
-        · 최고속도 <strong style="color:#60a5fa">${avgGroup(fullGps,'max_speed',1)}km/h</strong>
-        ${currentUseRpe?' · RPE <strong style="color:#fbbf24">'+mRpeAvg+'</strong> · sRPE <strong style="color:#c084fc">'+mSrpeAvg+'</strong>':''}
-      </div>
+      ${groupStatChips(fullGps)}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
@@ -13327,7 +13381,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       </div>
     </div>
 
-    <!-- ④ 혼합 그룹 (오전/오후 그룹 상이) -->
+    <!-- ④ 혼합 그룹 (오전/오후 그룹 상이) — 항상 새 페이지 시작 -->
     ${mixedGps.length ? `
     <div class="print-page-start" style="background:var(--surface);border:1px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#fbbf24;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
@@ -13336,6 +13390,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
         오전·오후 분류가 다른 선수 (예: 오전 S / 오후 M). 하루 전체 합산 기준이며 M그룹 평균에는 포함하지 않습니다.
       </div>
+      ${groupStatChips(mixedGps)}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
@@ -13344,15 +13399,16 @@ async function loadTeamSummary(forceDate, quiet=false){
       </div>
     </div>` : ''}
 
-    <!-- ⑤ 서브/미엔트리 그룹 -->
+    <!-- ⑤ 서브/미엔트리 그룹 — 혼합 없으면 새 페이지, 있으면 혼합과 같은 페이지 -->
     ${indGps.length ? `
-    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="${mixedGps.length?'':'print-page-start'}" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         서브 평균 (${indGps.length}명)
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
         서브/미엔트리(S) ${indGps.length - ssGps.length - xGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">스페셜 세션(SS) '+ssGps.length+'명 — 팀 평균 미반영</span>' : ''}${xGps.length > 0 ? ' · <span style="color:#f87171;font-weight:600">엔트리 제외(X) '+xGps.length+'명 — 팀 평균 미반영</span>' : ''}
       </div>
+      ${groupStatChips(indGps)}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
@@ -20629,7 +20685,7 @@ function printTrainingReport(){
   .report-sub{ font-size:11px; color:#cbd5e1; margin-top:2px; }
   .report-meta{ text-align:right; font-size:11px; color:#94a3b8; line-height:1.8; }
   .report-meta strong{ color:#e2e8f0; }
-  .report-body{ padding:20px 28px 16px; }
+  .report-body{ padding:32px 28px 16px; }
   div[style*="background:var(--surface)"],
   div[style*="background:var(--surface2)"]{background:#f9fafb !important;}
   [style*="color:var(--text)"]:not([style*="color:var(--text2)"]):not([style*="color:var(--text3)"]){color:#111827 !important}
@@ -20639,16 +20695,14 @@ function printTrainingReport(){
   [style*="border:1px solid var(--border)"],[style*="border-bottom:1px solid var(--border)"],[style*="border:1px solid var(--border2)"]{ border-color:#9ca3af !important }
   svg[style*="background:var(--surface2)"]{ background:#f4f5f6 !important }
   #training-report-action-bar, select, button{ display:none !important }
-  /* 페이지 나눔 제어 */
+  .wreport-edit-col{ display:none !important }
+  /* 페이지 나눔 제어 (화면에서도 섹션 간 여백 확보) */
   .print-page-start{
     page-break-before: always !important;
     break-before: page !important;
-    margin-top: 0 !important;
+    margin-top: 28px;
   }
-  /* 주기화 섹션은 1페이지에 유지 */
   div[style*="border-radius:10px"]{
-    break-inside:avoid;
-    page-break-inside:avoid;
     margin-bottom:10px;
   }
   /* 테이블 행 자르지 않기 */
@@ -20682,14 +20736,24 @@ function printTrainingReport(){
     box-shadow:0 4px 20px rgba(22,163,74,.35);
     z-index:9999;
   }
-  @page{ size:A4 landscape; margin:6mm 0 4mm 0; }
+  @page{ size:A4 portrait; margin:0 8mm; }
   @media print{
-    html{ zoom:0.60; }
     body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .report-logo{ background:#16a34a !important; }
-    div[style*="border-radius:10px"]{ break-inside:avoid; page-break-inside:avoid; }
+    /* 표가 길면 다음 페이지로 자연스럽게 넘어가고, thead(항목)가 반복되도록 */
+    table{ break-inside:auto; }
+    tr{ break-inside:avoid; }
+    thead{ display:table-header-group; }
     .screen-print-btn{ display:none !important }
+    /* @page margin이 인쇄 대화상자에서 무시되는 경우가 많아,
+       page-break 카드 위에 흰 top border로 여백을 직접 확보(margin과 달리 page-break에서 collapse 안 됨) */
+    .print-page-start{ border-top:8mm solid #fff !important; margin-top:0 !important; }
+    /* report-body 첫 카드도 위 여백 확보 */
+    .report-body{ padding-top:8mm !important; }
+    /* 긴 표가 다음 페이지로 넘어갈 때, 반복되는 헤더 위에 여백 확보
+       (thead는 매 페이지 반복되므로 th의 top border가 연속 페이지 상단 여백 역할) */
+    .print-thead th{ border-top:8mm solid #fff !important; }
   }
 </style>
 </head>
