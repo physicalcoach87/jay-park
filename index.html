@@ -12977,13 +12977,13 @@ async function loadTeamSummary(forceDate, quiet=false){
     const wf=parseFloat(w.fatigue)||0, ws2=parseFloat(w.sleep_quality)||0, wst=parseFloat(w.stress)||0, wm=parseFloat(w.muscle_soreness)||0;
     const hasWell = w.fatigue!=null||w.sleep_quality!=null||w.stress!=null||w.muscle_soreness!=null;
     const wellTotal = hasWell ? wf+ws2+wst+wm : null;
-    const wSC = v => v>=4?'#22c55e':v>=3?'#86efac':v>=2?'#eab308':'#ef4444';
+    const wSC = v => v>=4?'#22c55e':v>=3?'#f59e0b':v>=2?'#f97316':'#ef4444';
     const wFatC = hasWell&&wf ? wSC(wf) : 'var(--text3)';
     const wSlpC = hasWell&&ws2 ? wSC(ws2) : 'var(--text3)';
     const wStC  = hasWell&&wst ? wSC(wst) : 'var(--text3)';
     const wMuC  = hasWell&&wm  ? wSC(wm)  : 'var(--text3)';
     const wellStatus = wellTotal==null?'—':wellTotal>=17?'최상':wellTotal>=13?'양호':wellTotal>=9?'주의':'위험';
-    const wellStatusColor = wellTotal==null?'var(--text3)':wellTotal>=17?'#22c55e':wellTotal>=13?'#86efac':wellTotal>=9?'#f97316':'#ef4444';
+    const wellStatusColor = wellTotal==null?'var(--text3)':wellTotal>=17?'#22c55e':wellTotal>=13?'#f59e0b':wellTotal>=9?'#f97316':'#ef4444';
     const wellStatusDot = wellTotal==null?'':wellTotal>=13?' 🟢':wellTotal>=9?' 🟡':' 🔴';
     const wellTimeStr = toKSTHHMM(w.created_at);
     const rpeTimeStr  = toKSTHHMM(s1.created_at);
