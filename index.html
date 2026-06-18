@@ -2282,32 +2282,26 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="dm-training-area">
       <!-- MD 라벨 -->
       <div style="margin-bottom:14px">
-        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨 <span style="font-size:10px">(선택 또는 직접 입력)</span></div>
-        <input id="dm-day-label" type="text" list="dm-day-label-list" placeholder="예) MD-4, D-1, W1..." oninput="onDmLabelChange(this.value)" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨</div>
+        <input id="dm-day-label" type="text" placeholder="예) MD-4, D-1, W1..." oninput="onDmLabelChange(this.value)" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:6px">
+        <div style="display:flex;flex-wrap:wrap;gap:5px">
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD-5';onDmLabelChange('MD-5')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-5</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD-4';onDmLabelChange('MD-4')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-4</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD-3';onDmLabelChange('MD-3')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-3</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD-2';onDmLabelChange('MD-2')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-2</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD-1';onDmLabelChange('MD-1')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-1</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD';onDmLabelChange('MD')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD+1';onDmLabelChange('MD+1')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD+1</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD+2';onDmLabelChange('MD+2')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD+2</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='연습경기';onDmLabelChange('연습경기')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">연습경기</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='REST';onDmLabelChange('REST')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">REST</button>
+        </div>
         <div id="dm-load-hint" style="display:none;margin-top:7px;padding:7px 10px;border-radius:7px;font-size:11px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc">✨ 추천 운동량이 적용됐어요. 팀 상황에 맞게 수정하세요.</div>
         <div id="dm-mss-badge" style="display:none;margin-top:7px;padding:10px 12px;border-radius:8px;font-size:11px;border:1px solid">
           <div id="dm-mss-title" style="font-size:12px;font-weight:700;margin-bottom:4px"></div>
           <div id="dm-mss-detail" style="color:var(--text2);line-height:1.6;white-space:pre-line"></div>
           <div id="dm-mss-source" style="font-size:10px;color:var(--text3);margin-top:5px;display:none"></div>
         </div>
-        <datalist id="dm-day-label-list">
-          <option value="MD-5"></option>
-          <option value="MD-4"></option>
-          <option value="MD-3"></option>
-          <option value="MD-2"></option>
-          <option value="MD-1"></option>
-          <option value="MD"></option>
-          <option value="MD+1"></option>
-          <option value="MD+2"></option>
-          <option value="REST"></option>
-          <option value="연습경기"></option>
-          <option value="D-1"></option>
-          <option value="D-2"></option>
-          <option value="D-3"></option>
-          <option value="D-4"></option>
-          <option value="D-5"></option>
-
-        </datalist>
       </div>
       <!-- AM 세션 -->
       <div style="margin-bottom:12px">
