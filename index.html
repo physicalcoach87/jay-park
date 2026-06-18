@@ -13282,21 +13282,21 @@ async function loadTeamSummary(forceDate, quiet=false){
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px">
           <tr style="background:var(--surface2)">
-            <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+            <th style="padding:5px 6px;text-align:left;color:var(--text3);font-size:11px;white-space:nowrap">선수</th>
             ${currentUseWellness ? `
-            <th style="padding:6px 8px;text-align:center;color:#22c55e">🔋 피로도</th>
-            <th style="padding:6px 8px;text-align:center;color:#22c55e">😴 수면질</th>
-            <th style="padding:6px 8px;text-align:center;color:#22c55e">🧠 스트레스</th>
-            <th style="padding:6px 8px;text-align:center;color:#22c55e">💪 근육통</th>
-            <th style="padding:6px 8px;text-align:center;color:#22c55e">총점</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">상태</th>
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스시간</th>` : ''}
-            ${currentUseRpe?`<th style="padding:6px 8px;text-align:right;color:#fbbf24">RPE · 시간</th>`:''}
-            ${currentUseRpe?`<th style="padding:6px 8px;text-align:right;color:#c084fc">sRPE</th>`:''}
-            ${currentUseWellness ? `<th style="padding:6px 8px;text-align:right;color:var(--text3)">전/후체중(kg)</th>` : ''}
-            <th style="padding:6px 8px;text-align:center;color:var(--text3)">GPS</th>
-            ${currentUseRpe ? `<th style="padding:6px 8px;text-align:center;color:var(--text3)">RPE편집</th>` : ''}
-            ${(!currentUsePlayerApp&&currentUseWellness) ? `<th style="padding:6px 8px;text-align:center;color:var(--text3)">웰니스편집</th>` : ''}
+            <th style="padding:5px 4px;text-align:center;color:#22c55e;font-size:10px;white-space:nowrap">🔋 피로도</th>
+            <th style="padding:5px 4px;text-align:center;color:#22c55e;font-size:10px;white-space:nowrap">😴 수면질</th>
+            <th style="padding:5px 4px;text-align:center;color:#22c55e;font-size:10px;white-space:nowrap">🧠 스트레스</th>
+            <th style="padding:5px 4px;text-align:center;color:#22c55e;font-size:10px;white-space:nowrap">💪 근육통</th>
+            <th style="padding:5px 4px;text-align:center;color:#22c55e;font-size:10px;white-space:nowrap">총점</th>
+            <th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">상태</th>
+            <th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">웰니스시간</th>` : ''}
+            ${currentUseRpe?`<th style="padding:5px 4px;text-align:right;color:#fbbf24;font-size:10px;white-space:nowrap">RPE · 시간</th>`:''}
+            ${currentUseRpe?`<th style="padding:5px 4px;text-align:right;color:#c084fc;font-size:10px;white-space:nowrap">sRPE</th>`:''}
+            ${currentUseWellness ? `<th style="padding:5px 4px;text-align:right;color:var(--text3);font-size:10px;white-space:nowrap">전/후체중(kg)</th>` : ''}
+            <th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">GPS</th>
+            ${currentUseRpe ? `<th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">RPE편집</th>` : ''}
+            ${(!currentUsePlayerApp&&currentUseWellness) ? `<th style="padding:5px 4px;text-align:center;color:var(--text3);font-size:10px;white-space:nowrap">웰니스편집</th>` : ''}
           </tr>
           ${rpeStatusHtml}
         </table>
