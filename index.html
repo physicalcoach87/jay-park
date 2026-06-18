@@ -13329,7 +13329,7 @@ async function loadTeamSummary(forceDate, quiet=false){
 
     <!-- ④ 혼합 그룹 (오전/오후 그룹 상이) -->
     ${mixedGps.length ? `
-    <div style="background:var(--surface);border:1px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="print-page-start" style="background:var(--surface);border:1px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#fbbf24;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         ⚠️ 혼합 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(오전/오후 그룹 상이 · ${mixedGps.length}명 — 팀 평균 미반영)</span>
       </div>
@@ -13346,7 +13346,7 @@ async function loadTeamSummary(forceDate, quiet=false){
 
     <!-- ⑤ 서브/미엔트리 그룹 -->
     ${indGps.length ? `
-    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         서브 평균 (${indGps.length}명)
       </div>
@@ -20684,7 +20684,7 @@ function printTrainingReport(){
   }
   @page{ size:A4 landscape; margin:6mm 0 4mm 0; }
   @media print{
-    html{ zoom:0.72; }
+    html{ zoom:0.60; }
     body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .report-logo{ background:#16a34a !important; }
