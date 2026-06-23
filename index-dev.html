@@ -24410,16 +24410,18 @@ function _crpeRender(){
 
   const rows = metas.map((s,i)=>{
     const isGym = isGymType(s.sessionType||'');
-    const isAM  = !isGym && (s.sessionType||'').toUpperCase() !== 'PM';
-    const sessBadge = isGym
-      ? `<span style="font-size:11px;font-weight:700;padding:3px 8px;border-radius:5px;background:rgba(96,165,250,0.15);color:#60a5fa;border:1px solid rgba(96,165,250,0.4)">🏋️ GYM</span>`
-      : (totalSess > 1 || s.origRpe!=null ? `
+    const st = (s.sessionType||'AM').toUpperCase();
+    const isAM  = !isGym && st !== 'PM';
+    const selColor = isGym ? '#60a5fa' : (isAM ? '#4ade80' : '#f97316');
+    const sessBadge = (totalSess > 1 || s.origRpe!=null || isGym) ? `
       <select class="crpe-ampm-sel" data-idx="${i}"
         onchange="crpeChangeAmPm(${i},this.value)"
-        style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:${isAM?'#4ade80':'#f97316'};font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">
-        <option value="AM" ${isAM?'selected':''}>⚽ AM</option>
-        <option value="PM" ${!isAM?'selected':''}>⚽ PM</option>
-      </select>` : `<span style="font-size:11px;color:var(--text3);font-weight:600">단일 세션</span>`);
+        style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:${selColor};font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">
+        <option value="AM"     ${st==='AM'?'selected':''}>⚽ AM</option>
+        <option value="PM"     ${st==='PM'?'selected':''}>⚽ PM</option>
+        <option value="AM_GYM" ${st==='AM_GYM'||st==='GYM'?'selected':''}>🏋️ GYM(오전)</option>
+        <option value="PM_GYM" ${st==='PM_GYM'?'selected':''}>🏋️ GYM(오후)</option>
+      </select>` : `<span style="font-size:11px;color:var(--text3);font-weight:600">단일 세션</span>`;
     // 선수 원본 체크값
     const origBadge = s.origRpe!=null
       ? `<span style="font-size:10px;color:var(--text3)">선수: <span style="color:#fbbf24;font-weight:700">${s.origRpe}</span>${s.origDur!=null?' · '+s.origDur+'분':''}${s.origTime?' · '+s.origTime:''}</span>`
