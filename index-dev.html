@@ -9399,10 +9399,11 @@ async function loadMorningReport(){
             📨 웰니스 입력 요청
           </button>
         </div>`).join('')}
-      <button onclick="sendWellnessReminderAll(window._noRespPlayers,this)"
-        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #185FA5;background:#0c1a2e;color:#60a5fa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit">
-        📨 미응답 전원에게 발송
+      <button id="remind-well-btn" onclick="sendWellnessReminderAll(window._noRespPlayers,this)"
+        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #185FA5;background:#0c1a2e;color:#60a5fa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit;opacity:${_remindLastStr('wellness',today)?'0.75':'1'}">
+        ${_remindLastStr('wellness',today)?'🔄 재발송':'📨 미응답 전원에게 발송'}
       </button>
+      <div id="remind-well-info" style="font-size:10px;color:var(--text3);text-align:center;margin-top:3px">${_remindLastStr('wellness',today)?`마지막 발송: ${_remindLastStr('wellness',today)}`:''}</div>
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 응답 완료</div>`;
 
   // ── 오늘 RPE 미응답 HTML ─────────────────────────────────────────
@@ -9421,10 +9422,11 @@ async function loadMorningReport(){
             📨 RPE 입력 요청
           </button>
         </div>`).join('')}
-      <button onclick="sendRpeReminderAll(window._noRpeRespPlayers,this)"
-        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #7c3aed;background:#1a0a2e;color:#a78bfa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit">
-        📨 미입력 전원에게 발송
+      <button id="remind-rpe-btn" onclick="sendRpeReminderAll(window._noRpeRespPlayers,this)"
+        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #7c3aed;background:#1a0a2e;color:#a78bfa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit;opacity:${_remindLastStr('rpe',today)?'0.75':'1'}">
+        ${_remindLastStr('rpe',today)?'🔄 재발송':'📨 미입력 전원에게 발송'}
       </button>
+      <div id="remind-rpe-info" style="font-size:10px;color:var(--text3);text-align:center;margin-top:3px">${_remindLastStr('rpe',today)?`마지막 발송: ${_remindLastStr('rpe',today)}`:''}</div>
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 RPE 입력 완료</div>`;
 
   // ── PM RPE 미입력 HTML (오전 입력 완료, 오후 미입력) ─────────────
@@ -9443,10 +9445,11 @@ async function loadMorningReport(){
             📨 PM RPE 요청
           </button>
         </div>`).join('')}
-      <button onclick="sendRpeReminderAll(window._pmNoRpeRespPlayers,this)"
-        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #f59e0b;background:rgba(245,158,11,0.08);color:#fbbf24;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit">
-        📨 PM 미입력 전원에게 발송
+      <button id="remind-pm-rpe-btn" onclick="sendRpeReminderAll(window._pmNoRpeRespPlayers,this)"
+        style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #f59e0b;background:rgba(245,158,11,0.08);color:#fbbf24;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit;opacity:${_remindLastStr('pm_rpe',today)?'0.75':'1'}">
+        ${_remindLastStr('pm_rpe',today)?'🔄 재발송':'📨 PM 미입력 전원에게 발송'}
       </button>
+      <div id="remind-pm-rpe-info" style="font-size:10px;color:var(--text3);text-align:center;margin-top:3px">${_remindLastStr('pm_rpe',today)?`마지막 발송: ${_remindLastStr('pm_rpe',today)}`:''}</div>
     </div>` : (todayHasPmSession && noTodayRpeResp.length===0 ? `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ PM RPE 전원 입력 완료</div>` : '');
 
   // ── Priority Alert 계산 ──────────────────────────────────────
@@ -10008,6 +10011,26 @@ async function sendWellnessReminder(playerId, playerName, btn){
 }
 
 // 웰니스 입력 요청 발송 (전체)
+function _remindKey(type, date){ return `remind_sent_${type}_${date||today}`; }
+function _remindSave(type, date){
+  const ts = new Date().toISOString();
+  localStorage.setItem(_remindKey(type, date), ts);
+  return ts;
+}
+function _remindLastStr(type, date){
+  const ts = localStorage.getItem(_remindKey(type, date));
+  if(!ts) return null;
+  return new Date(ts).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+function _remindUpdateBtn(btn, infoId, type, date){
+  const t = _remindLastStr(type, date);
+  btn.innerHTML = t ? `🔄 재발송` : `📨 미응답 전원에게 발송`;
+  btn.disabled = false;
+  btn.style.opacity = t ? '0.75' : '1';
+  const infoEl = document.getElementById(infoId);
+  if(infoEl) infoEl.textContent = t ? `마지막 발송: ${t}` : '';
+}
+
 async function sendWellnessReminderAll(players, btn){
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
   const langMap = await getPlayersLangMap(players.map(p=>p.id));
@@ -10020,7 +10043,8 @@ async function sendWellnessReminderAll(players, btn){
     });
     await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
   }));
-  btn.textContent='✅ 전체 발송 완료';
+  _remindSave('wellness', today);
+  _remindUpdateBtn(btn, 'remind-well-info', 'wellness', today);
 }
 
 
@@ -10052,6 +10076,9 @@ async function sendPmRpeReminder(playerId, playerName, btn){
 
 // RPE 입력 요청 발송 (전체)
 async function sendRpeReminderAll(players, btn){
+  const isPm = btn.id === 'remind-pm-rpe-btn';
+  const key  = isPm ? 'pm_rpe' : 'rpe';
+  const infoId = isPm ? 'remind-pm-rpe-info' : 'remind-rpe-info';
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
   const langMap = await getPlayersLangMap(players.map(p=>p.id));
   await Promise.all(players.map(async p=>{
@@ -10063,7 +10090,8 @@ async function sendRpeReminderAll(players, btn){
     });
     await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
   }));
-  btn.textContent='✅ 전체 발송 완료';
+  _remindSave(key, today);
+  _remindUpdateBtn(btn, infoId, key, today);
 }
 
 // ── 웰니스 2주 달력 ────────────────────────────────────────────────
