@@ -9681,14 +9681,29 @@ async function loadMorningReport(){
         <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📋 오늘 RPE (${todayRpeRespondedIds.size}/${_players.length}명)</div>
         ${todayRpeRows.length ? `
           <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
-            ${sortRecordsByPos(todayRpeRows).map(r=>{
-              const rp=_players.find(p=>p.id===r.player_id);
-              const rt=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
-              return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
-                <span style="color:var(--text);font-weight:500">${rp?.name||'-'} <span style="color:var(--text3);font-size:10px">${rp?.position||''}</span></span>
-                <span style="color:#a78bfa;font-size:10px">RPE ${parseFloat(r.rpe)} · ✓ ${rt}</span>
-              </div>`;
-            }).join('')}
+            ${(()=>{
+              // 선수별로 묶기
+              const byPid = {};
+              todayRpeRows.forEach(r=>{ if(!byPid[r.player_id]) byPid[r.player_id]=[]; byPid[r.player_id].push(r); });
+              return sortByPos(_players.filter(p=>byPid[p.id])).map(p=>{
+                const recs = byPid[p.id];
+                const amGym = recs.filter(r=>isGymType(r.session_type)&&gymTiming(r.session_type)==='AM');
+                const amF   = recs.filter(r=>{ const t=(r.session_type||'').toUpperCase(); return !isGymType(t)&&t!=='PM'; });
+                const pmGym = recs.filter(r=>isGymType(r.session_type)&&gymTiming(r.session_type)==='PM');
+                const pmF   = recs.filter(r=>(r.session_type||'').toUpperCase()==='PM');
+                const parts=[];
+                amGym.forEach(r=>{ const v=parseFloat(r.rpe)||0; if(v) parts.push(`<span style="color:#60a5fa;font-size:10px">GYM</span> ${v}`); });
+                amF.forEach(r=>{ const v=parseFloat(r.rpe)||0; if(v) parts.push(`${amGym.length?'<span style="color:#94a3b8;font-size:10px">AM</span> ':''}${v}`); });
+                pmGym.forEach(r=>{ const v=parseFloat(r.rpe)||0; if(v) parts.push(`<span style="color:#60a5fa;font-size:10px">GYM</span> ${v}`); });
+                pmF.forEach(r=>{ const v=parseFloat(r.rpe)||0; if(v) parts.push(`<span style="color:#f97316;font-size:10px">PM</span> ${v}`); });
+                const lastRec = [...recs].sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))[0];
+                const rt = lastRec?.created_at ? new Date(lastRec.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}) : '—';
+                return `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px;background:var(--surface2);border-radius:6px;font-size:11px">
+                  <span style="color:var(--text);font-weight:500">${p.name} <span style="color:var(--text3);font-size:10px">${p.position||''}</span></span>
+                  <span style="color:#a78bfa;font-size:10px">${parts.join(' · ')} · ✓ ${rt}</span>
+                </div>`;
+              }).join('');
+            })()}
           </div>` : ''}
         ${noRpeRespHtml}
         ${pmNoRpeHtml}
@@ -10908,7 +10923,7 @@ async function loadWellnessRpeView(){
           <thead>
             <tr style="background:var(--surface2)">
               <th style="padding:8px;text-align:left;color:var(--text3)">선수</th>
-              <th style="padding:8px;text-align:center;color:var(--text3)">오전 RPE <span style="color:#60a5fa;font-size:9px">GYM+AM</span></th>
+              <th style="padding:8px;text-align:center;color:var(--text3)">오전 RPE</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">오전 sRPE</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">PM RPE</th>
               <th style="padding:8px;text-align:center;color:var(--text3)">PM sRPE</th>
