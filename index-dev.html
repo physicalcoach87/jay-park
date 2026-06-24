@@ -10033,18 +10033,21 @@ function _remindUpdateBtn(btn, infoId, type, date){
 
 async function sendWellnessReminderAll(players, btn){
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
-  const langMap = await getPlayersLangMap(players.map(p=>p.id));
-  await Promise.all(players.map(async p=>{
-    const { title, body } = getNotifText('wellness', langMap[p.id]||'ko', p.name);
-    await supa.from('notifications').insert({
-      title, body,
-      target_type:'player', target_value:p.id,
-      created_by: currentUser?.email||'coach',
-    });
-    await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
-  }));
-  _remindSave('wellness', today);
-  _remindUpdateBtn(btn, 'remind-well-info', 'wellness', today);
+  try {
+    const langMap = await getPlayersLangMap(players.map(p=>p.id));
+    await Promise.all(players.map(async p=>{
+      const { title, body } = getNotifText('wellness', langMap[p.id]||'ko', p.name);
+      await supa.from('notifications').insert({ title, body, target_type:'player', target_value:p.id, created_by: currentUser?.email||'coach' });
+      await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
+    }));
+    _remindSave('wellness', today);
+    _remindUpdateBtn(btn, 'remind-well-info', 'wellness', today);
+  } catch(e) {
+    btn.textContent='❌ 발송 실패 — 재시도';
+    btn.disabled=false;
+    btn.style.opacity='1';
+    console.error('wellness remind error', e);
+  }
 }
 
 
@@ -10080,18 +10083,21 @@ async function sendRpeReminderAll(players, btn){
   const key  = isPm ? 'pm_rpe' : 'rpe';
   const infoId = isPm ? 'remind-pm-rpe-info' : 'remind-rpe-info';
   btn.textContent='⏳ 전체 발송 중...'; btn.disabled=true;
-  const langMap = await getPlayersLangMap(players.map(p=>p.id));
-  await Promise.all(players.map(async p=>{
-    const { title, body } = getNotifText('rpe', langMap[p.id]||'ko', p.name);
-    await supa.from('notifications').insert({
-      title, body,
-      target_type:'player', target_value:p.id,
-      created_by: currentUser?.email||'coach',
-    });
-    await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
-  }));
-  _remindSave(key, today);
-  _remindUpdateBtn(btn, infoId, key, today);
+  try {
+    const langMap = await getPlayersLangMap(players.map(p=>p.id));
+    await Promise.all(players.map(async p=>{
+      const { title, body } = getNotifText('rpe', langMap[p.id]||'ko', p.name);
+      await supa.from('notifications').insert({ title, body, target_type:'player', target_value:p.id, created_by: currentUser?.email||'coach' });
+      await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
+    }));
+    _remindSave(key, today);
+    _remindUpdateBtn(btn, infoId, key, today);
+  } catch(e) {
+    btn.textContent='❌ 발송 실패 — 재시도';
+    btn.disabled=false;
+    btn.style.opacity='1';
+    console.error('rpe remind error', e);
+  }
 }
 
 // ── 웰니스 2주 달력 ────────────────────────────────────────────────
