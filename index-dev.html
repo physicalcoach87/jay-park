@@ -24393,9 +24393,9 @@ function openCoachRpeModal(date, playerId, playerName){
   // 해당 선수 기존 session_records (session_order 순)
   const playerSess = (_lastSessData||[]).filter(s=>s.player_id===playerId)
     .sort((a,b)=>(a.session_order||0)-(b.session_order||0));
-  // 해당 선수 GPS 기록 (AM→PM 순 정렬)
+  // 해당 선수 GPS 기록 (AM→PM 순 정렬, session_label 기준)
   const playerGps = (_lastGpsData||[]).filter(r=>r.player_id===playerId)
-    .sort((a,b)=>((a.session_date||'')<(b.session_date||'')?-1:1));
+    .sort((a,b)=>{ const la=(a.session_label||'AM').toUpperCase(), lb=(b.session_label||'AM').toUpperCase(); return la<lb?-1:la>lb?1:0; });
 
   // 세션 목록 구성: 기존 session_records 우선, GPS 세션 수만큼 확보
   // duration: session_records 값 우선, 없으면 session_order 기반 GPS duration
@@ -24610,7 +24610,7 @@ async function openCoachRpeBatchModal(date){
   // 기존 session_records 조회
   const [{data:existing}, {data:gpsData}] = await Promise.all([
     supa.from('session_records').select('player_id,rpe,duration,session_type,session_order').eq('record_date', date),
-    supa.from('gps_records').select('player_id,duration').eq('session_date', date),
+    supa.from('gps_records').select('player_id,duration,session_label').eq('session_date', date),
   ]);
   _lastGpsData = gpsData||[];
   const existMap = {};
