@@ -776,8 +776,8 @@ async function loadHome(){
   ].map(({label,t,unit,color,ref})=>{
     const v=t==null?'—':Math.round(t).toLocaleString();
     let pctSpan='';
-    if(t&&ref&&ref>0){const pct=Math.round(t/ref*100);const pc=pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';pctSpan=' <span style="font-size:9px;color:'+pc+';font-weight:600">'+pct+'%</span>';}
-    return '<div style="background:var(--surface2);padding:10px 4px;text-align:center"><div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:5px">'+label+'</div><div style="font-size:13px;font-weight:700;color:'+(t==null?'var(--text3)':'var(--text)')+';line-height:1.2">'+v+'<span style="font-size:9px;color:var(--text3);margin-left:1px">'+unit+'</span>'+pctSpan+'</div></div>';
+    if(t&&ref&&ref>0){const pct=Math.round(t/ref*100);const pc=pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';pctSpan='<div style="font-size:10px;color:'+pc+';font-weight:600;margin-top:3px">'+pct+'%</div>';}
+    return '<div style="background:var(--surface2);padding:10px 4px;text-align:center"><div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:5px">'+label+'</div><div style="font-size:13px;font-weight:700;color:'+(t==null?'var(--text3)':'var(--text)')+';line-height:1.2">'+v+'<span style="font-size:9px;color:var(--text3);margin-left:1px">'+unit+'</span></div>'+pctSpan+'</div>';
   }).join('');
   // 목표/실제/달성 테이블 헬퍼
   const achBadge=(actual,target,targetSet)=>{
