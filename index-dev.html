@@ -24418,11 +24418,14 @@ function openCoachRpeModal(date, playerId, playerName){
         };
       })
     : [{ id:null, order:1, sessionType:'AM', rpe:'', dur:playerGps[0]?.duration||'', origRpe:null, origDur:null, origTime:null }];
-  // 남은 GPS 세션(선수 미입력) 추가
-  const usedOrders = new Set(sessions.map(s=>s.order));
-  playerGps.forEach((g,i)=>{
-    const order = i+1;
-    if(!usedOrders.has(order)) sessions.push({ id:null, order, sessionType:'AM', rpe:'', dur:g.duration||'', origRpe:null, origDur:null, origTime:null });
+  // 남은 GPS 세션(선수 미입력) 추가 — GPS는 필드 세션에만 매핑 (GYM 제외)
+  const fieldSessCount = sessions.filter(s=>!isGymType(s.sessionType||'')).length;
+  playerGps.forEach((g, i)=>{
+    if(i >= fieldSessCount){
+      const nextOrder = Math.max(0, ...sessions.map(s=>s.order||0)) + 1;
+      const sessType = fieldSessCount === 0 && i === 0 ? 'AM' : 'PM';
+      sessions.push({ id:null, order:nextOrder, sessionType:sessType, rpe:'', dur:g.duration||'', origRpe:null, origDur:null, origTime:null });
+    }
   });
   sessions.sort((a,b)=>a.order-b.order);
   window._crpeSessionMeta = sessions;
