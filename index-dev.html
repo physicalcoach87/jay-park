@@ -24537,15 +24537,21 @@ async function saveCoachRpe(){
   const metas = window._crpeSessionMeta||[];
   const msgEl = document.getElementById('crpe-msg');
   msgEl.style.color='var(--text3)'; msgEl.textContent='저장 중...';
+  // 기존 레코드 session_order를 임시 큰 값으로 먼저 초기화 (unique 제약 충돌 방지)
+  for(let i=0; i<metas.length; i++){
+    if(metas[i]?.id){
+      await supa.from('session_records').update({ session_order: 9000+i }).eq('id', metas[i].id);
+    }
+  }
   for(let i=0; i<rpeInputs.length; i++){
     const rpe = parseFloat(rpeInputs[i].value)||null;
     const dur = parseFloat(durInputs[i].value)||null;
     if(!rpe) continue;
     const meta = metas[i]||{};
     let error;
-    const sessType = rpeInputs[i].dataset.sesstype || meta.sessionType || 'AM';
+    const sessType = meta.sessionType || rpeInputs[i].dataset.sesstype || 'AM';
     if(meta.id){
-      // 기존 레코드 UPDATE (created_at 유지 → 선수 체크 시간 보존, session_order 수정 포함)
+      // 기존 레코드 UPDATE
       ({error} = await supa.from('session_records').update({ rpe, duration: dur, session_type: sessType, session_order: meta.order||i+1, coach_edited: true }).eq('id', meta.id));
     } else {
       // 신규 INSERT
