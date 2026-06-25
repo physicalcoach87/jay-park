@@ -13810,13 +13810,40 @@ async function loadPlayerDashboard(){
     ...(currentGpsPlan==='V1'?[]:[{label:'P.Load',val:avgPL,unit:'',color:'#a78bfa',mx:player.match_max_pl!=null?parseFloat(player.match_max_pl).toFixed(1):null}]),
   ];
 
-  const sessionRows = sessions.map(r=>{
+  // GPS 세션을 날짜별로 합치기 (AM+PM → 1행)
+  const _gpsByDate = {};
+  sessions.filter(r=>r._source==='gps').forEach(r=>{
+    (_gpsByDate[r.session_date]=_gpsByDate[r.session_date]||[]).push(r);
+  });
+  const _processedDates = new Set();
+  const dailyRows = [];
+  sessions.forEach(r=>{
+    if(r._source==='match'){ dailyRows.push(r); return; }
+    const d=r.session_date;
+    if(_processedDates.has(d)) return;
+    _processedDates.add(d);
+    const dayRecs=_gpsByDate[d];
+    if(dayRecs.length===1){ dailyRows.push(dayRecs[0]); return; }
+    const _sum=f=>{ const s=dayRecs.reduce((a,x)=>a+(parseFloat(x[f])||0),0); return s>0?s:null; };
+    const _max=f=>{ const v=dayRecs.map(x=>parseFloat(x[f])||0).filter(v=>v>0); return v.length?Math.max(...v):null; };
+    const sorted=dayRecs.slice().sort((a,b)=>(a.session_label||'AM').localeCompare(b.session_label||'AM'));
+    const topics=sorted.map(x=>x.session_topic).filter(Boolean);
+    const base=sorted[0];
+    dailyRows.push({...base, _combined:true, _dayRecs:dayRecs,
+      td:_sum('td'), running_high:_sum('running_high'), sprint:_sum('sprint'),
+      accel:_sum('accel'), rhie:_sum('rhie'), duration:_sum('duration'),
+      player_load:_sum('player_load'), max_speed:_max('max_speed'),
+      session_topic:topics.join(' + ')||null });
+  });
+
+  const sessionRows = dailyRows.map(r=>{
     const isMatch = r._source === 'match';
     const _lbl   = (r.session_label||'AM').toUpperCase();
     const rpe    = rpeMap[r.session_date+'__'+_lbl] || rpeMap[r.session_date];
     const rpeVal = parseFloat(rpe?.rpe)||null;
     const dur    = parseFloat(r.duration)||null;
-    const sRPE   = rpeVal&&dur ? Math.round(dur*rpeVal) : null;
+    // 합쳐진 행은 날짜별 총 sRPE 사용
+    const sRPE   = r._combined ? (dateSRPE[r.session_date]||null) : (rpeVal&&dur ? Math.round(dur*rpeVal) : null);
     const rpeColor = rpeVal>=8?'#ef4444':rpeVal>=6?'#f59e0b':'var(--text2)';
     const w = wellMap[r.session_date];
     const wellTotal = w ? (w.fatigue||0)+(w.sleep_quality||0)+(w.stress||0)+(w.muscle_soreness||0) : null;
