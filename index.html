@@ -354,11 +354,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
 <div class="tabs" id="main-tabs">
   <button class="tab admin-only active" onclick="switchTab('report',this)">📋 데일리 브리핑</button>
-  <button class="tab" onclick="switchTab('players',this)">📊 선수 통합관리</button>
-  <button class="tab" onclick="switchTab('period',this)">📅 주기화</button>
-  <button class="tab" onclick="switchTab('exercise',this)">🏋️ 운동 처방</button>
+  <button class="tab" id="tab-btn-players" onclick="switchTab('players',this)">📊 스포츠 사이언스</button>
   <button class="tab admin-only" onclick="switchTab('notify',this)" id="tab-btn-notify" style="position:relative">🔔 알림/메시지<span id="notify-tab-badge" style="display:none;position:absolute;top:4px;right:6px;background:#ef4444;color:#fff;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:14px;text-align:center;line-height:1.4"></span></button>
-  <button class="tab" id="tab-btn-perms" onclick="switchTab('perms',this)" style="display:none">⚙️ 권한 설정</button>
+  <button class="tab" onclick="switchTab('settings',this)">⚙️ 설정</button>
   <button class="tab" id="tab-btn-superadmin" onclick="switchTab('superadmin',this)" style="display:none">🏢 팀 관리</button>
 </div>
 
@@ -552,11 +550,12 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <h3>📊 선수 통합 관리</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">팀 요약</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('period')" id="pvbtn-period">📅 주기화</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('training')" id="pvbtn-training">📋 훈련 데이터</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('match')" id="pvbtn-match">🏟️ 경기 데이터</button>
       <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스 / RPE</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('exercise')" id="pvbtn-exercise">🏋️ 운동 처방</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">👤 선수 개인데이터</button>
-      <button class="btn-exp admin-only" onclick="setPlayerView('roster')" id="pvbtn-roster">👥 선수 명단</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('upload')" id="pvbtn-upload">📤 GPS 업로드</button>
     </div>
   </div>
@@ -2433,6 +2432,15 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div id="perms-role-tabs" style="display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap"></div>
   <div id="perms-editor"></div>
   <div id="perms-coach-mgmt" style="display:none;margin-top:2rem"></div>
+</div>
+
+<!-- 설정 탭 -->
+<div id="tab-settings" style="display:none;padding:1rem">
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <button class="btn-exp" onclick="setSettingsView('roster')" id="stvbtn-roster" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">👥 선수 명단</button>
+    <button class="btn-exp" onclick="setSettingsView('perms')" id="stvbtn-perms">⚙️ 권한 설정</button>
+  </div>
+  <div id="stv-content"></div>
 </div>
 
 <!-- 슈퍼어드민 탭 -->
@@ -7690,14 +7698,28 @@ async function loadPlayerManagement(){
 }
 
 function setPlayerView(view){
+  // 주기화·운동처방은 별도 탭 div를 players 영역 안에서 토글
+  const _isExternal = ['period','exercise'].includes(view);
+  ['tab-period','tab-exercise'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.style.display=(view==='period'&&id==='tab-period')||(view==='exercise'&&id==='tab-exercise')?'block':'none';
+  });
   ['team','wellness','roster','dashboard','upload','match','training'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
-    if(el) el.style.display = v===view ? 'block' : 'none';
+    if(el) el.style.display = (!_isExternal && v===view) ? 'block' : 'none';
     const btn = document.getElementById(`pvbtn-${v}`);
     if(btn){
       btn.style.borderColor = v===view ? 'var(--accent)' : 'var(--border2)';
       btn.style.background  = v===view ? 'var(--accent-bg)' : 'var(--surface2)';
       btn.style.color       = v===view ? 'var(--accent2)' : 'var(--text2)';
+    }
+  });
+  ['period','exercise'].forEach(v=>{
+    const btn=document.getElementById(`pvbtn-${v}`);
+    if(btn){
+      btn.style.borderColor=v===view?'var(--accent)':'var(--border2)';
+      btn.style.background =v===view?'var(--accent-bg)':'var(--surface2)';
+      btn.style.color      =v===view?'var(--accent2)':'var(--text2)';
     }
   });
   // 뒤로가기 버튼: dashboard 진입 시 히스토리 있으면 표시
@@ -7743,6 +7765,8 @@ function setPlayerView(view){
     }
     runTrainingReport();
   }
+  if(view==='period') loadPeriodTab();
+  if(view==='exercise') switchExerciseTab('gym');
 }
 
 // ═══════════════════════════════════════════
@@ -11053,6 +11077,29 @@ async function loadTeamWellness(){
     <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)">
       ⚠️ 미응답: ${_players.filter(p=>!records.find(r=>r.player_id===p.id)).map(p=>p.name).join(', ')}
     </div>`:''}`; 
+}
+
+function setSettingsView(view){
+  ['roster','perms'].forEach(v=>{
+    const btn=document.getElementById(`stvbtn-${v}`);
+    if(btn){
+      btn.style.borderColor=v===view?'var(--accent)':'var(--border2)';
+      btn.style.background =v===view?'var(--accent-bg)':'var(--surface2)';
+      btn.style.color      =v===view?'var(--accent2)':'var(--text2)';
+    }
+  });
+  const stv=document.getElementById('stv-content');
+  if(!stv) return;
+  if(view==='roster'){
+    const pvRoster=document.getElementById('pv-roster');
+    if(pvRoster){ stv.innerHTML=''; stv.appendChild(pvRoster); pvRoster.style.display='block'; }
+    loadRosterList();
+  }
+  if(view==='perms'){
+    const tabPerms=document.getElementById('tab-perms');
+    if(tabPerms){ stv.innerHTML=''; stv.appendChild(tabPerms); tabPerms.style.display='block'; }
+    loadPermsTab();
+  }
 }
 
 async function loadRosterList(){
@@ -22644,18 +22691,19 @@ async function loadMatchMax(){
 
 function switchTab(tab,el){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');
-  ['exercise','players','notify','report','match','cprog','superadmin','perms','period'].forEach(id=>{
+  // players 탭에서 벗어날 때 period/exercise 숨기기
+  if(tab!=='players'){
+    ['tab-period','tab-exercise'].forEach(id=>{ const e=document.getElementById(id); if(e) e.style.display='none'; });
+  }
+  ['players','notify','report','superadmin','settings'].forEach(id=>{
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
-  if(tab==='players'){loadPlayerManagement();}
-  if(tab==='notify')loadNotifyTab();
+  if(tab==='players'){ loadPlayerManagement(); setPlayerView('team'); }
+  if(tab==='notify') loadNotifyTab();
   if(tab==='report'){ loadMorningReport(); loadScheduleCalendar(); }
-  if(tab==='match') loadMatchTab();
-  if(tab==='exercise') switchExerciseTab('gym');
   if(tab==='superadmin') loadSuperAdmin();
-  if(tab==='perms') loadPermsTab();
-  if(tab==='period') loadPeriodTab();
+  if(tab==='settings') setSettingsView('roster');
 }
 
 function switchExerciseTab(sub){
