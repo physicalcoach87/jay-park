@@ -10057,6 +10057,7 @@ function _remindUpdateBtn(btn, infoId, type, date){
 
 async function sendWellnessReminderAll(players, btn){
   btn.disabled=true;
+  const today = getKSTDateStr();
   try {
     const langMap = await getPlayersLangMap(players.map(p=>p.id));
     for(let i=0; i<players.length; i++){
@@ -10108,6 +10109,7 @@ async function sendRpeReminderAll(players, btn){
   const isPm = btn.id === 'remind-pm-rpe-btn';
   const key  = isPm ? 'pm_rpe' : 'rpe';
   const infoId = isPm ? 'remind-pm-rpe-info' : 'remind-rpe-info';
+  const today = getKSTDateStr();
   btn.disabled=true;
   try {
     const langMap = await getPlayersLangMap(players.map(p=>p.id));
