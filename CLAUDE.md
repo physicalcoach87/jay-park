@@ -1,4 +1,4 @@
-# CLAUDE.md — 부산아이파크 코치 앱 작업 지침
+# CLAUDE.md — 선수관리 프로그램 작업 지침
 <!-- deploy trigger 2026-05-26 -->
 
 ---
@@ -174,6 +174,7 @@ await supa.from('notifications').insert({
 근력 운동
 Pre-activation
 유산소 운동
+📅 주기화             주기화 플랜 입력 / 라벨 관리 (cycle, periodization 컬럼 연동)
 📋 프로그램 관리
 🔔 알림/메시지        부상위험 / 공지 / 1:1메시지
 🏟️ 경기 데이터       경기목록 / 선수별분석 / Match Max
@@ -181,7 +182,17 @@ Pre-activation
 
 ---
 
-## 7. 작업 순서 체크리스트
+## 7. 세션 시작 시 자동 실행
+
+새 대화 시작 시 **반드시** 아래를 먼저 실행:
+```bash
+cd ~/jay-park && git pull
+```
+사용자가 말하지 않아도 항상 최신 코드를 받고 작업 시작.
+
+---
+
+## 8. 작업 순서 체크리스트
 
 ```
 □ 현재 코드 view/grep으로 정확한 위치 파악
