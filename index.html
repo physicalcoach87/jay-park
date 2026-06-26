@@ -9115,7 +9115,7 @@ async function loadMorningReport(){
               </div>
               <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
                 <span style="font-size:10px;padding:2px 8px;border-radius:10px;background:${cfg.border}33;color:${cfg.color};font-weight:600">${cfg.label}</span>
-                <button onclick="event.stopPropagation();sendRiskAlertById('${player.id}')"
+                <button onclick="event.stopPropagation();sendRiskAlertById(this,'${player.id}')"
                   style="font-size:10px;padding:2px 8px;border-radius:6px;border:0.5px solid ${cfg.border};background:transparent;color:${cfg.color};cursor:pointer;font-family:inherit">📨 알림 발송</button>
               </div>
             </div>
@@ -15337,7 +15337,7 @@ function renderRiskResults(results, today){
             </div>
             <div style="text-align:right">
               <div style="font-size:10px;color:var(--text3)">${cfg.action}</div>
-              <button onclick="sendRiskAlertById('${player.id}')"
+              <button onclick="sendRiskAlertById(this,'${player.id}')"
                 style="margin-top:4px;font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid ${cfg.border};background:transparent;color:${cfg.color};cursor:pointer;font-family:inherit">
                 📨 알림 발송
               </button>
@@ -15354,7 +15354,7 @@ function renderRiskResults(results, today){
 
 // ── 위험 선수 개별 알림 발송 ─────────────────────────────────────
 // sendRiskAlertById: riskResults 캐시 참조로 백틱 없이 호출
-function sendRiskAlertById(playerId){
+function sendRiskAlertById(btn, playerId){
   const cached = window._lastRiskResults||[];
   const found = cached.find(r=>r.player.id===playerId);
   if(found){
@@ -15365,14 +15365,15 @@ function sendRiskAlertById(playerId){
       acwr: found.acwrData?.acwr ?? null,
       flags: found.risk.flags.map(f=>f.msg),
     };
-    sendRiskAlert(playerId, found.player.name, msg, meta);
+    sendRiskAlert(btn, playerId, found.player.name, msg, meta);
   } else {
     const p = _players.find(pl=>pl.id===playerId);
-    sendRiskAlert(playerId, p?p.name:'선수', '부상 위험 감지', {type:'injury',level:'amber',acwr:null,flags:[]});
+    sendRiskAlert(btn, playerId, p?p.name:'선수', '부상 위험 감지', {type:'injury',level:'amber',acwr:null,flags:[]});
   }
 }
 
-async function sendRiskAlert(playerId, playerName, flagMsg, meta={}){
+async function sendRiskAlert(btn, playerId, playerName, flagMsg, meta={}){
+  if(btn){ btn.disabled=true; btn.textContent='⏳ 발송 중...'; }
   const title = `⚠️ 부상 위험 알림 — ${playerName}`;
   const body  = `${flagMsg}\n\n훈련 부하 및 컨디션을 확인해주세요.`;
 
@@ -15391,7 +15392,7 @@ async function sendRiskAlert(playerId, playerName, flagMsg, meta={}){
     });
   } catch(e){ console.warn('push error:', e); }
 
-  alert(`✅ ${playerName} 선수에게 알림을 발송했습니다.`);
+  if(btn){ btn.textContent='✅ 발송됨'; btn.style.opacity='0.6'; }
 }
 
 
