@@ -10026,7 +10026,7 @@ async function sendWellnessReminder(playerId, playerName, btn){
   const { data: pd } = await supa.from('player_profiles').select('preferred_lang').eq('id', playerId).single();
   const { title, body } = getNotifText('wellness', pd?.preferred_lang||'ko', playerName);
   await supa.from('notifications').insert({
-    title, body,
+    title, body, meta:{type:'wellness'},
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
   });
@@ -10084,7 +10084,7 @@ async function sendRpeReminder(playerId, playerName, btn){
   const { data: pd } = await supa.from('player_profiles').select('preferred_lang').eq('id', playerId).single();
   const { title, body } = getNotifText('rpe', pd?.preferred_lang||'ko', playerName);
   await supa.from('notifications').insert({
-    title, body,
+    title, body, meta:{type:'rpe', isPm:false},
     target_type:'player', target_value:playerId,
     created_by: currentUser?.email||'coach',
   });
@@ -10099,7 +10099,7 @@ async function sendPmRpeReminder(playerId, playerName, btn){
   const lang = pd?.preferred_lang||'ko';
   const title = lang==='en'?'💪 PM RPE Input Request':lang==='pt'?'💪 Registro de RPE (PM)':'💪 PM RPE 입력 요청';
   const body  = lang==='en'?`${playerName}, please enter your PM session RPE now!`:lang==='pt'?`${playerName}, registre seu RPE da sessão PM agora!`:`${playerName} 선수, 오후 훈련 후 RPE를 입력해주세요!`;
-  await supa.from('notifications').insert({ title, body, target_type:'player', target_value:playerId, created_by:currentUser?.email||'coach' });
+  await supa.from('notifications').insert({ title, body, meta:{type:'rpe', isPm:true}, target_type:'player', target_value:playerId, created_by:currentUser?.email||'coach' });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
   btn.textContent='✅ 발송됨';
 }
