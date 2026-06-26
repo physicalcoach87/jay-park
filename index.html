@@ -10064,7 +10064,7 @@ async function sendWellnessReminderAll(players, btn){
       const p = players[i];
       btn.textContent=`⏳ 발송 중... (${i+1}/${players.length})`;
       const { title, body } = getNotifText('wellness', langMap[p.id]||'ko', p.name);
-      await supa.from('notifications').insert({ title, body, target_type:'player', target_value:p.id, created_by: currentUser?.email||'coach' });
+      await supa.from('notifications').insert({ title, body, meta:{type:'wellness'}, target_type:'player', target_value:p.id, created_by: currentUser?.email||'coach' });
       await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
     }
     _remindSave('wellness', today);
@@ -10117,7 +10117,7 @@ async function sendRpeReminderAll(players, btn){
       const p = players[i];
       btn.textContent=`⏳ 발송 중... (${i+1}/${players.length})`;
       const { title, body } = getNotifText('rpe', langMap[p.id]||'ko', p.name);
-      await supa.from('notifications').insert({ title, body, target_type:'player', target_value:p.id, created_by: currentUser?.email||'coach' });
+      await supa.from('notifications').insert({ title, body, meta:{type:'rpe', isPm}, target_type:'player', target_value:p.id, created_by: currentUser?.email||'coach' });
       await _firePush({ title, body, target_type:'player', target_value:p.id, player_id:p.id });
     }
     _remindSave(key, today);
@@ -15359,19 +15359,25 @@ function sendRiskAlertById(playerId){
   const found = cached.find(r=>r.player.id===playerId);
   if(found){
     const msg = found.risk.flags.map(f=>f.msg).join(' / ');
-    sendRiskAlert(playerId, found.player.name, msg);
+    const meta = {
+      type: 'injury',
+      level: found.risk.level,
+      acwr: found.acwrData?.acwr ?? null,
+      flags: found.risk.flags.map(f=>f.msg),
+    };
+    sendRiskAlert(playerId, found.player.name, msg, meta);
   } else {
     const p = _players.find(pl=>pl.id===playerId);
-    sendRiskAlert(playerId, p?p.name:'선수', '부상 위험 감지');
+    sendRiskAlert(playerId, p?p.name:'선수', '부상 위험 감지', {type:'injury',level:'amber',acwr:null,flags:[]});
   }
 }
 
-async function sendRiskAlert(playerId, playerName, flagMsg){
+async function sendRiskAlert(playerId, playerName, flagMsg, meta={}){
   const title = `⚠️ 부상 위험 알림 — ${playerName}`;
   const body  = `${flagMsg}\n\n훈련 부하 및 컨디션을 확인해주세요.`;
 
   await supa.from('notifications').insert({
-    title, body,
+    title, body, meta,
     target_type: 'player',
     target_value: playerId,
     created_by: currentUser?.email || 'coach',
