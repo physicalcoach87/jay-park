@@ -7678,7 +7678,7 @@ async function loadPlayerManagement(){
   if(dateEl && !dateEl.value) dateEl.value = today;
   const wDateEl = document.getElementById('wellness-view-date');
   if(wDateEl && !wDateEl.value) wDateEl.value = today;
-  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('position').order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred').order('position').order('name');
   _players = data || [];
   const sel = document.getElementById('dashboard-player');
   if(sel){
@@ -11108,7 +11108,8 @@ async function loadRosterList(){
   const listEl = document.getElementById('roster-list');
   if(!listEl) return;
   const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('position').order('name');
-  _players = data || [];
+  const allPlayers = data || [];
+  _players = allPlayers.filter(p=>(p.status||'active')==='active');
   document.getElementById('roster-count').textContent = `총 ${_players.length}명 등록`;
   const groups = {};
   _players.forEach(p=>{ if(!groups[p.position]) groups[p.position]=[]; groups[p.position].push(p); });
@@ -11135,11 +11136,45 @@ async function loadRosterList(){
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button onclick="openPlayerForm('${p.id}')"
               style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">편집</button>
+            <button onclick="confirmTransferPlayer('${p.id}','${p.name}')"
+              style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #b45309;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">이적</button>
             <button onclick="confirmDeletePlayer('${p.id}','${p.name}')"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">삭제</button>
           </div>
         </div>`).join('')}
     </div>`).join('');
+
+  // 이적 선수 섹션
+  const transferred = allPlayers.filter(p=>p.status==='transferred');
+  if(transferred.length){
+    listEl.innerHTML += `
+    <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">🔄 이적 선수 (${transferred.length}명)</div>
+      ${transferred.map(p=>`
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;opacity:0.6">
+          <div>
+            <span style="font-size:13px;font-weight:600;color:var(--text3)">${p.name}</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:6px">${p.position}</span>
+          </div>
+          <button onclick="confirmRestorePlayer('${p.id}','${p.name}')"
+            style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">복귀</button>
+        </div>`).join('')}
+    </div>`;
+  }
+}
+
+async function confirmTransferPlayer(id, name){
+  if(!confirm(`"${name}" 선수를 이적 처리할까요?\n데이터는 보존되고 선수 앱 접속이 차단됩니다.`)) return;
+  await supa.from('player_profiles').update({status:'transferred'}).eq('id',id);
+  loadRosterList();
+  loadPlayerManagement();
+}
+
+async function confirmRestorePlayer(id, name){
+  if(!confirm(`"${name}" 선수를 현역으로 복귀시킬까요?`)) return;
+  await supa.from('player_profiles').update({status:'active'}).eq('id',id);
+  loadRosterList();
+  loadPlayerManagement();
 }
 
 // ── 선수 폼 ───────────────────────────────
@@ -11229,7 +11264,9 @@ async function savePlayerForm(){
 }
 
 async function confirmDeletePlayer(id,name){
-  if(!confirm(`"${name}" 선수를 삭제할까요?\n관련 GPS 데이터도 모두 삭제됩니다.`)) return;
+  if(!confirm(`⚠️ "${name}" 선수를 완전 삭제할까요?\n\nGPS, 웰니스, RPE, 부상 등 모든 데이터가 영구 삭제되며 복구가 불가능합니다.\n\n데이터를 보존하려면 [취소] 후 [이적] 처리하세요.`)) return;
+  const confirm2 = prompt(`정말 삭제하려면 선수 이름 "${name}" 을 입력하세요:`);
+  if(confirm2 !== name) { alert('이름이 일치하지 않아 삭제가 취소됐습니다.'); return; }
   await supa.from('player_profiles').delete().eq('id',id);
   await loadPlayerManagement();
   loadRosterList();
