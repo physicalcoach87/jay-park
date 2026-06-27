@@ -8648,7 +8648,7 @@ async function loadMorningReport(){
   const since7Str  = since7.toISOString().split('T')[0];
 
   if(!_players.length){
-    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
+    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
     _players = data || [];
   }
 
@@ -9419,8 +9419,8 @@ async function loadMorningReport(){
             <span style="font-size:10px;color:var(--text3);margin-left:6px">${p.position}</span>
           </div>
           <button onclick="sendWellnessReminder('${p.id}','${p.name}',this)"
-            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #185FA5;background:transparent;color:#60a5fa;cursor:pointer;font-family:inherit">
-            📨 웰니스 입력 요청
+            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #185FA5;background:transparent;color:#60a5fa;cursor:pointer;font-family:inherit;opacity:${_indRemindStr('wellness',p.id,today)?'0.75':'1'}">
+            ${_indRemindStr('wellness',p.id,today)?`✅ ${_indRemindStr('wellness',p.id,today)} 발송`:'📨 웰니스 입력 요청'}
           </button>
         </div>`).join('')}
       <button id="remind-well-btn" onclick="sendWellnessReminderAll(window._noRespPlayers,this)"
@@ -9442,8 +9442,8 @@ async function loadMorningReport(){
             <span style="font-size:10px;color:var(--text3);margin-left:6px">${p.position}</span>
           </div>
           <button onclick="sendRpeReminder('${p.id}','${p.name}',this)"
-            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-family:inherit">
-            📨 RPE 입력 요청
+            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #7c3aed;background:transparent;color:#a78bfa;cursor:pointer;font-family:inherit;opacity:${_indRemindStr('rpe',p.id,today)?'0.75':'1'}">
+            ${_indRemindStr('rpe',p.id,today)?`✅ ${_indRemindStr('rpe',p.id,today)} 발송`:'📨 RPE 입력 요청'}
           </button>
         </div>`).join('')}
       <button id="remind-rpe-btn" onclick="sendRpeReminderAll(window._noRpeRespPlayers,this)"
@@ -9465,8 +9465,8 @@ async function loadMorningReport(){
             <span style="font-size:10px;color:var(--text3);margin-left:6px">${p.position}</span>
           </div>
           <button onclick="sendPmRpeReminder('${p.id}','${p.name}',this)"
-            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #f59e0b;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">
-            📨 PM RPE 요청
+            style="font-size:10px;padding:3px 10px;border-radius:6px;border:0.5px solid #f59e0b;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit;opacity:${_indRemindStr('pm_rpe',p.id,today)?'0.75':'1'}">
+            ${_indRemindStr('pm_rpe',p.id,today)?`✅ ${_indRemindStr('pm_rpe',p.id,today)} 발송`:'📨 PM RPE 요청'}
           </button>
         </div>`).join('')}
       <button id="remind-pm-rpe-btn" onclick="sendRpeReminderAll(window._pmNoRpeRespPlayers,this)"
@@ -10031,7 +10031,9 @@ async function sendWellnessReminder(playerId, playerName, btn){
     created_by: currentUser?.email||'coach',
   });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
-  btn.textContent='✅ 발송됨';
+  _indRemindSave('wellness', playerId);
+  btn.textContent=`✅ ${_indRemindStr('wellness',playerId)} 발송`;
+  btn.style.opacity='0.75';
 }
 
 // 웰니스 입력 요청 발송 (전체)
@@ -10043,6 +10045,14 @@ function _remindSave(type, date){
 }
 function _remindLastStr(type, date){
   const ts = localStorage.getItem(_remindKey(type, date));
+  if(!ts) return null;
+  return new Date(ts).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
+}
+// 개별 발송 시각 저장/조회 (선수별)
+function _indRemindKey(type, pid, date){ return `remind_ind_${type}_${pid}_${date||getKSTDateStr()}`; }
+function _indRemindSave(type, pid){ localStorage.setItem(_indRemindKey(type, pid), new Date().toISOString()); }
+function _indRemindStr(type, pid, date){
+  const ts = localStorage.getItem(_indRemindKey(type, pid, date));
   if(!ts) return null;
   return new Date(ts).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
 }
@@ -10089,7 +10099,9 @@ async function sendRpeReminder(playerId, playerName, btn){
     created_by: currentUser?.email||'coach',
   });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
-  btn.textContent='✅ 발송됨';
+  _indRemindSave('rpe', playerId);
+  btn.textContent=`✅ ${_indRemindStr('rpe',playerId)} 발송`;
+  btn.style.opacity='0.75';
 }
 
 // PM RPE 입력 요청 발송 (개별)
@@ -10101,7 +10113,9 @@ async function sendPmRpeReminder(playerId, playerName, btn){
   const body  = lang==='en'?`${playerName}, please enter your PM session RPE now!`:lang==='pt'?`${playerName}, registre seu RPE da sessão PM agora!`:`${playerName} 선수, 오후 훈련 후 RPE를 입력해주세요!`;
   await supa.from('notifications').insert({ title, body, meta:{type:'rpe', isPm:true}, target_type:'player', target_value:playerId, created_by:currentUser?.email||'coach' });
   await _firePush({ title, body, target_type:'player', target_value:playerId, player_id:playerId });
-  btn.textContent='✅ 발송됨';
+  _indRemindSave('pm_rpe', playerId);
+  btn.textContent=`✅ ${_indRemindStr('pm_rpe',playerId)} 발송`;
+  btn.style.opacity='0.75';
 }
 
 // RPE 입력 요청 발송 (전체)
@@ -15162,7 +15176,7 @@ async function runInjuryRiskAnalysis(){
 
   // 선수 목록 보장
   if(!_players.length){
-    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
+    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
     _players = data || [];
   }
 
@@ -21113,7 +21127,7 @@ ${printContent}
 // 탭 진입 시
 async function loadMatchTab(){
   if(!_players.length){
-    const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
+    const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
     _players=data||[];
   }
   const sel=document.getElementById('match-player-sel');
@@ -22676,7 +22690,7 @@ async function loadMatchMax(){
   out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
 
   if(!_players.length){
-    const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
+    const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
     _players=data||[];
   }
 
