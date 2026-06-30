@@ -25630,7 +25630,7 @@ async function saveDayPlan(){
   };
   let error;
   if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
-  else{({error}=await supa.from('block_days').insert(row));}
+  else{({error}=await supa.from('block_days').upsert(row,{onConflict:'plan_date'}));}
   if(error){alert('저장 실패: '+error.message);return;}
   closeDayModal();
   await loadPeriodTab();
