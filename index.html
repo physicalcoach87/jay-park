@@ -12126,31 +12126,27 @@ async function loadTeamOverview(){
   let fromVal = document.getElementById('overview-from')?.value;
   let toVal   = document.getElementById('overview-to')?.value;
   if(!fromVal && !toVal){
-    // 기본: 이전 블록 시작 ~ 오늘 (현재+이전 2블록)
-    // 이전 블록 시작 = 현재 블록 시작 바로 전 MATCH일 + 1일
-    const curBlockStart = await getMicrocycleStart(today);
-    const prevMatchDay = new Date(curBlockStart + 'T12:00:00');
-    prevMatchDay.setDate(prevMatchDay.getDate() - 1); // curBlockStart 하루 전
-    const {data: prevMatch} = await supa.from('weekly_schedule')
-      .select('event_date').eq('md_stage','MATCH')
-      .lte('event_date', prevMatchDay.toISOString().split('T')[0])
-      .order('event_date',{ascending:false}).limit(1).maybeSingle();
-    if(prevMatch?.event_date){
-      const d = new Date(prevMatch.event_date + 'T12:00:00');
-      d.setDate(d.getDate() + 1);
-      fromVal = d.toISOString().split('T')[0]; // 이전 MATCH+1 = 이전 블록 시작
+    // 기본: 이전 블록 시작 ~ 다음 블록 종료 (이전+현재+다음 3블록)
+    // blocks 테이블에서 오늘 기준으로 이전/현재/다음 블록 탐색
+    const {data: allBlocks} = await supa.from('blocks')
+      .select('id,start_date,end_date,context,label')
+      .order('start_date', {ascending:true});
+    const blocks3 = allBlocks || [];
+    const curIdx = blocks3.findIndex(b => b.start_date <= today && b.end_date >= today);
+    if(curIdx >= 0){
+      const prevBlock = blocks3[curIdx - 1] || null;
+      const nextBlock = blocks3[curIdx + 1] || null;
+      fromVal = prevBlock ? prevBlock.start_date : blocks3[curIdx].start_date;
+      toVal   = nextBlock ? nextBlock.end_date   : blocks3[curIdx].end_date;
     } else {
-      fromVal = curBlockStart; // 이전 경기 없으면 현재 블록만
+      // 현재 날짜가 어느 블록에도 없으면: 가장 가까운 과거 블록 + 미래 블록
+      const pastBlocks  = blocks3.filter(b => b.end_date < today);
+      const futureBlocks= blocks3.filter(b => b.start_date > today);
+      const prev = pastBlocks[pastBlocks.length - 1] || null;
+      const next = futureBlocks[0] || null;
+      fromVal = prev ? prev.start_date : (next ? next.start_date : today);
+      toVal   = next ? next.end_date   : (prev ? prev.end_date   : today);
     }
-    // 현재 블록 종료일: block_days에서 curBlockStart 이후 최대 plan_date
-    const blockEnd = new Date(curBlockStart + 'T12:00:00');
-    blockEnd.setDate(blockEnd.getDate() + 21); // 최대 3주 앞까지 탐색
-    const {data: bdEnd} = await supa.from('block_days')
-      .select('plan_date')
-      .gte('plan_date', curBlockStart)
-      .lte('plan_date', blockEnd.toISOString().split('T')[0])
-      .order('plan_date', {ascending:false}).limit(1).maybeSingle();
-    toVal = bdEnd?.plan_date || today;
   } else if(fromVal && !toVal){ toVal=today; }
   else if(!fromVal && toVal){ fromVal = await getMicrocycleStart(toVal); }
 
@@ -25050,8 +25046,11 @@ const DOW_KR = ['일','월','화','수','목','금','토'];
 async function loadPeriodTab() {
   await loadPeriodMatchAvg();
   const y=_periodYear, m=_periodMonth;
-  const first=`${y}-${String(m+1).padStart(2,'0')}-01`;
-  const last=`${y}-${String(m+1).padStart(2,'0')}-${new Date(y,m+1,0).getDate()}`;
+  // 달력 첫주/마지막주에 보이는 인접월 넘침 날짜까지 포함하도록 ±7일 확장
+  const firstD=new Date(y,m,1); firstD.setDate(firstD.getDate()-7);
+  const lastD=new Date(y,m+1,0); lastD.setDate(lastD.getDate()+7);
+  const first=firstD.toISOString().split('T')[0];
+  const last=lastD.toISOString().split('T')[0];
   const [{data:blocks},{data:days}] = await Promise.all([
     supa.from('blocks').select('*').order('start_date'),
     supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
@@ -25278,7 +25277,7 @@ function renderPeriodCalendar() {
           <div style="text-align:center">
             <span style="font-size:${isOverflow?'11px':'12px'};font-weight:${isToday?700:500};color:${isOverflow?'var(--text3)':dayColor}">${dispDate} <span style="font-size:10px;opacity:.8">(${dowLabel})</span></span>
           </div>
-          ${isOverflow?'':`${amHtml}${pmHtml}${gauges}`}${mssBadgeHtml}
+          ${amHtml}${pmHtml}${gauges}${mssBadgeHtml}
         </td>`;
       }
     }
@@ -25630,7 +25629,7 @@ async function saveDayPlan(){
   };
   let error;
   if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
-  else{({error}=await supa.from('block_days').insert(row));}
+  else{({error}=await supa.from('block_days').upsert(row,{onConflict:'plan_date'}));}
   if(error){alert('저장 실패: '+error.message);return;}
   closeDayModal();
   await loadPeriodTab();
