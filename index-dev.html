@@ -25281,7 +25281,7 @@ function renderPeriodCalendar() {
           <div style="text-align:center">
             <span style="font-size:${isOverflow?'11px':'12px'};font-weight:${isToday?700:500};color:${isOverflow?'var(--text3)':dayColor}">${dispDate} <span style="font-size:10px;opacity:.8">(${dowLabel})</span></span>
           </div>
-          ${isOverflow?'':`${amHtml}${pmHtml}${gauges}`}${mssBadgeHtml}
+          ${amHtml}${pmHtml}${gauges}${mssBadgeHtml}
         </td>`;
       }
     }
