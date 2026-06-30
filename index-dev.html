@@ -25050,8 +25050,11 @@ const DOW_KR = ['일','월','화','수','목','금','토'];
 async function loadPeriodTab() {
   await loadPeriodMatchAvg();
   const y=_periodYear, m=_periodMonth;
-  const first=`${y}-${String(m+1).padStart(2,'0')}-01`;
-  const last=`${y}-${String(m+1).padStart(2,'0')}-${new Date(y,m+1,0).getDate()}`;
+  // 달력 첫주/마지막주에 보이는 인접월 넘침 날짜까지 포함하도록 ±7일 확장
+  const firstD=new Date(y,m,1); firstD.setDate(firstD.getDate()-7);
+  const lastD=new Date(y,m+1,0); lastD.setDate(lastD.getDate()+7);
+  const first=firstD.toISOString().split('T')[0];
+  const last=lastD.toISOString().split('T')[0];
   const [{data:blocks},{data:days}] = await Promise.all([
     supa.from('blocks').select('*').order('start_date'),
     supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
