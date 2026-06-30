@@ -13719,7 +13719,7 @@ async function loadPlayerDashboard(){
   since.setDate(since.getDate()-days);
   const sinceStr = since.toISOString().split('T')[0];
 
-  const [{data:gps},{data:matchGps},{data:rpeRows},{data:wellRows},{data:injuries},{data:fitnessData}] = await Promise.all([
+  const [{data:gps},{data:matchGps},{data:rpeRows},{data:wellRows},{data:injuries},{data:fitnessData},{data:schedRows}] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,fmp_run_medium,fmp_run_high,fmp_dyn_medium,fmp_dyn_high,cycle,periodization,session_topic,opponent,session_type2,session_label')
       .eq('player_id',playerId)
@@ -13749,7 +13749,11 @@ async function loadPlayerDashboard(){
       .select('record_date,weight,muscle_mass,body_fat_pct')
       .eq('player_id',playerId)
       .order('record_date',{ascending:false})
-      .limit(10)
+      .limit(10),
+    supa.from('weekly_schedule')
+      .select('event_date,md_stage,title,event_type')
+      .gte('event_date',sinceStr)
+      .order('event_date',{ascending:false})
   ]);
   const fitnessRows = fitnessData||[];
   const latestFit   = fitnessRows[0]||null;
@@ -14151,7 +14155,91 @@ async function loadPlayerDashboard(){
         </table>
       </div>
     </div>
-    ` : `<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">최근 ${days}일 운동 데이터 없음</div>`}
+    ` : `
+    <div style="text-align:center;padding:1.2rem;color:var(--text3);font-size:13px;margin-bottom:8px">최근 ${days}일 GPS/세션 데이터 없음</div>
+    ${currentUseWellness && wellRows?.length ? `
+    <div style="background:var(--surface);border:1px solid #15803d;border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="font-size:11px;font-weight:600;color:#86efac;letter-spacing:.05em;margin-bottom:10px">기간 평균 웰니스 <span style="font-weight:400;color:var(--text3)">(${wellRows.length}회 응답)</span></div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-bottom:${wellRows.some(w=>w.morning_weight)?'10px':'0'}">
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">종합</div>
+          <div style="font-size:16px;font-weight:700;color:${wTotalColor(avgWellTotal)}">${avgWellTotal||'—'}<span style="font-size:10px;color:var(--text3)">/20</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">피로</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgFatigue)}">${avgFatigue||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">수면</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgSleep)}">${avgSleep||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">스트레스</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgStress)}">${avgStress||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+        <div style="background:var(--surface2);border-radius:8px;padding:9px 6px;text-align:center">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">근육통</div>
+          <div style="font-size:16px;font-weight:700;color:${wScoreColor(avgMuscle)}">${avgMuscle||'—'}<span style="font-size:10px;color:var(--text3)">/5</span></div>
+        </div>
+      </div>
+      ${wellRows.some(w=>w.morning_weight) ? (() => {
+        const wtVals = wellRows.map(w=>parseFloat(w.morning_weight)).filter(v=>v>0);
+        const wtAvg  = wtVals.length ? (wtVals.reduce((a,b)=>a+b,0)/wtVals.length).toFixed(1) : null;
+        const wtMin  = wtVals.length ? Math.min(...wtVals).toFixed(1) : null;
+        const wtMax  = wtVals.length ? Math.max(...wtVals).toFixed(1) : null;
+        return `<div style="display:flex;align-items:center;gap:14px;padding:10px 4px 0;border-top:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--text3)">아침 체중</div>
+          <div style="font-size:18px;font-weight:700;color:#d0d4f0">${wtAvg} <span style="font-size:11px;color:var(--text3)">kg 평균</span></div>
+          <div style="font-size:11px;color:var(--text3)">최저 ${wtMin} · 최고 ${wtMax} kg</div>
+          <div style="font-size:10px;color:var(--text3);margin-left:auto">${wtVals.length}회 기록</div>
+        </div>`;
+      })() : ''}
+    </div>` : ''}
+    ${wellRows?.length ? (() => {
+      // 날짜별 주기화 맵 (같은 날 여러 일정이면 MD 우선, 그 다음 첫 번째)
+      const schedMap = {};
+      (schedRows||[]).forEach(s => {
+        const d = s.event_date;
+        if (!schedMap[d] || s.md_stage) schedMap[d] = s;
+      });
+      const wc = v => !v?'var(--text3)':+v>=4?'#22c55e':+v>=3?'#eab308':'#ef4444';
+      const mdStyle = md => {
+        const map = {MATCH:'background:#3b1219;color:#f87171','MD-3':'background:#2a0e0e;color:#f87171','MD-2':'background:#2a1a00;color:#fbbf24','MD-4':'background:#0c1a2e;color:#60a5fa','MD-1':'background:#0a1f10;color:#4ade80','MD+1':'background:#1a1a1a;color:#9ca3af'};
+        return map[md] || 'background:var(--surface2);color:var(--text3)';
+      };
+      return `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">웰니스 · 체중 · 주기화 이력</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:11px">
+            <thead><tr style="background:var(--surface2)">
+              <th style="padding:5px 8px;text-align:left;color:var(--text3)">날짜</th>
+              <th style="padding:5px 8px;text-align:center;color:#60a5fa">MD</th>
+              <th style="padding:5px 8px;text-align:center;color:#86efac">피로</th>
+              <th style="padding:5px 8px;text-align:center;color:#86efac">수면</th>
+              <th style="padding:5px 8px;text-align:center;color:#86efac">스트레스</th>
+              <th style="padding:5px 8px;text-align:center;color:#86efac">근육통</th>
+              <th style="padding:5px 8px;text-align:right;color:var(--text3)">체중(kg)</th>
+            </tr></thead>
+            <tbody>
+              ${wellRows.map(w => {
+                const s = schedMap[w.record_date];
+                const md = s?.md_stage || '';
+                const title = s?.title || '';
+                return `<tr style="border-bottom:1px solid var(--border)">
+                  <td style="padding:5px 8px;color:var(--text2)">${w.record_date}</td>
+                  <td style="padding:5px 8px;text-align:center">${md ? `<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdStyle(md)}">${md}</span>` : '—'}</td>
+                  <td style="padding:5px 8px;text-align:center;color:${wc(w.fatigue)};font-weight:600">${w.fatigue||'—'}</td>
+                  <td style="padding:5px 8px;text-align:center;color:${wc(w.sleep_quality)};font-weight:600">${w.sleep_quality||'—'}</td>
+                  <td style="padding:5px 8px;text-align:center;color:${wc(w.stress)};font-weight:600">${w.stress||'—'}</td>
+                  <td style="padding:5px 8px;text-align:center;color:${wc(w.muscle_soreness)};font-weight:600">${w.muscle_soreness||'—'}</td>
+                  <td style="padding:5px 8px;text-align:right;color:var(--text2)">${w.morning_weight||'—'}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    })() : ''}`}
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
