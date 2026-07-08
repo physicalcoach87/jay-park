@@ -776,8 +776,8 @@ async function loadHome(){
   ].map(({label,t,unit,color,ref})=>{
     const v=t==null?'—':Math.round(t).toLocaleString();
     let pctSpan='';
-    if(t&&ref&&ref>0){const pct=Math.round(t/ref*100);const pc=pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';pctSpan=' <span style="font-size:9px;color:'+pc+';font-weight:600">'+pct+'%</span>';}
-    return '<div style="background:var(--surface2);padding:10px 4px;text-align:center"><div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:5px">'+label+'</div><div style="font-size:13px;font-weight:700;color:'+(t==null?'var(--text3)':'var(--text)')+';line-height:1.2">'+v+'<span style="font-size:9px;color:var(--text3);margin-left:1px">'+unit+'</span>'+pctSpan+'</div></div>';
+    if(t&&ref&&ref>0){const pct=Math.round(t/ref*100);const pc=pct>130?'#ef4444':pct>=110?'#f97316':pct>=80?'#22c55e':pct>=60?'#eab308':'#ef4444';pctSpan='<div style="font-size:10px;color:'+pc+';font-weight:600;margin-top:3px">'+pct+'%</div>';}
+    return '<div style="background:var(--surface2);padding:10px 4px;text-align:center"><div style="font-size:9px;color:'+color+';font-weight:600;margin-bottom:5px">'+label+'</div><div style="font-size:13px;font-weight:700;color:'+(t==null?'var(--text3)':'var(--text)')+';line-height:1.2">'+v+'<span style="font-size:9px;color:var(--text3);margin-left:1px">'+unit+'</span></div>'+pctSpan+'</div>';
   }).join('');
   // 목표/실제/달성 테이블 헬퍼
   const achBadge=(actual,target,targetSet)=>{
@@ -1359,14 +1359,6 @@ async function loadRpe(){
       +'</div>':'');
   window._rpeNoResp=noResp.map(p=>p.id);
 }
-async function mobileUpdateRpeType(sel, recordId){
-  const newType=sel.value;
-  sel.disabled=true;
-  const {error}=await supa.from('session_records').update({session_type:newType}).eq('id',recordId);
-  sel.disabled=false;
-  if(error){showToast('수정 실패',true);sel.value=sel.dataset.orig||'AM';}
-  else{showToast('✅ '+newType+'으로 변경');sel.style.color='var(--accent2)';setTimeout(()=>sel.style.color='',1500);}
-}
 function mobileOpenRpeModal(id, playerId, name, sess, rpe, date){
   window._mRpeOpts={id,playerId,name,sess:sess||'AM',rpe,date};
   let m=document.getElementById('mobile-rpe-modal');
@@ -1466,13 +1458,6 @@ async function mobileDeleteRpeMod(){
   mobileCloseRpeModal();
   _loadedPages['rpe']=false;loadRpe();
 }
-async function mobileDeleteRpe(recordId, playerName){
-  if(!confirm('이 RPE 기록을 삭제할까요?\n'+playerName+' · 선택한 항목')) return;
-  const {error}=await supa.from('session_records').delete().eq('id',recordId);
-  if(error){showToast('삭제 실패',true);}
-  else{showToast('✅ 삭제됨');_loadedPages['rpe']=false;loadRpe();}
-}
-
 async function sendRpeReminder(id,name,btn){
   if(btn){btn.disabled=true;btn.textContent='전송 중…';}
   const {error}=await supa.from('notifications').insert({title:'RPE 입력 요청',body:'오늘 훈련 강도(RPE)를 아직 입력하지 않았어요. 지금 바로 입력해 주세요 💪',target_type:'player',target_value:id,created_by:currentUser?.email||'coach'});
@@ -2467,13 +2452,14 @@ function calcACWR(sessions,today){
     byDate[s.date]=(byDate[s.date]||0)+sRPE;
   });
   const tD=new Date(today);
-  let acute=0,cSum=0,cDays=0;
+  let acute=0,cSum=0;
   Object.entries(byDate).forEach(([date,sRPE])=>{
     const d=Math.floor((tD-new Date(date))/86400000);
     if(d>=0&&d<7) acute+=sRPE;
-    if(d>=0&&d<28){cSum+=sRPE;cDays++;}
+    if(d>=0&&d<28) cSum+=sRPE;
   });
-  const chronic=cDays>0?(cSum/cDays)*7:0;
+  // 휴식일도 0으로 간주 → 28일 전체로 나눔 (표준 롤링 평균, 웹앱과 동일 공식)
+  const chronic=(cSum/28)*7;
   const acwr=chronic>0?acute/chronic:null;
   return{acute:Math.round(acute),chronic:Math.round(chronic),acwr};
 }
