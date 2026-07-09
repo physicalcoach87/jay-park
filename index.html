@@ -10748,6 +10748,8 @@ async function loadRosterList(){
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button onclick="openPlayerForm('${p.id}')"
               style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">편집</button>
+            <button onclick="resetPlayerPin('${p.id}','${p.name}')" title="선수가 PIN을 잊었을 때 초기화"
+              style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">🔑PIN</button>
             <button onclick="confirmTransferPlayer('${p.id}','${p.name}')"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #b45309;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">이적</button>
             <button onclick="confirmDeletePlayer('${p.id}','${p.name}')"
@@ -10773,6 +10775,19 @@ async function loadRosterList(){
         </div>`).join('')}
     </div>`;
   }
+}
+
+// 선수 PIN 초기화 (선수가 PIN을 잊었을 때)
+async function resetPlayerPin(id, name){
+  const input = prompt(`${name} 선수의 새 PIN (숫자 4자리)을 입력하세요.\n비워두고 확인하면 0000으로 초기화됩니다.`, '0000');
+  if(input === null) return; // 취소
+  const pin = input.trim() === '' ? '0000' : input.trim();
+  if(!/^\d{4}$/.test(pin)){ alert('PIN은 숫자 4자리여야 합니다.'); return; }
+  // 잠금 상태도 함께 해제 (PIN 5회 오류 잠금 풀기)
+  const {error} = await supa.from('player_profiles')
+    .update({pin, failed_logins: 0, locked_until: null}).eq('id', id);
+  if(error){ alert('초기화 실패: ' + error.message); return; }
+  alert(`✅ ${name} 선수 PIN이 ${pin}(으)로 설정되었습니다.\n선수에게 알려주시고, 로그인 후 본인이 PIN을 변경하도록 안내하세요.`);
 }
 
 async function confirmTransferPlayer(id, name){
