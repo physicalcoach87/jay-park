@@ -2518,6 +2518,16 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="sa-coach-result"></div>
   </div>
 
+  <!-- 에러 로그 -->
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;margin-top:1.5rem">
+    <div style="font-size:16px;font-weight:700">🐞 에러 로그 <span id="sa-errors-count" style="font-size:12px;font-weight:400;color:var(--text3)"></span></div>
+    <div style="display:flex;gap:8px">
+      <button onclick="saLoadErrors()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit">새로고침</button>
+      <button onclick="saClearErrors()" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);color:#ef4444;border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit">전체 삭제</button>
+    </div>
+  </div>
+  <div id="sa-errors-list" style="margin-bottom:2rem"></div>
+
 </div>
 
 <!-- 기존 처방 불러오기 모달 -->
@@ -23111,6 +23121,50 @@ window.addEventListener('resize', updateHeaderHeight);
 // ══════════════════════════════════════════════
 async function loadSuperAdmin(){
   await saLoadClubs();
+  saLoadErrors();
+}
+
+// ── 에러 로그 (app_errors, superadmin 전용) ─────────────────
+async function saLoadErrors(){
+  const el = document.getElementById('sa-errors-list');
+  if(!el) return;
+  el.innerHTML = '<div style="color:var(--text3);font-size:13px">불러오는 중...</div>';
+  const {data:errs, error} = await supa.from('app_errors')
+    .select('*').order('created_at',{ascending:false}).limit(50);
+  if(error){
+    el.innerHTML = `<div style="color:var(--text3);font-size:13px">조회 불가 — 008_error_logs.sql 실행 필요 (${error.message})</div>`;
+    return;
+  }
+  const cntEl = document.getElementById('sa-errors-count');
+  if(cntEl) cntEl.textContent = errs?.length ? `최근 ${errs.length}건` : '';
+  if(!errs?.length){ el.innerHTML = '<div style="color:var(--text3);font-size:13px">✅ 수집된 에러 없음</div>'; return; }
+  const appBadge = a => a==='player'
+    ? '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(34,197,94,0.12);color:#4ade80">선수앱</span>'
+    : a==='coach-mobile'
+      ? '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(251,191,36,0.12);color:#fbbf24">코치모바일</span>'
+      : '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(96,165,250,0.12);color:#60a5fa">코치웹</span>';
+  el.innerHTML = errs.map(e=>{
+    const t = new Date(e.created_at).toLocaleString('ko-KR',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return `<details style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;margin-bottom:6px">
+      <summary style="cursor:pointer;display:flex;align-items:center;gap:8px;flex-wrap:wrap;list-style:none">
+        ${appBadge(e.app)}
+        <span style="font-size:11px;color:var(--text3)">${t}</span>
+        <span style="font-size:12px;color:#f87171;font-weight:500;flex:1;min-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.message)}</span>
+      </summary>
+      <div style="margin-top:8px;font-size:11px;color:var(--text3);line-height:1.7">
+        ${e.user_info?`사용자: ${esc(e.user_info)}<br>`:''}
+        ${e.url?`위치: ${esc(e.url)}<br>`:''}
+        ${e.stack?`<pre style="white-space:pre-wrap;word-break:break-all;background:var(--surface);border-radius:6px;padding:8px;margin-top:6px;font-size:10px;max-height:200px;overflow-y:auto">${esc(e.stack)}</pre>`:''}
+      </div>
+    </details>`;
+  }).join('');
+}
+
+async function saClearErrors(){
+  if(!confirm('에러 로그를 전부 삭제할까요?')) return;
+  await supa.from('app_errors').delete().gte('id', 0);
+  saLoadErrors();
 }
 
 async function saLoadClubs(){
@@ -25166,5 +25220,33 @@ function printWeekDetail() {
     </div>
   </div>
 </div>
+
+<!-- 에러 자동 수집 (superadmin 에러 로그) -->
+<script>
+(function(){
+  let _errSent = 0;
+  const _errSeen = new Set();
+  function _reportErr(message, stack){
+    try {
+      if(_errSent >= 5 || typeof supa === 'undefined' || !supa) return; // 세션당 최대 5건
+      const key = String(message||'').slice(0,120);
+      if(_errSeen.has(key)) return; // 같은 에러 반복 방지
+      _errSeen.add(key); _errSent++;
+      supa.from('app_errors').insert({
+        app: 'coach-web',
+        club_id: (typeof currentClubId!=='undefined' && currentClubId) || null,
+        user_info: (typeof currentUser!=='undefined' && currentUser && currentUser.email) || null,
+        message: String(message||'').slice(0,500),
+        stack: String(stack||'').slice(0,2000),
+        url: location.pathname + location.hash.slice(0,100),
+        user_agent: navigator.userAgent.slice(0,200)
+      }).then(()=>{}, ()=>{}); // 실패해도 조용히 무시 (테이블 없어도 안전)
+    } catch(_e) {}
+  }
+  window.addEventListener('error', e => _reportErr(e.message, e.error && e.error.stack));
+  window.addEventListener('unhandledrejection', e => _reportErr(
+    (e.reason && e.reason.message) || String(e.reason), e.reason && e.reason.stack));
+})();
+</script>
 </body>
 </html>
