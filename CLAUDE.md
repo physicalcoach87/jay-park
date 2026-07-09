@@ -21,7 +21,10 @@
 - 기존 스타일 유지
 
 ### 검증 루프
-- 수정 후 반드시 `node --check`로 JS 문법 검증
+- 수정 후 반드시 JS 문법 검증 (node 없으면 macOS 내장 jsc 사용:
+  `/System/Library/Frameworks/JavaScriptCore.framework/Versions/Current/Helpers/jsc`)
+- **계산 함수(calcACWR/calcMVExposure/calcWellnessRisk/calcRiskLevel) 수정 시
+  반드시 `bash tests/run-tests.sh` 실행 → 전체 통과 확인 후 커밋**
 - 핵심 변수/함수 존재 확인
 - outputs 복사 + present_files로 전달
 
