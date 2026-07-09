@@ -2959,12 +2959,12 @@ async function doResetPw(){
     // 초대 링크 파라미터 감지
     const urlToken = new URLSearchParams(window.location.search).get('invite');
     if(urlToken){
-      const {data:inv} = await supa.from('invite_tokens')
-        .select('token,club_id,club_name,role,used,expires_at')
-        .eq('token', urlToken).single();
-      if(inv && !inv.used && new Date(inv.expires_at) > new Date()){
-        _inviteToken = inv;
-        showSignup(inv);
+      // RLS 적용 후 anon은 invite_tokens 직접 조회 불가 → RPC 사용
+      const {data:invRows} = await supa.rpc('validate_invite', {p_token: urlToken});
+      const inv = invRows?.[0];
+      if(inv && inv.valid){
+        _inviteToken = {token: urlToken, club_id: inv.club_id, club_name: inv.club_name, role: inv.role};
+        showSignup(_inviteToken);
       } else {
         const msg = document.getElementById('login-msg');
         if(msg){ msg.textContent='초대 링크가 만료되었거나 이미 사용되었습니다.'; msg.style.color='#ef4444'; }
@@ -3071,13 +3071,9 @@ async function doSignup(){
   btn.textContent='가입 신청'; btn.disabled=false;
   if(error){ errEl.textContent='오류: '+error.message; return; }
   // 초대 토큰이 있으면 club_id·role·approved 자동 반영 + 토큰 소모
+  // (RPC — 가입 직후 세션이 없어도 토큰이 권한 증명이 됨)
   if(invite && data?.user?.id){
-    await supa.from('profiles').update({
-      club_id: invite.club_id,
-      role: invite.role,
-      approved: true
-    }).eq('id', data.user.id);
-    await supa.from('invite_tokens').update({used:true}).eq('token', invite.token);
+    await supa.rpc('claim_invite', {p_token: invite.token, p_user_id: data.user.id});
     _inviteToken = null;
     // URL에서 invite 파라미터 제거
     const url = new URL(window.location.href);
