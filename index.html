@@ -3130,7 +3130,9 @@ async function loadMgmt(mode){
     }
   });
   listEl.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>';
-  const {data, error} = await supa.from('profiles').select('*').eq('approved', mode==='approved');
+  // 선수앱 내부 계정(p-...@player.internal)은 스텝이 아니므로 제외
+  const {data, error} = await supa.from('profiles').select('*').eq('approved', mode==='approved')
+    .not('email','like','p-%@player.internal');
   if(error){
     listEl.innerHTML=`<div style="padding:1rem;text-align:center">
       <div style="font-size:13px;color:var(--text2);margin-bottom:12px;line-height:1.7">
@@ -3173,6 +3175,10 @@ CREATE POLICY "user_tab_overrides_write" ON public.user_tab_overrides FOR ALL US
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
+  -- 선수앱 내부 계정은 스텝 프로필 생성 제외
+  IF new.email LIKE 'p-%@player.internal' THEN
+    RETURN new;
+  END IF;
   INSERT INTO public.profiles (id, email, name, role, approved)
   VALUES (
     new.id, new.email,
