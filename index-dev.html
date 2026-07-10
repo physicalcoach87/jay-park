@@ -2873,7 +2873,11 @@ function checkAdmin(user){
   return Array.isArray(roles) && roles.includes('admin');
 }
 
+// 새로고침 시 IIFE와 onAuthStateChange가 동시에 호출 → 중복 실행 방지
+let _showAppFor = null;
 async function showApp(user, preloadedRole){
+  if(_showAppFor === user.id) return;
+  _showAppFor = user.id;
   currentUser = user;
   document.getElementById('login-overlay').style.display='none';
   document.getElementById('main-app').style.display='block';
@@ -2883,12 +2887,19 @@ async function showApp(user, preloadedRole){
   // 역할 결정
   // 역할 결정 — preloadedRole이 있어도 profiles를 항상 조회 (단일 진실원천)
   // 건너뛰면 isSuperAdmin·클럽 정보가 설정되지 않아 superadmin이 코치로 표시되는 문제 발생
-  // 일시적 네트워크 오류로 role이 coach로 강등되지 않게 1회 재시도
-  let prof = null;
-  for(let i = 0; i < 2; i++){
+  // 일시적 오류(만료 토큰·네트워크)로 role이 coach로 조용히 강등되지 않게 재시도
+  let prof = null, profErr = null;
+  for(let i = 0; i < 3; i++){
     const {data, error:pe} = await supa.from('profiles').select('role,club_id').eq('id', user.id).single();
-    if(data){ prof = data; break; }
-    if(i === 0) await new Promise(r=>setTimeout(r, 400));
+    if(data){ prof = data; profErr = null; break; }
+    profErr = pe;
+    if(i < 2) await new Promise(r=>setTimeout(r, 300 * (i+1)));
+  }
+  // 조회 실패 시 조용히 coach로 강등하지 말고 사용자에게 알림 (권한이 잘못 보이는 것보다 안전)
+  if(!prof && !preloadedRole){
+    _showAppFor = null; // 재시도 가능하게 해제
+    showRoleLoadError(profErr);
+    return;
   }
   let role = prof?.role || preloadedRole || (isAdmin ? 'admin' : 'coach');
   {
@@ -2947,11 +2958,28 @@ async function showApp(user, preloadedRole){
 
 function showLogin(){
   currentUser = null;
+  _showAppFor = null;
   isAdmin = false;
+  isSuperAdmin = false;
+  isTeamAdmin = false;
   currentRole = 'coach';
   userPermissions = {};
   document.getElementById('login-overlay').style.display='flex';
   document.getElementById('main-app').style.display='none';
+}
+
+// 권한(profiles) 조회 실패 — 잘못된 역할로 진입시키지 않고 재시도를 안내
+function showRoleLoadError(err){
+  const ov = document.getElementById('login-overlay');
+  const app = document.getElementById('main-app');
+  if(ov) ov.style.display='flex';
+  if(app) app.style.display='none';
+  const msg = document.getElementById('login-err');
+  if(msg){
+    msg.textContent = '권한 정보를 불러오지 못했습니다. 새로고침 후 다시 시도해주세요.'
+      + (err?.message ? ' ('+err.message+')' : '');
+    msg.style.color = '#ef4444';
+  }
 }
 
 async function doLogout(){
@@ -2971,7 +2999,13 @@ async function doResetPw(){
 // 앱 시작 시 로그인 상태 확인
 (async function(){
   const {data:{session}} = await supa.auth.getSession();
-  if(session?.user) showApp(session.user);
+  if(session?.user){
+    // 저장된 토큰이 만료됐을 수 있음 → 서버 검증·갱신 후 진행
+    // (만료 토큰으로 profiles를 조회하면 역할이 coach로 강등되는 문제 방지)
+    const {data:{user:vUser}, error:vErr} = await supa.auth.getUser();
+    if(vErr || !vUser){ await supa.auth.signOut(); showLogin(); }
+    else showApp(vUser);
+  }
   else {
     showLogin();
     // 초대 링크 파라미터 감지

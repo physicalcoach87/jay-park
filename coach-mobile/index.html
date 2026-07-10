@@ -478,8 +478,13 @@ async function doLogout(){
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app').style.display='none';
 }
-supa.auth.onAuthStateChange((event,session)=>{
-  if(session?.user&&!currentUser){currentUser=session.user;initApp();}
+supa.auth.onAuthStateChange(async (event,session)=>{
+  if(session?.user&&!currentUser){
+    // 저장된 토큰이 만료됐을 수 있음 → 서버 검증·갱신 후 진입 (RLS 조회 실패 방지)
+    const {data:{user},error}=await supa.auth.getUser();
+    if(error||!user){ await supa.auth.signOut(); return; }
+    currentUser=user; initApp();
+  }
 });
 async function initApp(){
   document.getElementById('login-screen').style.display='none';
