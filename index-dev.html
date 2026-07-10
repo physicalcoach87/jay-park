@@ -2325,6 +2325,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <span>ACC: <b id="dm-avg-accel" style="color:var(--text)">—</b>회</span>
         <span>RHIE: <b id="dm-avg-rhie" style="color:var(--text)">—</b>회</span>
       </div>
+      <div id="dm-basis-note" style="display:none;margin-top:6px;padding-top:6px;border-top:1px solid var(--border);font-size:10px;color:var(--text3);line-height:1.5"></div>
     </div>
     <!-- 항목별 슬라이더 + 절대값 (JS 렌더링) -->
     <div id="dm-metrics-area" style="margin-bottom:18px"></div>
@@ -8554,7 +8555,7 @@ async function loadMorningReport(){
       .order('match_date',{ascending:false})
       .limit(300),
     supa.from('block_days')
-      .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
+      .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,ref_basis')
       .gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
   ]);
 
@@ -11711,7 +11712,7 @@ async function loadTeamOverview(){
   // ── 데이터 조회 ──
   const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
-      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,player_profiles(name,position)')
@@ -12422,7 +12423,7 @@ async function buildWeeklyLoadHtml(forDate){
   let periodHeader = '';
   if(window._trainingMode) {
     const {data: bdWeek} = await supa.from('block_days')
-      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
@@ -12458,9 +12459,9 @@ async function buildWeeklyLoadHtml(forDate){
       'MD':    ['td','hsr','sprint','accel','rhie'],
       'MATCH': ['td','hsr','sprint','accel','rhie'],
     };
-    const _pBadge = (target, avg, mdLabel, field) => {
-      if(!target || !avg) return '';
-      const p = Math.round(target/avg*100);
+    const _pBadge = (pct, mdLabel, field) => {
+      if(pct==null) return '';
+      const p = Math.round(pct);
       const md = (mdLabel||'').trim().toUpperCase().replace(/\s/g,'');
       const keyFields = MD_KEY_FIELDS[md] || [];
       const isKey = keyFields.includes(field);
@@ -12526,7 +12527,8 @@ async function buildWeeklyLoadHtml(forDate){
       const isSel = dd===forDate;
       const dObj = new Date(dd+'T12:00:00');
       const mdLbl = bd.day_label||'';
-      const tCell = (val, avg, field) => val==null ? '—' : val===0 ? '0 <span style="font-size:9px;color:var(--text3)">(0%)</span>' : val.toLocaleString()+_pBadge(val,avg,mdLbl,field);
+      // 저장된 기준(ref_basis) 우선 % (지난 날 고정). field == avgKey
+      const tCell = (val, avg, field) => val==null ? '—' : val===0 ? '0 <span style="font-size:9px;color:var(--text3)">(0%)</span>' : val.toLocaleString()+_pBadge(frozenPctByAvgKey(bd,field),mdLbl,field);
       const rowStyle = isSel ? 'background:rgba(99,102,241,0.08);font-weight:600' : '';
       const sessionLbl = [bd.am_session,bd.pm_session].filter(Boolean).join(' / ');
       return '<tr style="'+rowStyle+'">'
@@ -12667,7 +12669,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', date),
     supa.from('block_days')
-      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session')
+      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
@@ -12949,13 +12951,22 @@ async function loadTeamSummary(forceDate, quiet=false){
     rhie:  _mAvgTs(ref3RowsTs,'rhie'),
   };
   const bd = blockDayRow || null;
-  // periodPct: block_days 절대 목표 / 팀 경기 평균 (역산)
+  // periodPct: 저장된 기준(ref_basis) 우선 → 지난 날은 준비 당시 기준 고정, 없으면 현재 평균 역산
+  const _pp = (targetCol, avgKey) => {
+    if(!bd || bd[targetCol]==null) return null;
+    if(bd.ref_basis){
+      const m = PERIOD_METRICS.find(x=>x.avgKey===avgKey);
+      if(m && bd.ref_basis.pct && bd.ref_basis.pct[m.pctId]!=null) return bd.ref_basis.pct[m.pctId];
+      if(bd.ref_basis.avg && bd.ref_basis.avg[avgKey]) return bd[targetCol]/bd.ref_basis.avg[avgKey]*100;
+    }
+    return teamMAvg[avgKey] ? bd[targetCol]/teamMAvg[avgKey]*100 : null;
+  };
   const periodPct = {
-    td:    (bd?.td_target   && teamMAvg.td)    ? bd.td_target   / teamMAvg.td    * 100 : null,
-    hsr:   (bd?.hsr_target  && teamMAvg.hsr)   ? bd.hsr_target  / teamMAvg.hsr   * 100 : null,
-    sprint:(bd?.spr_target  && teamMAvg.sprint) ? bd.spr_target  / teamMAvg.sprint * 100 : null,
-    accel: (bd?.acc_target  && teamMAvg.accel)  ? bd.acc_target  / teamMAvg.accel  * 100 : null,
-    rhie:  (bd?.rhie_target && teamMAvg.rhie)   ? bd.rhie_target / teamMAvg.rhie   * 100 : null,
+    td:     _pp('td_target','td'),
+    hsr:    _pp('hsr_target','hsr'),
+    sprint: _pp('spr_target','sprint'),
+    accel:  _pp('acc_target','accel'),
+    rhie:   _pp('rhie_target','rhie'),
   };
   const isTrainingMode = window._trainingMode === true;
 
@@ -24466,11 +24477,43 @@ async function runTrainingReport(){
 let _periodYear  = new Date().getFullYear();
 let _periodMonth = new Date().getMonth();
 let _periodMatchAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0};
+let _periodMatchKeys = []; // 현재 기준 최근 3경기 [{date,opp}]
 let _blocksData  = []; // blocks 테이블
 let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }
 let _bmEditId    = null; // 편집중인 block id
 let _dmEditDate  = null; // 편집중인 날짜
 let _dmEditId    = null; // 편집중인 block_days id
+let _dmEditRefBasis = null; // 편집중인 날의 기존 기준 스냅샷 (지난 날 고정용)
+let _dmBasisAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0}; // 모달 내 %↔절대값 변환 기준(지난 날은 고정 기준)
+
+// 주기화 지표 정의 (pct키 / 목표컬럼 / 평균키 매핑)
+const PERIOD_METRICS = [
+  {pctId:'td',   targetCol:'td_target',   avgKey:'td'},
+  {pctId:'hsr',  targetCol:'hsr_target',  avgKey:'hsr'},
+  {pctId:'spr',  targetCol:'spr_target',  avgKey:'sprint'},
+  {pctId:'acc',  targetCol:'acc_target',  avgKey:'accel'},
+  {pctId:'rhie', targetCol:'rhie_target', avgKey:'rhie'},
+];
+
+// 저장된 기준 스냅샷 우선으로 % 계산 (지난 날은 준비 당시 기준으로 고정)
+// pctId: td/hsr/spr/acc/rhie | avgKey: td/hsr/sprint/accel/rhie
+function frozenPct(row, pctId, targetCol, avgKey){
+  const tgt = row?.[targetCol];
+  if(tgt==null) return null;
+  const rb = row.ref_basis;
+  if(rb){
+    if(rb.pct && rb.pct[pctId]!=null) return Math.round(rb.pct[pctId]);
+    if(rb.avg && rb.avg[avgKey])      return Math.round(tgt/rb.avg[avgKey]*100);
+  }
+  // 기준 미기록(구 데이터) → 현재 평균으로 계산 (하위 호환)
+  const cur = _periodMatchAvg[avgKey];
+  return cur ? Math.round(tgt/cur*100) : null;
+}
+// avgKey만 알 때 사용하는 축약형
+function frozenPctByAvgKey(row, avgKey){
+  const m = PERIOD_METRICS.find(x=>x.avgKey===avgKey);
+  return m ? frozenPct(row, m.pctId, m.targetCol, avgKey) : null;
+}
 let _bmColor     = '#818cf8';
 const DOW_KR = ['일','월','화','수','목','금','토'];
 
@@ -24521,6 +24564,8 @@ async function loadPeriodMatchAvg() {
     accel: Math.round(mAvg(rows,'accel')),
     rhie:  Math.round(mAvg(rows,'rhie')),
   };
+  // 현재 기준 3경기 (저장 시 스냅샷으로 남김)
+  _periodMatchKeys = keys.map(k=>{ const [date,opp]=k.split('__'); return {date, opp}; });
 }
 
 function getBlockForDate(dateStr) {
@@ -24690,13 +24735,13 @@ function renderPeriodCalendar() {
           </div>`;
         };
         const hasGauge=dayRow?.td_target!=null||dayRow?.hsr_target!=null;
-        const getPct=(val,base)=>val!=null&&base?Math.round(val/base*100):null;
+        // 저장된 기준(ref_basis) 우선으로 % 계산 → 지난 날은 준비 당시 기준으로 고정
         const gauges=hasGauge?`<div style="margin-top:6px">
-          ${mgRow('TD',  getPct(dayRow.td_target,avg.td),  '#60a5fa', dayRow.td_target!=null?dayRow.td_target.toLocaleString()+'m':null)}
-          ${mgRow('HSR', getPct(dayRow.hsr_target,avg.hsr),'#f97316', dayRow.hsr_target!=null?dayRow.hsr_target.toLocaleString()+'m':null)}
-          ${mgRow('SPR', getPct(dayRow.spr_target,avg.sprint),'#fb923c',dayRow.spr_target!=null?dayRow.spr_target.toLocaleString()+'m':null)}
-          ${mgRow('ACC', getPct(dayRow.acc_target,avg.accel),'#a855f7',dayRow.acc_target!=null?dayRow.acc_target+'회':null)}
-          ${mgRow('RHIE',getPct(dayRow.rhie_target,avg.rhie),'#c084fc',dayRow.rhie_target!=null?dayRow.rhie_target+'회':null)}
+          ${mgRow('TD',  frozenPct(dayRow,'td','td_target','td'),      '#60a5fa', dayRow.td_target!=null?dayRow.td_target.toLocaleString()+'m':null)}
+          ${mgRow('HSR', frozenPct(dayRow,'hsr','hsr_target','hsr'),   '#f97316', dayRow.hsr_target!=null?dayRow.hsr_target.toLocaleString()+'m':null)}
+          ${mgRow('SPR', frozenPct(dayRow,'spr','spr_target','sprint'),'#fb923c',dayRow.spr_target!=null?dayRow.spr_target.toLocaleString()+'m':null)}
+          ${mgRow('ACC', frozenPct(dayRow,'acc','acc_target','accel'), '#a855f7',dayRow.acc_target!=null?dayRow.acc_target+'회':null)}
+          ${mgRow('RHIE',frozenPct(dayRow,'rhie','rhie_target','rhie'),'#c084fc',dayRow.rhie_target!=null?dayRow.rhie_target+'회':null)}
         </div>`:'';
 
         const bg=isOverflow?'var(--bg)':(block?block.color+'15':(isToday?'rgba(99,102,241,0.07)':'var(--surface)'));
@@ -24843,7 +24888,7 @@ function onDmLabelChange(val) {
   const hint = document.getElementById('dm-load-hint');
   if (defKey) {
     const pcts = MD_LOAD_DEFAULTS[defKey];
-    const avg  = _periodMatchAvg;
+    const avg  = _dmBasisAvg;
     DM_METRICS.forEach(m => {
       const pct    = pcts[m.id] ?? 0;
       const avgVal = avg[m.avgKey] || 0;
@@ -24903,7 +24948,8 @@ function renderDmMetrics(dayRow){
   area.innerHTML=DM_METRICS.map(m=>{
     const absVal=dayRow?.[m.id+'_target']??null;
     const avgVal=avg[m.avgKey]||0;
-    const pct=absVal!=null&&avgVal?Math.round(absVal/avgVal*100):null;
+    // 저장된 기준이 있으면 그 %를 보여줌(지난 날 고정), 없으면 현재 평균 기준
+    const pct=frozenPct(dayRow, m.id, m.id+'_target', m.avgKey);
     const sliderPct=pct!=null?Math.min(200,pct):0;
     const gaugeW=Math.min(100,pct??0);
     const gaugeColor=pct!=null&&pct>=150?'#ef4444':pct!=null&&pct>=100?'#f97316':m.color;
@@ -24933,7 +24979,7 @@ function renderDmMetrics(dayRow){
 
 function onDmSlider(id, pctVal){
   pctVal=parseInt(pctVal);
-  const avg=_periodMatchAvg;
+  const avg=_dmBasisAvg;
   const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
   const avgVal=avg[m.avgKey]||0;
   const absVal=avgVal?Math.round(avgVal*pctVal/100):0;
@@ -24948,7 +24994,7 @@ function onDmSlider(id, pctVal){
 
 function onDmPct(id, pctVal){
   pctVal=parseInt(pctVal)||0;
-  const avg=_periodMatchAvg;
+  const avg=_dmBasisAvg;
   const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
   const avgVal=avg[m.avgKey]||0;
   const absVal=avgVal?Math.round(avgVal*pctVal/100):0;
@@ -24964,7 +25010,7 @@ function onDmPct(id, pctVal){
 
 function onDmAbs(id, absVal){
   absVal=parseInt(absVal)||0;
-  const avg=_periodMatchAvg;
+  const avg=_dmBasisAvg;
   const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
   const avgVal=avg[m.avgKey]||0;
   const pct=avgVal?Math.round(absVal/avgVal*100):0;
@@ -24999,6 +25045,7 @@ function openDayModal(dateStr){
   const block=getBlockForDate(dateStr);
   const dayRow=_daysData[dateStr]||{};
   _dmEditId=dayRow.id||null;
+  _dmEditRefBasis=dayRow.ref_basis||null;
 
   document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})`;
   document.getElementById('day-modal-block').textContent=block?`${block.context||''} · ${block.label||''}`:'';
@@ -25013,13 +25060,30 @@ function openDayModal(dateStr){
   document.getElementById('dm-am').value = dayRow.am_session||'';
   document.getElementById('dm-pm').value = dayRow.pm_session||'';
 
-  // 팀 평균 표시
-  const avg=_periodMatchAvg;
+  // 팀 평균 표시 — 지난 날에 저장된 기준(ref_basis)이 있으면 그 기준을, 없으면 현재 평균
+  const rb = dayRow.ref_basis;
+  const usingFrozen = _dmEditDate < getKSTDateStr() && rb && rb.avg;
+  const avg = usingFrozen ? rb.avg : _periodMatchAvg;
+  _dmBasisAvg = avg; // 모달 내 슬라이더·% 변환도 같은 기준 사용
   document.getElementById('dm-avg-td').textContent=avg.td?avg.td.toLocaleString():'—';
   document.getElementById('dm-avg-hsr').textContent=avg.hsr?avg.hsr.toLocaleString():'—';
   document.getElementById('dm-avg-sprint').textContent=avg.sprint?avg.sprint.toLocaleString():'—';
   document.getElementById('dm-avg-accel').textContent=avg.accel||'—';
   document.getElementById('dm-avg-rhie').textContent=avg.rhie||'—';
+  // 기준 출처 표시 (어떤 경기 기준으로 짰는지 기록)
+  const basisEl = document.getElementById('dm-basis-note');
+  if(basisEl){
+    if(rb && rb.matches && rb.matches.length){
+      const opps = rb.matches.map(x=>x.opp||x.date).join(', ');
+      const savedAt = rb.saved_at ? rb.saved_at.split('T')[0] : '';
+      basisEl.innerHTML = `📌 이 계획 기준: 최근 3경기 <b style="color:var(--text2)">${opps}</b>`
+        + (usingFrozen ? ' <span style="color:#fbbf24">(준비 당시 기준 고정)</span>' : '')
+        + (savedAt ? ` · ${savedAt} 저장` : '');
+      basisEl.style.display='block';
+    } else {
+      basisEl.style.display='none';
+    }
+  }
 
   // 항목별 슬라이더+절대값 렌더링
   renderDmMetrics(dayRow);
@@ -25034,29 +25098,57 @@ async function saveDayPlan(){
   if(!_dmEditDate) return;
   const block=getBlockForDate(_dmEditDate);
   const isRest=document.getElementById('dm-rest').checked;
+
+  // 기준 평균 결정: 지난 날을 편집하고 기존 스냅샷이 있으면 그 기준을 그대로 유지(고정),
+  // 그 외(신규·오늘·미래)는 현재 최근 3경기 기준을 스냅샷으로 남김
+  const today = getKSTDateStr();
+  const isPastEdit = _dmEditDate < today && _dmEditRefBasis && _dmEditRefBasis.avg;
+  const basisAvg  = isPastEdit ? _dmEditRefBasis.avg
+                               : {td:_periodMatchAvg.td, hsr:_periodMatchAvg.hsr, sprint:_periodMatchAvg.sprint, accel:_periodMatchAvg.accel, rhie:_periodMatchAvg.rhie};
+  const basisMatches = isPastEdit ? (_dmEditRefBasis.matches||[]) : _periodMatchKeys.slice();
+
+  const pctOut = {}; // 저장할 % (코치 의도)
   const getAbs = id => {
-    const absEl=document.getElementById('dm-abs-'+id);
-    if(absEl&&absEl.value!=='') return parseInt(absEl.value);
-    // 절대값 없으면 % 입력값으로 계산
-    const pctEl=document.getElementById('dm-pct-'+id);
     const m=DM_METRICS.find(x=>x.id===id);
-    if(pctEl&&pctEl.value!==''&&m){
-      const avgVal=_periodMatchAvg[m.avgKey]||0;
-      return avgVal?Math.round(avgVal*parseInt(pctEl.value)/100):null;
+    const avgVal = m ? (basisAvg[m.avgKey]||0) : 0;
+    const absEl=document.getElementById('dm-abs-'+id);
+    const pctEl=document.getElementById('dm-pct-'+id);
+    // 절대값을 직접 입력한 경우: 그 값을 쓰고 %는 기준평균으로 역산
+    if(absEl&&absEl.value!==''){
+      const abs=parseInt(absEl.value);
+      if(avgVal) pctOut[id]=Math.round(abs/avgVal*100);
+      return abs;
+    }
+    // %를 입력한 경우: 기준평균 × % 로 절대값 계산, %는 그대로 저장
+    if(pctEl&&pctEl.value!==''&&avgVal){
+      pctOut[id]=parseFloat(pctEl.value);
+      return Math.round(avgVal*parseFloat(pctEl.value)/100);
     }
     return null;
   };
+  const targets = {
+    td:  isRest?null:getAbs('td'),
+    hsr: isRest?null:getAbs('hsr'),
+    spr: isRest?null:getAbs('spr'),
+    acc: isRest?null:getAbs('acc'),
+    rhie:isRest?null:getAbs('rhie'),
+  };
+  const hasAnyTarget = Object.values(targets).some(v=>v!=null);
   const row={
     plan_date:_dmEditDate,
     block_id:block?.id||null,
     day_label:isRest?'REST':(document.getElementById('dm-day-label').value.trim()||null),
     am_session:isRest?null:(document.getElementById('dm-am').value.trim()||null),
     pm_session:isRest?null:(document.getElementById('dm-pm').value.trim()||null),
-    td_target:   isRest?null:getAbs('td'),
-    hsr_target:  isRest?null:getAbs('hsr'),
-    spr_target:  isRest?null:getAbs('spr'),
-    acc_target:  isRest?null:getAbs('acc'),
-    rhie_target: isRest?null:getAbs('rhie'),
+    td_target:   targets.td,
+    hsr_target:  targets.hsr,
+    spr_target:  targets.spr,
+    acc_target:  targets.acc,
+    rhie_target: targets.rhie,
+    // 이 계획이 어떤 경기 기준으로 짜였는지 스냅샷 (지난 날 고정 + 기록용)
+    ref_basis: (isRest||!hasAnyTarget) ? null : {
+      pct: pctOut, avg: basisAvg, matches: basisMatches, saved_at: new Date().toISOString()
+    },
   };
   let error;
   if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
@@ -25178,7 +25270,8 @@ async function openWeekDetail(blockId) {
       const isRest=dr?.day_label?.trim().toUpperCase()==='REST';
       if(isRest||!dr){ row+=td('—','color:var(--text3);text-align:center'); return; }
       const absVal=dr?.[targetKey]??null;
-      const pct=pctOf2(absVal,avg[avgKey]);
+      // 저장된 기준(ref_basis) 우선 % (지난 날 고정)
+      const pct=frozenPctByAvgKey(dr, avgKey);
       const w=Math.min(100,Math.max(0,pct??0));
       const bc=pct!=null&&pct>=150?'#ef4444':pct!=null&&pct>=100?'#f97316':color;
       row+=td(
