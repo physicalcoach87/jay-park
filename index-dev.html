@@ -2252,7 +2252,10 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(480px,92vw);max-height:85vh;overflow-y:auto;border:1px solid var(--border2)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h4 style="margin:0;font-size:15px">📋 블록 목록</h4>
-      <button onclick="closeBlockListModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="block-backfill-btn" onclick="runBlockBasisBackfill()" style="display:none;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-size:11px" title="과거 블록의 %기준을 각 경기 직전 3경기로 소급 기록">🔧 과거 블록 기준 백필</button>
+        <button onclick="closeBlockListModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
+      </div>
     </div>
     <div id="block-list-body"></div>
   </div>
@@ -24846,9 +24849,96 @@ async function openBlockListModal(){
     </div>`).join('')
     :'<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">등록된 블록이 없어요</div>';
   document.getElementById('block-list-body').innerHTML=html;
+  const bfBtn=document.getElementById('block-backfill-btn');
+  if(bfBtn) bfBtn.style.display=(isTeamAdmin||isSuperAdmin)?'inline-block':'none';
   document.getElementById('block-list-modal').style.display='flex';
 }
 function closeBlockListModal(){ document.getElementById('block-list-modal').style.display='none'; }
+
+// ── 과거 블록 기준 백필 ─────────────────────────────────────
+// 각 블록이 준비한 경기(블록 내 MD일)의 "직전 3경기"를 기준으로,
+// 기준 미기록(구 데이터) 날짜들에 ref_basis를 소급 기록한다.
+async function backfillBlockBasis(apply){
+  // 1) 전 경기(FT) 로드 — 시간보정 팀 평균 계산용
+  const {data:matches} = await supa.from('match_records')
+    .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
+    .eq('time_type','FT').order('match_date',{ascending:false});
+  const mAvg=(arr,field)=>{
+    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+    if(!vrs.length) return 0;
+    const mx=Math.max(...vrs.map(r=>parseFloat(r.duration)));
+    const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+    const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+    return sd>0?Math.round(sv/sd*mx):0;
+  };
+  // 경기 직전 3경기(날짜+상대 키) → {avg, matches}
+  const refBefore=(matchDate)=>{
+    const rows=(matches||[]).filter(r=>r.match_date < matchDate);
+    const keys=[...new Set(rows.map(r=>r.match_date+'__'+r.opponent))].slice(0,3);
+    if(!keys.length) return null;
+    const sel=rows.filter(r=>keys.includes(r.match_date+'__'+r.opponent));
+    return {
+      avg:{ td:mAvg(sel,'td'), hsr:mAvg(sel,'band4_td'), sprint:mAvg(sel,'band5_td'), accel:mAvg(sel,'accel'), rhie:mAvg(sel,'rhie') },
+      matches: keys.map(k=>{ const [date,opp]=k.split('__'); return {date,opp}; }),
+    };
+  };
+
+  // 2) 블록 + 날짜 로드
+  const {data:blocks} = await supa.from('blocks').select('*').order('start_date');
+  const {data:days}   = await supa.from('block_days').select('*');
+  const report=[]; const updates=[];
+
+  for(const b of (blocks||[])){
+    const bdays=(days||[]).filter(d=>d.plan_date>=b.start_date && d.plan_date<=b.end_date);
+    // 블록의 경기일 = MD 라벨 날짜, 없으면 블록 기간 내 마지막 FT 경기일
+    let matchDate = bdays.find(d=>(d.day_label||'').trim().toUpperCase()==='MD')?.plan_date;
+    if(!matchDate){
+      const inBlock=(matches||[]).filter(r=>r.match_date>=b.start_date && r.match_date<=b.end_date)
+        .map(r=>r.match_date).sort();
+      matchDate = inBlock[inBlock.length-1] || null;
+    }
+    // 기준 미기록 + 목표 있는 날만 대상
+    const legacyDays=bdays.filter(d=>(d.td_target!=null||d.hsr_target!=null||d.spr_target!=null||d.acc_target!=null||d.rhie_target!=null) && (!d.ref_basis||!d.ref_basis.matches));
+    if(!legacyDays.length) continue;
+    if(!matchDate){ report.push({block:`${b.context||''} ${b.label||''}`, status:'경기일 판별 불가 → 건너뜀', n:legacyDays.length}); continue; }
+    const ref=refBefore(matchDate);
+    if(!ref){ report.push({block:`${b.context||''} ${b.label||''}`, status:`직전 경기 없음(${matchDate}) → 건너뜀`, n:legacyDays.length}); continue; }
+
+    for(const d of legacyDays){
+      const pct={};
+      PERIOD_METRICS.forEach(m=>{
+        const tgt=d[m.targetCol]; const av=ref.avg[m.avgKey];
+        if(tgt!=null && av) pct[m.pctId]=Math.round(tgt/av*100);
+      });
+      updates.push({ id:d.id, ref_basis:{ pct, avg:ref.avg, matches:ref.matches, saved_at:new Date().toISOString(), backfilled:true } });
+    }
+    report.push({block:`${b.context||''} ${b.label||''}`, status:`기준: ${matchDate} 직전 3경기 (${ref.matches.map(x=>x.opp).join(', ')})`, n:legacyDays.length});
+  }
+
+  if(!apply) return {report, count:updates.length};
+
+  // 3) 적용
+  let ok=0, fail=0;
+  for(const u of updates){
+    const {error}=await supa.from('block_days').update({ref_basis:u.ref_basis}).eq('id',u.id);
+    if(error) fail++; else ok++;
+  }
+  return {report, count:updates.length, ok, fail};
+}
+
+async function runBlockBasisBackfill(){
+  if(!isTeamAdmin && !isSuperAdmin){ alert('관리자만 실행할 수 있습니다.'); return; }
+  const btn=document.getElementById('block-backfill-btn');
+  if(btn){ btn.disabled=true; btn.textContent='분석 중...'; }
+  const dry=await backfillBlockBasis(false);
+  if(btn){ btn.disabled=false; btn.textContent='🔧 과거 블록 기준 백필'; }
+  if(!dry.count){ alert('백필할 과거 블록이 없습니다. (모두 기준이 기록돼 있거나 대상 없음)'); return; }
+  const preview=dry.report.map(r=>`• ${r.block} — ${r.status} (${r.n}일)`).join('\n');
+  if(!confirm(`과거 블록 ${dry.count}일의 %기준을 "각 경기 직전 3경기"로 소급 기록합니다.\n(이미 기준이 있는 날은 건드리지 않음)\n\n${preview}\n\n적용할까요?`)) return;
+  const res=await backfillBlockBasis(true);
+  alert(`백필 완료: ${res.ok}일 기록${res.fail?`, 실패 ${res.fail}일`:''}.\n블록을 다시 열어 %가 준비 당시 기준으로 바뀌었는지 확인하세요.`);
+  closeBlockListModal();
+}
 
 async function deleteBlockFromList(blockId){
   if(!confirm('블록을 삭제할까요? (날짜 세션도 함께 삭제됩니다)')) return;
