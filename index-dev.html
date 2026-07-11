@@ -2913,7 +2913,7 @@ async function showApp(user, preloadedRole){
     isTeamAdmin  = (prof?.role === 'admin' || prof?.role === 'superadmin');
     if(prof?.club_id){
       currentClubId = prof.club_id;
-      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions,use_player_app,use_rpe,use_wellness').eq('id', prof.club_id).single();
+      const {data:club} = await supa.from('clubs').select('name,gps_plan,permissions,use_player_app,use_rpe,use_wellness,gps_col_map,gps_alias').eq('id', prof.club_id).single();
       if(club){
         currentClubName     = club.name;
         currentGpsPlan      = club.gps_plan || 'V2';
@@ -2923,6 +2923,8 @@ async function showApp(user, preloadedRole){
         // use_wellness DB값이 있으면 사용, 없으면 use_player_app과 동일하게
         currentUseWellness  = club.use_wellness ?? currentUsePlayerApp;
         currentClubPermissions = club.permissions || {};
+        // GPS 컬럼 매핑·이름 별칭을 DB에서 메모리로 로드 (팀 단위 공유)
+        await loadGpsMaps(club);
       }
     }
   }
@@ -13862,44 +13864,77 @@ const GPS_INTERNAL_FIELDS = [
   {key:'fmpDynHigh',label:'FMP Dynamic High',      unit:'sec'},
 ];
 
+// GPS 매핑·별칭: 팀(clubs) 단위로 DB에 저장, 메모리 캐시로 동기 접근
+let _gpsColMap = {};    // 컬럼 매핑
+let _gpsAliasMap = {};  // 선수 이름 별칭
 function _colMapKey(){ return 'gps_colmap_' + (currentClubId||'default'); }
+function _aliasKey(){ return 'gps_alias_' + (currentClubId||'default'); }
 
-function getColMap(){
-  try{ return JSON.parse(localStorage.getItem(_colMapKey())||'{}'); }
-  catch(e){ return {}; }
+// 클럽 로드 시 호출: DB값을 메모리로. DB가 비어있고 이 브라우저 localStorage에 값이 있으면 1회 이관
+async function loadGpsMaps(club){
+  const parse = v => { if(!v) return {}; if(typeof v==='object') return v; try{ return JSON.parse(v)||{}; }catch(e){ return {}; } };
+  _gpsColMap   = parse(club.gps_col_map);
+  _gpsAliasMap = parse(club.gps_alias);
+  // 하위호환: DB가 비었는데 localStorage에 예전 설정이 있으면 DB로 옮김
+  let migrated = false;
+  if(!Object.keys(_gpsColMap).length){
+    try{ const ls=JSON.parse(localStorage.getItem(_colMapKey())||'{}'); if(Object.keys(ls).length){ _gpsColMap=ls; migrated=true; } }catch(e){}
+  }
+  if(!Object.keys(_gpsAliasMap).length){
+    try{ const ls=JSON.parse(localStorage.getItem(_aliasKey())||'{}'); if(Object.keys(ls).length){ _gpsAliasMap=ls; migrated=true; } }catch(e){}
+  }
+  if(migrated && currentClubId){
+    await supa.from('clubs').update({gps_col_map:_gpsColMap, gps_alias:_gpsAliasMap}).eq('id', currentClubId);
+  }
+}
+async function _persistGpsMaps(){
+  if(!currentClubId) return {error:{message:'클럽 정보 없음'}};
+  // localStorage에도 백업(오프라인/캐시)
+  try{ localStorage.setItem(_colMapKey(), JSON.stringify(_gpsColMap)); localStorage.setItem(_aliasKey(), JSON.stringify(_gpsAliasMap)); }catch(e){}
+  return await supa.from('clubs').update({gps_col_map:_gpsColMap, gps_alias:_gpsAliasMap}).eq('id', currentClubId);
 }
 
-function saveColMap(){
+function getColMap(){ return _gpsColMap; }
+
+async function saveColMap(){
   const map = {};
   GPS_INTERNAL_FIELDS.forEach(f=>{
     const el = document.getElementById('cm-input-'+f.key);
     if(el && el.value.trim()) map[f.key] = el.value.trim();
   });
-  localStorage.setItem(_colMapKey(), JSON.stringify(map));
+  // mpm 매핑 3개도 포함 (같은 폼에 있음)
+  ['mpm_name','mpm_time','mpm_value'].forEach(k=>{
+    const el = document.getElementById('cm-input-'+k);
+    if(el && el.value.trim()) map[k] = el.value.trim();
+  });
+  _gpsColMap = map;
   const msg = document.getElementById('colmap-msg');
-  if(msg){ msg.style.color='#4ade80'; msg.textContent='✅ 저장 완료! 다음 GPS 업로드부터 자동 적용됩니다.'; setTimeout(()=>{msg.textContent='';},3000); }
+  if(msg){ msg.style.color='var(--text3)'; msg.textContent='저장 중...'; }
+  const {error} = await _persistGpsMaps();
+  if(msg){
+    if(error){ msg.style.color='#ef4444'; msg.textContent='저장 실패: '+error.message; }
+    else{ msg.style.color='#4ade80'; msg.textContent='✅ 저장 완료! 팀 전체·모든 기기에 적용됩니다.'; setTimeout(()=>{msg.textContent='';},3000); }
+  }
 }
 
-function resetColMap(){
+async function resetColMap(){
   if(!confirm('매핑 설정을 초기화하시겠습니까?')) return;
-  localStorage.removeItem(_colMapKey());
+  _gpsColMap = {};
+  await _persistGpsMaps();
   renderColMapForm();
   const msg = document.getElementById('colmap-msg');
   if(msg){ msg.style.color='var(--text3)'; msg.textContent='초기화 완료'; setTimeout(()=>{msg.textContent='';},2000); }
 }
 
 // ── 선수 이름 별칭 ─────────────────────────────────────
-function _aliasKey(){ return 'gps_alias_' + (currentClubId||'default'); }
-function getAliasMap(){ try{ return JSON.parse(localStorage.getItem(_aliasKey())||'{}'); }catch(e){ return {}; } }
-function saveAlias(gpsName, profileName){
-  const map = getAliasMap();
-  map[gpsName.trim()] = profileName;
-  localStorage.setItem(_aliasKey(), JSON.stringify(map));
+function getAliasMap(){ return _gpsAliasMap; }
+async function saveAlias(gpsName, profileName){
+  _gpsAliasMap[gpsName.trim()] = profileName;
+  await _persistGpsMaps();
 }
-function deleteAlias(gpsName){
-  const map = getAliasMap();
-  delete map[gpsName];
-  localStorage.setItem(_aliasKey(), JSON.stringify(map));
+async function deleteAlias(gpsName){
+  delete _gpsAliasMap[gpsName];
+  await _persistGpsMaps();
   renderColMapForm();
 }
 
@@ -13984,11 +14019,11 @@ async function renderColMapForm(){
     </div>`;
 }
 
-function addAlias(){
+async function addAlias(){
   const gps = document.getElementById('alias-gps-name')?.value.trim();
   const profile = document.getElementById('alias-profile-name')?.value;
   if(!gps||!profile){ alert('GPS 이름과 선수를 모두 입력하세요.'); return; }
-  saveAlias(gps, profile);
+  await saveAlias(gps, profile);
   renderColMapForm();
   const msg = document.getElementById('colmap-msg');
   if(msg){ msg.style.color='#4ade80'; msg.textContent=`✅ 별칭 추가: ${gps} → ${profile}`; setTimeout(()=>{msg.textContent='';},2000); }
