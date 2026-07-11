@@ -9624,18 +9624,9 @@ function goToPlayerFromRisk(playerId){
 }
 
 
-// 🔔 Web Push 발송 헬퍼 (Edge Function 호출)
-const _PUSH_FN_URL = 'https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push';
-const _PUSH_AUTH   = 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI';
-async function _firePush(payload){
-  try {
-    await fetch(_PUSH_FN_URL, {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':_PUSH_AUTH},
-      body: JSON.stringify(payload)
-    });
-  } catch(e){ console.warn('push error:', e); }
-}
+// 🔔 Web Push 발송 — DB 웹훅(notifications INSERT → send-push)이 자동 처리하므로
+// 클라이언트에서 직접 호출하지 않음(중복 발송 방지). 호출부 호환 위해 no-op로 유지.
+async function _firePush(_payload){ /* 웹훅이 발송을 담당 */ }
 
 // ── 다국어 알림 텍스트 헬퍼 ────────────────────────────────────────
 function getNotifText(type, lang, name) {

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>단체 처방 인쇄 샘플</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background:#f1f5f9; padding:32px 24px; color:#111; }
+
+  h2 { font-size:13px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.06em; margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid #e2e8f0; }
+
+  .sample-wrap { background:#fff; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,.10); padding:28px; margin-bottom:48px; }
+  .sample-label { display:inline-block; font-size:11px; font-weight:700; color:#fff; background:#334155; border-radius:4px; padding:3px 10px; margin-bottom:20px; letter-spacing:.04em; }
+
+  /* ─── SAMPLE A ─── */
+  .sA-header { text-align:center; margin-bottom:20px; padding-bottom:14px; border-bottom:3px solid #111; }
+  .sA-header .title { font-size:22px; font-weight:900; letter-spacing:-.02em; }
+  .sA-header .sub   { font-size:12px; color:#6b7280; margin-top:5px; }
+
+  .sA-members { display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin-bottom:20px; border:1.5px solid #111; border-radius:6px; overflow:hidden; }
+  .sA-group { padding:12px 14px; }
+  .sA-group:not(:last-child) { border-right:1.5px solid #111; }
+  .sA-group-title { font-size:13px; font-weight:800; margin-bottom:2px; }
+  .sA-group-mas   { font-size:11px; color:#6b7280; margin-bottom:8px; }
+  .sA-player-list { font-size:12px; line-height:1.9; }
+  .sA-player span { font-size:10px; color:#9ca3af; }
+
+  .sA-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .sA-table thead tr th { padding:10px 14px; font-size:12px; font-weight:700; text-align:center; border-bottom:2px solid #111; }
+  .sA-table thead tr th:first-child { text-align:left; }
+  .sA-table tbody tr td { padding:9px 14px; border-bottom:1px solid #e5e7eb; }
+  .sA-table tbody tr td:not(:first-child) { text-align:center; }
+  .sA-table tbody tr:nth-child(even) td { background:#f8fafc; }
+  .sA-table tbody tr.highlight td { font-size:15px; font-weight:800; }
+  .sA-table tbody tr.highlight td:first-child { font-size:12px; font-weight:600; }
+  .sA-note { margin-top:16px; padding:10px 14px; background:#f8fafc; border-left:4px solid #94a3b8; font-size:12px; color:#374151; line-height:1.7; }
+
+  /* ─── SAMPLE B ─── */
+  .sB-header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:20px; padding-bottom:12px; border-bottom:2.5px solid #111; }
+  .sB-header .title { font-size:20px; font-weight:900; }
+  .sB-header .meta  { font-size:11px; color:#6b7280; text-align:right; line-height:1.8; }
+
+  .sB-groups { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px; }
+  .sB-card { border-radius:8px; overflow:hidden; border:1.5px solid; }
+  .sB-card-head { padding:10px 14px; display:flex; justify-content:space-between; align-items:center; }
+  .sB-card-head .glabel { font-size:16px; font-weight:900; }
+  .sB-card-head .gmas   { font-size:11px; font-weight:500; opacity:.8; }
+  .sB-card-body { padding:10px 14px; background:#fff; }
+  .sB-card-body .big  { font-size:26px; font-weight:900; line-height:1; margin-bottom:2px; }
+  .sB-card-body .sub  { font-size:10px; color:#6b7280; margin-bottom:8px; }
+  .sB-card-body .stat { display:flex; justify-content:space-between; font-size:11px; border-top:1px solid #e5e7eb; padding-top:7px; margin-top:7px; }
+  .sB-card-body .stat-item { text-align:center; }
+  .sB-card-body .stat-val { font-size:13px; font-weight:700; }
+  .sB-card-body .stat-lbl { font-size:9px; color:#9ca3af; margin-top:1px; }
+  .sB-players { margin-top:10px; padding-top:10px; border-top:1px solid #e5e7eb; }
+  .sB-player-row { display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid #f3f4f6; font-size:12px; }
+  .sB-player-row:last-child { border-bottom:none; }
+  .sB-player-name { font-weight:600; color:#111; }
+  .sB-player-mas  { font-size:12px; font-weight:700; }
+
+  .sB-note { margin-top:4px; padding:9px 14px; background:#f8fafc; border:1px solid #e5e7eb; border-radius:6px; font-size:11px; color:#374151; line-height:1.7; }
+
+  /* ─── SAMPLE C ─── */
+  .sC-top { display:grid; grid-template-columns:1fr auto; align-items:start; gap:20px; margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid #d1d5db; }
+  .sC-top .title { font-size:20px; font-weight:900; line-height:1.2; }
+  .sC-top .meta  { font-size:11px; color:#6b7280; line-height:1.9; text-align:right; }
+  .sC-top .badge { display:inline-block; font-size:10px; font-weight:700; background:#111; color:#fff; padding:2px 8px; border-radius:4px; margin-top:4px; }
+
+  .sC-members { display:grid; grid-template-columns:repeat(3,1fr); gap:0; margin-bottom:18px; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; }
+  .sC-mcard { padding:12px 14px; }
+  .sC-mcard:not(:last-child) { border-right:1px solid #d1d5db; }
+  .sC-mcard-hd { font-size:13px; font-weight:800; margin-bottom:1px; }
+  .sC-mcard-mas{ font-size:10px; color:#9ca3af; margin-bottom:8px; }
+  .sC-mcard-pl { font-size:11px; color:#374151; line-height:1.8; }
+  .sC-mcard-pl b { font-weight:600; }
+
+  .sC-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:16px; }
+  .sC-box { border-radius:6px; overflow:hidden; }
+  .sC-box-hd { padding:9px 12px; text-align:center; }
+  .sC-box-hd .gl { font-size:15px; font-weight:900; }
+  .sC-box-hd .gm { font-size:10px; font-weight:400; margin-top:1px; opacity:.85; }
+  .sC-box-body { background:#f8fafc; padding:12px; }
+  .sC-box-speed { text-align:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e5e7eb; }
+  .sC-box-speed .spd { font-size:28px; font-weight:900; line-height:1; }
+  .sC-box-speed .slbl { font-size:10px; color:#6b7280; margin-top:2px; }
+  .sC-box-rows .row { display:flex; justify-content:space-between; font-size:11px; padding:4px 0; border-bottom:1px dashed #e5e7eb; }
+  .sC-box-rows .row:last-child { border:none; }
+  .sC-box-rows .row .lbl { color:#6b7280; }
+  .sC-box-rows .row .val { font-weight:700; }
+  .sC-box-rows .row.big .val { font-size:13px; color:#111; }
+
+  .sC-note { padding:10px 14px; background:#f8fafc; border:1px solid #e5e7eb; border-left:3px solid #94a3b8; border-radius:0 6px 6px 0; font-size:11px; color:#374151; line-height:1.8; }
+</style>
+</head>
+<body>
+
+<!-- ─────────────── SAMPLE A ─────────────── -->
+<div class="sample-wrap">
+  <span class="sample-label">SAMPLE A — 심플 테이블</span>
+  <h2>화면 미리보기</h2>
+
+  <div class="sA-header">
+    <div class="title">단체 유산소 훈련 처방</div>
+    <div class="sub">2026. 5. 24 &nbsp;·&nbsp; MD-3 &nbsp;·&nbsp; 야외 &nbsp;·&nbsp; 15-15 (VO₂max Short Interval)</div>
+  </div>
+
+  <div class="sA-members">
+    <div class="sA-group" style="background:#f0fdf4">
+      <div class="sA-group-title" style="color:#15803d">A그룹</div>
+      <div class="sA-group-mas" style="color:#15803d">대표 MAS 17.1 km/h &nbsp;·&nbsp; 10명</div>
+      <div class="sA-player-list">
+        <div class="sA-player">Cristian <span>16.6</span></div>
+        <div class="sA-player">Xavier <span>17.1</span></div>
+        <div class="sA-player">김동윤 <span>16.7</span></div>
+        <div class="sA-player">김희승 <span>16.7</span></div>
+        <div class="sA-player">박혜성 <span>17.3</span></div>
+        <div class="sA-player">손준석 <span>16.6</span></div>
+        <div class="sA-player">손휘 <span>17.8</span></div>
+        <div class="sA-player">최예훈 <span>17.9</span></div>
+      </div>
+    </div>
+    <div class="sA-group" style="background:#eff6ff">
+      <div class="sA-group-title" style="color:#1d4ed8">B그룹</div>
+      <div class="sA-group-mas" style="color:#1d4ed8">대표 MAS 16.4 km/h &nbsp;·&nbsp; 9명</div>
+      <div class="sA-player-list">
+        <div class="sA-player">Gabriel <span>16.3</span></div>
+        <div class="sA-player">권준성 <span>16.2</span></div>
+        <div class="sA-player">김동욱 <span>16.2</span></div>
+        <div class="sA-player">김민혁 <span>16.4</span></div>
+        <div class="sA-player">우주성 <span>16.4</span></div>
+        <div class="sA-player">이동수 <span>16.5</span></div>
+        <div class="sA-player">홍옥현 <span>16.5</span></div>
+      </div>
+    </div>
+    <div class="sA-group" style="background:#fff7ed">
+      <div class="sA-group-title" style="color:#c2410c">C그룹</div>
+      <div class="sA-group-mas" style="color:#c2410c">대표 MAS 16.0 km/h &nbsp;·&nbsp; 8명</div>
+      <div class="sA-player-list">
+        <div class="sA-player">Gutem <span>15.3</span></div>
+        <div class="sA-player">김진혁 <span>15.8</span></div>
+        <div class="sA-player">김찬 <span>16.0</span></div>
+        <div class="sA-player">안헌범 <span>16.2</span></div>
+        <div class="sA-player">이호진 <span>16.1</span></div>
+        <div class="sA-player">전성진 <span>16.2</span></div>
+        <div class="sA-player">최동렬 <span>16.2</span></div>
+      </div>
+    </div>
+  </div>
+
+  <table class="sA-table">
+    <thead>
+      <tr>
+        <th style="width:140px">항목</th>
+        <th style="color:#15803d;border-bottom-color:#15803d">A그룹</th>
+        <th style="color:#1d4ed8;border-bottom-color:#1d4ed8">B그룹</th>
+        <th style="color:#c2410c;border-bottom-color:#c2410c">C그룹</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>대표 MAS (km/h)</td><td>17.1</td><td>16.4</td><td>16.0</td></tr>
+      <tr class="highlight">
+        <td>목표 속도</td>
+        <td style="color:#15803d">19.7 km/h</td>
+        <td style="color:#1d4ed8">18.8 km/h</td>
+        <td style="color:#c2410c">18.4 km/h</td>
+      </tr>
+      <tr><td>훈련 구성</td><td>3세트 × 6rep</td><td>3세트 × 6rep</td><td>3세트 × 6rep</td></tr>
+      <tr><td>Work : Rest</td><td>15s : 15s</td><td>15s : 15s</td><td>15s : 15s</td></tr>
+      <tr class="highlight">
+        <td>15초 구간 거리</td>
+        <td>82 m</td><td>78 m</td><td>77 m</td>
+      </tr>
+      <tr><td>총 Work 시간</td><td>270 초</td><td>270 초</td><td>270 초</td></tr>
+      <tr><td>세트간 휴식</td><td>3 min</td><td>3 min</td><td>3 min</td></tr>
+      <tr class="highlight">
+        <td>총 이동거리</td>
+        <td>1,476 m</td><td>1,404 m</td><td>1,386 m</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="sA-note">💬 코칭 포인트 &nbsp; 최단 인터벌 최대 강도. Work 구간마다 목표 속도 유지 여부를 확인하고, 속도 감소 선수는 세트 수 조절.</div>
+</div>
+
+
+<!-- ─────────────── SAMPLE B ─────────────── -->
+<div class="sample-wrap">
+  <span class="sample-label">SAMPLE B — 그룹 카드 + 빅 넘버</span>
+  <h2>화면 미리보기</h2>
+
+  <div class="sB-header">
+    <div>
+      <div class="title">단체 유산소 훈련 처방</div>
+      <div style="font-size:12px;color:#6b7280;margin-top:4px">VO₂max Short Interval &nbsp;·&nbsp; 15-15</div>
+    </div>
+    <div class="meta">
+      2026. 5. 24<br>
+      MD-3 &nbsp;·&nbsp; 야외<br>
+      <span style="font-size:11px;font-weight:700;color:#111">3세트 × 6rep &nbsp;·&nbsp; 세트간 3min</span>
+    </div>
+  </div>
+
+  <div class="sB-groups">
+    <!-- A -->
+    <div class="sB-card" style="border-color:#16a34a">
+      <div class="sB-card-head" style="background:#15803d;color:#fff">
+        <span class="glabel">A그룹</span>
+        <span class="gmas">MAS 17.1 km/h</span>
+      </div>
+      <div class="sB-card-body">
+        <div class="big" style="color:#15803d">19.7</div>
+        <div class="sub">km/h &nbsp;목표 속도 (115% MAS)</div>
+        <div class="stat">
+          <div class="stat-item"><div class="stat-val">82 m</div><div class="stat-lbl">15초 거리</div></div>
+          <div class="stat-item"><div class="stat-val">270 초</div><div class="stat-lbl">총 Work</div></div>
+          <div class="stat-item"><div class="stat-val" style="color:#15803d">1,476 m</div><div class="stat-lbl">총 거리</div></div>
+        </div>
+        <div class="sB-players">
+          <div class="sB-player-row"><span class="sB-player-name">Cristian</span><span class="sB-player-mas" style="color:#15803d">16.6</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">Xavier</span><span class="sB-player-mas" style="color:#15803d">17.1</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">김동윤</span><span class="sB-player-mas" style="color:#15803d">16.7</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">김희승</span><span class="sB-player-mas" style="color:#15803d">16.7</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">박혜성</span><span class="sB-player-mas" style="color:#15803d">17.3</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">손준석</span><span class="sB-player-mas" style="color:#15803d">16.6</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">손휘</span><span class="sB-player-mas" style="color:#15803d">17.8</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">최예훈</span><span class="sB-player-mas" style="color:#15803d">17.9</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- B -->
+    <div class="sB-card" style="border-color:#2563eb">
+      <div class="sB-card-head" style="background:#1d4ed8;color:#fff">
+        <span class="glabel">B그룹</span>
+        <span class="gmas">MAS 16.4 km/h</span>
+      </div>
+      <div class="sB-card-body">
+        <div class="big" style="color:#1d4ed8">18.8</div>
+        <div class="sub">km/h &nbsp;목표 속도 (115% MAS)</div>
+        <div class="stat">
+          <div class="stat-item"><div class="stat-val">78 m</div><div class="stat-lbl">15초 거리</div></div>
+          <div class="stat-item"><div class="stat-val">270 초</div><div class="stat-lbl">총 Work</div></div>
+          <div class="stat-item"><div class="stat-val" style="color:#1d4ed8">1,404 m</div><div class="stat-lbl">총 거리</div></div>
+        </div>
+        <div class="sB-players">
+          <div class="sB-player-row"><span class="sB-player-name">Gabriel</span><span class="sB-player-mas" style="color:#1d4ed8">16.3</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">권준성</span><span class="sB-player-mas" style="color:#1d4ed8">16.2</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">김동욱</span><span class="sB-player-mas" style="color:#1d4ed8">16.2</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">김민혁</span><span class="sB-player-mas" style="color:#1d4ed8">16.4</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">우주성</span><span class="sB-player-mas" style="color:#1d4ed8">16.4</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">이동수</span><span class="sB-player-mas" style="color:#1d4ed8">16.5</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">홍옥현</span><span class="sB-player-mas" style="color:#1d4ed8">16.5</span></div>
+        </div>
+      </div>
+    </div>
+    <!-- C -->
+    <div class="sB-card" style="border-color:#ea580c">
+      <div class="sB-card-head" style="background:#c2410c;color:#fff">
+        <span class="glabel">C그룹</span>
+        <span class="gmas">MAS 16.0 km/h</span>
+      </div>
+      <div class="sB-card-body">
+        <div class="big" style="color:#c2410c">18.4</div>
+        <div class="sub">km/h &nbsp;목표 속도 (115% MAS)</div>
+        <div class="stat">
+          <div class="stat-item"><div class="stat-val">77 m</div><div class="stat-lbl">15초 거리</div></div>
+          <div class="stat-item"><div class="stat-val">270 초</div><div class="stat-lbl">총 Work</div></div>
+          <div class="stat-item"><div class="stat-val" style="color:#c2410c">1,386 m</div><div class="stat-lbl">총 거리</div></div>
+        </div>
+        <div class="sB-players">
+          <div class="sB-player-row"><span class="sB-player-name">Gutem</span><span class="sB-player-mas" style="color:#c2410c">15.3</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">김진혁</span><span class="sB-player-mas" style="color:#c2410c">15.8</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">김찬</span><span class="sB-player-mas" style="color:#c2410c">16.0</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">안헌범</span><span class="sB-player-mas" style="color:#c2410c">16.2</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">이호진</span><span class="sB-player-mas" style="color:#c2410c">16.1</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">전성진</span><span class="sB-player-mas" style="color:#c2410c">16.2</span></div>
+          <div class="sB-player-row"><span class="sB-player-name">최동렬</span><span class="sB-player-mas" style="color:#c2410c">16.2</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sB-note">💬 최단 인터벌 최대 강도. Work 구간마다 목표 속도 유지 여부를 확인하고, 속도 감소 선수는 세트 수 조절.</div>
+</div>
+
+
+<!-- ─────────────── SAMPLE C ─────────────── -->
+<div class="sample-wrap">
+  <span class="sample-label">SAMPLE C — 선수 목록 + 처방 분리</span>
+  <h2>화면 미리보기</h2>
+
+  <div class="sC-top">
+    <div>
+      <div class="title">단체 유산소 훈련 처방</div>
+      <div style="margin-top:5px">
+        <span class="badge">MD-3</span>
+        <span class="badge" style="margin-left:4px">야외</span>
+        <span class="badge" style="margin-left:4px">15-15</span>
+        <span class="badge" style="margin-left:4px;background:#6b7280">3세트 × 6rep</span>
+      </div>
+    </div>
+    <div class="meta">
+      2026. 5. 24<br>
+      부산아이파크 FC<br>
+      Work:Rest = 15s:15s<br>
+      세트간 휴식 3min
+    </div>
+  </div>
+
+  <div class="sC-members">
+    <div class="sC-mcard" style="background:#f0fdf4">
+      <div class="sC-mcard-hd" style="color:#15803d">● A그룹</div>
+      <div class="sC-mcard-mas" style="color:#15803d">대표 MAS 17.1 km/h &nbsp;·&nbsp; 8명</div>
+      <div class="sC-mcard-pl">
+        Cristian &nbsp;·&nbsp; Xavier &nbsp;·&nbsp; 김동윤 &nbsp;·&nbsp; 김희승<br>
+        박혜성 &nbsp;·&nbsp; 손준석 &nbsp;·&nbsp; 손휘 &nbsp;·&nbsp; 최예훈
+      </div>
+    </div>
+    <div class="sC-mcard" style="background:#eff6ff">
+      <div class="sC-mcard-hd" style="color:#1d4ed8">● B그룹</div>
+      <div class="sC-mcard-mas" style="color:#1d4ed8">대표 MAS 16.4 km/h &nbsp;·&nbsp; 7명</div>
+      <div class="sC-mcard-pl">
+        Gabriel &nbsp;·&nbsp; 권준성 &nbsp;·&nbsp; 김동욱<br>
+        김민혁 &nbsp;·&nbsp; 우주성 &nbsp;·&nbsp; 이동수 &nbsp;·&nbsp; 홍옥현
+      </div>
+    </div>
+    <div class="sC-mcard" style="background:#fff7ed">
+      <div class="sC-mcard-hd" style="color:#c2410c">● C그룹</div>
+      <div class="sC-mcard-mas" style="color:#c2410c">대표 MAS 16.0 km/h &nbsp;·&nbsp; 7명</div>
+      <div class="sC-mcard-pl">
+        Gutem &nbsp;·&nbsp; 김진혁 &nbsp;·&nbsp; 김찬<br>
+        안헌범 &nbsp;·&nbsp; 이호진 &nbsp;·&nbsp; 전성진 &nbsp;·&nbsp; 최동렬
+      </div>
+    </div>
+  </div>
+
+  <div class="sC-grid">
+    <div class="sC-box" style="border:1.5px solid #16a34a">
+      <div class="sC-box-hd" style="background:#15803d;color:#fff">
+        <div class="gl">A그룹</div>
+        <div class="gm">대표 MAS 17.1 km/h</div>
+      </div>
+      <div class="sC-box-body">
+        <div class="sC-box-speed">
+          <div class="spd" style="color:#15803d">19.7 km/h</div>
+          <div class="slbl">목표 속도 (115% MAS)</div>
+        </div>
+        <div class="sC-box-rows">
+          <div class="row"><span class="lbl">15초 구간 거리</span><span class="val" style="color:#15803d">82 m</span></div>
+          <div class="row"><span class="lbl">총 Work</span><span class="val">270 초</span></div>
+          <div class="row"><span class="lbl">세트간 휴식</span><span class="val">3 min</span></div>
+          <div class="row big"><span class="lbl">총 이동거리</span><span class="val">1,476 m</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="sC-box" style="border:1.5px solid #2563eb">
+      <div class="sC-box-hd" style="background:#1d4ed8;color:#fff">
+        <div class="gl">B그룹</div>
+        <div class="gm">대표 MAS 16.4 km/h</div>
+      </div>
+      <div class="sC-box-body">
+        <div class="sC-box-speed">
+          <div class="spd" style="color:#1d4ed8">18.8 km/h</div>
+          <div class="slbl">목표 속도 (115% MAS)</div>
+        </div>
+        <div class="sC-box-rows">
+          <div class="row"><span class="lbl">15초 구간 거리</span><span class="val" style="color:#1d4ed8">78 m</span></div>
+          <div class="row"><span class="lbl">총 Work</span><span class="val">270 초</span></div>
+          <div class="row"><span class="lbl">세트간 휴식</span><span class="val">3 min</span></div>
+          <div class="row big"><span class="lbl">총 이동거리</span><span class="val">1,404 m</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="sC-box" style="border:1.5px solid #ea580c">
+      <div class="sC-box-hd" style="background:#c2410c;color:#fff">
+        <div class="gl">C그룹</div>
+        <div class="gm">대표 MAS 16.0 km/h</div>
+      </div>
+      <div class="sC-box-body">
+        <div class="sC-box-speed">
+          <div class="spd" style="color:#c2410c">18.4 km/h</div>
+          <div class="slbl">목표 속도 (115% MAS)</div>
+        </div>
+        <div class="sC-box-rows">
+          <div class="row"><span class="lbl">15초 구간 거리</span><span class="val" style="color:#c2410c">77 m</span></div>
+          <div class="row"><span class="lbl">총 Work</span><span class="val">270 초</span></div>
+          <div class="row"><span class="lbl">세트간 휴식</span><span class="val">3 min</span></div>
+          <div class="row big"><span class="lbl">총 이동거리</span><span class="val">1,386 m</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sC-note">💬 최단 인터벌 최대 강도. Work 구간마다 목표 속도 유지 여부를 확인하고, 속도 감소 선수는 세트 수 조절.</div>
+</div>
+
+</body>
+</html>

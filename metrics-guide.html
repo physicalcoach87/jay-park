@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>코치 앱 산출 항목 가이드</title>
+<style>
+  :root {
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --surface2: #263347;
+    --border: #334155;
+    --text: #f1f5f9;
+    --text2: #cbd5e1;
+    --text3: #94a3b8;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #22c55e;
+    --yellow: #eab308;
+    --orange: #f97316;
+    --red: #ef4444;
+    --purple: #a78bfa;
+    --teal: #2dd4bf;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ── 헤더 ── */
+  .page-header {
+    background: linear-gradient(135deg, #1e3a5f 0%, #1e293b 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 1.8rem 2rem 1.3rem;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .page-header h1 { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .page-header p  { font-size: 12px; color: var(--text3); margin-top: 3px; }
+
+  /* ── 목차 ── */
+  .toc {
+    display: flex; flex-wrap: wrap; gap: 5px;
+    padding: .8rem 2rem;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+  }
+  .toc-group { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .toc-label {
+    font-size: 10px; font-weight: 700; color: var(--text3);
+    letter-spacing: .5px; padding-right: 6px;
+    border-right: 1px solid var(--border); margin-right: 2px;
+  }
+  .toc a {
+    font-size: 11px; color: var(--text3); text-decoration: none;
+    background: var(--surface2); border: 1px solid var(--border);
+    padding: 2px 9px; border-radius: 20px; transition: all .15s;
+  }
+  .toc a:hover { color: var(--accent); border-color: var(--accent); }
+  .toc-sep { width: 100%; height: 0; margin: 2px 0; }
+
+  /* ── 레이아웃 ── */
+  .container { max-width: 1000px; margin: 0 auto; padding: 1.5rem 2rem 3rem; }
+
+  /* ── 카테고리 헤더 ── */
+  .cat-header {
+    display: flex; align-items: center; gap: 10px;
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .cat-header h2 { font-size: 12px; font-weight: 700; color: var(--text3); text-transform: uppercase; letter-spacing: 1px; }
+  .cat-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── 카드 ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: .8rem;
+    overflow: hidden;
+  }
+  .card-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+  .card-head:hover { background: #2e3f57; }
+  .card-num { font-size: 10px; font-weight: 700; color: var(--text3); min-width: 22px; }
+  .card-title { font-size: 15px; font-weight: 700; color: var(--text); flex: 1; }
+  .card-en { font-size: 11px; color: var(--text3); font-weight: 400; margin-left: 6px; }
+  .card-tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    font-weight: 600; white-space: nowrap;
+  }
+  .tag-rpe    { background:#2e1065; color:#a78bfa; }
+  .tag-gps    { background:#0e3a5e; color:#38bdf8; }
+  .tag-well   { background:#052e16; color:#4ade80; }
+  .tag-match  { background:#3b1219; color:#f87171; }
+  .tag-derived{ background:#1c1917; color:#a8a29e; }
+  .tag-target { background:#1c2240; color:#818cf8; }
+  .card-toggle { font-size: 12px; color: var(--text3); transition: transform .2s; }
+  .card-body { padding: 14px 16px; display: block; }
+  .card-body.collapsed { display: none; }
+
+  /* ── 공식 박스 ── */
+  .formula {
+    background: #0d1e30;
+    border: 1px solid #1e3a5f;
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    font-family: 'SF Mono','Fira Code','Consolas',monospace;
+    font-size: 12.5px;
+    color: #7dd3fc;
+    line-height: 1.9;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+
+  /* ── 판정 기준 ── */
+  .thresholds { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
+  .th {
+    font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600;
+  }
+  .th-red    { background:#3b1219; color:#f87171; }
+  .th-orange { background:#2a1a00; color:#fb923c; }
+  .th-yellow { background:#1c1a00; color:#facc15; }
+  .th-green  { background:#052e16; color:#4ade80; }
+  .th-blue   { background:#0c2340; color:#60a5fa; }
+  .th-gray   { background:#1e293b; color:#94a3b8; }
+
+  /* ── 테이블 ── */
+  .itbl { width:100%; border-collapse:collapse; font-size:13px; margin:10px 0; }
+  .itbl th {
+    text-align:left; padding:6px 12px; color:var(--text3);
+    font-weight:600; font-size:11px; background:#18253a;
+    border-bottom:1px solid var(--border); width:120px; white-space:nowrap;
+  }
+  .itbl td { padding:6px 12px; color:var(--text2); border-bottom:1px solid #1e293b; vertical-align:top; }
+  .itbl tr:last-child td { border-bottom:none; }
+  code { background:var(--surface2); padding:1px 5px; border-radius:3px; font-size:11px; font-family:'SF Mono','Consolas',monospace; }
+
+  /* ── 참고 ── */
+  .ref { font-size:11px; color:var(--text3); margin-top:8px; font-style:italic; }
+  .note {
+    font-size:12px; color:var(--text3); margin-top:8px; padding:8px 12px;
+    background:var(--surface2); border-radius:6px; border-left:2px solid var(--accent2);
+    line-height:1.7;
+  }
+
+  /* ── MD 기준선 그리드 ── */
+  .md-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:10px 0; font-size:12px; }
+  .md-cell { background:var(--surface2); border-radius:6px; padding:8px 10px; }
+  .md-cell-label { font-weight:700; color:var(--text); margin-bottom:4px; }
+  .md-cell-sub { color:var(--text3); font-size:11px; line-height:1.6; }
+
+  /* ── 점수 모듈 ── */
+  .score-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:10px 0; }
+  .score-col { background:var(--surface2); border-radius:8px; padding:10px 12px; }
+  .score-col-title { font-size:10px; color:var(--accent); font-weight:700; margin-bottom:6px; }
+  .score-row { font-size:12px; color:var(--text2); line-height:1.8; }
+
+  /* ── 흐름도 ── */
+  .flow-wrap { margin-top:2.5rem; }
+  .flow-title { font-size:13px; font-weight:700; color:var(--accent); margin-bottom:12px; }
+  .flow-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-bottom:12px; }
+  .flow-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .flow-col {
+    border-radius:8px; padding:14px;
+  }
+  .flow-col-title { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.7px; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .flow-item { font-size:12px; line-height:2; }
+  .flow-note {
+    font-size:12px; color:var(--text3); padding:10px 14px;
+    background:#0d1e30; border-radius:6px; border-left:2px solid var(--accent2); line-height:1.8;
+  }
+
+  /* ── 전체 공식 테이블 ── */
+  .all-tbl { width:100%; border-collapse:collapse; font-size:12px; margin-top:1rem; }
+  .all-tbl th { background:#18253a; color:var(--text3); padding:8px 10px; text-align:left; font-size:11px; font-weight:600; border-bottom:1px solid var(--border); }
+  .all-tbl td { padding:7px 10px; border-bottom:1px solid #1a2540; color:var(--text2); vertical-align:top; }
+  .all-tbl tr:hover td { background:#1e2f45; }
+  .all-tbl .mono { font-family:'SF Mono','Consolas',monospace; color:#7dd3fc; font-size:11px; }
+
+  @media(max-width:640px){
+    .container{padding:1rem;}
+    .md-grid,.score-grid,.flow-grid3,.flow-grid2{grid-template-columns:1fr;}
+    .toc{padding:.8rem 1rem;}
+    .page-header{padding:1.2rem 1rem .8rem;}
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>📊 코치 앱 산출 항목 전체 가이드</h1>
+  <p>부산아이파크 피지컬 코치 앱 — 현재 코드에서 실제로 계산되는 모든 산출 항목 및 공식</p>
+</div>
+
+<nav class="toc">
+  <div class="toc-group">
+    <span class="toc-label">RPE</span>
+    <a href="#s-srpe">sRPE</a>
+    <a href="#s-acwr">ACWR 개인</a>
+    <a href="#s-tacwr">ACWR 팀</a>
+    <a href="#s-wsrpe">주간 sRPE</a>
+  </div>
+  <div class="toc-sep"></div>
+  <div class="toc-group">
+    <span class="toc-label">웰니스</span>
+    <a href="#s-well">웰니스 총점</a>
+    <a href="#s-welldrop">급락 감지</a>
+    <a href="#s-weight">체중 변화</a>
+    <a href="#s-wellavg">7일 평균</a>
+  </div>
+  <div class="toc-sep"></div>
+  <div class="toc-group">
+    <span class="toc-label">GPS</span>
+    <a href="#s-hsr">HSR</a>
+    <a href="#s-mpm">MPM</a>
+    <a href="#s-mss">MSS 갱신</a>
+    <a href="#s-mv">MV 노출</a>
+    <a href="#s-sd">표준편차</a>
+  </div>
+  <div class="toc-sep"></div>
+  <div class="toc-group">
+    <span class="toc-label">팀 평균</span>
+    <a href="#s-trainavg">훈련 팀 평균</a>
+    <a href="#s-matchavg">경기 팀 평균</a>
+    <a href="#s-p100">팀 평균/100분</a>
+    <a href="#s-ref3">최근3경기 기준선</a>
+  </div>
+  <div class="toc-sep"></div>
+  <div class="toc-group">
+    <span class="toc-label">위험지수</span>
+    <a href="#s-cri">CRI</a>
+  </div>
+  <div class="toc-sep"></div>
+  <div class="toc-group">
+    <span class="toc-label">경기</span>
+    <a href="#s-matchmax">Match Max</a>
+    <a href="#s-abspct">절대%·강도%</a>
+    <a href="#s-teamsum">팀 합계/평균</a>
+    <a href="#s-halfcomp">전후반 비교</a>
+    <a href="#s-wcs">mpm 롤링</a>
+    <a href="#s-fmp">FMP</a>
+  </div>
+  <div class="toc-sep"></div>
+  <div class="toc-group">
+    <span class="toc-label">목표</span>
+    <a href="#s-md">MD 기준부하</a>
+    <a href="#s-target">주간 달성률</a>
+    <a href="#s-badge">경기 대비 뱃지</a>
+  </div>
+  <div class="toc-sep"></div>
+  <a href="#s-all">전체 공식표</a>
+  <a href="#s-flow">흐름도</a>
+</nav>
+
+<div class="container">
+
+<!-- ═══════════════════════ RPE 기반 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#a78bfa"></div>
+  <h2>RPE 기반 산출</h2>
+</div>
+
+<!-- sRPE -->
+<div class="card" id="s-srpe">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">01</span>
+    <span class="card-title">sRPE <span class="card-en">Session RPE · 세션 운동강도</span></span>
+    <span class="card-tag tag-rpe">RPE</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>AU (Arbitrary Unit)</td></tr>
+      <tr><th>데이터 출처</th><td><code>session_records</code> — rpe, duration</td></tr>
+      <tr><th>용도</th><td>개인·팀 훈련 부하 정량화. ACWR 산출의 원재료</td></tr>
+    </table>
+    <div class="formula">sRPE = RPE × 운동시간(분)</div>
+    <p style="font-size:12px;color:var(--text3)">예) RPE 7 × 75분 = 525 AU</p>
+  </div>
+</div>
+
+<!-- ACWR 개인 -->
+<div class="card" id="s-acwr">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">02</span>
+    <span class="card-title">ACWR (개인) <span class="card-en">Acute:Chronic Workload Ratio</span></span>
+    <span class="card-tag tag-rpe">RPE</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>비율 (소수점 2자리)</td></tr>
+      <tr><th>데이터 출처</th><td><code>session_records</code> — rpe, duration, record_date (최근 28일)</td></tr>
+      <tr><th>용도</th><td>부하 급증 감지 → CRI 입력값 · 부상 위험 예측</td></tr>
+    </table>
+    <div class="formula">sRPE    = RPE × 운동시간(분)
+Acute   = 최근 7일 sRPE 합산
+Chronic = (최근 28일 sRPE 합산 ÷ 유효 세션 수) × 7
+ACWR    = Acute ÷ Chronic</div>
+    <div class="thresholds">
+      <span class="th th-red">🔴 &gt;1.5 급성 과부하</span>
+      <span class="th th-orange">🟠 1.3~1.5 부하 주의</span>
+      <span class="th th-green">🟢 0.8~1.3 안전 구간</span>
+      <span class="th th-yellow">🟡 &lt;0.8 과소부하</span>
+    </div>
+    <p class="ref">참고: Gabbett 2016</p>
+  </div>
+</div>
+
+<!-- 팀 ACWR -->
+<div class="card" id="s-tacwr">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">03</span>
+    <span class="card-title">ACWR (팀 평균) <span class="card-en">Team ACWR</span></span>
+    <span class="card-tag tag-derived">파생</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>팀 전체 부하 상태 파악 — 주간 현황 캘린더 상단 표시</td></tr>
+    </table>
+    <div class="formula">각 선수 ACWR 개별 계산 (null 제외)
+팀 ACWR = 유효 선수 ACWR 합 ÷ 유효 선수 수</div>
+    <div class="note">※ 데이터 없는 선수(신입·부상 등)는 팀 평균에서 제외</div>
+  </div>
+</div>
+
+<!-- 주간 sRPE 합 -->
+<div class="card" id="s-wsrpe">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">04</span>
+    <span class="card-title">주간 총 sRPE <span class="card-en">Weekly sRPE Sum</span></span>
+    <span class="card-tag tag-rpe">RPE</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>주간 훈련 부하 총량 확인 — 주간 현황 우측 표시</td></tr>
+    </table>
+    <div class="formula">주간 총 sRPE = Σ (RPE × 운동시간) — 이번 주 전체 세션 합산</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ 웰니스 기반 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#22c55e"></div>
+  <h2>웰니스 기반 산출</h2>
+</div>
+
+<!-- 웰니스 총점 -->
+<div class="card" id="s-well">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">05</span>
+    <span class="card-title">웰니스 총점 <span class="card-en">Wellness Score (20점 만점)</span></span>
+    <span class="card-tag tag-well">웰니스</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>점 (0~20점)</td></tr>
+      <tr><th>입력 항목</th><td>피로도 · 수면질 · 스트레스 · 근육통 (각 1~5점)</td></tr>
+      <tr><th>데이터 출처</th><td><code>wellness_records</code> — fatigue, sleep_quality, stress, muscle_soreness</td></tr>
+      <tr><th>용도</th><td>일간 컨디션 모니터링 · CRI 입력값</td></tr>
+    </table>
+    <div class="formula">총점 = 피로도 + 수면질 + 스트레스 + 근육통
+(각 항목 1=최악 ↔ 5=최상)</div>
+    <div class="thresholds">
+      <span class="th th-green">🟢 17~20 최상</span>
+      <span class="th th-green">🟢 13~16 양호</span>
+      <span class="th th-yellow">🟡 9~12 주의</span>
+      <span class="th th-red">🔴 ≤8 위험/과훈련</span>
+    </div>
+  </div>
+</div>
+
+<!-- 웰니스 급락 -->
+<div class="card" id="s-welldrop">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">06</span>
+    <span class="card-title">웰니스 급락 감지 <span class="card-en">Wellness Drop Detection</span></span>
+    <span class="card-tag tag-well">웰니스</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>% (하락 비율)</td></tr>
+      <tr><th>용도</th><td>단기 컨디션 급락 조기 감지 → CRI 입력값</td></tr>
+    </table>
+    <div class="formula">7일 베이스라인 = 최근 7일 웰니스 총점 평균
+dropPct = (베이스라인 − 오늘 총점) ÷ 베이스라인</div>
+    <div class="thresholds">
+      <span class="th th-red">🔴 ≥25% 급락 (+2점)</span>
+      <span class="th th-orange">🟠 ≥15% 하락 (+1점)</span>
+    </div>
+  </div>
+</div>
+
+<!-- 체중 변화 -->
+<div class="card" id="s-weight">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">07</span>
+    <span class="card-title">체중 변화 (wDiff) <span class="card-en">Session Weight Change</span></span>
+    <span class="card-tag tag-well">웰니스</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>kg</td></tr>
+      <tr><th>데이터 출처</th><td><code>wellness_records</code> — morning_weight / <code>session_records</code> — post_weight</td></tr>
+      <tr><th>용도</th><td>세션 중 수분 손실 감지</td></tr>
+    </table>
+    <div class="formula">wDiff = 운동 후 체중(post_weight) − 아침 체중(morning_weight)</div>
+    <div class="thresholds">
+      <span class="th th-red">🔴 ≤−1.0kg 과도한 유수분 손실</span>
+      <span class="th th-orange">🟠 −1.0~0kg 경미한 손실</span>
+      <span class="th th-green">🟢 ≥0kg 정상</span>
+    </div>
+  </div>
+</div>
+
+<!-- 7일 평균 체중 -->
+<div class="card" id="s-wellavg">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">08</span>
+    <span class="card-title">7일 평균 체중 <span class="card-en">7-Day Average Morning Weight</span></span>
+    <span class="card-tag tag-well">웰니스</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>kg</td></tr>
+      <tr><th>용도</th><td>오늘 체중과 7일 기준값 비교 — "오늘값/7일평균 kg" 형태로 표시</td></tr>
+    </table>
+    <div class="formula">7일 평균 = 최근 7일 morning_weight 합산 ÷ 유효 일수
+(오늘 제외)</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ GPS 기반 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#38bdf8"></div>
+  <h2>GPS 기반 산출</h2>
+</div>
+
+<!-- HSR -->
+<div class="card" id="s-hsr">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">09</span>
+    <span class="card-title">HSR <span class="card-en">High Speed Running — 고속 러닝 거리</span></span>
+    <span class="card-tag tag-gps">GPS</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>m</td></tr>
+      <tr><th>데이터 출처</th><td><code>gps_records</code> — running_high(Band4), sprint(Band5)</td></tr>
+      <tr><th>용도</th><td>팀·개인 고강도 이동거리 집계 · 주기화 목표 대비 실적</td></tr>
+    </table>
+    <div class="formula">HSR = running_high (Band4) + sprint (Band5)
+※ hsr_total 직접 필드 있을 경우 우선 사용</div>
+    <div class="note">Band3 = 중속, Band4 = 고속(HSR), Band5 = 최고속(Sprint)</div>
+  </div>
+</div>
+
+<!-- MPM -->
+<div class="card" id="s-mpm">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">10</span>
+    <span class="card-title">MPM <span class="card-en">Meters Per Minute — 분당 이동거리</span></span>
+    <span class="card-tag tag-gps">GPS</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>m/min</td></tr>
+      <tr><th>용도</th><td>시간 정규화 강도 지표 · 출전시간 다른 선수 간 강도 비교 · 경기 롤링 분석 기초</td></tr>
+    </table>
+    <div class="formula">MPM (td_per_min) = TD(총이동거리, m) ÷ 운동시간(분)</div>
+  </div>
+</div>
+
+<!-- MSS 갱신 -->
+<div class="card" id="s-mss">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">11</span>
+    <span class="card-title">MSS 자동 갱신 <span class="card-en">Maximum Sprint Speed — 최고속도 자동 업데이트</span></span>
+    <span class="card-tag tag-gps">GPS</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>km/h</td></tr>
+      <tr><th>데이터 흐름</th><td><code>gps_records</code>.max_speed → <code>player_profiles</code>.mss 자동 갱신</td></tr>
+      <tr><th>갱신 시점</th><td>GPS 파일 업로드 시</td></tr>
+      <tr><th>용도</th><td>MV 노출 Zone5 기준값 · Match Max 최고속도 기준</td></tr>
+    </table>
+    <div class="formula">업로드된 max_speed > 현재 MSS → MSS 자동 갱신
+갱신 시 → 코치 알림 + 선수 개인 알림 자동 발송</div>
+  </div>
+</div>
+
+<!-- MV 노출 -->
+<div class="card" id="s-mv">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">12</span>
+    <span class="card-title">MV 노출 <span class="card-en">Maximum Velocity Exposure — 최고속도 존 노출 분석</span></span>
+    <span class="card-tag tag-gps">GPS</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>단위</th><td>일수, 비율(%)</td></tr>
+      <tr><th>데이터 출처</th><td><code>gps_records</code> — max_speed, session_date (최근 21일) / <code>player_profiles</code> — mss</td></tr>
+      <tr><th>용도</th><td>햄스트링 부상 위험 감지 → CRI 입력값</td></tr>
+    </table>
+    <div class="formula">Zone5 기준속도   = MSS × 0.9
+exposureRatio    = Zone5 도달 세션 수 ÷ 최근 21일 총 세션 수
+daysSinceExposed = 마지막 Zone5 노출일로부터 경과 일수
+pctMSS           = 최근 7일 최고속도 ÷ MSS × 100</div>
+    <div class="thresholds">
+      <span class="th th-red">🔴 14일↑ 미노출 햄스트링 고위험 (+3점)</span>
+      <span class="th th-orange">🟠 7~13일 미노출 주의 (+2점)</span>
+      <span class="th th-yellow">🟡 pctMSS &lt;80% 속도 노출 부족 (+1점)</span>
+    </div>
+    <p class="ref">참고: Malone 2017, Duhig 2016</p>
+  </div>
+</div>
+
+<!-- 표준편차 -->
+<div class="card" id="s-sd">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">13</span>
+    <span class="card-title">표준편차 · 선수 편차 <span class="card-en">Standard Deviation — 팀 내 개인 편차</span></span>
+    <span class="card-tag tag-gps">GPS</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>선수별 GPS 지표가 팀 평균에서 얼마나 벗어나는지 표시 (개인 상세 테이블)</td></tr>
+    </table>
+    <div class="formula">표준편차(SD) = √[ Σ(값 - 평균)² ÷ 선수 수 ]
+개인 편차(%)  = (개인값 - 팀 평균) ÷ 팀 평균 × 100
+※ |편차| ≥ 10% 이상일 때 +/- 뱃지 표시</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ 팀 평균 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#eab308"></div>
+  <h2>팀 평균 산출 (3종)</h2>
+</div>
+
+<!-- 훈련 팀 평균 -->
+<div class="card" id="s-trainavg">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">14</span>
+    <span class="card-title">훈련 팀 평균 (trainAvg) <span class="card-en">최빈 훈련시간 기준 정규화</span></span>
+    <span class="card-tag tag-gps">GPS</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>적용 조건</th><td><code>session_type2 = 'M'</code> 인 선수만 (주전·엔트리)</td></tr>
+      <tr><th>용도</th><td>데일리 브리핑 · 주간 현황 · 목표 대비 실적 집계</td></tr>
+    </table>
+    <div class="formula">최빈 훈련시간(mode) = 가장 많은 M 선수가 공유하는 훈련시간
+trainAvg = (M선수 지표 총합 ÷ M선수 훈련시간 총합) × 최빈 훈련시간</div>
+    <div class="note">
+      <strong style="color:var(--text2)">사용 이유:</strong> 부상·로테이션으로 일부 선수가 짧게 훈련했을 때 단순 평균 왜곡 방지.<br>
+      M 있는 날 → M 기준 / M 없는 날 → S 기준 평균 사용
+    </div>
+  </div>
+</div>
+
+<!-- 경기 팀 평균 -->
+<div class="card" id="s-matchavg">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">15</span>
+    <span class="card-title">경기 팀 평균 (matchAvg) <span class="card-en">최대 출전시간 기준 정규화</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>적용 데이터</th><td><code>match_records</code>, <code>time_type = 'FT'</code></td></tr>
+      <tr><th>용도</th><td>최근 3경기 기준선 · 경기 보고서 팀 비교</td></tr>
+    </table>
+    <div class="formula">matchAvg = (선수 지표 총합 ÷ 출전시간 총합) × 최대 출전시간(max duration)</div>
+    <div class="note">
+      <strong style="color:var(--text2)">사용 이유:</strong> 교체 선수 출전시간이 짧아 지표가 낮아지는 문제 보정.<br>
+      최장 출전자(풀타임 기준) 시간으로 환산하여 팀 레벨 비교 가능하게 함
+    </div>
+  </div>
+</div>
+
+<!-- 100분 평균 -->
+<div class="card" id="s-p100">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">16</span>
+    <span class="card-title">팀 평균 /100분 (p100) <span class="card-en">100분 기준 정규화 강도 지표</span></span>
+    <span class="card-tag tag-derived">파생</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>경기 보고서 — 출전시간이 다른 선수들을 100분 기준으로 균등화 비교</td></tr>
+    </table>
+    <div class="formula">p100 = 지표 총합 ÷ 출전시간 합계 × 100</div>
+  </div>
+</div>
+
+<!-- 최근 3경기 기준선 -->
+<div class="card" id="s-ref3">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">17</span>
+    <span class="card-title">최근 3경기 팀 기준선 (ref3) <span class="card-en">Match Reference — 훈련 강도 비교 기준</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>산출 지표</th><td>TD · HSR(Band4) · Sprint(Band5) · 가속 · RHIE</td></tr>
+      <tr><th>산출 방법</th><td>최근 3경기 FT 전체 선수 데이터 → matchAvg 공식 적용</td></tr>
+      <tr><th>용도</th><td>훈련 데이터 옆 % 뱃지 기준 — "오늘 훈련이 경기 대비 몇 %인가"</td></tr>
+    </table>
+    <div class="formula">ref3 = matchAvg(최근 3경기 FT 전체 선수 데이터, 지표)
+뱃지% = 훈련 실제값 ÷ ref3 × 100</div>
+    <div class="thresholds">
+      <span class="th th-green">🟢 ≥80% 충분</span>
+      <span class="th th-yellow">🟡 60~79% 주의</span>
+      <span class="th th-red">🔴 &lt;60% 부족</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ 복합 위험 지수 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#ef4444"></div>
+  <h2>복합 위험 지수</h2>
+</div>
+
+<!-- CRI -->
+<div class="card" id="s-cri">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">18</span>
+    <span class="card-title">CRI <span class="card-en">Composite Risk Index — 복합위험지수</span></span>
+    <span class="card-tag tag-derived">파생</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>입력값</th><td>ACWR · daysSinceExposed · pctMSS · 웰니스 총점(absScore) · dropPct</td></tr>
+      <tr><th>용도</th><td>선수별 부상 위험 종합 등급 산정 — 부상 위험 탭 메인 지표</td></tr>
+    </table>
+    <div class="score-grid">
+      <div class="score-col">
+        <div class="score-col-title">ACWR 모듈</div>
+        <div class="score-row">
+          <span style="color:#f87171">+3</span> ACWR &gt;1.5<br>
+          <span style="color:#fb923c">+2</span> 1.3~1.5<br>
+          <span style="color:#facc15">+1</span> &lt;0.8
+        </div>
+      </div>
+      <div class="score-col">
+        <div class="score-col-title">MV 노출 모듈</div>
+        <div class="score-row">
+          <span style="color:#f87171">+3</span> 14일↑ 미노출<br>
+          <span style="color:#fb923c">+2</span> 7~13일 미노출<br>
+          <span style="color:#facc15">+1</span> pctMSS &lt;80%
+        </div>
+      </div>
+      <div class="score-col">
+        <div class="score-col-title">웰니스 모듈</div>
+        <div class="score-row">
+          <span style="color:#f87171">+2</span> 총점 ≤8점<br>
+          <span style="color:#f87171">+2</span> dropPct ≥25%<br>
+          <span style="color:#fb923c">+1</span> dropPct ≥15%
+        </div>
+      </div>
+    </div>
+    <div class="formula">CRI Score = ACWR 점수 + MV노출 점수 + 웰니스 점수</div>
+    <div class="thresholds">
+      <span class="th th-red">🔴 RED ≥4점</span>
+      <span class="th th-orange">🟠 AMBER ≥2점</span>
+      <span class="th th-yellow">🟡 YELLOW ≥1점</span>
+      <span class="th th-green">🟢 GREEN 0점</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ 경기 데이터 산출 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#f87171"></div>
+  <h2>경기 데이터 산출</h2>
+</div>
+
+<!-- Match Max -->
+<div class="card" id="s-matchmax">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">19</span>
+    <span class="card-title">Match Max <span class="card-en">경기 최대 퍼포먼스 기준값 (커리어 최고)</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>산출 지표</th><td>TD · MPM · HIR+Sprint · HSR(Band4) · Sprint(Band5) · 가속 · RHIE · 최고속도 · Player Load · FMP 4종</td></tr>
+      <tr><th>저장 위치</th><td><code>player_profiles</code> — match_max_* 필드 (14개)</td></tr>
+      <tr><th>갱신 시점</th><td>경기 데이터 업로드 시 / 전체 재계산 버튼</td></tr>
+    </table>
+    <div style="display:flex;flex-direction:column;gap:5px;margin:10px 0;font-size:12px">
+      <div style="background:var(--surface2);border-radius:6px;padding:8px 12px;border-left:3px solid var(--green)">
+        <span style="color:var(--green);font-weight:700">① FT 90분↑ 경기 ≥3개</span><br>
+        <span style="color:var(--text3)">상위 3개 raw 값 평균</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;padding:8px 12px;border-left:3px solid var(--yellow)">
+        <span style="color:var(--yellow);font-weight:700">② FT 90분↑ 경기 1~2개</span><br>
+        <span style="color:var(--text3)">raw 값 + 60~89분 경기를 출전시간 많은 순으로 보충 → 정규화(÷출전시간×100) 후 3개 평균</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;padding:8px 12px;border-left:3px solid var(--orange)">
+        <span style="color:var(--orange);font-weight:700">③ 90분↑ 없고 60분↑ 있음</span><br>
+        <span style="color:var(--text3)">출전시간 많은 순 3경기 정규화 평균</span>
+      </div>
+      <div style="background:var(--surface2);border-radius:6px;padding:8px 12px;border-left:3px solid var(--red)">
+        <span style="color:var(--red);font-weight:700">④ 60분 미만만 있음</span><br>
+        <span style="color:var(--text3)">null (미산출)</span>
+      </div>
+    </div>
+    <div class="formula">정규화값 = 지표값 ÷ 출전시간(분) × 100
+최고속도(MSS) = max(경기 max_speed, 훈련 GPS max_speed)  ← 단일 최대값</div>
+  </div>
+</div>
+
+<!-- 절대% · 강도% -->
+<div class="card" id="s-abspct">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">20</span>
+    <span class="card-title">절대% · 강도% <span class="card-en">개인 Match Max 대비 경기 퍼포먼스</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>경기 보고서 — 이 경기가 커리어 최고 대비 어느 수준인가</td></tr>
+    </table>
+    <div class="formula">절대% (총량 기준) = 이 경기 TD ÷ Match Max TD × 100
+강도% (시간 기준) = 이 경기 MPM ÷ Match Max MPM × 100</div>
+    <div class="thresholds">
+      <span class="th th-yellow">★ ≥90% 커리어 최고 수준</span>
+      <span class="th th-gray">— 70~89% 정상 범위</span>
+      <span class="th th-red">↓ &lt;70% 저하</span>
+    </div>
+  </div>
+</div>
+
+<!-- 팀 합계 / 경기당 팀 평균 -->
+<div class="card" id="s-teamsum">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">21</span>
+    <span class="card-title">경기 팀 합계 · 경기당 팀 평균 <span class="card-en">teamSum / teamAvg</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>경기 보고서 팀 섹션 — FT·1Q·2Q·Top-up 각각 집계</td></tr>
+    </table>
+    <div class="formula">팀 합계(f)     = Σ 선수 지표값 (양수인 선수만 합산)
+단순 평균(avg) = Σ 지표값 ÷ 선수 수
+p100 강도     = Σ 지표값 ÷ Σ 출전시간 × 100
+팀 평균(norm)  = Σ 지표값 ÷ Σ 출전시간 × max 출전시간</div>
+    <div class="note">경기 보고서는 합계(절대량)와 팀 평균(정규화) 두 버전 모두 표시</div>
+  </div>
+</div>
+
+<!-- 전후반 비교 -->
+<div class="card" id="s-halfcomp">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">22</span>
+    <span class="card-title">전후반 비교 <span class="card-en">1Q vs 2Q / Halftime Auto-detection</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>데이터</th><td><code>match_records</code> — time_type: '1Q' / '2Q'</td></tr>
+      <tr><th>비교 지표</th><td>TD · HIR+Sprint · 평균 MPM · 가속 · 감속 등</td></tr>
+      <tr><th>용도</th><td>후반 강도 저하(PIP 손실) 감지 → 회복 훈련 처방 근거</td></tr>
+    </table>
+    <div class="formula">mpm 감소율    = (2Q mpm − 1Q mpm) ÷ 1Q mpm × 100
+하프타임 자동  = FT 선수 평균 mpm에서 전후반 20~80% 구간 내 최대 갭(≥3분 단절) 자동 탐지
+2Q 종료 자동   = 하프타임 이후 팀 평균 mpm ≥ 30인 마지막 분</div>
+    <div class="note"><strong style="color:var(--text2)">PIP 손실 판정:</strong> 후반 동일 구간 mpm이 전반 평균 대비 −10% 이하 → 회복 훈련 처방 우선</div>
+  </div>
+</div>
+
+<!-- mpm 롤링 분석 -->
+<div class="card" id="s-wcs">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">23</span>
+    <span class="card-title">mpm 롤링 분석 (WCS) <span class="card-en">Peak Intensity / Worst Case Scenario</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>데이터</th><td>분당 mpm — mpm 파일 업로드로 생성, FT 출전 선수만 포함</td></tr>
+      <tr><th>용도</th><td>훈련 처방 근거 — 경기 최고 강도 구간 수치화 → 훈련에서 재현</td></tr>
+    </table>
+    <div class="formula">Peak 1분  = 연속 1분 구간 mpm 평균 중 최대값
+Peak 5분  = 연속 5분 구간 mpm 평균 중 최대값 (슬라이딩)
+Peak 10분 = 연속 10분 구간 mpm 평균 중 최대값 (슬라이딩)
+체류시간  = mpm &gt; 임계값(150/130/110 m/min)인 분수 합계</div>
+    <div class="note">훈련 처방 목표: Peak 5분 mpm의 90% 이상 복제<br>체류시간 &gt;150 m/min → 인터벌 처방 강도 기준</div>
+  </div>
+</div>
+
+<!-- FMP -->
+<div class="card" id="s-fmp">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">24</span>
+    <span class="card-title">FMP <span class="card-en">Functional Movement Profile — Run/Dynamic Medium·High</span></span>
+    <span class="card-tag tag-match">경기</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>지표 4종</th><td>FMP Run Medium · FMP Run High · FMP Dynamic Medium · FMP Dynamic High (단위: 초)</td></tr>
+      <tr><th>데이터 출처</th><td><code>gps_records</code> — fmp_run_medium/high, fmp_dyn_medium/high<br><code>match_records</code> — fmp_run_m/h, fmp_dyn_m/h</td></tr>
+      <tr><th>용도</th><td>고강도 기능적 움직임 시간 · Match Max 대비 % 비교</td></tr>
+    </table>
+    <div class="formula">FMP 개인 평균 = avgF(세션들, 'fmp_run_medium' 등)  ← 기간 평균
+FMP Match Max  = matchAvg 공식 적용 (상위 3경기 평균)
+Dyn H/M 비율   = FMP Dynamic High ÷ FMP Dynamic Medium  ← 편심 부하 지표</div>
+    <div class="note"><strong style="color:var(--text2)">Dynamic High/Medium 비율:</strong> 높을수록 eccentric(편심) 부하 비중 높음 → 햄스트링 위험도 참고 지표</div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ 목표 · 달성률 ═══════════════════════ -->
+<div class="cat-header">
+  <div class="cat-dot" style="background:#818cf8"></div>
+  <h2>목표 · 달성률 산출</h2>
+</div>
+
+<!-- MD 기준 부하 -->
+<div class="card" id="s-md">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">25</span>
+    <span class="card-title">MD 기준 부하 (Microcycle Default) <span class="card-en">경기 주기별 기본 부하 목표 범위</span></span>
+    <span class="card-tag tag-target">목표</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>주기화 블록 목표값이 없을 때 MD 기준값으로 대체 (fallback)</td></tr>
+    </table>
+    <div class="md-grid">
+      <div class="md-cell">
+        <div class="md-cell-label">MATCH</div>
+        <div class="md-cell-sub">TD 10~12km<br>HSR 1200~1600m<br>sRPE 700~900 AU</div>
+      </div>
+      <div class="md-cell">
+        <div class="md-cell-label">MD-4 — 고볼륨/중강도</div>
+        <div class="md-cell-sub">TD 7.5~9km<br>HSR 600~900m<br>sRPE 400~550 AU</div>
+      </div>
+      <div class="md-cell">
+        <div class="md-cell-label">MD-3 — 고볼륨/고강도</div>
+        <div class="md-cell-sub">TD 8.5~9.5km<br>HSR 900~1100m<br>sRPE 550~700 AU</div>
+      </div>
+      <div class="md-cell">
+        <div class="md-cell-label">MD-2 — 저볼륨/고속</div>
+        <div class="md-cell-sub">TD 7.5~9km<br>HSR 700~1000m<br>sRPE 450~600 AU</div>
+      </div>
+      <div class="md-cell">
+        <div class="md-cell-label">MD-1 — 테이퍼링</div>
+        <div class="md-cell-sub">TD 4~6km<br>HSR 300~500m<br>sRPE 200~350 AU</div>
+      </div>
+      <div class="md-cell">
+        <div class="md-cell-label">MD+1 — 회복</div>
+        <div class="md-cell-sub">TD 4~6km<br>HSR 200~400m<br>sRPE 150~280 AU</div>
+      </div>
+    </div>
+    <div class="note">주기화 블록 목표(block_training) → 없으면 MD 기본값 → 없으면 목표 미설정으로 표시</div>
+  </div>
+</div>
+
+<!-- 주간 달성률 -->
+<div class="card" id="s-target">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">26</span>
+    <span class="card-title">주간 목표 달성률 <span class="card-en">Weekly Achievement % — 주기화 실적 추적</span></span>
+    <span class="card-tag tag-target">목표</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>집계 지표</th><td>TD · HSR · Sprint · 가속 · RHIE · sRPE</td></tr>
+      <tr><th>목표 출처</th><td><code>block_training</code> 테이블 — 날짜별 목표값 (REST 제외)</td></tr>
+      <tr><th>실제값 출처</th><td>M 세션 날짜별 trainAvg 누적합 (오늘까지만)</td></tr>
+    </table>
+    <div class="formula">주간 목표 합 = Σ block_training 목표값 (REST 제외, 오늘까지)
+주간 실제 합 = Σ trainAvg(M 세션) — 날짜별 계산 후 합산
+달성률        = 주간 실제 합 ÷ 주간 목표 합 × 100</div>
+    <div class="thresholds">
+      <span class="th th-green">🟢 ≥90% 달성</span>
+      <span class="th th-yellow">🟡 70~89% 부분 달성</span>
+      <span class="th th-red">🔴 &lt;70% 미달</span>
+    </div>
+  </div>
+</div>
+
+<!-- 경기 대비 뱃지 -->
+<div class="card" id="s-badge">
+  <div class="card-head" onclick="toggle(this)">
+    <span class="card-num">27</span>
+    <span class="card-title">경기 대비 훈련 강도 뱃지 <span class="card-en">matchPctBadge — 최근 3경기 팀 평균 대비</span></span>
+    <span class="card-tag tag-target">목표</span>
+    <span class="card-toggle">▼</span>
+  </div>
+  <div class="card-body">
+    <table class="itbl">
+      <tr><th>용도</th><td>데일리 브리핑 · 주간 현황 테이블의 훈련 지표 옆 % 색상 뱃지</td></tr>
+    </table>
+    <div class="formula">뱃지% = 훈련 실제값 ÷ 최근 3경기 팀 평균(ref3) × 100</div>
+    <div class="thresholds">
+      <span class="th th-green">🟢 ≥80% 경기 수준 충분</span>
+      <span class="th th-yellow">🟡 60~79% 주의</span>
+      <span class="th th-red">🔴 &lt;60% 경기 대비 부족</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════ 전체 공식 요약 ═══════════════════════ -->
+<div class="cat-header" id="s-all">
+  <div class="cat-dot" style="background:#2dd4bf"></div>
+  <h2>전체 공식 요약표</h2>
+</div>
+
+<div style="overflow-x:auto">
+<table class="all-tbl">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>항목명</th>
+      <th>공식 (핵심)</th>
+      <th>단위</th>
+      <th>용도 요약</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>1</td><td>sRPE</td><td class="mono">RPE × 운동시간(분)</td><td>AU</td><td>세션 부하 정량화</td></tr>
+    <tr><td>2</td><td>Acute</td><td class="mono">Σ sRPE (최근 7일)</td><td>AU</td><td>ACWR 분자</td></tr>
+    <tr><td>3</td><td>Chronic</td><td class="mono">(Σ sRPE / 유효 일수) × 7</td><td>AU</td><td>ACWR 분모</td></tr>
+    <tr><td>4</td><td>ACWR 개인</td><td class="mono">Acute ÷ Chronic</td><td>비율</td><td>개인 부하 급증 감지</td></tr>
+    <tr><td>5</td><td>ACWR 팀</td><td class="mono">Σ 유효 ACWR ÷ 유효 선수 수</td><td>비율</td><td>팀 부하 상태 파악</td></tr>
+    <tr><td>6</td><td>주간 sRPE</td><td class="mono">Σ (RPE × 시간) — 이번 주</td><td>AU</td><td>주간 총 부하</td></tr>
+    <tr><td>7</td><td>웰니스 총점</td><td class="mono">피로+수면+스트레스+근육통</td><td>점(20점)</td><td>컨디션 종합</td></tr>
+    <tr><td>8</td><td>웰니스 급락</td><td class="mono">(7일 기준선 - 오늘) ÷ 기준선</td><td>%</td><td>컨디션 이상 감지</td></tr>
+    <tr><td>9</td><td>체중 변화(wDiff)</td><td class="mono">운동 후 체중 - 아침 체중</td><td>kg</td><td>수분 손실 모니터링</td></tr>
+    <tr><td>10</td><td>7일 평균 체중</td><td class="mono">Σ morning_weight(7일) ÷ 일수</td><td>kg</td><td>체중 추이</td></tr>
+    <tr><td>11</td><td>HSR</td><td class="mono">running_high + sprint</td><td>m</td><td>고강도 이동거리</td></tr>
+    <tr><td>12</td><td>MPM</td><td class="mono">TD ÷ 운동시간(분)</td><td>m/min</td><td>시간 정규화 강도</td></tr>
+    <tr><td>13</td><td>Zone5 기준</td><td class="mono">MSS × 0.9</td><td>km/h</td><td>MV 노출 임계속도</td></tr>
+    <tr><td>14</td><td>exposureRatio</td><td class="mono">Zone5 도달 세션 ÷ 전체 세션(21일)</td><td>비율</td><td>고속 노출 비율</td></tr>
+    <tr><td>15</td><td>daysSinceExposed</td><td class="mono">오늘 - 마지막 Zone5 노출일</td><td>일</td><td>햄스트링 위험</td></tr>
+    <tr><td>16</td><td>pctMSS</td><td class="mono">최근 7일 최고속도 ÷ MSS × 100</td><td>%</td><td>속도 노출 수준</td></tr>
+    <tr><td>17</td><td>SD (표준편차)</td><td class="mono">√[Σ(값-평균)² ÷ 선수수]</td><td>-</td><td>팀 내 편차 분석</td></tr>
+    <tr><td>18</td><td>개인 편차%</td><td class="mono">(개인값 - 팀평균) ÷ 팀평균 × 100</td><td>%</td><td>개인-팀 차이</td></tr>
+    <tr><td>19</td><td>trainAvg</td><td class="mono">Σ지표 ÷ Σ시간 × MODE시간</td><td>-</td><td>훈련 팀 평균(M 세션)</td></tr>
+    <tr><td>20</td><td>matchAvg</td><td class="mono">Σ지표 ÷ Σ시간 × MAX시간</td><td>-</td><td>경기 팀 평균(FT)</td></tr>
+    <tr><td>21</td><td>p100</td><td class="mono">Σ지표 ÷ Σ시간 × 100</td><td>/100분</td><td>100분 강도 정규화</td></tr>
+    <tr><td>22</td><td>ref3</td><td class="mono">matchAvg(최근 3경기 FT)</td><td>-</td><td>훈련 비교 기준선</td></tr>
+    <tr><td>23</td><td>CRI</td><td class="mono">ACWR점수 + MV점수 + 웰니스점수</td><td>점(0-8)</td><td>복합 부상위험지수</td></tr>
+    <tr><td>24</td><td>Match Max</td><td class="mono">FT 90분↑ 상위 3경기 평균</td><td>-</td><td>커리어 기준점</td></tr>
+    <tr><td>25</td><td>정규화 Match Max</td><td class="mono">값 ÷ 출전시간 × 100 (60~89분)</td><td>/100분</td><td>Match Max 보충</td></tr>
+    <tr><td>26</td><td>절대%</td><td class="mono">경기 TD ÷ Match Max TD × 100</td><td>%</td><td>총량 기준 성과</td></tr>
+    <tr><td>27</td><td>강도%</td><td class="mono">경기 MPM ÷ Match Max MPM × 100</td><td>%</td><td>강도 기준 성과</td></tr>
+    <tr><td>28</td><td>팀 합계</td><td class="mono">Σ 선수 지표 (양수만)</td><td>-</td><td>경기 팀 총량</td></tr>
+    <tr><td>29</td><td>팀 평균/100분</td><td class="mono">Σ지표 ÷ Σ시간 × 100 (경기)</td><td>/100분</td><td>경기 강도 정규화</td></tr>
+    <tr><td>30</td><td>전후반 감소율</td><td class="mono">(2Q mpm - 1Q mpm) ÷ 1Q mpm × 100</td><td>%</td><td>후반 강도 저하</td></tr>
+    <tr><td>31</td><td>Peak 1분 mpm</td><td class="mono">max(mpm, 1분 슬라이딩)</td><td>m/min</td><td>최고 순간 강도</td></tr>
+    <tr><td>32</td><td>Peak 5분 mpm</td><td class="mono">max(5분 연속 mpm 평균)</td><td>m/min</td><td>고강도 연속 능력</td></tr>
+    <tr><td>33</td><td>Peak 10분 mpm</td><td class="mono">max(10분 연속 mpm 평균)</td><td>m/min</td><td>지속 강도 능력</td></tr>
+    <tr><td>34</td><td>체류시간 &gt;150</td><td class="mono">mpm &gt; 150인 분수 합산</td><td>분</td><td>스프린트 노출 빈도</td></tr>
+    <tr><td>35</td><td>FMP Dyn H/M 비율</td><td class="mono">Dyn High ÷ Dyn Medium</td><td>비율</td><td>편심 부하 지표</td></tr>
+    <tr><td>36</td><td>주간 목표 합</td><td class="mono">Σ block_training 목표 (REST 제외)</td><td>-</td><td>주간 계획량</td></tr>
+    <tr><td>37</td><td>주간 실제 합</td><td class="mono">Σ trainAvg(M일, 오늘까지)</td><td>-</td><td>주간 실시량</td></tr>
+    <tr><td>38</td><td>주간 달성률</td><td class="mono">주간 실제 ÷ 주간 목표 × 100</td><td>%</td><td>주기화 추적</td></tr>
+    <tr><td>39</td><td>경기 대비 뱃지</td><td class="mono">훈련값 ÷ ref3 × 100</td><td>%</td><td>훈련-경기 연결</td></tr>
+  </tbody>
+</table>
+</div>
+
+
+<!-- ═══════════════════════ 흐름도 ═══════════════════════ -->
+<div class="flow-wrap" id="s-flow">
+  <div class="flow-title">📐 전체 산출 흐름도</div>
+
+  <div class="flow-grid3">
+    <div class="flow-col" style="background:#0d1e30;border:1px solid #1e3a5f">
+      <div class="flow-col-title" style="color:var(--accent)">입력 데이터</div>
+      <div class="flow-item" style="color:var(--text2)">
+        📥 GPS 파일 (xlsx)<br>
+        📥 RPE 입력 (선수 앱)<br>
+        📥 웰니스 입력 (선수 앱)<br>
+        📥 mpm 파일<br>
+        📥 경기 데이터 (xlsx)
+      </div>
+    </div>
+    <div class="flow-col" style="background:#0e2a1a;border:1px solid #14532d">
+      <div class="flow-col-title" style="color:var(--green)">1차 산출값</div>
+      <div class="flow-item" style="color:var(--text2)">
+        🟢 sRPE = RPE × 시간<br>
+        🟢 HSR = Band4 + Band5<br>
+        🟢 MPM = TD ÷ 시간<br>
+        🟢 wDiff = 후체중 − 아침체중<br>
+        🟢 웰니스 총점 (20점)<br>
+        🟢 MSS 자동 갱신<br>
+        🟢 Peak mpm 1·5·10분
+      </div>
+    </div>
+    <div class="flow-col" style="background:#1a0e2e;border:1px solid #3730a3">
+      <div class="flow-col-title" style="color:var(--purple)">2차 파생 지수</div>
+      <div class="flow-item" style="color:var(--text2)">
+        🟣 ACWR 개인·팀<br>
+        🟣 MV 노출 (Zone5 = MSS×0.9)<br>
+        🟣 웰니스 급락% (7일 기준선)<br>
+        🟣 CRI 복합위험지수<br>
+        🟣 Match Max (3경기 평균)<br>
+        🟣 SD 표준편차
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-grid2">
+    <div class="flow-col" style="background:#1a1200;border:1px solid #78350f">
+      <div class="flow-col-title" style="color:var(--yellow)">팀 평균 (3종)</div>
+      <div class="flow-item" style="color:var(--text2)">
+        <span style="color:var(--yellow)">trainAvg</span> — GPS 훈련 팀 평균<br>
+        <span style="color:var(--text3);font-size:11px">→ 지표합/시간합 × 최빈 훈련시간 (M 선수만)</span><br><br>
+        <span style="color:var(--yellow)">matchAvg</span> — 경기 팀 평균<br>
+        <span style="color:var(--text3);font-size:11px">→ 지표합/시간합 × 최대 출전시간 (FT 기준)</span><br><br>
+        <span style="color:var(--yellow)">p100</span> — /100분 정규화<br>
+        <span style="color:var(--text3);font-size:11px">→ 지표합/시간합 × 100</span>
+      </div>
+    </div>
+    <div class="flow-col" style="background:#1a0e0e;border:1px solid #7f1d1d">
+      <div class="flow-col-title" style="color:var(--red)">최종 비교 지표</div>
+      <div class="flow-item" style="color:var(--text2)">
+        <span style="color:#f87171">최근 3경기 기준선(ref3)</span><br>
+        <span style="color:var(--text3);font-size:11px">→ 훈련 지표 옆 % 뱃지 기준</span><br><br>
+        <span style="color:#f87171">Match Max 대비 절대%·강도%</span><br>
+        <span style="color:var(--text3);font-size:11px">→ 커리어 최고 대비 이 경기 성과</span><br><br>
+        <span style="color:#f87171">주간 달성률 (주기화 추적)</span><br>
+        <span style="color:var(--text3);font-size:11px">→ 실제합 ÷ 목표합 × 100</span><br><br>
+        <span style="color:#f87171">전후반 비교 · PIP 손실</span><br>
+        <span style="color:var(--text3);font-size:11px">→ 후반 강도 저하 → 회복 처방</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="flow-note">
+    <strong style="color:var(--text2)">session_type2 규칙 (모든 팀 평균 산출의 기준)</strong><br>
+    <span style="color:#38bdf8">M</span> = 팀 전체훈련 (주전·엔트리) → 팀 평균 포함 · 주간 합계 포함<br>
+    <span style="color:var(--text3)">S</span> = 서브·미엔트리 개인 컨디셔닝 → 팀 평균 제외 · 주간 합계 제외<br>
+    M이 하루라도 있는 날 → M 기준 / M 없는 날 → S 기준 / 개인 데이터는 필터 없이 전체 표시
+  </div>
+</div>
+
+<div style="text-align:center;padding:2.5rem 0 1rem;font-size:11px;color:var(--text3)">
+  부산아이파크 피지컬 코치 앱 · 산출 항목 가이드 v2.0 · 2026-06-04<br>
+  총 39개 산출 항목 · 코드 기반 실측 문서
+</div>
+
+</div>
+
+<script>
+function toggle(head){
+  const body = head.nextElementSibling;
+  const arrow = head.querySelector('.card-toggle');
+  if(body.classList.contains('collapsed')){
+    body.classList.remove('collapsed');
+    arrow.style.transform = 'rotate(0deg)';
+  } else {
+    body.classList.add('collapsed');
+    arrow.style.transform = 'rotate(-90deg)';
+  }
+}
+// 처음엔 모두 열린 상태
+</script>
+</body>
+</html>

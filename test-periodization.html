@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>주기화 처방 자동화 — 테스트</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --border: #334155; --border2: #475569;
+    --text: #f1f5f9; --text2: #94a3b8; --text3: #64748b;
+    --accent: #6366f1; --green: #4ade80; --red: #f87171; --yellow: #fbbf24;
+    --blue: #60a5fa; --orange: #fb923c; --purple: #c084fc;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, sans-serif; font-size: 14px; padding: 20px; }
+  h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: var(--text2); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  label { font-size: 11px; color: var(--text3); display: block; margin-bottom: 4px; }
+  input[type=number], input[type=text], select {
+    width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border2);
+    background: var(--bg); color: var(--text); font-size: 13px;
+  }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+  .grid5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .btn { padding: 9px 18px; border-radius: 8px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-outline { background: transparent; border: 1px solid var(--border2); color: var(--text2); }
+  .md-btn {
+    padding: 8px 4px; border-radius: 8px; border: 2px solid var(--border);
+    background: var(--bg); color: var(--text2); cursor: pointer; font-size: 12px;
+    font-weight: 600; text-align: center; transition: all 0.15s;
+  }
+  .md-btn.active { border-color: var(--accent); background: #6366f122; color: var(--accent); }
+  .md-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+  .bar-wrap { background: var(--bg); border-radius: 6px; height: 8px; overflow: hidden; margin-top: 4px; }
+  .bar { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+  .metric-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .metric-label { width: 50px; font-size: 11px; color: var(--text3); flex-shrink: 0; }
+  .metric-val { width: 70px; font-size: 13px; font-weight: 700; text-align: right; flex-shrink: 0; }
+  .metric-pct { width: 42px; font-size: 11px; color: var(--text3); text-align: right; flex-shrink: 0; }
+  .metric-bar-wrap { flex: 1; background: var(--bg); border-radius: 4px; height: 7px; overflow: hidden; }
+  .metric-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+  .pct-badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; }
+  .week-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .day-cell {
+    border: 1px solid var(--border); border-radius: 8px; padding: 8px 4px;
+    text-align: center; cursor: pointer; min-height: 90px;
+    transition: all 0.15s;
+  }
+  .day-cell:hover { border-color: var(--border2); }
+  .day-cell.has-md { border-color: var(--accent); }
+  .day-label-badge {
+    display: inline-block; padding: 2px 6px; border-radius: 10px;
+    font-size: 10px; font-weight: 700; margin-bottom: 4px;
+  }
+  .day-stat { font-size: 9px; color: var(--text3); line-height: 1.6; }
+  .info-box { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; margin: 2px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px 10px; text-align: center; font-size: 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--text3); font-weight: 500; }
+  tr:last-child td { border-bottom: none; }
+  .section-title { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+
+<div style="max-width:860px;margin:0 auto">
+
+  <div style="margin-bottom:20px">
+    <h2>📅 주기화 처방 자동화 — 테스트</h2>
+    <p style="font-size:12px;color:var(--text3);margin-top:4px">논문 기반 경기대비 % → 목표값 자동 처방 프로토타입</p>
+  </div>
+
+  <!-- Step 1: Match Max 입력 -->
+  <div class="card">
+    <div class="section-title">① Match Max 기준값 설정</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px">경기 평균 또는 팀 Match Max 값을 입력하세요 (실제 앱에서는 Supabase에서 자동 로드)</p>
+    <div class="grid5">
+      <div>
+        <label>TD (m)</label>
+        <input type="number" id="mm-td" value="10800" oninput="recalcAll()">
+      </div>
+      <div>
+        <label>HSR (m)</label>
+        <input type="number" id="mm-hsr" value="1050" oninput="recalcAll()">
+      </div>
+      <div>
+        <label>SPR (m)</label>
+        <input type="number" id="mm-spr" value="280" oninput="recalcAll()">
+      </div>
+      <div>
+        <label>ACC (회)</label>
+        <input type="number" id="mm-acc" value="42" oninput="recalcAll()">
+      </div>
+      <div>
+        <label>RHIE (회)</label>
+        <input type="number" id="mm-rhie" value="38" oninput="recalcAll()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: 단일 날짜 처방 테스트 -->
+  <div class="card">
+    <div class="section-title">② 날짜별 처방 테스트</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px">MD 유형 선택 → 목표값 자동 제안 (수동 조정 가능)</p>
+
+    <div style="margin-bottom:16px">
+      <label style="margin-bottom:8px">MD 유형 선택</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="md-btn" data-md="MD-5" onclick="selectMD(this)">MD-5</button>
+        <button class="md-btn active" data-md="MD-4" onclick="selectMD(this)">MD-4</button>
+        <button class="md-btn" data-md="MD-3" onclick="selectMD(this)">MD-3</button>
+        <button class="md-btn" data-md="MD-2" onclick="selectMD(this)">MD-2</button>
+        <button class="md-btn" data-md="MD-1" onclick="selectMD(this)">MD-1</button>
+        <button class="md-btn" data-md="MD" onclick="selectMD(this)" style="border-color:#f87171;color:#f87171">MD ⚽</button>
+        <button class="md-btn" data-md="MD+1" onclick="selectMD(this)">MD+1</button>
+        <button class="md-btn" data-md="REST" onclick="selectMD(this)">REST</button>
+        <button class="md-btn" data-md="GYM" onclick="selectMD(this)">GYM</button>
+      </div>
+    </div>
+
+    <!-- 처방 결과 -->
+    <div id="prescription-result" style="margin-bottom:16px"></div>
+
+    <!-- 수동 조정 -->
+    <div id="manual-adjust" style="display:none">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px">수동 조정 (자동값에서 ±)</div>
+      <div class="grid5" id="manual-inputs"></div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="applyManual()">✓ 이 값으로 저장</button>
+        <button class="btn btn-outline" onclick="resetToAuto()">↺ 자동값으로 초기화</button>
+      </div>
+    </div>
+
+    <div id="save-confirm" style="display:none;margin-top:12px;padding:10px 14px;background:#4ade8022;border:1px solid #4ade80;border-radius:8px;font-size:12px;color:#4ade80">
+      ✓ 저장 완료! (실제 앱에서는 Supabase block_days에 upsert)
+    </div>
+  </div>
+
+  <!-- Step 3: 주간 뷰 -->
+  <div class="card">
+    <div class="section-title">③ 주간 처방 플랜 뷰</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px">경기 패턴을 선택하면 주간 처방이 자동 생성됩니다</p>
+
+    <div style="margin-bottom:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="font-size:11px;color:var(--text3)">경기 패턴:</span>
+      <button class="btn btn-outline" onclick="applyPattern('1game-sat')" style="font-size:11px;padding:6px 12px">주 1경기 (토)</button>
+      <button class="btn btn-outline" onclick="applyPattern('1game-sun')" style="font-size:11px;padding:6px 12px">주 1경기 (일)</button>
+      <button class="btn btn-outline" onclick="applyPattern('2game')" style="font-size:11px;padding:6px 12px">주 2경기 (화·토)</button>
+      <button class="btn btn-outline" onclick="applyPattern('rest-week')" style="font-size:11px;padding:6px 12px">Rest Week</button>
+    </div>
+
+    <div class="week-grid" id="week-grid"></div>
+
+    <!-- 주간 합계 -->
+    <div id="week-totals" style="margin-top:14px;display:none"></div>
+  </div>
+
+  <!-- Step 4: 처방 % 테이블 (논문 참고값) -->
+  <div class="card">
+    <div class="section-title">④ 처방 기준표 (논문 기반) — 편집 가능</div>
+    <p style="font-size:11px;color:var(--text3);margin-bottom:14px">각 MD 유형별 경기대비 % 기준값. 팀 특성에 맞게 조정 가능.</p>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th style="text-align:left">MD 유형</th>
+            <th style="color:var(--blue)">TD %</th>
+            <th style="color:var(--green)">HSR %</th>
+            <th style="color:var(--orange)">SPR %</th>
+            <th style="color:var(--purple)">ACC %</th>
+            <th style="color:var(--yellow)">RHIE %</th>
+            <th>초점</th>
+          </tr>
+        </thead>
+        <tbody id="pct-table-body"></tbody>
+      </table>
+    </div>
+    <p style="font-size:10px;color:var(--text3);margin-top:8px">참고: Malone et al. 2019, Lago-Penas et al. 2022, Clemente et al. 2021 종합</p>
+  </div>
+
+</div>
+
+<script>
+// ── 처방 기준표 (논문 기반) ──
+const PRESETS = {
+  'MD-5': { td:50, hsr:35, spr:30, acc:45, rhie:35, focus:'볼륨 기반', color:'#818cf8' },
+  'MD-4': { td:60, hsr:40, spr:35, acc:50, rhie:45, focus:'볼륨+신경근', color:'#818cf8' },
+  'MD-3': { td:65, hsr:50, spr:45, acc:45, rhie:40, focus:'대사강도 피크', color:'#f97316' },
+  'MD-2': { td:32, hsr:12, spr:10, acc:15, rhie:15, focus:'회복+전술', color:'#4ade80' },
+  'MD-1': { td:38, hsr:20, spr:15, acc:22, rhie:20, focus:'신경활성화', color:'#60a5fa' },
+  'MD':   { td:100, hsr:100, spr:100, acc:100, rhie:100, focus:'경기', color:'#f87171' },
+  'MD+1': { td:15, hsr:8,  spr:5,  acc:10, rhie:8,  focus:'회복', color:'#94a3b8' },
+  'REST': { td:0,  hsr:0,  spr:0,  acc:0,  rhie:0,  focus:'휴식', color:'#475569' },
+  'GYM':  { td:20, hsr:5,  spr:0,  acc:8,  rhie:5,  focus:'근력', color:'#c084fc' },
+};
+
+const METRICS = [
+  { key:'td',   label:'TD',   unit:'m', color:'#60a5fa' },
+  { key:'hsr',  label:'HSR',  unit:'m', color:'#4ade80' },
+  { key:'spr',  label:'SPR',  unit:'m', color:'#fb923c' },
+  { key:'acc',  label:'ACC',  unit:'회', color:'#c084fc' },
+  { key:'rhie', label:'RHIE', unit:'회', color:'#fbbf24' },
+];
+
+let _selectedMD = 'MD-4';
+let _manualVals = {};
+
+function getMatchMax() {
+  return {
+    td:   parseFloat(document.getElementById('mm-td').value)||10800,
+    hsr:  parseFloat(document.getElementById('mm-hsr').value)||1050,
+    spr:  parseFloat(document.getElementById('mm-spr').value)||280,
+    acc:  parseFloat(document.getElementById('mm-acc').value)||42,
+    rhie: parseFloat(document.getElementById('mm-rhie').value)||38,
+  };
+}
+
+function calcTargets(mdType, mm) {
+  const p = PRESETS[mdType];
+  if (!p) return null;
+  return {
+    td:   Math.round(mm.td   * p.td   / 100),
+    hsr:  Math.round(mm.hsr  * p.hsr  / 100),
+    spr:  Math.round(mm.spr  * p.spr  / 100),
+    acc:  Math.round(mm.acc  * p.acc  / 100),
+    rhie: Math.round(mm.rhie * p.rhie / 100),
+  };
+}
+
+function selectMD(btn) {
+  document.querySelectorAll('.md-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  _selectedMD = btn.dataset.md;
+  _manualVals = {};
+  renderPrescription();
+}
+
+function renderPrescription() {
+  const mm = getMatchMax();
+  const targets = calcTargets(_selectedMD, mm);
+  const preset = PRESETS[_selectedMD];
+  const el = document.getElementById('prescription-result');
+  const manualEl = document.getElementById('manual-adjust');
+
+  if (!targets || preset.td === 0) {
+    el.innerHTML = `<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">${_selectedMD === 'REST' ? '🛌 휴식일 — 처방 없음' : '처방 데이터 없음'}</div>`;
+    manualEl.style.display = 'none';
+    return;
+  }
+
+  const activeVals = { ...targets, ..._manualVals };
+
+  let html = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${preset.color}"></span>
+      <span style="font-size:13px;font-weight:700;color:${preset.color}">${_selectedMD}</span>
+      <span style="font-size:11px;color:var(--text3)">— ${preset.focus}</span>
+    </div>
+  `;
+
+  METRICS.forEach(m => {
+    const pct = preset[m.key];
+    const val = activeVals[m.key];
+    const isManual = _manualVals[m.key] !== undefined;
+    const barW = Math.min(pct, 100);
+    html += `
+      <div class="metric-row">
+        <div class="metric-label">${m.label}</div>
+        <div class="metric-bar-wrap">
+          <div class="metric-bar" style="width:${barW}%;background:${m.color}"></div>
+        </div>
+        <div class="metric-val" style="color:${isManual ? '#fbbf24' : 'var(--text)'}">
+          ${val.toLocaleString()}${m.unit}
+          ${isManual ? '<span style="font-size:9px;color:#fbbf24">✎</span>' : ''}
+        </div>
+        <div class="metric-pct" style="color:${m.color}">${pct}%</div>
+      </div>
+    `;
+  });
+
+  el.innerHTML = html;
+  manualEl.style.display = 'block';
+
+  // 수동 입력 필드
+  const manInputs = document.getElementById('manual-inputs');
+  manInputs.innerHTML = METRICS.map(m => `
+    <div>
+      <label>${m.label} (${m.unit})</label>
+      <input type="number" id="man-${m.key}" value="${activeVals[m.key]}"
+        style="border-color:${_manualVals[m.key]!==undefined?'#fbbf24':'var(--border2)'}">
+    </div>
+  `).join('');
+}
+
+function applyManual() {
+  METRICS.forEach(m => {
+    const v = parseFloat(document.getElementById('man-'+m.key).value);
+    if (!isNaN(v)) _manualVals[m.key] = v;
+  });
+  renderPrescription();
+  const sc = document.getElementById('save-confirm');
+  sc.style.display = 'block';
+  setTimeout(() => sc.style.display = 'none', 2500);
+}
+
+function resetToAuto() {
+  _manualVals = {};
+  renderPrescription();
+}
+
+function recalcAll() {
+  renderPrescription();
+  renderWeekGrid(_weekPattern);
+}
+
+// ── 주간 뷰 ──
+let _weekPattern = null;
+const WEEK_DAYS = ['월','화','수','목','금','토','일'];
+
+const PATTERNS = {
+  '1game-sat': ['MD-4','MD-3','MD-2','MD-1','MD-1','MD','MD+1'],
+  '1game-sun': ['MD-5','MD-4','MD-3','MD-2','MD-1','MD-1','MD'],
+  '2game':     ['MD','MD+1','REST','MD-2','MD-1','MD','MD+1'],
+  'rest-week': ['REST','GYM','REST','GYM','REST','REST','REST'],
+};
+
+function applyPattern(key) {
+  _weekPattern = PATTERNS[key];
+  renderWeekGrid(_weekPattern);
+}
+
+function renderWeekGrid(pattern) {
+  if (!pattern) return;
+  const mm = getMatchMax();
+  const grid = document.getElementById('week-grid');
+  const totalsEl = document.getElementById('week-totals');
+
+  let weekTotals = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
+
+  grid.innerHTML = pattern.map((mdType, i) => {
+    const targets = calcTargets(mdType, mm);
+    const preset = PRESETS[mdType] || { color:'#475569', focus:'' };
+
+    if (targets) {
+      Object.keys(weekTotals).forEach(k => weekTotals[k] += targets[k]);
+    }
+
+    const isMatch = mdType === 'MD';
+    const cellBorder = isMatch ? '#f87171' : (targets && preset.td > 0 ? preset.color+'66' : 'var(--border)');
+
+    return `
+      <div class="day-cell" style="border-color:${cellBorder}">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:4px">${WEEK_DAYS[i]}</div>
+        <div class="day-label-badge" style="background:${preset.color}22;color:${preset.color}">${mdType}</div>
+        ${targets && preset.td > 0 ? `
+          <div class="day-stat">
+            <span style="color:#60a5fa">TD</span> ${targets.td.toLocaleString()}m<br>
+            <span style="color:#4ade80">HSR</span> ${targets.hsr}m<br>
+            <span style="color:#fb923c">SPR</span> ${targets.spr}m<br>
+            <span style="color:#c084fc">ACC</span> ${targets.acc}회
+          </div>
+        ` : `<div style="font-size:10px;color:var(--text3);margin-top:8px">${preset.focus}</div>`}
+      </div>
+    `;
+  }).join('');
+
+  // 경기 대비 주간 합계 %
+  const matchWeekCount = pattern.filter(d => d === 'MD').length;
+  const matchWeekTD = mm.td * matchWeekCount;
+
+  totalsEl.style.display = 'block';
+  totalsEl.innerHTML = `
+    <div style="font-size:11px;color:var(--text3);margin-bottom:8px">주간 합계 (경기 제외 훈련일)</div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap">
+      ${[
+        { label:'TD', val:weekTotals.td, mm:mm.td*7, color:'#60a5fa', unit:'m' },
+        { label:'HSR', val:weekTotals.hsr, mm:mm.hsr*7, color:'#4ade80', unit:'m' },
+        { label:'SPR', val:weekTotals.spr, mm:mm.spr*7, color:'#fb923c', unit:'m' },
+        { label:'ACC', val:weekTotals.acc, mm:mm.acc*7, color:'#c084fc', unit:'회' },
+        { label:'RHIE', val:weekTotals.rhie, mm:mm.rhie*7, color:'#fbbf24', unit:'회' },
+      ].map(m => `
+        <div style="text-align:center;min-width:70px">
+          <div style="font-size:10px;color:${m.color};font-weight:600">${m.label}</div>
+          <div style="font-size:15px;font-weight:700">${m.val.toLocaleString()}</div>
+          <div style="font-size:9px;color:var(--text3)">${m.unit}</div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── 처방 기준표 렌더 ──
+function renderPctTable() {
+  const order = ['MD-5','MD-4','MD-3','MD-2','MD-1','MD','MD+1','REST','GYM'];
+  const tbody = document.getElementById('pct-table-body');
+  tbody.innerHTML = order.map(md => {
+    const p = PRESETS[md];
+    return `
+      <tr>
+        <td style="text-align:left;font-weight:600;color:${p.color}">${md}</td>
+        <td><span class="pct-badge" style="background:#60a5fa22;color:#60a5fa">${p.td}%</span></td>
+        <td><span class="pct-badge" style="background:#4ade8022;color:#4ade80">${p.hsr}%</span></td>
+        <td><span class="pct-badge" style="background:#fb923c22;color:#fb923c">${p.spr}%</span></td>
+        <td><span class="pct-badge" style="background:#c084fc22;color:#c084fc">${p.acc}%</span></td>
+        <td><span class="pct-badge" style="background:#fbbf2422;color:#fbbf24">${p.rhie}%</span></td>
+        <td style="font-size:11px;color:var(--text3)">${p.focus}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+// 초기화
+renderPrescription();
+renderPctTable();
+applyPattern('1game-sat');
+</script>
+</body>
+</html>
