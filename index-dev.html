@@ -2236,6 +2236,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <button onclick="closeWeekDetail()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:20px">✕</button>
       </div>
     </div>
+    <!-- 경기 % 기준 -->
+    <div id="wd-basis" style="display:none;margin:0 20px 10px;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:11px;color:var(--text3);line-height:1.6"></div>
     <!-- 테이블 -->
     <div style="overflow-x:auto;padding:0 20px 20px">
       <table id="wd-table" style="width:100%;border-collapse:collapse;min-width:500px"></table>
@@ -25195,6 +25197,36 @@ async function openWeekDetail(blockId) {
   const dayMap = {};
   (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
 
+  // 경기 % 기준: 이 블록의 계획들이 어떤 최근 3경기를 기준으로 짜였는지 표시
+  const basisEl = document.getElementById('wd-basis');
+  if(basisEl){
+    const seen = new Set(), basisList = [];
+    (days||[]).forEach(d=>{
+      const rb = d.ref_basis;
+      if(!rb || !rb.matches || !rb.matches.length) return;
+      const key = rb.matches.map(x=>x.opp||x.date).join('|');
+      if(seen.has(key)) return;
+      seen.add(key);
+      basisList.push(rb);
+    });
+    const hasLegacy = (days||[]).some(d=>(d.td_target!=null)&&(!d.ref_basis||!d.ref_basis.matches));
+    if(basisList.length){
+      const fmtAvg = a => a ? `TD ${a.td?.toLocaleString()||'—'}m · HSR ${a.hsr||'—'}m · SPR ${a.sprint||'—'}m · ACC ${a.accel||'—'}회 · RHIE ${a.rhie||'—'}회` : '';
+      basisEl.innerHTML = '📌 <b style="color:var(--text2)">경기 % 기준</b> (이 블록 계획의 근거)'
+        + basisList.map(rb=>{
+            const opps = rb.matches.map(x=>x.opp||x.date).join(', ');
+            return `<div style="margin-top:4px">· 최근 3경기 <b style="color:var(--text2)">${opps}</b><br><span style="color:var(--text3)">&nbsp;&nbsp;&nbsp;${fmtAvg(rb.avg)}</span></div>`;
+          }).join('')
+        + (hasLegacy ? '<div style="margin-top:4px;color:#fbbf24">· 일부 날짜는 기준 미기록(구 데이터) — 현재 평균으로 표시됨</div>' : '');
+      basisEl.style.display = 'block';
+    } else if(hasLegacy){
+      basisEl.innerHTML = '📌 <b style="color:var(--text2)">경기 % 기준</b>: 이 블록은 기준 미기록(구 데이터)이라 현재 최근 3경기 평균으로 %가 계산됩니다. 날짜를 열어 다시 저장하면 기준이 기록됩니다.';
+      basisEl.style.display = 'block';
+    } else {
+      basisEl.style.display = 'none';
+    }
+  }
+
   const avg = _periodMatchAvg;
   const calc = (pct, base) => base!=null&&base ? Math.round(base*(pct??0)/100) : null;
   const fmtV = (v,unit) => v!=null ? `${v>999?v.toLocaleString():v}${unit}` : '—';
@@ -25342,6 +25374,11 @@ function printWeekDetail() {
     .replace(/color:var\(--text2\)/g,'color:#333')
     .replace(/background:[^;]+18/g,'background:#f5f5f5')
     .replace(/border:1px solid [^;]+44/g,'border:1px solid #ddd');
+  const basisEl2 = document.getElementById('wd-basis');
+  const basis = (basisEl2 && basisEl2.style.display!=='none')
+    ? '<div style="margin:8px 0;padding:8px 12px;border:1px solid #ddd;border-radius:6px;background:#f8f8f8;font-size:10px;color:#555;line-height:1.6">'
+        + basisEl2.innerHTML.replace(/color:var\(--text2\)/g,'color:#333').replace(/color:var\(--text3\)/g,'color:#888') + '</div>'
+    : '';
 
   const win = window.open('','_blank','width=1200,height=750');
   win.document.write(`<!DOCTYPE html><html><head>
@@ -25375,6 +25412,7 @@ function printWeekDetail() {
       </div>
       <div style="font-size:11px;color:#888">${new Date().toLocaleDateString('ko-KR')} 출력</div>
     </div>
+    ${basis}
     ${table}
     <div class="totals">${totals}</div>
     <script>window.onload=()=>{ window.print(); }<\/script>
