@@ -24829,11 +24829,13 @@ async function openBlockListModal(){
   const html=_blocksData.length?_blocksData.map(b=>`
     <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--bg)">
       <span style="width:12px;height:12px;border-radius:50%;background:${b.color};flex-shrink:0;display:inline-block"></span>
-      <div style="flex:1;min-width:0">
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="closeBlockListModal();openWeekDetail('${b.id}')" title="클릭하면 블록 진행 내용을 봅니다">
         <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.context||''} <span style="color:var(--text3);font-weight:400">${b.label||''}</span></div>
         <div style="font-size:11px;color:var(--text3)">${b.start_date} ~ ${b.end_date}</div>
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
+        <button onclick="closeBlockListModal();openWeekDetail('${b.id}')"
+          style="padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">📊 보기</button>
         <button onclick="closeBlockListModal();openBlockModal('${b.id}')"
           style="padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px">✏️ 편집</button>
         <button onclick="deleteBlockFromList('${b.id}')"
