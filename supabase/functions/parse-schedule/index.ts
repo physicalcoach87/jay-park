@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
       | "image/webp";
 
     const msg = await client.messages.create({
-      model: "claude-opus-4-7",
+      model: "claude-opus-4-8",
       max_tokens: 2000,
       messages: [
         {
