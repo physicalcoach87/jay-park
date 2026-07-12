@@ -8096,11 +8096,7 @@ async function saveScheduleEvent(){
         created_by: currentUser?.email||'coach'
       });
       try{
-        await fetch(SUPA_URL+'/functions/v1/send-push',{
-          method:'POST',
-          headers:{'Content-Type':'application/json','Authorization':'Bearer '+ANON_KEY},
-          body: JSON.stringify({title:notifTitle, body:notifBody, target_type:'player', player_id:pid})
-        });
+        await _firePush({title:notifTitle, body:notifBody, target_type:'player', player_id:pid});
       }catch(e){ console.warn('push error:',e); }
     }));
   }
@@ -9624,9 +9620,20 @@ function goToPlayerFromRisk(playerId){
 }
 
 
-// 🔔 Web Push 발송 — DB 웹훅(notifications INSERT → send-push)이 자동 처리하므로
-// 클라이언트에서 직접 호출하지 않음(중복 발송 방지). 호출부 호환 위해 no-op로 유지.
-async function _firePush(_payload){ /* 웹훅이 발송을 담당 */ }
+// 🔔 Web Push 발송 — 로그인한 코치 세션 토큰으로 send-push 함수 직접 호출
+// (send-push가 스태프 검증 + 본인 팀 선수로만 발송 제한)
+const _PUSH_FN_URL = 'https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push';
+async function _firePush(payload){
+  try {
+    const { data:{ session } } = await supa.auth.getSession();
+    const token = session?.access_token; if(!token) return;
+    await fetch(_PUSH_FN_URL, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+token},
+      body: JSON.stringify(payload)
+    });
+  } catch(e){ console.warn('push error:', e); }
+}
 
 // ── 다국어 알림 텍스트 헬퍼 ────────────────────────────────────────
 function getNotifText(type, lang, name) {
@@ -15084,11 +15091,7 @@ async function sendRiskAlert(btn, playerId, playerName, flagMsg, meta={}){
   });
 
   try {
-    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'},
-      body: JSON.stringify({ title, body, target_type:'player', player_id: playerId })
-    });
+    await _firePush({ title, body, target_type:'player', player_id: playerId });
   } catch(e){ console.warn('push error:', e); }
 
   if(btn){ btn.textContent='✅ 발송됨'; btn.style.opacity='0.6'; }
@@ -15305,19 +15308,7 @@ async function sendNotification(){
   if(error){ msg.textContent='오류: '+error.message; msg.style.color='var(--red)'; return; }
   // 푸시 알림 발송
   try {
-    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'
-      },
-      body: JSON.stringify({
-        title, body,
-        target_type: target,
-        target_value: targetVal,
-        player_id: target==='player' ? targetVal : null
-      })
-    });
+    await _firePush({ title, body, target_type: target, target_value: targetVal, player_id: target==='player' ? targetVal : null });
   } catch(e) { console.warn('push error:', e); }
   msg.textContent='✅ 알림이 발송됐습니다!'; msg.style.color='var(--accent2)';
   document.getElementById('notify-title').value='';
@@ -15475,19 +15466,7 @@ async function sendMessage(){
   // 해당 선수에게 푸시 알림 발송
   const playerName = _players.find(p=>p.id===playerId)?.name||'선수';
   try {
-    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'
-      },
-      body: JSON.stringify({
-        title: '💬 코치 메시지',
-        body: content.length > 50 ? content.slice(0,50)+'...' : content,
-        target_type: 'player',
-        player_id: playerId
-      })
-    });
+    await _firePush({ title: '💬 코치 메시지', body: content.length > 50 ? content.slice(0,50)+'...' : content, target_type: 'player', player_id: playerId });
   } catch(e) { console.warn('push error:', e); }
 }
 
@@ -18009,14 +17988,7 @@ async function sendCardioPrescription(){
 
   // 푸시 알림
   try {
-    await fetch('https://gmrhkbddhzpfqzkhuvgf.supabase.co/functions/v1/send-push', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdtcmhrYmRkaHpwZnF6a2h1dmdmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4MzM4ODIsImV4cCI6MjA5MjQwOTg4Mn0.HMn3UIXqV2YJA5f067VpjNmgNU-yzusbDTOh3SC54cI'
-      },
-      body: JSON.stringify({ title:'🏃 유산소 훈련이 처방되었습니다', body:`${rx.exName} · ${rx.mdLabel} 처방이 등록됐습니다. 처방 탭에서 확인하세요.`, target_type:'player', target_value:rx.playerId, player_id:rx.playerId })
-    });
+    await _firePush({ title:'🏃 유산소 훈련이 처방되었습니다', body:`${rx.exName} · ${rx.mdLabel} 처방이 등록됐습니다. 처방 탭에서 확인하세요.`, target_type:'player', target_value:rx.playerId, player_id:rx.playerId });
   } catch(e){ console.warn('push error:', e); }
 
   if(btn){ btn.textContent='✅ 전송 완료!'; btn.style.background='#16a34a'; }
