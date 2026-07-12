@@ -454,6 +454,12 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="photo-preview-wrap" style="display:none;margin-top:12px">
       <img id="photo-preview-img" style="width:100%;border-radius:8px;border:1px solid var(--border);max-height:200px;object-fit:contain">
     </div>
+    <!-- 텍스트 붙여넣기 (사진 분석 대신) -->
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">📋 또는 텍스트로 붙여넣기</div>
+      <textarea id="schedule-paste-text" rows="3" placeholder='일정 텍스트(JSON)를 붙여넣으세요' style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:8px;font-size:11px;font-family:monospace;resize:vertical"></textarea>
+      <button onclick="parseScheduleFromText()" style="margin-top:6px;padding:7px 14px;font-size:12px;font-weight:600;border-radius:7px;border:1px solid #8b5cf6;background:rgba(139,92,246,0.1);color:#c4b5fd;cursor:pointer;font-family:inherit">📋 붙여넣은 일정 불러오기</button>
+    </div>
     <div id="photo-parse-result" style="display:none;margin-top:14px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">파싱된 일정 (수정 가능)</div>
       <div id="photo-parsed-table"></div>
@@ -8355,6 +8361,34 @@ function onPhotoSelected(e){
   };
   reader.readAsDataURL(file);
 }
+// 붙여넣은 텍스트(JSON)를 파싱해 편집 테이블로 (사진 분석 함수 없이도 동작)
+function parseScheduleFromText(){
+  const raw = (document.getElementById('schedule-paste-text')?.value||'').trim();
+  if(!raw){ alert('일정 텍스트를 붙여넣어 주세요.'); return; }
+  // ```json ... ``` 코드펜스 제거
+  const cleaned = raw.replace(/^```[a-z]*\s*/i,'').replace(/```\s*$/,'').trim();
+  let arr;
+  try{
+    const parsed = JSON.parse(cleaned);
+    arr = Array.isArray(parsed) ? parsed : (parsed.events || null);
+  }catch(e){ alert('형식 오류: 올바른 JSON이 아닙니다.\n'+e.message); return; }
+  if(!Array.isArray(arr) || !arr.length){ alert('일정 항목을 찾지 못했습니다.'); return; }
+  // 필수 필드(event_date) 있는 항목만, 기본값 보정
+  const VALID_TYPE=['TRAINING','MATCH','GYM','REST','MEAL','SNACK','EVENT'];
+  const VALID_TEAM=['ALL','A','B'];
+  _parsedEvents = arr.filter(e=>e && e.event_date).map(e=>({
+    event_date: String(e.event_date).trim(),
+    start_time: e.start_time || null,
+    event_type: VALID_TYPE.includes(e.event_type) ? e.event_type : 'TRAINING',
+    title: e.title || '',
+    team: VALID_TEAM.includes(e.team) ? e.team : 'ALL',
+  }));
+  if(!_parsedEvents.length){ alert('event_date가 있는 일정이 없습니다.'); return; }
+  renderParsedTable();
+  document.getElementById('photo-parse-result').style.display='block';
+  document.getElementById('photo-save-btn').style.display='inline-block';
+}
+
 async function parseSchedulePhoto(){
   if(!_photoBase64){alert('사진을 선택해주세요.');return;}
   const btn = document.getElementById('photo-parse-btn');
