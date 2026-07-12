@@ -8078,7 +8078,8 @@ async function saveScheduleEvent(){
     title:       title||null,
     description: desc||null,
     team:        _calSchedTeam,
-    player_ids:  _schedSelectedPlayers.length ? _schedSelectedPlayers : null
+    player_ids:  _schedSelectedPlayers.length ? _schedSelectedPlayers : null,
+    club_id:     currentClubId
   };
   let error;
   if(_calEditId){
@@ -8319,7 +8320,7 @@ async function saveWeekGrid(){
   if(toIns.length){
     ({error}=await supa.from('weekly_schedule').insert(toIns.map(row=>({
       event_date:row.date, start_time:row.time||null, event_type:row.type,
-      md_stage:row.md||null, title:row.title||null, team:row.team, description:null
+      md_stage:row.md||null, title:row.title||null, team:row.team, description:null, club_id:currentClubId
     }))));
     if(error){alert('저장 실패: '+error.message);return;}
   }
@@ -8440,7 +8441,7 @@ async function savePhotoSchedule(){
   cards.forEach(card=>{
     const g=f=>card.querySelector('[data-field="'+f+'"]').value;
     if(!g('event_date')) return;
-    rows.push({event_date:g('event_date'),start_time:g('start_time')||null,event_type:g('event_type'),title:g('title').trim()||null,team:g('team'),description:null,md_stage:null});
+    rows.push({event_date:g('event_date'),start_time:g('start_time')||null,event_type:g('event_type'),title:g('title').trim()||null,team:g('team'),description:null,md_stage:null,club_id:currentClubId});
   });
   if(!rows.length){alert('등록할 일정이 없습니다.');return;}
   const {error}=await supa.from('weekly_schedule').insert(rows);
