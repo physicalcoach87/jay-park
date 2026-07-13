@@ -8,7 +8,7 @@
 -- ① 트랙 컬럼 추가 (기존 행은 자동으로 'ALL')
 ALTER TABLE block_days ADD COLUMN IF NOT EXISTS track text NOT NULL DEFAULT 'ALL';
 
--- ② 기존 plan_date 단독 UNIQUE(제약 또는 인덱스) 제거
+-- ② 기존 plan_date 단독 UNIQUE 제거 후 (plan_date, track) 복합 UNIQUE 추가
 DO $$
 DECLARE c text;
 BEGIN
@@ -16,7 +16,7 @@ BEGIN
   FOR c IN
     SELECT con.conname FROM pg_constraint con
     WHERE con.conrelid='public.block_days'::regclass AND con.contype='u'
-      AND (SELECT array_agg(att.attname ORDER BY att.attname)
+      AND (SELECT array_agg(att.attname::text ORDER BY att.attname::text)
            FROM pg_attribute att
            WHERE att.attrelid=con.conrelid AND att.attnum = ANY(con.conkey)) = ARRAY['plan_date']
   LOOP EXECUTE 'ALTER TABLE block_days DROP CONSTRAINT '||quote_ident(c); END LOOP;
@@ -25,17 +25,20 @@ BEGIN
   FOR c IN
     SELECT i.relname FROM pg_index x
     JOIN pg_class i ON i.oid=x.indexrelid
-    WHERE x.indrelid='public.block_days'::regclass AND x.indisunique
-      AND (SELECT array_agg(att.attname ORDER BY att.attname)
+    WHERE x.indrelid='public.block_days'::regclass AND x.indisunique AND NOT x.indisprimary
+      AND (SELECT array_agg(att.attname::text ORDER BY att.attname::text)
            FROM pg_attribute att
            WHERE att.attrelid=x.indrelid AND att.attnum = ANY(x.indkey::int[])) = ARRAY['plan_date']
-      AND NOT x.indisprimary
   LOOP EXECUTE 'DROP INDEX IF EXISTS '||quote_ident(c); END LOOP;
-END $$;
 
--- ③ (plan_date, track) 복합 UNIQUE 추가 (upsert onConflict 대상)
-ALTER TABLE block_days
-  ADD CONSTRAINT block_days_plan_date_track_key UNIQUE (plan_date, track);
+  -- (plan_date, track) 복합 UNIQUE 없으면 추가 (재실행 안전)
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid='public.block_days'::regclass AND conname='block_days_plan_date_track_key'
+  ) THEN
+    ALTER TABLE block_days ADD CONSTRAINT block_days_plan_date_track_key UNIQUE (plan_date, track);
+  END IF;
+END $$;
 
 -- ④ 확인
 SELECT track, count(*) FROM block_days GROUP BY track ORDER BY track;
