@@ -2129,6 +2129,14 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     </div>
   </div>
 
+  <!-- 트랙 토글 (전체 / A팀 / B팀) -->
+  <div style="display:flex;gap:6px;align-items:center;padding:2px 0 4px">
+    <span style="font-size:11px;color:var(--text3);margin-right:2px">트랙</span>
+    <button id="ptrk-ALL" onclick="setPeriodTrack('ALL')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">전체</button>
+    <button id="ptrk-A" onclick="setPeriodTrack('A')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">A팀</button>
+    <button id="ptrk-B" onclick="setPeriodTrack('B')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">B팀</button>
+  </div>
+
   <!-- 관리 버튼 -->
   <div style="display:flex;gap:8px;flex-wrap:wrap;padding:10px 0 8px">
     <button onclick="openBlockModal()" style="padding:6px 14px;border-radius:7px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600">＋ 블록 추가</button>
@@ -8460,6 +8468,7 @@ async function getMicrocycleStart(todayStr) {
   const since28Str = since28d.toISOString().split('T')[0];
 
   const {data: bdRows} = await supa.from('block_days')
+  .eq('track','ALL')
     .select('plan_date')
     .lte('plan_date', todayStr)
     .gte('plan_date', since28Str)
@@ -8593,6 +8602,7 @@ async function loadMorningReport(){
       .order('match_date',{ascending:false})
       .limit(300),
     supa.from('block_days')
+    .eq('track','ALL')
       .select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,ref_basis')
       .gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
   ]);
@@ -11752,6 +11762,7 @@ async function loadTeamOverview(){
   // ── 데이터 조회 ──
   const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
+    .eq('track','ALL')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
@@ -12463,6 +12474,7 @@ async function buildWeeklyLoadHtml(forDate){
   let periodHeader = '';
   if(window._trainingMode) {
     const {data: bdWeek} = await supa.from('block_days')
+    .eq('track','ALL')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
     const bdMap = {};
@@ -12709,6 +12721,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', date),
     supa.from('block_days')
+    .eq('track','ALL')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
@@ -24517,7 +24530,10 @@ let _periodMonth = new Date().getMonth();
 let _periodMatchAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0};
 let _periodMatchKeys = []; // 현재 기준 최근 3경기 [{date,opp}]
 let _blocksData  = []; // blocks 테이블
-let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }
+let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }  ← 현재 선택 트랙의 행만
+let _daysByTrack = {}; // { 'YYYY-MM-DD': { ALL/A/B: row } }  ← 전 트랙
+let _periodTrack = 'ALL'; // 주기화 달력에서 보고 있는 트랙 (전체/A/B)
+let _dmEditTrack = 'ALL'; // 날짜 모달에서 편집중인 트랙
 let _bmEditId    = null; // 편집중인 block id
 let _dmEditDate  = null; // 편집중인 날짜
 let _dmEditId    = null; // 편집중인 block_days id
@@ -24569,8 +24585,37 @@ async function loadPeriodTab() {
     supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
   ]);
   _blocksData = blocks||[];
+  // 전 트랙을 날짜별로 보관
+  _daysByTrack={};
+  (days||[]).forEach(r=>{
+    const t=r.track||'ALL';
+    if(!_daysByTrack[r.plan_date]) _daysByTrack[r.plan_date]={};
+    _daysByTrack[r.plan_date][t]=r;
+  });
+  _rebuildDaysDataForTrack();
+  renderPeriodCalendar();
+}
+
+// 선택된 트랙(_periodTrack)의 행만 _daysData에 채움 (달력/모달이 이걸 읽음)
+function _rebuildDaysDataForTrack(){
   _daysData={};
-  (days||[]).forEach(r=>{ _daysData[r.plan_date]=r; });
+  Object.keys(_daysByTrack).forEach(date=>{
+    const row=_daysByTrack[date][_periodTrack];
+    if(row) _daysData[date]=row;
+  });
+}
+
+function setPeriodTrack(t){
+  _periodTrack=t;
+  ['ALL','A','B'].forEach(k=>{
+    const btn=document.getElementById('ptrk-'+k);
+    if(btn){ const on=k===t;
+      btn.style.background=on?'var(--accent)':'transparent';
+      btn.style.color=on?'#fff':'var(--text2)';
+      btn.style.borderColor=on?'var(--accent)':'var(--border2)';
+    }
+  });
+  _rebuildDaysDataForTrack();
   renderPeriodCalendar();
 }
 
@@ -24918,7 +24963,7 @@ async function backfillBlockBasis(apply){
 
   // 2) 블록 + 날짜 로드
   const {data:blocks} = await supa.from('blocks').select('*').order('start_date');
-  const {data:days}   = await supa.from('block_days').select('*');
+  const {data:days}   = await supa.from('block_days').eq('track','ALL').select('*');
   const report=[]; const updates=[];
 
   for(const b of (blocks||[])){
@@ -25168,13 +25213,15 @@ function toggleDmRest(isRest){
 
 function openDayModal(dateStr){
   _dmEditDate=dateStr;
+  _dmEditTrack=_periodTrack; // 현재 보고 있는 트랙에 저장
   const d=new Date(dateStr+'T00:00:00');
   const block=getBlockForDate(dateStr);
-  const dayRow=_daysData[dateStr]||{};
+  const dayRow=(_daysByTrack[dateStr]&&_daysByTrack[dateStr][_dmEditTrack])||{};
   _dmEditId=dayRow.id||null;
   _dmEditRefBasis=dayRow.ref_basis||null;
 
-  document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})`;
+  const trkLbl=_dmEditTrack==='A'?' · A팀':_dmEditTrack==='B'?' · B팀':'';
+  document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})${trkLbl}`;
   document.getElementById('day-modal-block').textContent=block?`${block.context||''} · ${block.label||''}`:'';
 
   // REST 여부
@@ -25263,6 +25310,7 @@ async function saveDayPlan(){
   const hasAnyTarget = Object.values(targets).some(v=>v!=null);
   const row={
     plan_date:_dmEditDate,
+    track:_dmEditTrack,
     block_id:block?.id||null,
     day_label:isRest?'REST':(document.getElementById('dm-day-label').value.trim()||null),
     am_session:isRest?null:(document.getElementById('dm-am').value.trim()||null),
@@ -25279,7 +25327,7 @@ async function saveDayPlan(){
   };
   let error;
   if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
-  else{({error}=await supa.from('block_days').upsert(row,{onConflict:'plan_date'}));}
+  else{({error}=await supa.from('block_days').upsert(row,{onConflict:'plan_date,track'}));}
   if(error){alert('저장 실패: '+error.message);return;}
   closeDayModal();
   await loadPeriodTab();
@@ -25316,7 +25364,7 @@ async function openWeekDetail(blockId) {
   }
 
   // block_days 로드
-  const {data:days} = await supa.from('block_days').select('*').in('plan_date', dates);
+  const {data:days} = await supa.from('block_days').eq('track','ALL').select('*').in('plan_date', dates);
   const dayMap = {};
   (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
 
