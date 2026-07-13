@@ -14702,7 +14702,7 @@ async function loadGpsHistory(){
   listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
 
   const {data, error} = await supa.from('gps_records')
-    .select('session_date, player_id, session_type2')
+    .select('session_date, player_id, session_type2, track')
     .order('session_date', {ascending: false})
     .limit(500);
 
@@ -14714,10 +14714,11 @@ async function loadGpsHistory(){
   // 날짜별 집계
   const byDate = {};
   data.forEach(r => {
-    if(!byDate[r.session_date]) byDate[r.session_date] = {total:0, types: new Set()};
+    if(!byDate[r.session_date]) byDate[r.session_date] = {total:0, types: new Set(), tracks: new Set()};
     byDate[r.session_date].total++;
     const t = (r.session_type2||'').trim().toUpperCase();
     if(t) byDate[r.session_date].types.add(t);
+    byDate[r.session_date].tracks.add(r.track||'ALL');
   });
 
   const rows = Object.entries(byDate).map(([date, info]) => {
@@ -14733,6 +14734,13 @@ async function loadGpsHistory(){
     }).join(' ');
     window._gpsHistoryDates = window._gpsHistoryDates || {};
     window._gpsHistoryDates[date] = date;
+    const curTrack = info.tracks.size===1 ? [...info.tracks][0] : 'MIX';
+    const trackSel = `<select onchange="setGpsDateTrack('${date}',this.value)" title="이 날짜 전체 GPS의 팀 지정"
+        style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid ${curTrack==='B'?'var(--accent)':'var(--border2)'};background:var(--surface2);color:var(--text);font-family:inherit;font-weight:600">
+        ${curTrack==='MIX'?'<option value="MIX" selected disabled>혼합</option>':''}
+        <option value="ALL" ${curTrack==='ALL'?'selected':''}>A팀</option>
+        <option value="B" ${curTrack==='B'?'selected':''}>B팀</option>
+      </select>`;
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px">
@@ -14740,14 +14748,26 @@ async function loadGpsHistory(){
           ${typeTags}
           <span style="font-size:11px;color:var(--text3)">${info.total}명</span>
         </div>
+        <div style="display:flex;align-items:center;gap:8px">
+        ${trackSel}
         <button onclick="deleteGpsDate('${date}')"
           style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
           🗑 삭제
         </button>
+        </div>
       </div>`;
   }).join('');
 
   listEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">${rows}</div>`;
+}
+
+// ── GPS 날짜별 팀(트랙) 지정 ────────────────────────────────────
+// 그날 전체 GPS 기록의 track을 A팀(ALL)/B팀(B)으로 일괄 변경
+async function setGpsDateTrack(date, track){
+  if(track!=='ALL' && track!=='B') return;
+  const {error} = await supa.from('gps_records').update({track}).eq('session_date', date);
+  if(error){ alert('팀 지정 실패: '+error.message); return; }
+  loadGpsHistory();
 }
 
 // ── GPS 날짜별 삭제 ──────────────────────────────────────────────
