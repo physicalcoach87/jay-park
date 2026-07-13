@@ -8545,7 +8545,15 @@ async function loadMorningReport(){
   const yesterdayStr = yesterday.toISOString().split('T')[0];
 
   // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
-  const weekStartStr = await getMicrocycleStart(today);
+  let weekStartStr = await getMicrocycleStart(today);
+  // 트랙 블록으로 주간 범위 보정: 오늘이 속한 그 트랙 블록이 있으면 start~end 사용
+  const {data:_pBlocks} = await supa.from('blocks')
+    .select('start_date,end_date')
+    .eq('track', isB?'B':'ALL')
+    .lte('start_date', today).gte('end_date', today)
+    .order('start_date',{ascending:false}).limit(1);
+  const _curBlock = (_pBlocks&&_pBlocks[0])||null;
+  if(_curBlock) weekStartStr = _curBlock.start_date;
   const weekStart = new Date(weekStartStr);
   // schedEnd: 스케줄/block_days 조회용 — 오늘부터 최소 6일 앞까지 (사이클 길이 무관)
   const schedEnd = new Date(now); schedEnd.setDate(now.getDate()+6);
@@ -9102,8 +9110,8 @@ async function loadMorningReport(){
     ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(96,165,250,0.1);color:#60a5fa;border:0.5px solid rgba(96,165,250,0.2)">MD 기본값</span>'
     : '';
 
-  // 블록 종료일: weekBlockDays 중 weekStartStr 이후 최대 plan_date
-  const blockEndDate = (weekBlockDays||[])
+  // 블록 종료일: 트랙 블록 있으면 그 end_date, 없으면 weekBlockDays 최대 plan_date
+  const blockEndDate = _curBlock ? _curBlock.end_date : (weekBlockDays||[])
     .filter(r=>r.plan_date>=weekStartStr)
     .reduce((mx,r)=>r.plan_date>mx?r.plan_date:mx, weekStartStr);
 
@@ -24563,7 +24571,8 @@ let _periodYear  = new Date().getFullYear();
 let _periodMonth = new Date().getMonth();
 let _periodMatchAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0};
 let _periodMatchKeys = []; // 현재 기준 최근 3경기 [{date,opp}]
-let _blocksData  = []; // blocks 테이블
+let _blocksData  = []; // blocks — 현재 선택 트랙(_periodTrack)의 블록만
+let _blocksAll   = []; // blocks — 전 트랙 (메모리 보관, 트랙 전환 시 재필터용)
 let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }  ← 현재 선택 트랙의 행만
 let _daysByTrack = {}; // { 'YYYY-MM-DD': { ALL/A/B: row } }  ← 전 트랙
 let _periodTrack = 'ALL'; // 주기화 달력 트랙: 'ALL'=A팀(기본/기존데이터), 'B'=B팀
@@ -24618,7 +24627,8 @@ async function loadPeriodTab() {
     supa.from('blocks').select('*').order('start_date'),
     supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
   ]);
-  _blocksData = blocks||[];
+  _blocksAll = blocks||[];
+  _rebuildBlocksForTrack();
   // 전 트랙을 날짜별로 보관
   _daysByTrack={};
   (days||[]).forEach(r=>{
@@ -24628,6 +24638,11 @@ async function loadPeriodTab() {
   });
   _rebuildDaysDataForTrack();
   renderPeriodCalendar();
+}
+
+// 선택된 트랙의 블록만 _blocksData에 채움 (달력/getBlockForDate가 이걸 읽음)
+function _rebuildBlocksForTrack(){
+  _blocksData = (_blocksAll||[]).filter(b=>(b.track||'ALL')===_periodTrack);
 }
 
 // 선택된 트랙(_periodTrack)의 행만 _daysData에 채움 (달력/모달이 이걸 읽음)
@@ -24649,6 +24664,7 @@ function setPeriodTrack(t){
       btn.style.borderColor=on?'var(--accent)':'var(--border2)';
     }
   });
+  _rebuildBlocksForTrack();
   _rebuildDaysDataForTrack();
   renderPeriodCalendar();
 }
@@ -24925,6 +24941,7 @@ async function saveBlock(){
   const end=document.getElementById('bm-end').value;
   if(!start||!end){alert('시작일과 종료일을 입력해주세요.');return;}
   const row={start_date:start,end_date:end,context:document.getElementById('bm-context').value.trim()||null,label:document.getElementById('bm-label').value.trim()||null,color:_bmColor,show_totals:document.getElementById('bm-show-totals').checked};
+  if(!_bmEditId) row.track=_periodTrack; // 새 블록은 현재 트랙에 소속 (A팀=ALL / B팀=B)
   let error;
   if(_bmEditId){({error}=await supa.from('blocks').update(row).eq('id',_bmEditId));}
   else{({error}=await supa.from('blocks').insert(row));}
@@ -24942,7 +24959,8 @@ async function deleteBlock(){
 
 async function openBlockListModal(){
   const {data}=await supa.from('blocks').select('*').order('start_date');
-  _blocksData=data||[];
+  _blocksAll=data||[];
+  _rebuildBlocksForTrack(); // 현재 트랙(A팀/B팀) 블록만
   const html=_blocksData.length?_blocksData.map(b=>`
     <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--bg)">
       <span style="width:12px;height:12px;border-radius:50%;background:${b.color};flex-shrink:0;display:inline-block"></span>
