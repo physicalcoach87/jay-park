@@ -9151,12 +9151,24 @@ async function loadMorningReport(){
   const weekActualACC  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'accel')||0); },0);
   const weekActualRHIE = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'rhie')||0); },0);
 
+  // 경기일 실제 부하 포함: 현재 트랙 블록에서 day_label='MD'(경기일)인 날의
+  // match_records 팀 평균을 주간 실제에 합산 (경기는 gps_records에 없어 누락되던 것)
+  const _isMatchDay = lbl => { const u=(lbl||'').trim().toUpperCase(); return u==='MD'||u.includes('MATCH'); };
+  const weekMatchDays = [...new Set((weekMatchRaw||[])
+    .filter(r=>r.match_date>=weekStartStr && r.match_date<=weekActualCutDate
+      && _isMatchDay(blockDayMap[r.match_date]?.day_label))
+    .map(r=>r.match_date))];
+  const mAdd = field => weekMatchDays.reduce((a,d)=>{
+    const rows=(weekMatchRaw||[]).filter(r=>r.match_date===d);
+    return a+(matchAvg(rows,field)||0);
+  },0);
+
   const weekActual = {
-    td:   Math.round(weekActualTD),
-    hsr:  Math.round(weekActualHSR),
-    spr:  Math.round(weekActualSPR),
-    acc:  Math.round(weekActualACC),
-    rhie: Math.round(weekActualRHIE),
+    td:   Math.round(weekActualTD   + mAdd('td')),
+    hsr:  Math.round(weekActualHSR  + mAdd('band4_td')),
+    spr:  Math.round(weekActualSPR  + mAdd('band5_td')),
+    acc:  Math.round(weekActualACC  + mAdd('accel')),
+    rhie: Math.round(weekActualRHIE + mAdd('rhie')),
   };
 
   // 달성률 배지 헬퍼 (0 포함 처리)
