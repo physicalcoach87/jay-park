@@ -2132,8 +2132,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <!-- 트랙 토글 (전체 / A팀 / B팀) -->
   <div style="display:flex;gap:6px;align-items:center;padding:2px 0 4px">
     <span style="font-size:11px;color:var(--text3);margin-right:2px">트랙</span>
-    <button id="ptrk-ALL" onclick="setPeriodTrack('ALL')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">전체</button>
-    <button id="ptrk-A" onclick="setPeriodTrack('A')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">A팀</button>
+    <button id="ptrk-ALL" onclick="setPeriodTrack('ALL')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">A팀</button>
     <button id="ptrk-B" onclick="setPeriodTrack('B')" style="padding:4px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">B팀</button>
   </div>
 
@@ -24532,7 +24531,7 @@ let _periodMatchKeys = []; // 현재 기준 최근 3경기 [{date,opp}]
 let _blocksData  = []; // blocks 테이블
 let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }  ← 현재 선택 트랙의 행만
 let _daysByTrack = {}; // { 'YYYY-MM-DD': { ALL/A/B: row } }  ← 전 트랙
-let _periodTrack = 'ALL'; // 주기화 달력에서 보고 있는 트랙 (전체/A/B)
+let _periodTrack = 'ALL'; // 주기화 달력 트랙: 'ALL'=A팀(기본/기존데이터), 'B'=B팀
 let _dmEditTrack = 'ALL'; // 날짜 모달에서 편집중인 트랙
 let _bmEditId    = null; // 편집중인 block id
 let _dmEditDate  = null; // 편집중인 날짜
@@ -24607,7 +24606,7 @@ function _rebuildDaysDataForTrack(){
 
 function setPeriodTrack(t){
   _periodTrack=t;
-  ['ALL','A','B'].forEach(k=>{
+  ['ALL','B'].forEach(k=>{
     const btn=document.getElementById('ptrk-'+k);
     if(btn){ const on=k===t;
       btn.style.background=on?'var(--accent)':'transparent';
@@ -25220,7 +25219,7 @@ function openDayModal(dateStr){
   _dmEditId=dayRow.id||null;
   _dmEditRefBasis=dayRow.ref_basis||null;
 
-  const trkLbl=_dmEditTrack==='A'?' · A팀':_dmEditTrack==='B'?' · B팀':'';
+  const trkLbl=_dmEditTrack==='B'?' · B팀':' · A팀';
   document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})${trkLbl}`;
   document.getElementById('day-modal-block').textContent=block?`${block.context||''} · ${block.label||''}`:'';
 
