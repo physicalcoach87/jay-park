@@ -8467,8 +8467,8 @@ async function getMicrocycleStart(todayStr) {
   const since28Str = since28d.toISOString().split('T')[0];
 
   const {data: bdRows} = await supa.from('block_days')
-  .eq('track','ALL')
     .select('plan_date')
+    .eq('track','ALL')
     .lte('plan_date', todayStr)
     .gte('plan_date', since28Str)
     .neq('day_label', 'REST')
@@ -8607,8 +8607,8 @@ async function loadMorningReport(){
       .order('match_date',{ascending:false})
       .limit(300),
     supa.from('block_days')
-      .in('track', isB?['ALL','B']:['ALL'])
       .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,ref_basis')
+      .in('track', isB?['ALL','B']:['ALL'])
       .gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
   ]);
 
@@ -11779,8 +11779,8 @@ async function loadTeamOverview(){
   // ── 데이터 조회 ──
   const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
-    .eq('track','ALL')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
+      .eq('track','ALL')
       .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,player_profiles(name,position)')
@@ -12491,8 +12491,8 @@ async function buildWeeklyLoadHtml(forDate){
   let periodHeader = '';
   if(window._trainingMode) {
     const {data: bdWeek} = await supa.from('block_days')
-    .eq('track','ALL')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
+      .eq('track','ALL')
       .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
@@ -12738,8 +12738,8 @@ async function loadTeamSummary(forceDate, quiet=false){
       .select('player_id,morning_weight,fatigue,sleep_quality,stress,muscle_soreness,created_at')
       .eq('record_date', date),
     supa.from('block_days')
-    .eq('track','ALL')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
+      .eq('track','ALL')
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
@@ -24997,7 +24997,7 @@ async function backfillBlockBasis(apply){
 
   // 2) 블록 + 날짜 로드
   const {data:blocks} = await supa.from('blocks').select('*').order('start_date');
-  const {data:days}   = await supa.from('block_days').eq('track','ALL').select('*');
+  const {data:days}   = await supa.from('block_days').select('*').eq('track','ALL');
   const report=[]; const updates=[];
 
   for(const b of (blocks||[])){
@@ -25398,7 +25398,7 @@ async function openWeekDetail(blockId) {
   }
 
   // block_days 로드
-  const {data:days} = await supa.from('block_days').eq('track','ALL').select('*').in('plan_date', dates);
+  const {data:days} = await supa.from('block_days').select('*').eq('track','ALL').in('plan_date', dates);
   const dayMap = {};
   (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
 
