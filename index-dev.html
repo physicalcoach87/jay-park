@@ -11950,17 +11950,17 @@ async function loadTeamOverview(){
       if(mSpr)  acc.spr_act  += mSpr;
       if(mAcc)  acc.acc_act  += mAcc;
       if(mRhie) acc.rhie_act += mRhie;
+      // 훈련 행과 동일한 열 구조(9열): 날짜|준비상태(vs+결과)|MD단계|운동시간|TD|HSR|Sprint|가속|RHIE
       matchRowHtml=`<tr style="border-bottom:0.5px solid var(--border);background:#180808">
-        <td style="padding:6px 8px;white-space:nowrap"><span style="color:#f87171;font-weight:600">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span> <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700">🏟️경기</span></td>
-        <td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--text2)">vs ${mOpp}</td>
-        <td style="padding:6px 8px;text-align:center"><span style="font-size:10px;padding:1px 5px;border-radius:4px;background:#3b1219;color:#f87171;font-weight:700">MATCH</span></td>
-        <td style="padding:6px 8px;font-size:11px;font-weight:700;color:${rColor}">${rLabel}${mScore?' '+mScore:''}</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--text2)">${mDur}min</td>
-        <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:600">${mTD?Math.round(mTD).toLocaleString():'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#f59e0b">${mHSR?Math.round(mHSR):'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#ef4444">${mSpr?Math.round(mSpr):'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#fb923c">${mAcc?Math.round(mAcc):'—'}</td>
-        ${isV1?'': `<td style="padding:6px 8px;text-align:right;color:#34d399">${mRhie?parseFloat(mRhie.toFixed(1)):'—'}</td>`}
+        <td style="padding:6px 6px;white-space:nowrap;min-width:72px"><span style="color:#f87171;font-weight:600">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span> <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700">🏟️경기</span></td>
+        <td style="padding:6px 6px;text-align:left;font-size:10px;color:var(--text2);min-width:130px">vs ${mOpp}${rLabel?` <span style="color:${rColor};font-weight:700">${rLabel}${mScore?' '+mScore:''}</span>`:''}</td>
+        <td style="padding:6px 6px;text-align:center;min-width:52px"><span style="font-size:10px;padding:1px 5px;border-radius:4px;background:#3b1219;color:#f87171;font-weight:700">MATCH</span></td>
+        <td style="padding:6px 6px;text-align:center;color:var(--text2);white-space:nowrap;min-width:52px">${mDur}min</td>
+        <td style="padding:6px 6px;text-align:center;color:#60a5fa;font-weight:600;min-width:68px">${mTD?Math.round(mTD).toLocaleString():'—'}</td>
+        <td style="padding:6px 6px;text-align:center;color:#f59e0b;min-width:60px">${mHSR?Math.round(mHSR):'—'}</td>
+        <td style="padding:6px 6px;text-align:center;color:#ef4444;min-width:60px">${mSpr?Math.round(mSpr):'—'}</td>
+        <td style="padding:6px 6px;text-align:center;color:#fb923c;min-width:48px">${mAcc?Math.round(mAcc):'—'}</td>
+        ${isV1?'': `<td style="padding:6px 6px;text-align:center;color:#34d399;min-width:48px">${mRhie?parseFloat(mRhie.toFixed(1)):'—'}</td>`}
       </tr>`;
     }
 
