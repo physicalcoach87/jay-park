@@ -12389,11 +12389,17 @@ async function showTeamVariance(date, dateLabel){
 // ── 팀 요약 (날짜 조회) ────────────────────────────────────────────
 async function buildWeeklyLoadHtml(forDate){
   // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
-  const weekStartStr=await getMicrocycleStart(forDate);
+  let weekStartStr=await getMicrocycleStart(forDate);
+  // 트랙 블록으로 범위 보정: forDate가 속한 그 트랙 블록의 start~end (블록 있으면 우선)
+  const _bTrk = window._trainingMode ? _summaryTrack : 'ALL';
+  const {data:_pblk}=await supa.from('blocks').select('start_date,end_date').eq('track',_bTrk)
+    .lte('start_date',forDate).gte('end_date',forDate).order('start_date',{ascending:false}).limit(1);
+  const _curBlk=(_pblk&&_pblk[0])||null;
+  if(_curBlk) weekStartStr=_curBlk.start_date;
   const weekStart=new Date(weekStartStr);
-  // schedEnd: block_days/스케줄 조회용 — forDate 기준 최소 6일 앞까지
+  // schedEnd: block_days/스케줄 조회용 — 블록 있으면 블록 종료일, 없으면 forDate 기준 6일 앞
   const _schedEnd=new Date(forDate+'T12:00:00'); _schedEnd.setDate(_schedEnd.getDate()+6);
-  const weekEndStr=_schedEnd.toISOString().split('T')[0];
+  const weekEndStr=_curBlk ? _curBlk.end_date : _schedEnd.toISOString().split('T')[0];
   const _fd=new Date(forDate+'T12:00:00');
   const since28=new Date(_fd);since28.setDate(_fd.getDate()-28);
   const since28Str=since28.toISOString().split('T')[0];
@@ -12424,7 +12430,13 @@ async function buildWeeklyLoadHtml(forDate){
   const _wkGps = window._trainingMode ? _filteredWkGps : (wkGps||[]);
 
   const weekDates=[];
-  for(let i=0;i<7;i++){const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);weekDates.push(d.toISOString().split('T')[0]);}
+  if(_curBlk){
+    // 블록 범위 전체를 날짜순으로
+    let dc=new Date(weekStartStr+'T12:00:00'); const de=new Date(weekEndStr+'T12:00:00');
+    while(dc<=de){ weekDates.push(dc.toISOString().split('T')[0]); dc.setDate(dc.getDate()+1); }
+  } else {
+    for(let i=0;i<7;i++){const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);weekDates.push(d.toISOString().split('T')[0]);}
+  }
 
   const _trainAvg=(arr,field)=>{
     // AM+PM 복수 세션 대응: 선수별로 먼저 합산 후 팀 평균 계산
@@ -12662,8 +12674,9 @@ async function buildWeeklyLoadHtml(forDate){
         +'<td style="padding:5px 8px;text-align:center">'+tCell(bd.rhie_target,tMA.rhie,'rhie')+'</td>'
         +'</tr>';
     };
-    const trainRows = weekDates.filter(dd=>bdMap[dd]&&bdMap[dd].day_label!=='REST').map(dd=>_makeRow(dd,bdMap[dd])).join('');
-    const restRows  = weekDates.filter(dd=>bdMap[dd]&&bdMap[dd].day_label==='REST').map(dd=>_makeRow(dd,bdMap[dd])).join('');
+    // 날짜순으로 전체(훈련+REST) 렌더 — REST를 뒤로 빼지 않음
+    const trainRows = weekDates.filter(dd=>bdMap[dd]).map(dd=>_makeRow(dd,bdMap[dd])).join('');
+    const restRows  = '';
     const bdRows = trainRows; // 하위 호환용
 
     // [2] 오늘 목표 vs 달성 + 이번 주 누적 (나란히)
