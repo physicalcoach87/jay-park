@@ -792,6 +792,10 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
             <option value="">직접 날짜 입력</option>
           </select>
         </div>
+        <div style="display:flex;gap:4px;align-self:flex-end">
+          <button id="ovtrk-ALL" onclick="setOverviewTrack('ALL')" style="padding:8px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">A팀</button>
+          <button id="ovtrk-B" onclick="setOverviewTrack('B')" style="padding:8px 14px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">B팀</button>
+        </div>
         <button class="btn-gen" style="margin:0;padding:8px 18px;align-self:flex-end" onclick="loadTeamOverview()">조회</button>
         <button class="btn-exp" style="padding:8px 12px;align-self:flex-end;border-color:var(--border2);color:var(--text3);font-size:11px" onclick="resetTeamOverview()">초기화</button>
       </div>
@@ -874,6 +878,10 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <option value="AM">오전 (AM)</option>
         <option value="PM">오후 (PM)</option>
       </select>
+      <div style="display:flex;gap:4px">
+        <button id="trtrk-ALL" onclick="setTrainTrack('ALL')" style="padding:7px 14px;border-radius:7px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">A팀</button>
+        <button id="trtrk-B" onclick="setTrainTrack('B')" style="padding:7px 14px;border-radius:7px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:13px;font-weight:600;font-family:inherit">B팀</button>
+      </div>
       <button onclick="runTrainingReport()" class="btn-exp pri" style="padding:7px 16px">📋 보고서 생성</button>
     </div>
     <div id="training-report-output">
@@ -11721,11 +11729,24 @@ async function renderTwoWeekDetail(idx){
 
 // ── 팀 요약: 섹션A 목표 vs 달성률 ───────────────────────────────────
 let _overviewBlocks = [];
+let _overviewTrack = 'ALL'; // 팀요약 트랙: 'ALL'=A팀 / 'B'=B팀
+function setOverviewTrack(t){
+  _overviewTrack = t;
+  ['ALL','B'].forEach(k=>{
+    const btn=document.getElementById('ovtrk-'+k);
+    if(btn){ const on=k===t;
+      btn.style.background=on?'var(--accent)':'transparent';
+      btn.style.color=on?'#fff':'var(--text2)';
+      btn.style.borderColor=on?'var(--accent)':'var(--border2)';
+    }
+  });
+  loadOverviewBlocks().then(()=>loadTeamOverview());
+}
 
 async function loadOverviewBlocks(){
   const sel = document.getElementById('overview-block');
   if(!sel) return;
-  const {data} = await supa.from('blocks').select('id,start_date,end_date,context,label,color').order('start_date', {ascending:false});
+  const {data} = await supa.from('blocks').select('id,start_date,end_date,context,label,color').eq('track',_overviewTrack).order('start_date', {ascending:false});
   _overviewBlocks = data||[];
   // 기존 옵션 초기화 (첫 번째 "직접 날짜 입력" 유지)
   while(sel.options.length > 1) sel.remove(1);
@@ -11772,6 +11793,7 @@ async function loadTeamOverview(){
     // blocks 테이블에서 오늘 기준으로 이전/현재/다음 블록 탐색
     const {data: allBlocks} = await supa.from('blocks')
       .select('id,start_date,end_date,context,label')
+      .eq('track',_overviewTrack)
       .order('start_date', {ascending:true});
     const blocks3 = allBlocks || [];
     const curIdx = blocks3.findIndex(b => b.start_date <= today && b.end_date >= today);
@@ -11800,10 +11822,11 @@ async function loadTeamOverview(){
   const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
-      .eq('track','ALL')
+      .eq('track',_overviewTrack)
       .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,player_profiles(name,position)')
+      .eq('track',_overviewTrack)
       .gte('session_date',fromVal).lte('session_date',toVal),
     supa.from('match_records')
       .select('match_date,opponent,home_away,td,band4_td,band5_td,accel,decel,rhie,duration,result,score')
@@ -12379,6 +12402,7 @@ async function buildWeeklyLoadHtml(forDate){
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label')
       .gte('session_date',weekStartStr).lte('session_date',forDate)
+      .eq('track', window._trainingMode ? _summaryTrack : 'ALL')
       .order('session_date',{ascending:true}).order('session_label',{ascending:true}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration')
@@ -12520,7 +12544,7 @@ async function buildWeeklyLoadHtml(forDate){
   if(window._trainingMode) {
     const {data: bdWeek} = await supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
-      .eq('track','ALL')
+      .eq('track', _summaryTrack)
       .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
@@ -12745,6 +12769,20 @@ async function buildWeeklyLoadHtml(forDate){
   </div>`;
 }
 
+let _summaryTrack = 'ALL'; // 훈련데이터 리포트 트랙: 'ALL'=A팀 / 'B'=B팀 (훈련모드에서만 적용)
+function setTrainTrack(t){
+  _summaryTrack = t;
+  ['ALL','B'].forEach(k=>{
+    const btn=document.getElementById('trtrk-'+k);
+    if(btn){ const on=k===t;
+      btn.style.background=on?'var(--accent)':'transparent';
+      btn.style.color=on?'#fff':'var(--text2)';
+      btn.style.borderColor=on?'var(--accent)':'var(--border2)';
+    }
+  });
+  runTrainingReport();
+}
+
 async function loadTeamSummary(forceDate, quiet=false){
   const dateEl = document.getElementById('team-date');
   if(forceDate && dateEl) dateEl.value = forceDate;
@@ -12754,10 +12792,14 @@ async function loadTeamSummary(forceDate, quiet=false){
   if(!quiet) out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3)">불러오는 중...</div>';
   if(date) loadTwoWeekCal(date);
 
+  // 훈련데이터 모드에서만 트랙 토글 적용, 그 외(팀평균·RPE)는 A팀(ALL) 고정
+  const _summaryTrk = window._trainingMode ? _summaryTrack : 'ALL';
+
   const [{data:gps},{data:sessions},{data:wellness},{data:blockDayRow},{data:matchRef}] = await Promise.all([
     supa.from('gps_records')
       .select('*, player_profiles(name, position, match_max_td, match_max_hsr, match_max_sprint, match_max_accel, match_max_rhie, match_max_speed, match_max_pl)')
       .eq('session_date', date)
+      .eq('track', _summaryTrk)
       .order('td', {ascending:false}),
     supa.from('session_records')
       .select('id,player_id,rpe,post_weight,session_order,duration,session_type,created_at,coach_edited')
@@ -12767,7 +12809,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .eq('record_date', date),
     supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
-      .eq('track','ALL')
+      .eq('track',_summaryTrk)
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
