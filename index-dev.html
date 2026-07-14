@@ -11943,8 +11943,13 @@ async function loadTeamOverview(){
       const mTD=_mAvg(mRows,'td'); const mHSR=_mAvg(mRows,'band4_td'); const mSpr=_mAvg(mRows,'band5_td');
       const mAcc=_mAvg(mRows,'accel'); const mRhie=_mAvg(mRows,'rhie');
       const mDur=Math.round(Math.max(...mRows.map(r=>parseFloat(r.duration)||0)));
-      // 경기는 합계 미포함 (훈련량만 집계)
+      // 경기일 부하도 블록 합계에 포함 (데일리브리핑 주간 누적과 동일)
       acc.matchDays++;
+      if(mTD)   acc.td_act   += mTD;
+      if(mHSR)  acc.hsr_act  += mHSR;
+      if(mSpr)  acc.spr_act  += mSpr;
+      if(mAcc)  acc.acc_act  += mAcc;
+      if(mRhie) acc.rhie_act += mRhie;
       matchRowHtml=`<tr style="border-bottom:0.5px solid var(--border);background:#180808">
         <td style="padding:6px 8px;white-space:nowrap"><span style="color:#f87171;font-weight:600">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span> <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700">🏟️경기</span></td>
         <td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--text2)">vs ${mOpp}</td>
