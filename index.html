@@ -8545,7 +8545,15 @@ async function loadMorningReport(){
   const yesterdayStr = yesterday.toISOString().split('T')[0];
 
   // 마이크로사이클 시작일 (최근 MATCH 다음날, fallback 캘린더 월요일)
-  const weekStartStr = await getMicrocycleStart(today);
+  let weekStartStr = await getMicrocycleStart(today);
+  // 트랙 블록으로 주간 범위 보정: 오늘이 속한 그 트랙 블록이 있으면 start~end 사용
+  const {data:_pBlocks} = await supa.from('blocks')
+    .select('start_date,end_date')
+    .eq('track', isB?'B':'ALL')
+    .lte('start_date', today).gte('end_date', today)
+    .order('start_date',{ascending:false}).limit(1);
+  const _curBlock = (_pBlocks&&_pBlocks[0])||null;
+  if(_curBlock) weekStartStr = _curBlock.start_date;
   const weekStart = new Date(weekStartStr);
   // schedEnd: 스케줄/block_days 조회용 — 오늘부터 최소 6일 앞까지 (사이클 길이 무관)
   const schedEnd = new Date(now); schedEnd.setDate(now.getDate()+6);
@@ -9102,8 +9110,8 @@ async function loadMorningReport(){
     ? '<span style="font-size:9px;padding:1px 6px;border-radius:4px;background:rgba(96,165,250,0.1);color:#60a5fa;border:0.5px solid rgba(96,165,250,0.2)">MD 기본값</span>'
     : '';
 
-  // 블록 종료일: weekBlockDays 중 weekStartStr 이후 최대 plan_date
-  const blockEndDate = (weekBlockDays||[])
+  // 블록 종료일: 트랙 블록 있으면 그 end_date, 없으면 weekBlockDays 최대 plan_date
+  const blockEndDate = _curBlock ? _curBlock.end_date : (weekBlockDays||[])
     .filter(r=>r.plan_date>=weekStartStr)
     .reduce((mx,r)=>r.plan_date>mx?r.plan_date:mx, weekStartStr);
 
@@ -9143,12 +9151,24 @@ async function loadMorningReport(){
   const weekActualACC  = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'accel')||0); },0);
   const weekActualRHIE = weekCutDates.reduce((a,d)=>{ const g=weekGpsCut.filter(r=>r.session_date===d&&(r.session_type2||'').trim().toUpperCase()==='M'); return a+(trainAvg(g,'rhie')||0); },0);
 
+  // 경기일 실제 부하 포함: 현재 트랙 블록에서 day_label='MD'(경기일)인 날의
+  // match_records 팀 평균을 주간 실제에 합산 (경기는 gps_records에 없어 누락되던 것)
+  const _isMatchDay = lbl => { const u=(lbl||'').trim().toUpperCase(); return u==='MD'||u.includes('MATCH'); };
+  const weekMatchDays = [...new Set((weekMatchRaw||[])
+    .filter(r=>r.match_date>=weekStartStr && r.match_date<=weekActualCutDate
+      && _isMatchDay(blockDayMap[r.match_date]?.day_label))
+    .map(r=>r.match_date))];
+  const mAdd = field => weekMatchDays.reduce((a,d)=>{
+    const rows=(weekMatchRaw||[]).filter(r=>r.match_date===d);
+    return a+(matchAvg(rows,field)||0);
+  },0);
+
   const weekActual = {
-    td:   Math.round(weekActualTD),
-    hsr:  Math.round(weekActualHSR),
-    spr:  Math.round(weekActualSPR),
-    acc:  Math.round(weekActualACC),
-    rhie: Math.round(weekActualRHIE),
+    td:   Math.round(weekActualTD   + mAdd('td')),
+    hsr:  Math.round(weekActualHSR  + mAdd('band4_td')),
+    spr:  Math.round(weekActualSPR  + mAdd('band5_td')),
+    acc:  Math.round(weekActualACC  + mAdd('accel')),
+    rhie: Math.round(weekActualRHIE + mAdd('rhie')),
   };
 
   // 달성률 배지 헬퍼 (0 포함 처리)
@@ -11905,6 +11925,15 @@ async function loadTeamOverview(){
     const acc=blockAcc[blockKey];
     acc.endDate=date;
 
+    // 경기일(경기 있고 M훈련 없음): 훈련 행 숨기고 경기 행에 목표 병합
+    const mergeMatch=hasMatch&&!hasGps;
+    // 목표 누적 (행 렌더 여부와 무관하게 날짜당 1회 — 경기일 목표도 합계에 포함)
+    if(hasBd&&bd.td_target!=null)  {acc.td_tgt+=bd.td_target;acc.td_tgt_set=true;}
+    if(hasBd&&bd.hsr_target!=null) {acc.hsr_tgt+=bd.hsr_target;acc.hsr_tgt_set=true;}
+    if(hasBd&&bd.spr_target!=null) {acc.spr_tgt+=bd.spr_target;acc.spr_tgt_set=true;}
+    if(hasBd&&bd.acc_target!=null) {acc.acc_tgt+=bd.acc_target;acc.acc_tgt_set=true;}
+    if(hasBd&&bd.rhie_target!=null){acc.rhie_tgt+=bd.rhie_target;acc.rhie_tgt_set=true;}
+
     // 그룹 헤더 (그룹이 바뀔 때) — 무거운 행 대신 얇은 구분선
     const isNewBlock=blockKey!==prevBlockId;
     prevBlockId=blockKey;
@@ -11923,25 +11952,30 @@ async function loadTeamOverview(){
       const mTD=_mAvg(mRows,'td'); const mHSR=_mAvg(mRows,'band4_td'); const mSpr=_mAvg(mRows,'band5_td');
       const mAcc=_mAvg(mRows,'accel'); const mRhie=_mAvg(mRows,'rhie');
       const mDur=Math.round(Math.max(...mRows.map(r=>parseFloat(r.duration)||0)));
-      // 경기는 합계 미포함 (훈련량만 집계)
+      // 경기일 부하도 블록 합계에 포함 (데일리브리핑 주간 누적과 동일)
       acc.matchDays++;
+      if(mTD)   acc.td_act   += mTD;
+      if(mHSR)  acc.hsr_act  += mHSR;
+      if(mSpr)  acc.spr_act  += mSpr;
+      if(mAcc)  acc.acc_act  += mAcc;
+      if(mRhie) acc.rhie_act += mRhie;
+      // 훈련 행과 동일한 열 구조(9열): 날짜|준비상태(vs+결과)|MD단계|운동시간|TD|HSR|Sprint|가속|RHIE
       matchRowHtml=`<tr style="border-bottom:0.5px solid var(--border);background:#180808">
-        <td style="padding:6px 8px;white-space:nowrap"><span style="color:#f87171;font-weight:600">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span> <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700">🏟️경기</span></td>
-        <td style="padding:6px 8px;text-align:center;font-size:10px;color:var(--text2)">vs ${mOpp}</td>
-        <td style="padding:6px 8px;text-align:center"><span style="font-size:10px;padding:1px 5px;border-radius:4px;background:#3b1219;color:#f87171;font-weight:700">MATCH</span></td>
-        <td style="padding:6px 8px;font-size:11px;font-weight:700;color:${rColor}">${rLabel}${mScore?' '+mScore:''}</td>
-        <td style="padding:6px 8px;text-align:right;color:var(--text2)">${mDur}min</td>
-        <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:600">${mTD?Math.round(mTD).toLocaleString():'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#f59e0b">${mHSR?Math.round(mHSR):'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#ef4444">${mSpr?Math.round(mSpr):'—'}</td>
-        <td style="padding:6px 8px;text-align:right;color:#fb923c">${mAcc?Math.round(mAcc):'—'}</td>
-        ${isV1?'': `<td style="padding:6px 8px;text-align:right;color:#34d399">${mRhie?parseFloat(mRhie.toFixed(1)):'—'}</td>`}
+        <td style="padding:6px 6px;white-space:nowrap;min-width:72px"><span style="color:#f87171;font-weight:600">${DOW[dow]} ${(d.getMonth()+1)}/${d.getDate()}</span> <span style="font-size:9px;padding:1px 4px;border-radius:3px;background:#3b1219;color:#f87171;font-weight:700">🏟️경기</span></td>
+        <td style="padding:6px 6px;text-align:left;font-size:10px;color:var(--text2);min-width:130px">vs ${mOpp}${rLabel?` <span style="color:${rColor};font-weight:700">${rLabel}${mScore?' '+mScore:''}</span>`:''}</td>
+        <td style="padding:6px 6px;text-align:center;min-width:52px"><span style="font-size:10px;padding:1px 5px;border-radius:4px;background:#3b1219;color:#f87171;font-weight:700">MATCH</span></td>
+        <td style="padding:6px 6px;text-align:center;color:var(--text2);white-space:nowrap;min-width:52px">${mDur}min</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:68px">${_ach(mTD||null, bd?bd.td_target:null)}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:60px">${_ach(mHSR||null, bd?bd.hsr_target:null)}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:60px">${_ach(mSpr||null, bd?bd.spr_target:null)}</td>
+        <td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:48px">${_ach(mAcc||null, bd?bd.acc_target:null)}</td>
+        ${isV1?'': `<td style="padding:5px 6px;text-align:center;line-height:1.4;min-width:48px">${_ach(mRhie||null, bd?bd.rhie_target:null)}</td>`}
       </tr>`;
     }
 
-    // ── 훈련 행 ──
+    // ── 훈련 행 (경기일은 경기 행으로 병합되므로 숨김) ──
     let trainRowHtml='';
-    if(hasBd||hasGps){
+    if((hasBd||hasGps)&&!mergeMatch){
       // AM+PM 병합: 같은 날 같은 선수 세션 합산 후 팀 평균
       const _mergeM = rows => {
         const mp = {};
@@ -11985,12 +12019,6 @@ async function loadTeamOverview(){
         if(acc_act)  acc.acc_act+=acc_act;
         if(rhie_act) acc.rhie_act+=rhie_act;
       }
-      if(hasBd&&bd.td_target!=null)  {acc.td_tgt+=bd.td_target;acc.td_tgt_set=true;}
-      if(hasBd&&bd.hsr_target!=null) {acc.hsr_tgt+=bd.hsr_target;acc.hsr_tgt_set=true;}
-      if(hasBd&&bd.spr_target!=null) {acc.spr_tgt+=bd.spr_target;acc.spr_tgt_set=true;}
-      if(hasBd&&bd.acc_target!=null) {acc.acc_tgt+=bd.acc_target;acc.acc_tgt_set=true;}
-      if(hasBd&&bd.rhie_target!=null){acc.rhie_tgt+=bd.rhie_target;acc.rhie_tgt_set=true;}
-
       trainRowHtml=`<tr class="overview-row" data-date="${date}"
         style="border-bottom:0.5px solid var(--border);cursor:pointer;background:${isToday?'rgba(34,197,94,0.08)':trainBg};${isToday?'outline:1px solid rgba(34,197,94,0.3)':''}"
         onclick="showTeamVariance('${date}','${(d.getMonth()+1)+'/'+d.getDate()+' ('+DOW[dow]+')'}')">
@@ -14694,7 +14722,7 @@ async function loadGpsHistory(){
   listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
 
   const {data, error} = await supa.from('gps_records')
-    .select('session_date, player_id, session_type2')
+    .select('session_date, player_id, session_type2, track')
     .order('session_date', {ascending: false})
     .limit(500);
 
@@ -14706,10 +14734,11 @@ async function loadGpsHistory(){
   // 날짜별 집계
   const byDate = {};
   data.forEach(r => {
-    if(!byDate[r.session_date]) byDate[r.session_date] = {total:0, types: new Set()};
+    if(!byDate[r.session_date]) byDate[r.session_date] = {total:0, types: new Set(), tracks: new Set()};
     byDate[r.session_date].total++;
     const t = (r.session_type2||'').trim().toUpperCase();
     if(t) byDate[r.session_date].types.add(t);
+    byDate[r.session_date].tracks.add(r.track||'ALL');
   });
 
   const rows = Object.entries(byDate).map(([date, info]) => {
@@ -14725,6 +14754,13 @@ async function loadGpsHistory(){
     }).join(' ');
     window._gpsHistoryDates = window._gpsHistoryDates || {};
     window._gpsHistoryDates[date] = date;
+    const curTrack = info.tracks.size===1 ? [...info.tracks][0] : 'MIX';
+    const trackSel = `<select onchange="setGpsDateTrack('${date}',this.value)" title="이 날짜 전체 GPS의 팀 지정"
+        style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid ${curTrack==='B'?'var(--accent)':'var(--border2)'};background:var(--surface2);color:var(--text);font-family:inherit;font-weight:600">
+        ${curTrack==='MIX'?'<option value="MIX" selected disabled>혼합</option>':''}
+        <option value="ALL" ${curTrack==='ALL'?'selected':''}>A팀</option>
+        <option value="B" ${curTrack==='B'?'selected':''}>B팀</option>
+      </select>`;
     return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border)">
         <div style="display:flex;align-items:center;gap:8px">
@@ -14732,14 +14768,26 @@ async function loadGpsHistory(){
           ${typeTags}
           <span style="font-size:11px;color:var(--text3)">${info.total}명</span>
         </div>
+        <div style="display:flex;align-items:center;gap:8px">
+        ${trackSel}
         <button onclick="deleteGpsDate('${date}')"
           style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
           🗑 삭제
         </button>
+        </div>
       </div>`;
   }).join('');
 
   listEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">${rows}</div>`;
+}
+
+// ── GPS 날짜별 팀(트랙) 지정 ────────────────────────────────────
+// 그날 전체 GPS 기록의 track을 A팀(ALL)/B팀(B)으로 일괄 변경
+async function setGpsDateTrack(date, track){
+  if(track!=='ALL' && track!=='B') return;
+  const {error} = await supa.from('gps_records').update({track}).eq('session_date', date);
+  if(error){ alert('팀 지정 실패: '+error.message); return; }
+  loadGpsHistory();
 }
 
 // ── GPS 날짜별 삭제 ──────────────────────────────────────────────
@@ -24563,7 +24611,8 @@ let _periodYear  = new Date().getFullYear();
 let _periodMonth = new Date().getMonth();
 let _periodMatchAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0};
 let _periodMatchKeys = []; // 현재 기준 최근 3경기 [{date,opp}]
-let _blocksData  = []; // blocks 테이블
+let _blocksData  = []; // blocks — 현재 선택 트랙(_periodTrack)의 블록만
+let _blocksAll   = []; // blocks — 전 트랙 (메모리 보관, 트랙 전환 시 재필터용)
 let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }  ← 현재 선택 트랙의 행만
 let _daysByTrack = {}; // { 'YYYY-MM-DD': { ALL/A/B: row } }  ← 전 트랙
 let _periodTrack = 'ALL'; // 주기화 달력 트랙: 'ALL'=A팀(기본/기존데이터), 'B'=B팀
@@ -24618,7 +24667,8 @@ async function loadPeriodTab() {
     supa.from('blocks').select('*').order('start_date'),
     supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
   ]);
-  _blocksData = blocks||[];
+  _blocksAll = blocks||[];
+  _rebuildBlocksForTrack();
   // 전 트랙을 날짜별로 보관
   _daysByTrack={};
   (days||[]).forEach(r=>{
@@ -24628,6 +24678,11 @@ async function loadPeriodTab() {
   });
   _rebuildDaysDataForTrack();
   renderPeriodCalendar();
+}
+
+// 선택된 트랙의 블록만 _blocksData에 채움 (달력/getBlockForDate가 이걸 읽음)
+function _rebuildBlocksForTrack(){
+  _blocksData = (_blocksAll||[]).filter(b=>(b.track||'ALL')===_periodTrack);
 }
 
 // 선택된 트랙(_periodTrack)의 행만 _daysData에 채움 (달력/모달이 이걸 읽음)
@@ -24649,6 +24704,7 @@ function setPeriodTrack(t){
       btn.style.borderColor=on?'var(--accent)':'var(--border2)';
     }
   });
+  _rebuildBlocksForTrack();
   _rebuildDaysDataForTrack();
   renderPeriodCalendar();
 }
@@ -24925,6 +24981,7 @@ async function saveBlock(){
   const end=document.getElementById('bm-end').value;
   if(!start||!end){alert('시작일과 종료일을 입력해주세요.');return;}
   const row={start_date:start,end_date:end,context:document.getElementById('bm-context').value.trim()||null,label:document.getElementById('bm-label').value.trim()||null,color:_bmColor,show_totals:document.getElementById('bm-show-totals').checked};
+  if(!_bmEditId) row.track=_periodTrack; // 새 블록은 현재 트랙에 소속 (A팀=ALL / B팀=B)
   let error;
   if(_bmEditId){({error}=await supa.from('blocks').update(row).eq('id',_bmEditId));}
   else{({error}=await supa.from('blocks').insert(row));}
@@ -24942,7 +24999,8 @@ async function deleteBlock(){
 
 async function openBlockListModal(){
   const {data}=await supa.from('blocks').select('*').order('start_date');
-  _blocksData=data||[];
+  _blocksAll=data||[];
+  _rebuildBlocksForTrack(); // 현재 트랙(A팀/B팀) 블록만
   const html=_blocksData.length?_blocksData.map(b=>`
     <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--bg)">
       <span style="width:12px;height:12px;border-radius:50%;background:${b.color};flex-shrink:0;display:inline-block"></span>
