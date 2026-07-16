@@ -21823,7 +21823,7 @@ async function updateMatchMax(playerIds){
 
   // 경기 데이터 (FT만)
   const {data:ftData}=await supa.from('match_records')
-    .select('player_id,td,mpm,hir_sprint,band4_td,band5_td,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
+    .select('player_id,td,mpm,hir_sprint,band4_td,band5_td,band4_n,band5_n,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
     .eq('time_type','FT')
     .in('player_id',pids);
 
@@ -21890,6 +21890,7 @@ async function updateMatchMax(playerIds){
 
     const _td=calcMM('td'),   _mpm=calcMM('mpm'),       _hir=calcMM('hir_sprint'),
           _hsr=calcMM('band4_td'), _spr=calcMM('band5_td'), _acc=calcMM('accel'),
+          _hsrn=calcMM('band4_n'), _sprn=calcMM('band5_n'),
           _rhi=calcMM('rhie'), _pl=calcMM('player_load'),
           _frm=calcMM('fmp_run_m'), _frh=calcMM('fmp_run_h'),
           _fdm=calcMM('fmp_dyn_m'), _fdh=calcMM('fmp_dyn_h');
@@ -21898,9 +21899,11 @@ async function updateMatchMax(playerIds){
       match_max_td:       rnd(_td),
       match_max_mpm:      fix1(_mpm),
       match_max_hir:      rnd(_hir),
-      match_max_hsr:      rnd(_hsr),       // HSR 단독 (Band4)
-      match_max_sprint:   rnd(_spr),       // Sprint 단독 (Band5)
+      match_max_hsr:      rnd(_hsr),       // HSR 단독 거리 (Band4)
+      match_max_sprint:   rnd(_spr),       // Sprint 단독 거리 (Band5)
       match_max_band5_td: rnd(_spr),
+      match_max_hsr_n:    rnd(_hsrn),      // HSR 횟수 (Band4 n)
+      match_max_spr_n:    rnd(_sprn),      // Sprint 횟수 (Band5 n)
       match_max_accel:    rnd(_acc),
       match_max_rhie:     rnd(_rhi),
       match_max_speed:    trueMaxSpeed,    // 경기 + 훈련 전체 최대값 (단일 Max 유지)
@@ -22315,14 +22318,16 @@ async function loadMatchMax(){
       <button onclick="recalcAllMatchMax()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 전체 재계산</button>
     </div>
     <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px">
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:7px 8px;text-align:left;color:var(--text3)">선수</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">TD Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">MPM Max</th>
             <th style="padding:7px 8px;text-align:right;color:#f59e0b">HSR Max</th>
+            <th style="padding:7px 8px;text-align:right;color:#f59e0b">HSR횟수 Max</th>
             <th style="padding:7px 8px;text-align:right;color:#ef4444">Sprint Max</th>
+            <th style="padding:7px 8px;text-align:right;color:#ef4444">Sprint횟수 Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속 Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도 Max</th>
@@ -22339,7 +22344,9 @@ async function loadMatchMax(){
               <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${p.match_max_td?Math.round(p.match_max_td).toLocaleString()+'m':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#f59e0b">${p.match_max_mpm?parseFloat(p.match_max_mpm).toFixed(1):'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#f59e0b;font-weight:600">${p.match_max_hsr!=null?Math.round(p.match_max_hsr).toLocaleString()+'m':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#f59e0b">${p.match_max_hsr_n!=null?Math.round(p.match_max_hsr_n)+'회':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#ef4444;font-weight:600">${p.match_max_sprint!=null?Math.round(p.match_max_sprint).toLocaleString()+'m':'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#ef4444">${p.match_max_spr_n!=null?Math.round(p.match_max_spr_n)+'회':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#fb923c">${p.match_max_accel!=null?Math.round(p.match_max_accel):'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#34d399">${p.match_max_rhie!=null?Math.round(p.match_max_rhie):'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#60a5fa">${p.match_max_speed?parseFloat(p.match_max_speed).toFixed(1)+'km/h':'—'}</td>
