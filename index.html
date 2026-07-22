@@ -25181,12 +25181,14 @@ async function deleteBlockFromList(blockId){
 
 // ── 날짜 세션 모달 ──
 // 지표 설정 정의
+// MD단계별 추천 부하 = 경기 대비 %. 근거: Martín-García et al. 2018 (JSCR 32(12):3511-8)
+// 실측 %의 크기는 유지하되 피크 배치는 코치 모델대로: MD-4 볼륨피크 / MD-3 볼륨+강도 / MD-2 속도피크
 const MD_LOAD_DEFAULTS = {
-  'MD+1': { td:15,  hsr:8,  spr:5,  acc:10, rhie:8  },
-  'MD-4': { td:60,  hsr:40, spr:35, acc:50, rhie:45 },
-  'MD-3': { td:65,  hsr:50, spr:45, acc:45, rhie:40 },
-  'MD-2': { td:32,  hsr:12, spr:10, acc:15, rhie:14 },
-  'MD-1': { td:38,  hsr:20, spr:15, acc:20, rhie:18 },
+  'MD+1': { td:20,  hsr:12, spr:8,  acc:20, rhie:15 }, // 회복
+  'MD-4': { td:60,  hsr:40, spr:38, acc:60, rhie:48 }, // 볼륨 피크 (TD 최고)
+  'MD-3': { td:57,  hsr:50, spr:42, acc:70, rhie:55 }, // 볼륨+강도 (HSR·ACC·RHIE 최고)
+  'MD-2': { td:42,  hsr:45, spr:48, acc:62, rhie:50 }, // 속도 피크 (SPR 최고)
+  'MD-1': { td:28,  hsr:15, spr:12, acc:35, rhie:22 }, // 테이퍼
 };
 
 const MSS_GUIDE = {
@@ -25233,6 +25235,11 @@ function onDmLabelChange(val) {
       sliderEl.value           = Math.min(200, pct);
       absEl.value              = absVal ?? '';
     });
+    // 이 MD단계의 추천 % 를 지표별로 표시
+    const pctList = DM_METRICS
+      .map(m => `<span style="color:${m.color};font-weight:700">${m.label} ${pcts[m.id] ?? 0}%</span>`)
+      .join('<span style="color:var(--text3)"> · </span>');
+    hint.innerHTML = `✨ <b>${defKey}</b> 추천 (경기 대비) &nbsp;${pctList}<br><span style="color:var(--text3)">팀 상황에 맞게 수정하세요</span>`;
     hint.style.display = 'block';
   } else {
     hint.style.display = 'none';
