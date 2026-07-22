@@ -25235,6 +25235,11 @@ function onDmLabelChange(val) {
       sliderEl.value           = Math.min(200, pct);
       absEl.value              = absVal ?? '';
     });
+    // 이 MD단계의 추천 % 를 지표별로 표시
+    const pctList = DM_METRICS
+      .map(m => `<span style="color:${m.color};font-weight:700">${m.label} ${pcts[m.id] ?? 0}%</span>`)
+      .join('<span style="color:var(--text3)"> · </span>');
+    hint.innerHTML = `✨ <b>${defKey}</b> 추천 (경기 대비) &nbsp;${pctList}<br><span style="color:var(--text3)">팀 상황에 맞게 수정하세요</span>`;
     hint.style.display = 'block';
   } else {
     hint.style.display = 'none';
