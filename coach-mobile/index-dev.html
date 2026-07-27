@@ -652,7 +652,7 @@ async function loadHome(){
       .gte('record_date',since7Str).order('record_date',{ascending:false}),
     supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',since28Str),
     supa.from('gps_records').select('player_id,session_date,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2').gte('session_date',since28Str),
-    supa.from('match_records').select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
+    supa.from('match_records').select('match_date,opponent,home_away,player_id,duration,max_speed,td,band4_td,band5_td,accel,rhie,result,score')
       .eq('time_type','FT').order('match_date',{ascending:false}).limit(300),
     supa.from('block_days').select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target').gte('plan_date',weekStartStr).lte('plan_date',blockEndFetchStr).order('plan_date',{ascending:true}),
   ]);
@@ -676,14 +676,27 @@ async function loadHome(){
   const injuredIds=new Set((injuries||[]).map(r=>r.player_id));
   const rpeMap={};
   (rpe28||[]).forEach(r=>{if(!rpeMap[r.player_id])rpeMap[r.player_id]=[];rpeMap[r.player_id].push({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0});});
+  // 경기일 duration 폴백 (session_records.duration 미입력 시 경기 duration 사용)
+  const _matchDurByPid={};
+  (matchFT||[]).forEach(r=>{
+    if(!_matchDurByPid[r.player_id]) _matchDurByPid[r.player_id]={};
+    if(!_matchDurByPid[r.player_id][r.match_date]) _matchDurByPid[r.player_id][r.match_date]=parseFloat(r.duration)||0;
+  });
+  Object.keys(rpeMap).forEach(pid=>{
+    rpeMap[pid]=rpeMap[pid].map(r=>({...r, dur:r.dur||(_matchDurByPid[pid]||{})[r.date]||0}));
+  });
   const todayWMap={};(todayWell||[]).forEach(r=>{todayWMap[r.player_id]=r;});
   const paList=[];
   for(const pl of _players){
     if(injuredIds.has(pl.id)) continue;
     const acwrData=calcACWR(rpeMap[pl.id]||[],today);
     const pgps=(gps28||[]).filter(r=>r.player_id===pl.id);
+    const pmatch=(matchFT||[]).filter(r=>r.player_id===pl.id);
     const mss=parseFloat(pl.mss)||0;
-    const mvExp=mss>0?calcMVExposure(pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),mss,today):null;
+    const mvExp=mss>0?calcMVExposure([
+      ...pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),
+      ...pmatch.map(r=>({date:r.match_date,maxSpeed:parseFloat(r.max_speed)||0})),
+    ],mss,today):null;
     const p7w=(well7||[]).filter(r=>r.player_id===pl.id);
     const tw=todayWMap[pl.id]||null;
     const wellData=(tw&&p7w.length>1)?calcWellnessRisk(p7w.slice(1),tw):null;

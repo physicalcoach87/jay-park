@@ -8983,6 +8983,9 @@ async function loadMorningReport(){
   const {data:gps28} = await supa.from('gps_records')
     .select('player_id,session_date,max_speed,duration,session_type2')
     .gte('session_date',since28Str).order('session_date',{ascending:false});
+  const {data:match28} = await supa.from('match_records')
+    .select('player_id,match_date,max_speed,duration')
+    .gte('match_date',since28Str).order('match_date',{ascending:false});
 
   // 치료중/재활중/부분참여 선수는 이미 부상자 현황에 표시되므로 위험 목록에서 제외
   const injuredActiveIds = new Set(
@@ -8994,21 +8997,28 @@ async function loadMorningReport(){
     const pid = player.id;
     const mss = parseFloat(player.mss)||0;
     const pgps = (gps28||[]).filter(r=>r.player_id===pid); // 개인 데이터 전체 포함
+    const pmatch = (match28||[]).filter(r=>r.player_id===pid);
     const prpe = (rpeMap28[pid]||[]);
-    if(!pgps.length&&!prpe.length) continue;
-    // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×dur, GPS duration 폴백)
+    if(!pgps.length&&!prpe.length&&!pmatch.length) continue;
+    // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×dur, GPS/경기 duration 폴백)
     const _pGpsDurD={};
     pgps.forEach(r=>{ if(!_pGpsDurD[r.session_date]) _pGpsDurD[r.session_date]=parseFloat(r.duration)||0; });
+    const _pMatchDurD={};
+    pmatch.forEach(r=>{ if(!_pMatchDurD[r.match_date]) _pMatchDurD[r.match_date]=parseFloat(r.duration)||0; });
     const srpeByDate2={};
     prpe.forEach(r=>{
       const rv=parseFloat(r.rpe)||0;
-      const du=parseFloat(r.dur)||_pGpsDurD[r.date]||0;
+      const du=parseFloat(r.dur)||_pGpsDurD[r.date]||_pMatchDurD[r.date]||0;
       srpeByDate2[r.date]=(srpeByDate2[r.date]||0)+(rv&&du?rv*du:0);
     });
     pgps.forEach(r=>{ if(!(r.session_date in srpeByDate2)) srpeByDate2[r.session_date]=0; });
+    pmatch.forEach(r=>{ if(!(r.match_date in srpeByDate2)) srpeByDate2[r.match_date]=0; });
     // calcACWR는 rpe×dur로 sRPE 계산 → dur=1, rpe=합산sRPE 로 전달
     const sessForACWR = Object.entries(srpeByDate2).map(([d,srpe])=>({date:d,rpe:srpe,dur:1}));
-    const sessForMV   = pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0}));
+    const sessForMV   = [
+      ...pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),
+      ...pmatch.map(r=>({date:r.match_date,maxSpeed:parseFloat(r.max_speed)||0})),
+    ];
     const acwrData  = calcACWR(sessForACWR,today);
     const mvExp     = mss>0?calcMVExposure(sessForMV,mss,today):null;
     const todayW    = (well7||[]).find(r=>r.player_id===pid&&r.record_date===today)||null;
@@ -15058,10 +15068,13 @@ async function runInjuryRiskAnalysis(){
   }
 
   // 데이터 병렬 조회
-  const [{data:gpsAll}, {data:rpeAll}, {data:wellAll}, {data:injuredNow}] = await Promise.all([
+  const [{data:gpsAll}, {data:matchAll}, {data:rpeAll}, {data:wellAll}, {data:injuredNow}] = await Promise.all([
     supa.from('gps_records')
       .select('player_id,session_date,max_speed,duration,session_type2,session_label')
       .gte('session_date', since28Str).order('session_date', {ascending:false}),
+    supa.from('match_records')
+      .select('player_id,match_date,max_speed,duration')
+      .gte('match_date', since28Str).order('match_date', {ascending:false}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration,session_type,session_order')
       .gte('record_date', since28Str),
@@ -15084,11 +15097,12 @@ async function runInjuryRiskAnalysis(){
     const mss = parseFloat(player.mss) || 0;
 
     // 선수별 데이터 필터 — 개인 데이터이므로 session_type2 무관 전체 포함
-    const pgps = (gpsAll||[]).filter(r => r.player_id === pid);
-    const prpe = (rpeAll||[]).filter(r => r.player_id === pid);
-    const pwell= (wellAll||[]).filter(r => r.player_id === pid);
+    const pgps  = (gpsAll||[]).filter(r => r.player_id === pid);
+    const pmatch= (matchAll||[]).filter(r => r.player_id === pid);
+    const prpe  = (rpeAll||[]).filter(r => r.player_id === pid);
+    const pwell = (wellAll||[]).filter(r => r.player_id === pid);
 
-    if(!pgps.length && !prpe.length) continue; // 데이터 없는 선수 스킵
+    if(!pgps.length && !prpe.length && !pmatch.length) continue; // 데이터 없는 선수 스킵
 
     // GPS duration 폴백 맵 (date__label)
     const _pGpsDur = {};
@@ -15096,19 +15110,28 @@ async function runInjuryRiskAnalysis(){
       const key=r.session_date+'__'+(r.session_label||'AM').toUpperCase();
       if(!_pGpsDur[key]) _pGpsDur[key]=parseFloat(r.duration)||0;
     });
-    // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×duration, GPS 폴백)
+    // 경기 duration 폴백 맵 (경기는 AM/PM 라벨이 없어 날짜로만 매칭)
+    const _pMatchDur = {};
+    pmatch.forEach(r=>{
+      if(!_pMatchDur[r.match_date]) _pMatchDur[r.match_date]=parseFloat(r.duration)||0;
+    });
+    // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×duration, GPS/경기 폴백)
     const srpeByDate = {};
     prpe.forEach(r => {
       const rv=parseFloat(r.rpe)||0;
       const lbl=(r.session_type||((r.session_order||1)===1?'AM':'PM')).toUpperCase();
-      const du=parseFloat(r.duration)||_pGpsDur[r.record_date+'__'+lbl]||0;
+      const du=parseFloat(r.duration)||_pGpsDur[r.record_date+'__'+lbl]||_pMatchDur[r.record_date]||0;
       srpeByDate[r.record_date]=(srpeByDate[r.record_date]||0)+(rv&&du?rv*du:0);
     });
     pgps.forEach(r => { if(!(r.session_date in srpeByDate)) srpeByDate[r.session_date]=0; });
+    pmatch.forEach(r => { if(!(r.match_date in srpeByDate)) srpeByDate[r.match_date]=0; });
 
     // calcACWR는 rpe×dur로 sRPE 계산 → dur=1, rpe=합산sRPE 로 전달
     const sessionsForACWR = Object.entries(srpeByDate).map(([date, srpe]) => ({ date, rpe: srpe, dur: 1 }));
-    const sessionsForMV   = pgps.map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed)||0 }));
+    const sessionsForMV   = [
+      ...pgps.map(r => ({ date: r.session_date, maxSpeed: parseFloat(r.max_speed)||0 })),
+      ...pmatch.map(r => ({ date: r.match_date, maxSpeed: parseFloat(r.max_speed)||0 })),
+    ];
 
     // 모듈 계산
     const acwrData    = calcACWR(sessionsForACWR, today);
