@@ -22338,7 +22338,10 @@ async function loadMatchMax(){
   out.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;color:var(--text3)">FT 90분↑ raw + 부족분은 60분↑ 출전시간 많은 순 정규화로 보충 → 3경기 평균 / 60분↑ 없으면 미산출</div>
-      <button onclick="recalcAllMatchMax()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 전체 재계산</button>
+      <div style="display:flex;gap:8px">
+        <button onclick="downloadMatchMaxExcel()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">📥 엑셀 다운로드</button>
+        <button onclick="recalcAllMatchMax()" style="font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 전체 재계산</button>
+      </div>
     </div>
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:900px">
@@ -22353,6 +22356,7 @@ async function loadMatchMax(){
             <th style="padding:7px 8px;text-align:right;color:#ef4444">Sprint횟수 Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">가속 Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">RHIE Max</th>
+            <th style="padding:7px 8px;text-align:right;color:#a78bfa">P.Load Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">최고속도 Max</th>
             <th style="padding:7px 8px;text-align:right;color:var(--text3)">갱신일</th>
           </tr>
@@ -22372,12 +22376,48 @@ async function loadMatchMax(){
               <td style="padding:7px 8px;text-align:right;color:#ef4444">${p.match_max_spr_n!=null?Math.round(p.match_max_spr_n)+'회':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#fb923c">${p.match_max_accel!=null?Math.round(p.match_max_accel):'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#34d399">${p.match_max_rhie!=null?Math.round(p.match_max_rhie):'—'}</td>
+              <td style="padding:7px 8px;text-align:right;color:#a78bfa;font-weight:600">${p.match_max_pl!=null?parseFloat(p.match_max_pl).toFixed(1):'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:#60a5fa">${p.match_max_speed?parseFloat(p.match_max_speed).toFixed(1)+'km/h':'—'}</td>
               <td style="padding:7px 8px;text-align:right;color:var(--text3)">${p.match_max_updated||'—'}</td>
             </tr>`).join('')}
         </tbody>
       </table>
     </div>`;
+}
+
+// ── Match Max 엑셀 다운로드 ──────────────────────────────────────
+async function downloadMatchMaxExcel(){
+  const playersWithMax=_players.filter(p=>p.match_max_td);
+  if(!playersWithMax.length){ alert('다운로드할 Match Max 데이터가 없습니다.'); return; }
+
+  const posOrder=['GK','CB','FB','MF','CM','CAM','WG','ST','FW'];
+  const sorted=[...playersWithMax].sort((a,b)=>{
+    const ai=posOrder.indexOf(a.position)>=0?posOrder.indexOf(a.position):99;
+    const bi=posOrder.indexOf(b.position)>=0?posOrder.indexOf(b.position):99;
+    return ai-bi||a.name.localeCompare(b.name);
+  });
+
+  const rows=sorted.map(p=>({
+    '선수':               p.name,
+    '포지션':             p.position||'',
+    'TD Max (m)':         p.match_max_td!=null?Math.round(p.match_max_td):'',
+    'MPM Max':            p.match_max_mpm!=null?parseFloat(p.match_max_mpm).toFixed(1):'',
+    'HSR Max (m)':        p.match_max_hsr!=null?Math.round(p.match_max_hsr):'',
+    'HSR횟수 Max':        p.match_max_hsr_n!=null?Math.round(p.match_max_hsr_n):'',
+    'Sprint Max (m)':     p.match_max_sprint!=null?Math.round(p.match_max_sprint):'',
+    'Sprint횟수 Max':     p.match_max_spr_n!=null?Math.round(p.match_max_spr_n):'',
+    '가속 Max':           p.match_max_accel!=null?Math.round(p.match_max_accel):'',
+    'RHIE Max':           p.match_max_rhie!=null?Math.round(p.match_max_rhie):'',
+    'P.Load Max':         p.match_max_pl!=null?parseFloat(p.match_max_pl).toFixed(1):'',
+    '최고속도 Max (km/h)':p.match_max_speed!=null?parseFloat(p.match_max_speed).toFixed(1):'',
+    '갱신일':             p.match_max_updated||'',
+  }));
+
+  const XLSX = await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Match Max');
+  XLSX.writeFile(wb, `${currentClubName||'팀'}_MatchMax_${getKSTDateStr()}.xlsx`);
 }
 
 function switchTab(tab,el){
