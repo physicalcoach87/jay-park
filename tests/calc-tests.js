@@ -61,6 +61,9 @@ const TODAY = '2026-07-08';
   r = calcMVExposure([{ date: TODAY, maxSpeed: 26.9 }], MSS, TODAY);
   check('MV 90% 미만은 미노출', r.daysSinceExposed === 99, r.daysSinceExposed);
 
+  r = calcMVExposure([], MSS, TODAY);
+  check('MV 최근 데이터 없음 표시', r.hasData === false, JSON.stringify(r));
+
   // 10일 전 마지막 노출
   r = calcMVExposure([
     { date: dstr(TODAY, -10), maxSpeed: 28 },
@@ -127,6 +130,18 @@ const TODAY = '2026-07-08';
   // acwr 0은 과소부하로 치지 않음 (acwr > 0 조건)
   r = calcRiskLevel(0, null, null);
   check('위험등급 ACWR 0 → 무시', r.score === 0, r.score);
+
+  r = calcRiskLevel(null, { daysSinceExposed: 99, pctMSS: 0, hasData: false }, null);
+  check('MV 데이터 없음은 위험으로 계산하지 않음', r.score === 0 && r.flags.length === 0, JSON.stringify(r));
+})();
+
+// ── calcSuitability ─────────────────────────────────────────
+(function () {
+  const redFlag = [{ type:'ACWR', level:'red', msg:'ACWR 1.80 — 급성 과부하 (>1.5)' }];
+  check('개별 red 신호는 회복일에도 최소 조정 검토', calcSuitability('amber', 'low', redFlag, true) === 'review');
+  check('오늘 계획 없음 → 데이터 부족', calcSuitability('green', null, [], true) === 'unknown');
+  check('판정 데이터 없음 → 데이터 부족', calcSuitability('green', 'mid', [], false) === 'unknown');
+  check('정상 데이터와 계획 → 정상', calcSuitability('green', 'low', [], true) === 'ok');
 })();
 
 // ── 결과 ────────────────────────────────────────────────────
