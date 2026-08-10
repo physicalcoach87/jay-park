@@ -15078,6 +15078,108 @@ function calcRiskLevel(acwr, mvExp, wellnessRisk){
 }
 
 // ══════════════════════════════════════════════════════════════════
+// 🔋 회복 부하 엔진 — 경기·훈련 통합
+// ══════════════════════════════════════════════════════════════════
+// 부하는 경기든 훈련이든 같은 몸에 쌓인다. 두 소스를 하나의 스트림으로 보고,
+// 개인 풀타임 경기 부하를 100으로 놓은 지수로 환산해 시간 감쇠를 적용·합산한다.
+// 경기만 보고 쉬게 하면 훈련 자극이 사라져 체력이 늘지 않고, 훈련-경기 연결성도 끊긴다.
+//
+// 지수 해석: 100 = 풀타임 경기 직후 수준 / 150 = 그보다 더 쌓인 상태
+// 회복 시간: 같은 감쇠 곡선을 앞으로 돌려 지수가 RECOV_CLEAR 아래로 내려가는 시점
+//            (추정이 아니라 모델을 그대로 전진 시뮬레이션한 값)
+
+const RECOV_DECAY  = [1.0, 0.50, 0.15];         // 경과일 0·1·2 (3일↑ = 0)
+const RECOV_WEIGHT = { player_load:1.0, running_high:1.0, sprint:1.5, decel:1.5 };
+//   ↑ 감속·스프린트는 편심성 부하 = 근손상 주범이라 회복이 더 오래 걸린다.
+//     P.Load·HSR은 대사적 피로에 가까워 먼저 풀리므로 가중을 낮춘다.
+const RECOV_CLEAR  = 20;                        // 이 지수 아래면 '회복 완료'
+const RECOV_MAX_H  = 48;                        // 회복 시간 표시 상한 (코치 판단: 72h는 과함)
+const RECOV_MIN_BL = 3;                         // 기준선 최소 경기 수
+const RECOV_COLOR  = { high:'#f87171', mid:'#fb923c', low:'#fbbf24', clear:'#4ade80' };
+
+// match_records → gps_records 컬럼 형식으로 통일
+function recovMapMatch(r){
+  return {
+    date:         r.match_date,
+    duration:     parseFloat(r.duration)||0,
+    player_load:  parseFloat(r.player_load)||0,
+    running_high: parseFloat(r.band4_td)||0,   // Band4 = HSR
+    sprint:       parseFloat(r.band5_td)||0,   // Band5 = Sprint
+    decel:        parseFloat(r.decel)||0,
+    _src:'match',
+  };
+}
+function recovMapGps(r){
+  return {
+    date:         r.session_date,
+    duration:     parseFloat(r.duration)||0,
+    player_load:  parseFloat(r.player_load)||0,
+    running_high: parseFloat(r.running_high)||0,
+    sprint:       parseFloat(r.sprint)||0,
+    decel:        parseFloat(r.decel)||0,
+    _src:'train',
+  };
+}
+
+// 개인 경기 기준선 — 60분↑ 경기의 지표별 분당 평균 × 평균 출전시간
+// (분당으로 환산 후 되돌려야 출전시간 편차 95~105분의 영향이 제거된다)
+function buildRecovBaseline(matchEvents){
+  const rows = matchEvents.filter(e => e.duration >= 60);
+  if(rows.length < RECOV_MIN_BL) return null;
+  const refDur = rows.reduce((a,e)=>a+e.duration,0) / rows.length;
+  const base = { _n: rows.length, _refDur: refDur };
+  Object.keys(RECOV_WEIGHT).forEach(k=>{
+    const rates = rows.map(e => e[k]>0 ? e[k]/e.duration : 0).filter(v=>v>0);
+    base[k] = rates.length ? (rates.reduce((a,v)=>a+v,0)/rates.length) * refDur : null;
+  });
+  return base;
+}
+
+// 세션 하나의 '풀타임 경기 대비 비율' (풀타임 경기 ≈ 1.0)
+function recovSessionRatio(ev, base){
+  if(!base) return null;
+  let sum = 0, wsum = 0;
+  Object.entries(RECOV_WEIGHT).forEach(([k,w])=>{
+    if(!base[k] || !ev[k]) return;
+    sum  += w * (ev[k] / base[k]);
+    wsum += w;
+  });
+  return wsum > 0 ? sum / wsum : null;
+}
+
+// 회복 부하 지수 + 회복 소요 시간
+//   events: 통일 형식 [{date, duration, player_load, running_high, sprint, decel}]
+function calcRecoveryLoad(events, base, asOfDate){
+  if(!base) return { index:null, hours:null, level:null, hasBL:false };
+  const asOf = new Date(asOfDate+'T12:00:00');
+  const dayDiff = d => Math.floor((asOf - new Date(d+'T12:00:00')) / 86400000);
+
+  // offset일 뒤 시점의 지수 (같은 감쇠 곡선을 앞으로 돌린다)
+  const indexAt = offset => {
+    let total = 0;
+    events.forEach(ev=>{
+      const age = dayDiff(ev.date) + offset;
+      if(age < 0 || age >= RECOV_DECAY.length) return;
+      const ratio = recovSessionRatio(ev, base);
+      if(ratio == null) return;
+      total += ratio * RECOV_DECAY[age];
+    });
+    return Math.round(total * 100);
+  };
+
+  const index = indexAt(0);
+  let hours = 0;
+  if(index >= RECOV_CLEAR){
+    hours = RECOV_MAX_H;                        // 상한 내에 안 풀리면 상한값으로 표기
+    for(let o=1; o*24 <= RECOV_MAX_H; o++){
+      if(indexAt(o) < RECOV_CLEAR){ hours = o*24; break; }
+    }
+  }
+  const level = index>=120?'high' : index>=70?'mid' : index>=RECOV_CLEAR?'low' : 'clear';
+  return { index, hours, level, hasBL:true, blCnt:base._n };
+}
+
+// ══════════════════════════════════════════════════════════════════
 // 🧬 훈련 적합성 판정 — 선수 상태 × 오늘 훈련 계획
 // ══════════════════════════════════════════════════════════════════
 // 선수 상태만으로 판정하지 않는다. 같은 ACWR 1.4라도 회복일이면 문제없고
@@ -15134,7 +15236,7 @@ async function loadTrainingSuitability(){
   out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">⏳ 판정 중...</div>';
 
   const _d = n => { const x = new Date(day+'T12:00:00'); x.setDate(x.getDate()-n); return x.toISOString().split('T')[0]; };
-  const s28 = _d(28), s7 = _d(7);
+  const s28 = _d(28), s7 = _d(7), s120 = _d(120);
 
   if(!_players.length){
     const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
@@ -15146,11 +15248,13 @@ async function loadTrainingSuitability(){
       .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
       .eq('plan_date', day).in('track',['ALL']),
     supa.from('gps_records')
-      .select('player_id,session_date,max_speed,duration,session_label')
+      .select('player_id,session_date,max_speed,duration,session_label,player_load,running_high,sprint,decel')
       .gte('session_date', s28).lte('session_date', day),
+    // 경기는 120일 — 최근 부하(회복 지수)와 개인 경기 기준선을 함께 뽑는다.
+    // calcACWR·calcMVExposure는 내부에서 28·21일로 자르므로 더 넣어도 안전하다.
     supa.from('match_records')
-      .select('player_id,match_date,max_speed,duration')
-      .gte('match_date', s28).lte('match_date', day),
+      .select('player_id,match_date,max_speed,duration,player_load,band4_td,band5_td,decel')
+      .gte('match_date', s120).lte('match_date', day),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration,session_type,session_order')
       .gte('record_date', s28).lte('record_date', day),
@@ -15213,10 +15317,16 @@ async function loadTrainingSuitability(){
 
     const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
     const verdict = calcSuitability(risk.level, demand);
+
+    // 회복 부하 — 경기·훈련을 하나의 부하 스트림으로 보고 감쇠 합산
+    const recovMatches = pmatch.map(recovMapMatch);
+    const recov = calcRecoveryLoad(
+      [...recovMatches, ...pgps.map(recovMapGps)],
+      buildRecovBaseline(recovMatches), day);
     const top = risk.flags.slice().sort((a,b)=>({red:0,amber:1,yellow:2}[a.level]-{red:0,amber:1,yellow:2}[b.level]))[0];
 
     rows.push({
-      p, verdict, risk, acwr: acwrData.acwr,
+      p, verdict, risk, acwr: acwrData.acwr, recov,
       headline: top ? ({ACWR:'부하 급증',MV:'속도 노출 부족',W:'컨디션 저하'}[top.type] || '—') : '—',
       reason: risk.flags.map(f=>f.msg).join(' · ') || '특이사항 없음',
       advice: suitabilityAdvice(risk, demand, verdict),
@@ -15239,6 +15349,13 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis){
     ok:     { label:'🟢 정상',      color:'#4ade80', bg:'transparent' },
   };
   const DEMAND_LBL = { high:'고강도', mid:'중강도', low:'저강도·회복' };
+  // 회복 부하 셀 — 경기 직후를 100으로 본 지수 + 회복 소요 시간
+  const recovCell = rv => {
+    if(!rv || !rv.hasBL) return '<span style="font-size:11px;color:var(--text3)">—</span>';
+    const c = RECOV_COLOR[rv.level] || 'var(--text3)';
+    return `<div style="font-weight:700;color:${c};font-size:12px">${rv.hours?'~'+rv.hours+'시간':'회복 완료'}</div>
+            <div style="font-size:10px;color:var(--text3)">지수 ${rv.index}</div>`;
+  };
   const cnt = k => rows.filter(r=>r.verdict===k).length;
   const teamStatus = cnt('adjust')||cnt('out') ? {t:'🔴 조정 필요',c:'#f87171'}
                    : cnt('review')             ? {t:'🟠 조정 검토',c:'#fb923c'}
@@ -15296,6 +15413,7 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis){
           <tr style="background:var(--surface2)">
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">선수</th>
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">훈련 적합성</th>
+            <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">회복 소요</th>
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">핵심 위험</th>
             ${isTeamAdmin?'<th style="padding:8px;text-align:right;color:var(--text3);white-space:nowrap">ACWR</th>':''}
             <th style="padding:8px;text-align:left;color:var(--text3)">이유</th>
@@ -15310,12 +15428,13 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis){
                 <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
               </td>
               <td style="padding:8px;font-weight:700;color:${V[r.verdict].color};white-space:nowrap">${V[r.verdict].label}</td>
+              <td style="padding:8px;white-space:nowrap">${recovCell(r.recov)}</td>
               <td style="padding:8px;color:var(--text2);white-space:nowrap">${r.headline}</td>
               ${isTeamAdmin?`<td style="padding:8px;text-align:right;color:${r.acwr==null?'var(--text3)':r.acwr>1.5?'#f87171':r.acwr>1.3?'#fbbf24':'var(--text2)'}">${r.acwr!=null?r.acwr.toFixed(2):'—'}</td>`:''}
               <td style="padding:8px;color:var(--text3);font-size:11px;line-height:1.5">${r.reason}</td>
               <td style="padding:8px;color:var(--text2);font-size:11px;line-height:1.5">${r.advice}</td>
             </tr>`).join('')
-          :`<tr><td colspan="${isTeamAdmin?6:5}" style="padding:2rem;text-align:center;color:var(--text3)">판정할 데이터가 없습니다</td></tr>`}
+          :`<tr><td colspan="${isTeamAdmin?7:6}" style="padding:2rem;text-align:center;color:var(--text3)">판정할 데이터가 없습니다</td></tr>`}
         </tbody>
       </table>
     </div>
@@ -15323,7 +15442,10 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis){
     <div style="margin-top:10px;font-size:10px;color:var(--text3);line-height:1.7;background:var(--surface2);border-radius:6px;padding:8px 10px">
       <strong style="color:var(--text2)">판정 방식</strong> — 선수 상태(부하 ACWR · 최고속도 노출 · 웰니스)를 오늘 계획의 요구 강도와 교차해 결정합니다.
       같은 위험도라도 <strong>회복일이면 정상, 고강도일이면 조정 필요</strong>로 갈립니다 ·
-      경기일 RPE 미입력분은 출전시간 × RPE ${MATCH_RPE_EST}로 환산해 부하에 반영 ·
+      경기일 RPE 미입력분은 출전시간 × RPE ${MATCH_RPE_EST}로 환산해 부하에 반영<br>
+      <strong style="color:var(--text2)">회복 소요</strong> — 경기·훈련을 하나의 부하로 합산 ·
+      <strong>지수 100 = 풀타임 경기 직후 수준</strong> · 감쇠 D+0 100 / D+1 50 / D+2 15 ·
+      팀 공통 회복 곡선 기준이며 개인별 회복 속도는 웰니스 누적 후 반영 예정 ·
       <strong style="color:var(--text2)">최종 결정은 코치가 합니다</strong>
     </div>`;
 }
@@ -19410,7 +19532,7 @@ async function generateMatchReport(){
   const _preFromStr = _preFrom.toISOString().split('T')[0];
   const [{data:preGPS},{data:preRPE}] = await Promise.all([
     supa.from('gps_records')
-      .select('player_id,session_date,td,running_high,sprint,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
+      .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
       .gte('session_date',_preFromStr)
       .lt('session_date',date)
       .order('session_date',{ascending:true}),
@@ -19814,6 +19936,14 @@ async function generateMatchReport(){
     const pl    = (n(r.player_load)||0) + (top&&!r._topOnly ? n(top.player_load)||0 : 0);
     const decel = (n(r.decel)||0) + (top&&!r._topOnly ? n(top.decel)||0 : 0);
 
+    // 회복 부하 — 경기 전까지 쌓인 훈련 부채와 이번 경기분을 분리해 본다.
+    // 경기만 보고 판단하면 "경기 전에 이미 쌓여 있었는가"가 안 보여 훈련-경기 연결이 끊긴다.
+    const _mEv  = (recentAll||[]).filter(m=>m.player_id===pid).map(recovMapMatch);
+    const _tEv  = (preGPS||[]).filter(g=>g.player_id===pid).map(recovMapGps);
+    const _rBase= buildRecovBaseline(_mEv);
+    const _recovPre = calcRecoveryLoad([..._tEv, ..._mEv.filter(e=>e.date<date)], _rBase, date);
+    const _recovTot = calcRecoveryLoad([..._tEv, ..._mEv], _rBase, date);
+
     // 기본 그룹 (출전시간 기준, Top-up 합산 포함)
     let group,groupColor,groupPri,groupLabel;
     if(r._topOnly)   {group='D';groupColor='#64748b';groupPri=4;groupLabel='Top-up만';}
@@ -19848,6 +19978,7 @@ async function generateMatchReport(){
       gpsRisk, gpsColor,
       chr:chronicOf[pid]!=null?Math.round(chronicOf[pid]):null,  // 주당 환산 sRPE
       chrLv:chrLevel(chronicOf[pid]),                            // high / mid / low
+      recov:_recovTot, recovPre:_recovPre,
       hasBL:bl.hasBL, blCnt:bl.cnt
     };
   }).filter(x=>x.dur>0).sort((a,b)=>{
@@ -20831,7 +20962,12 @@ async function generateMatchReport(){
             ${!x.hasBL?`<span style="font-size:9px;color:#64748b;margin-left:4px">(BL${x.blCnt}G)</span>`:''}
             <div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:6px">${gpsTags(x)}</div>
           </div>
-          <div style="text-align:right;font-size:10px;color:var(--text3);white-space:nowrap">${x.groupLabel}</div>
+          <div style="text-align:right;white-space:nowrap">
+            ${x.recov&&x.recov.hasBL?`
+              <div style="font-size:11px;font-weight:700;color:${RECOV_COLOR[x.recov.level]||'var(--text3)'}">${x.recov.hours?'~'+x.recov.hours+'시간':'회복 완료'}</div>
+              <div style="font-size:9px;color:var(--text3)">지수 ${x.recov.index}${x.recovPre&&x.recovPre.index>=10?` · 경기전 ${x.recovPre.index}`:''}</div>`:''}
+            <div style="font-size:10px;color:var(--text3)">${x.groupLabel}</div>
+          </div>
         </div>`;
 
       return `
@@ -20903,7 +21039,10 @@ async function generateMatchReport(){
           <strong style="color:var(--text2)">그룹</strong>: 출전 ≥70′ → A · 45–69′ → B · ≤44′ → C &nbsp;·&nbsp;
           <strong style="color:var(--text2)">%</strong>: 본인 60분↑ 경기의 <b>분당 평균 × 오늘 출전시간</b>(기대치) 대비 증감 (+ 더 뛴 / − 덜 뛴) &nbsp;·&nbsp;
           <strong style="color:var(--text2)">GPS 위험</strong>: 🔴 ≥+30% &nbsp;·&nbsp; 🟡 +15~+29% &nbsp;·&nbsp; 🟢 정상 &nbsp;·&nbsp;
-          항목: HSR → Sprint → Decel → P.Load 순 체크
+          항목: HSR → Sprint → Decel → P.Load 순 체크<br>
+          <strong style="color:var(--text2)">회복 소요</strong>: 경기·훈련을 하나의 부하로 합산 ·
+          <strong>지수 100 = 풀타임 경기 직후 수준</strong> ·
+          <strong>경기전</strong> = 경기에 들어가기 전 이미 쌓여 있던 훈련 부하 · 감쇠 D+0 100 / D+1 50 / D+2 15
         </div>
       `;
     })()}
