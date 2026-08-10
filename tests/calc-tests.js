@@ -144,6 +144,62 @@ const TODAY = '2026-07-08';
   check('정상 데이터와 계획 → 정상', calcSuitability('green', 'low', [], true) === 'ok');
 })();
 
+// ── calcGpsForecastMetrics ──────────────────────────────────
+(function () {
+  let r = calcGpsForecastMetrics(Array(28).fill(100));
+  check('GPS 일정 부하 EWMA ACWR 1.0', approx(r.ewma, 1), r.ewma);
+  check('GPS 일정 부하 롤링 ACWR 1.0', approx(r.rolling, 1), r.rolling);
+  check('GPS 일정 부하 모노토니 무한', r.monotony === Infinity, r.monotony);
+
+  r = calcGpsForecastMetrics([...Array(27).fill(100), 400]);
+  check('GPS 급증 시 EWMA가 롤링보다 민감', r.ewma > r.rolling, JSON.stringify(r));
+
+  r = calcGpsForecastMetrics(Array(28).fill(0));
+  check('GPS 휴식만 있으면 비율 없음', r.ewma === null && r.rolling === null, JSON.stringify(r));
+  check('GPS 휴식만 있으면 모노토니/스트레인 0', r.monotony === 0 && r.strain === 0, JSON.stringify(r));
+})();
+
+// ── 주기화 데이터 존재일 통합 ──────────────────────────────
+(function () {
+  const gps=[
+    {session_date:'2026-07-01',session_type2:'M',track:'ALL'},
+    {session_date:'2026-07-02',session_type2:'S',track:'ALL'},
+    {session_date:'2026-07-03',session_type2:'SS',track:'ALL'},
+    {session_date:'2026-07-04',session_type2:'M',track:'B'},
+  ];
+  const matches=[{match_date:'2026-07-05'}];
+  const a=buildPeriodKnownDates(gps,matches,'ALL');
+  check('엔트리 완성도는 M 외 훈련 분류를 제외', !a['2026-07-02']&&!a['2026-07-03']);
+  check('A팀 완성도에 경기 테이블 날짜 통합', !!a['2026-07-05']);
+  check('A팀 완성도에서 B트랙 제외', !a['2026-07-04']);
+  const b=buildPeriodKnownDates(gps,matches,'B');
+  check('B팀 완성도는 B트랙만 인정하고 경기 공용 테이블 제외', !!b['2026-07-04']&&!b['2026-07-05']);
+})();
+
+// ── 개인 경기일 FT + TOP 부하 통합 ─────────────────────────
+(function () {
+  const rows=[
+    {match_date:'2026-08-04',time_type:'FT',duration:20,td:2200,band4_td:80,band5_td:20,accel:6,rhie:4,max_speed:30.1,player_load:180,opponent:'테스트FC'},
+    {match_date:'2026-08-04',time_type:'Top',duration:11,td:1100,band4_td:35,band5_td:12,accel:4,rhie:3,max_speed:29.2,player_load:90,opponent:'테스트FC'},
+  ];
+  const r=combineIndividualMatchLoads(rows)[0];
+  check('개인 경기일 FT+TOP 표시', r.load_label==='FT + TOP', r.load_label);
+  check('개인 경기일 활동시간 합산', r.duration===31, r.duration);
+  check('개인 경기일 GPS 부하 합산', r.td===3300&&r.running_high===115&&r.player_load===270, JSON.stringify(r));
+  check('개인 경기일 최고속도는 최댓값', approx(r.max_speed,30.1), r.max_speed);
+})();
+
+// ── 결과 ────────────────────────────────────────────────────
+(function () {
+  const row = (peak, rolling, monotony) => ({ enough:true, peak, rolling, monotony });
+  check('주기화 상태는 롤링 단독 상승을 경고로 판정하지 않음', getPeriodForecastStatus([row(1.1, 1.8, 1.1)]).label === '안정');
+  check('주기화 상태 EWMA 1.3부터 주의', getPeriodForecastStatus([row(1.3, 1.0, 1.0)]).label === '확인 필요');
+  check('주기화 상태 모노토니 2.0부터 높음', getPeriodForecastStatus([row(1.0, 1.0, 2.0)]).label === '부하 확인');
+  check('EWMA 주의 경계 1.30', periodForecastFlag(1.3, 'ratio').level === 1);
+  check('모노토니 주의 경계 1.50', periodForecastFlag(1.5, 'monotony').level === 1);
+  check('과거 부하 근거 부족 시 판정 보류', getPeriodForecastStatus([row(1.5, 1.5, 1.6)],[{reliable:false}]).label === '판정 보류');
+})();
+
 // ── 결과 ────────────────────────────────────────────────────
 print('');
 if (_fail === 0) print('✅ 전체 통과: ' + _pass + '개 테스트');

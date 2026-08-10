@@ -2205,7 +2205,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
 <!-- ===== 블록 설정 모달 ===== -->
 <div id="block-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)closeBlockModal()">
-  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(440px,92vw);border:1px solid var(--border2);margin:auto">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(680px,94vw);border:1px solid var(--border2);margin:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
       <h4 id="block-modal-title" style="margin:0;font-size:15px;font-weight:700">📅 블록 추가</h4>
       <button onclick="closeBlockModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
@@ -2214,11 +2214,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div style="display:flex;gap:10px;margin-bottom:14px">
       <div style="flex:1">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">시작일</div>
-        <input id="bm-start" type="date" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <input id="bm-start" type="date" onchange="renderBlockModalForecast()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
       </div>
       <div style="flex:1">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">종료일</div>
-        <input id="bm-end" type="date" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <input id="bm-end" type="date" onchange="renderBlockModalForecast()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
       </div>
     </div>
     <!-- 상위 맥락 -->
@@ -2252,6 +2252,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <input type="checkbox" id="bm-show-totals" checked style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer">
       <label for="bm-show-totals" style="font-size:12px;color:var(--text);cursor:pointer">색띠에 합계 데이터 표시 <span style="font-size:10px;color:var(--text3)">(TD · HSR · SPR · ACC · RHIE)</span></label>
     </div>
+    <div id="bm-forecast" style="margin-bottom:18px"></div>
     <div style="display:flex;gap:8px">
       <button onclick="saveBlock()" style="flex:1;padding:11px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">저장</button>
       <button onclick="deleteBlock()" id="bm-delete-btn" style="padding:11px 16px;border-radius:8px;border:1px solid #ef4444;background:transparent;color:#ef4444;cursor:pointer;font-size:13px;display:none">삭제</button>
@@ -2277,6 +2278,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     </div>
     <!-- 경기 % 기준 -->
     <div id="wd-basis" style="display:none;margin:0 20px 10px;padding:8px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--border);font-size:11px;color:var(--text3);line-height:1.6"></div>
+    <!-- GPS 계획 부하 예측 -->
+    <div id="wd-forecast" style="margin:0 20px 12px"></div>
     <!-- 테이블 -->
     <div style="overflow-x:auto;padding:0 20px 20px">
       <table id="wd-table" style="width:100%;border-collapse:collapse;min-width:500px"></table>
@@ -2302,7 +2305,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
 <!-- ===== 날짜별 세션 편집 모달 ===== -->
 <div id="day-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto" onclick="if(event.target===this)closeDayModal()">
-  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(420px,92vw);border:1px solid var(--border2);margin:auto">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(680px,94vw);border:1px solid var(--border2);margin:auto">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <div>
         <div id="day-modal-title" style="font-size:15px;font-weight:700"></div>
@@ -2373,6 +2376,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     </div>
     <!-- 항목별 슬라이더 + 절대값 (JS 렌더링) -->
     <div id="dm-metrics-area" style="margin-bottom:18px"></div>
+    <!-- GPS 계획 부하 예측 -->
+    <div id="dm-forecast" style="margin-bottom:18px;padding:10px 12px;border-radius:9px;background:var(--bg);border:1px solid var(--border2)">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">📈 GPS 계획 부하 예측</div>
+      <div style="font-size:10px;color:var(--text3)">최근 실제 GPS와 이 블록의 계획값을 연결해 계산합니다.</div>
+    </div>
     </div><!-- /dm-gauge-area -->
     <div style="display:flex;gap:8px">
       <button onclick="saveDayPlan()" style="flex:1;padding:11px;border-radius:8px;border:none;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:13px">저장</button>
@@ -9012,7 +9020,8 @@ async function loadMorningReport(){
     .select('player_id,session_date,max_speed,duration,session_type2')
     .gte('session_date',since28Str).order('session_date',{ascending:false});
   const {data:match28} = await supa.from('match_records')
-    .select('player_id,match_date,max_speed,duration')
+    .select('player_id,match_date,max_speed,duration,time_type')
+    .in('time_type',['FT','Top','Top-up','TOP'])
     .gte('match_date',since28Str).order('match_date',{ascending:false});
 
   // 치료중/재활중/부분참여 선수는 이미 부상자 현황에 표시되므로 위험 목록에서 제외
@@ -9032,7 +9041,7 @@ async function loadMorningReport(){
     const _pGpsDurD={};
     pgps.forEach(r=>{ if(!_pGpsDurD[r.session_date]) _pGpsDurD[r.session_date]=parseFloat(r.duration)||0; });
     const _pMatchDurD={};
-    pmatch.forEach(r=>{ if(!_pMatchDurD[r.match_date]) _pMatchDurD[r.match_date]=parseFloat(r.duration)||0; });
+    pmatch.forEach(r=>{ _pMatchDurD[r.match_date]=(_pMatchDurD[r.match_date]||0)+(parseFloat(r.duration)||0); });
     const srpeByDate2={};
     prpe.forEach(r=>{
       const rv=parseFloat(r.rpe)||0;
@@ -10142,7 +10151,7 @@ async function downloadDashboardExcel(){
     supa.from('match_records')
       .select('match_date,opponent,home_away,time_type,duration,td,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,max_speed,player_load,rhie,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h,result,score')
       .eq('player_id',playerId).gte('match_date',sinceStr)
-      .in('time_type',['FT','Top-up'])
+      .in('time_type',['FT','Top','Top-up','TOP'])
       .order('match_date',{ascending:true}),
     supa.from('session_records')
       .select('record_date,rpe,duration,session_type,session_order')
@@ -10210,7 +10219,7 @@ async function downloadDashboardExcel(){
   const n = v => parseFloat(v)||0;
   const matchRows = Object.entries(matchByDate).map(([date, recs])=>{
     const ft  = recs.find(r=>r.time_type==='FT');
-    const top = recs.find(r=>r.time_type==='Top-up');
+    const top = recs.find(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
     const base = ft || top; // FT 없으면 Top-up만
     const well = wellMap[date];
     const ha = (base.home_away||'').toUpperCase()==='HOME'?'홈':(base.home_away||'').toUpperCase()==='AWAY'?'원정':'';
@@ -13466,6 +13475,29 @@ function goBack(){
 }
 
 // ── 선수 대시보드 ─────────────────────────
+function combineIndividualMatchLoads(rows){
+  const byDate={};
+  (rows||[]).forEach(r=>(byDate[r.match_date]=byDate[r.match_date]||[]).push(r));
+  return Object.entries(byDate).map(([date,recs])=>{
+    const ft=recs.find(r=>(r.time_type||'').trim().toUpperCase()==='FT'), base=ft||recs[0];
+    const sum=f=>{const v=recs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);return v||null;};
+    const max=f=>{const vals=recs.map(r=>parseFloat(r[f])||0);const v=Math.max(...vals);return v||null;};
+    const hasTop=recs.some(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
+    return {
+      _source:'match', session_date:date,
+      load_label:ft&&hasTop?'FT + TOP':ft?'FT':'TOP',
+      td:sum('td'), running_high:sum('band4_td'), sprint:sum('band5_td'),
+      accel:sum('accel'), rhie:sum('rhie'), max_speed:max('max_speed'),
+      player_load:sum('player_load'), duration:sum('duration'),
+      opponent:base.opponent||null, home_away:base.home_away||null,
+      result:base.result||null, score:base.score||null,
+      session_topic:ft&&hasTop?'FT + TOP':ft?'FT':'TOP',
+      cycle:null, periodization:null, session_type2:null,
+      fmp_run_medium:null, fmp_run_high:null, fmp_dyn_medium:null, fmp_dyn_high:null,
+    };
+  });
+}
+
 async function loadPlayerDashboard(){
   const playerId = document.getElementById('dashboard-player')?.value;
   const days     = parseInt(document.getElementById('dashboard-period')?.value||28);
@@ -13490,7 +13522,7 @@ async function loadPlayerDashboard(){
     supa.from('match_records')
       .select('match_date,opponent,home_away,duration,td,band4_td,band5_td,accel,rhie,max_speed,player_load,hir_sprint,result,score,time_type')
       .eq('player_id',playerId)
-      .eq('time_type','FT')
+      .in('time_type',['FT','Top','Top-up','TOP'])
       .gte('match_date',sinceStr)
       .order('match_date',{ascending:false}),
     supa.from('session_records')
@@ -13543,25 +13575,7 @@ async function loadPlayerDashboard(){
   const hasInjury = injuries?.length > 0;
 
   // match_records → 통합 세션 형식으로 변환
-  const matchSessions = (matchGps||[]).map(r=>({
-    _source:      'match',
-    session_date: r.match_date,
-    td:           parseFloat(r.td)||null,
-    running_high: parseFloat(r.band4_td)||null,   // Band4 = HSR
-    sprint:       parseFloat(r.band5_td)||null,    // Band5 = Sprint
-    accel:        parseFloat(r.accel)||null,
-    rhie:         parseFloat(r.rhie)||null,
-    max_speed:    parseFloat(r.max_speed)||null,
-    player_load:  parseFloat(r.player_load)||null,
-    duration:     parseFloat(r.duration)||null,
-    opponent:     r.opponent||null,
-    home_away:    r.home_away||null,
-    result:       r.result||null,
-    score:        r.score||null,
-    // GPS 전용 필드는 null
-    cycle:null, periodization:null, session_topic:null, session_type2:null,
-    fmp_run_medium:null, fmp_run_high:null, fmp_dyn_medium:null, fmp_dyn_high:null,
-  }));
+  const matchSessions = combineIndividualMatchLoads(matchGps||[]);
 
   // gps_records에 _source 태그 추가
   const gpsSessions = (gps||[]).map(r=>({...r, _source:'gps'}));
@@ -13724,7 +13738,7 @@ async function loadPlayerDashboard(){
         <tr style="border-bottom:1px solid var(--border);background:#1a0808">
           <td style="padding:6px 8px;color:#f87171;white-space:nowrap;font-weight:600">${r.session_date}</td>
           <td style="padding:6px 8px;text-align:center">
-            <span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;background:#3b1219;color:#f87171">🏟️경기</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;background:#3b1219;color:#f87171">🏟️ ${r.load_label||'FT'}</span>
           </td>
           <td style="padding:6px 8px;text-align:center;font-size:11px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
             <span style="color:#f87171;font-weight:600">vs ${r.opponent||'—'}</span>
@@ -13743,7 +13757,7 @@ async function loadPlayerDashboard(){
           <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
           <td style="padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap">${wellTd}</td>
           ${currentUseWellness?`<td style="padding:6px 8px;text-align:right;font-size:11px;color:var(--text2)">${w?.morning_weight||'—'}</td>`:''}
-          <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">경기</td>
+          <td style="padding:6px 8px;text-align:center;font-size:11px;color:var(--text3)">${r.load_label||'FT'}</td>
         </tr>`;
     }
 
@@ -15260,7 +15274,8 @@ async function loadTrainingSuitability(){
     // 경기는 120일 — 최근 부하(회복 지수)와 개인 경기 기준선을 함께 뽑는다.
     // calcACWR·calcMVExposure는 내부에서 28·21일로 자르므로 더 넣어도 안전하다.
     supa.from('match_records')
-      .select('player_id,match_date,max_speed,duration,player_load,band4_td,band5_td,decel')
+      .select('player_id,match_date,max_speed,duration,player_load,band4_td,band5_td,decel,time_type')
+      .in('time_type',['FT','Top','Top-up','TOP'])
       .gte('match_date', s120).lte('match_date', day),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration,session_type,session_order')
@@ -15300,7 +15315,7 @@ async function loadTrainingSuitability(){
 
     const gpsDur = {}; pgps.forEach(r => { const k=r.session_date+'__'+(r.session_label||'AM').toUpperCase();
                                            if(!gpsDur[k]) gpsDur[k]=parseFloat(r.duration)||0; });
-    const mDur   = {}; pmatch.forEach(r => { if(!mDur[r.match_date]) mDur[r.match_date]=parseFloat(r.duration)||0; });
+    const mDur   = {}; pmatch.forEach(r => { mDur[r.match_date]=(mDur[r.match_date]||0)+(parseFloat(r.duration)||0); });
 
     const srpe = {};
     prpe.forEach(r => {
@@ -15324,9 +15339,10 @@ async function loadTrainingSuitability(){
 
     // 회복 부하 — 경기·훈련을 하나의 부하 스트림으로 보고 감쇠 합산
     const recovMatches = pmatch.map(recovMapMatch);
+    const recovFtMatches = pmatch.filter(r=>r.time_type==='FT').map(recovMapMatch);
     const recov = calcRecoveryLoad(
       [...recovMatches, ...pgps.map(recovMapGps)],
-      buildRecovBaseline(recovMatches), day);
+      buildRecovBaseline(recovFtMatches), day);
     const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
     const hasDecisionData = acwrData.acwr !== null || mvExp?.hasData === true || wellData !== null || recov.hasBL;
     const verdict = calcSuitability(risk.level, demand, risk.flags, hasDecisionData);
@@ -19525,7 +19541,7 @@ async function generateMatchReport(){
   const ftRows  = allRows.filter(r=>r.time_type==='FT');
   const q1Rows  = allRows.filter(r=>r.time_type==='1Q');
   const q2Rows  = allRows.filter(r=>r.time_type==='2Q');
-  const topRows = allRows.filter(r=>r.time_type==='Top-up');
+  const topRows = allRows.filter(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
   const hasHalf = q1Rows.length>0 && q2Rows.length>0;
 
   // 최근 3경기 팀 합계용 (FT 전체)
@@ -19853,7 +19869,7 @@ async function generateMatchReport(){
     .select('player_id,match_date,duration,time_type')
     .gte('match_date',_chrFrom.toISOString().split('T')[0])
     .lt('match_date',date)
-    .in('time_type',['FT','Top-up'])  // 1Q/2Q는 FT의 부분집합 → 중복 방지 위해 제외
+    .in('time_type',['FT','Top','Top-up','TOP'])  // 1Q/2Q는 FT의 부분집합 → 중복 방지 위해 제외
     .limit(20000);
   let _mAdd=0;
   (matchHist||[]).forEach(r=>{
@@ -22676,7 +22692,7 @@ async function loadMatchDetail(date, opponent){
   const ftRows=rows.filter(r=>r.time_type==='FT');
   const q1Rows=rows.filter(r=>r.time_type==='1Q');
   const q2Rows=rows.filter(r=>r.time_type==='2Q');
-  const topRows=rows.filter(r=>r.time_type==='Top-up');
+  const topRows=rows.filter(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
 
   const makeTable=(data,title)=>`
     <div style="margin-bottom:16px">
@@ -25341,6 +25357,9 @@ let _dmEditDate  = null; // 편집중인 날짜
 let _dmEditId    = null; // 편집중인 block_days id
 let _dmEditRefBasis = null; // 편집중인 날의 기존 기준 스냅샷 (지난 날 고정용)
 let _dmBasisAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0}; // 모달 내 %↔절대값 변환 기준(지난 날은 고정 기준)
+let _periodForecastActual = {}; // 날짜별 실제 팀 GPS/경기 평균
+let _periodForecastKnown = {}; // 날짜별 데이터 존재 여부 (모든 훈련 분류 + 경기)
+let _periodForecastFirst = null;
 
 // 주기화 지표 정의 (pct키 / 목표컬럼 / 평균키 매핑)
 const PERIOD_METRICS = [
@@ -25382,10 +25401,17 @@ async function loadPeriodTab() {
   const lastD=new Date(y,m+1,0); lastD.setDate(lastD.getDate()+7);
   const first=firstD.toISOString().split('T')[0];
   const last=lastD.toISOString().split('T')[0];
-  const [{data:blocks},{data:days}] = await Promise.all([
+  const histD=new Date(first+'T00:00:00'); histD.setDate(histD.getDate()-60);
+  const hist=histD.toISOString().split('T')[0];
+  const [{data:blocks},{data:days},{data:gpsRows},{data:matchRows}] = await Promise.all([
     supa.from('blocks').select('*').order('start_date'),
-    supa.from('block_days').select('*').gte('plan_date',first).lte('plan_date',last)
+    supa.from('block_days').select('*').gte('plan_date',hist).lte('plan_date',last),
+    supa.from('gps_records').select('session_date,td,running_high,sprint,accel,rhie,duration,session_type2,track').gte('session_date',hist).lte('session_date',last),
+    supa.from('match_records').select('match_date,td,band4_td,band5_td,accel,rhie,duration,time_type').eq('time_type','FT').gte('match_date',hist).lte('match_date',last)
   ]);
+  _periodForecastFirst=hist;
+  _periodForecastActual=buildPeriodActualLoads(gpsRows||[],matchRows||[],_periodTrack);
+  _periodForecastKnown=buildPeriodKnownDates(gpsRows||[],matchRows||[],_periodTrack);
   _blocksAll = blocks||[];
   _rebuildBlocksForTrack();
   // 전 트랙을 날짜별로 보관
@@ -25425,7 +25451,274 @@ function setPeriodTrack(t){
   });
   _rebuildBlocksForTrack();
   _rebuildDaysDataForTrack();
-  renderPeriodCalendar();
+  loadPeriodTab();
+}
+
+// 일별 선수 행 → 팀 평균. 기존 팀 대시보드와 동일하게 시간으로 보정한다.
+function periodLoadAvg(rows, field){
+  const vals=(rows||[]).filter(r=>parseFloat(r[field])>=0&&parseFloat(r.duration)>0);
+  if(!vals.length) return 0;
+  const dc={}; vals.forEach(r=>{const d=Math.round(parseFloat(r.duration));dc[d]=(dc[d]||0)+1;});
+  const modeDur=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1]||parseFloat(b[0])-parseFloat(a[0]))[0][0]);
+  const sumVal=vals.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
+  const sumDur=vals.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+  return sumDur>0?Math.round(sumVal/sumDur*modeDur):0;
+}
+
+function buildPeriodActualLoads(gpsRows, matchRows, track){
+  const out={}, gpsByDate={}, matchByDate={};
+  (gpsRows||[]).forEach(r=>{
+    const rt=(r.track||'ALL').toUpperCase();
+    const wanted=track==='B'?rt==='B':rt!=='B';
+    if(!wanted||(r.session_type2||'').trim().toUpperCase()!=='M') return;
+    (gpsByDate[r.session_date]=gpsByDate[r.session_date]||[]).push(r);
+  });
+  if(track!=='B') (matchRows||[]).forEach(r=>(matchByDate[r.match_date]=matchByDate[r.match_date]||[]).push(r));
+  const dates=new Set([...Object.keys(gpsByDate),...Object.keys(matchByDate)]);
+  dates.forEach(date=>{
+    const mr=matchByDate[date]||[], gr=gpsByDate[date]||[];
+    const rows=mr.length?mr:gr;
+    const cols=mr.length
+      ? {td:'td',hsr:'band4_td',spr:'band5_td',acc:'accel',rhie:'rhie'}
+      : {td:'td',hsr:'running_high',spr:'sprint',acc:'accel',rhie:'rhie'};
+    out[date]={}; Object.entries(cols).forEach(([k,col])=>out[date][k]=periodLoadAvg(rows,col));
+  });
+  return out;
+}
+
+// 엔트리 부하 완성도도 실제 산출과 동일하게 M/FT만 인정한다.
+// S·SS·X는 개인 부하에는 들어가지만 엔트리 팀 부하 근거에서는 제외한다.
+function buildPeriodKnownDates(gpsRows,matchRows,track){
+  const out={};
+  (gpsRows||[]).forEach(r=>{
+    const rt=(r.track||'ALL').toUpperCase();
+    const wanted=track==='B'?rt==='B':rt!=='B';
+    const type=(r.session_type2||'').trim().toUpperCase();
+    if(wanted&&type==='M'&&r.session_date) out[r.session_date]={source:'training'};
+  });
+  if(track!=='B') (matchRows||[]).forEach(r=>{if(r.match_date) out[r.match_date]={source:'match'};});
+  return out;
+}
+
+// EWMA ACWR(7/28) + 7일 롤링 ACWR·모노토니·스트레인.
+// values는 오래된 날짜부터 오늘/예측일까지의 일일 GPS 부하이며 휴식일 0을 포함한다.
+function calcGpsForecastMetrics(values){
+  if(!values||!values.length) return {ewma:null,rolling:null,monotony:null,strain:null};
+  const la=2/(7+1), lc=2/(28+1);
+  let acute=0, chronic=0;
+  values.forEach((raw,i)=>{
+    const v=Math.max(0,parseFloat(raw)||0);
+    if(i===0){acute=v;chronic=v;} else {acute=v*la+acute*(1-la);chronic=v*lc+chronic*(1-lc);}
+  });
+  const week=values.slice(-7).map(v=>Math.max(0,parseFloat(v)||0));
+  while(week.length<7) week.unshift(0);
+  const sum=week.reduce((a,b)=>a+b,0), mean=sum/7;
+  const variance=week.reduce((a,v)=>a+Math.pow(v-mean,2),0)/7;
+  const sd=Math.sqrt(variance);
+  const chronicRoll=values.slice(-28).reduce((a,v)=>a+(parseFloat(v)||0),0)/28*7;
+  return {
+    ewma:chronic>0?acute/chronic:null,
+    rolling:chronicRoll>0?sum/chronicRoll:null,
+    monotony:mean===0?0:sd>0?mean/sd:Infinity,
+    strain:mean===0?0:sd>0?sum*(mean/sd):Infinity,
+  };
+}
+
+function periodDateRange(start,end){
+  const out=[], d=new Date(start+'T00:00:00'), e=new Date(end+'T00:00:00');
+  while(d<=e){out.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);d.setDate(d.getDate()+1);}
+  return out;
+}
+
+function getDraftDayTargets(){
+  const out={};
+  DM_METRICS.forEach(m=>{const el=document.getElementById('dm-abs-'+m.id);out[m.id]=el&&el.value!==''?Math.max(0,parseFloat(el.value)||0):0;});
+  return out;
+}
+
+const PERIOD_TARGET_KEYS={td:'td_target',hsr:'hsr_target',spr:'spr_target',acc:'acc_target',rhie:'rhie_target'};
+
+// 블록 전체 계획을 하루씩 누적해 지표별 최고 위험 구간을 찾는다.
+function calcPeriodBlockForecast(block,dayMap,overrides={}){
+  if(!block) return [];
+  const start=_periodForecastFirst||(()=>{const d=new Date(block.start_date+'T00:00:00');d.setDate(d.getDate()-60);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;})();
+  const dates=periodDateRange(start,block.end_date);
+  const today=getKSTDateStr();
+  return DM_METRICS.map(m=>{
+    const values=[], points=[];
+    const actualCount=dates.filter(ds=>ds<block.start_date&&ds<=today&&(_periodForecastActual[ds]?.[m.id]||0)>0).length;
+    dates.forEach(ds=>{
+      let value=0;
+      if(ds<block.start_date&&ds<=today) value=_periodForecastActual[ds]?.[m.id]||0;
+      else if(ds>=block.start_date&&ds<=block.end_date){
+        const override=overrides[ds];
+        value=override&&Object.prototype.hasOwnProperty.call(override,m.id)
+          ? override[m.id]
+          : dayMap?.[ds]?.[PERIOD_TARGET_KEYS[m.id]]||0;
+      }
+      values.push(Math.max(0,parseFloat(value)||0));
+      if(ds>=block.start_date){
+        const stat=calcGpsForecastMetrics(values);
+        points.push({date:ds,...stat});
+      }
+    });
+    if(actualCount<7) return {m,enough:false,actualCount,peak:null,peakDate:null,rolling:null,monotony:null,strain:null};
+    const finite=(key)=>points.filter(p=>p[key]!=null&&isFinite(p[key]));
+    const peakPoint=finite('ewma').sort((a,b)=>b.ewma-a.ewma)[0]||null;
+    const max=(key)=>{const vals=finite(key).map(p=>p[key]);return vals.length?Math.max(...vals):null;};
+    return {m,enough:true,actualCount,peak:peakPoint?.ewma??null,peakDate:peakPoint?.date||null,
+      rolling:max('rolling'),monotony:max('monotony'),strain:max('strain')};
+  });
+}
+
+function getPeriodForecastStatus(rows,diagnoses=null){
+  const usable=(rows||[]).filter(r=>r.enough&&r.peak!=null);
+  if(!usable.length) return {label:'데이터 부족',color:'#94a3b8',icon:'⚪'};
+  if(diagnoses&&!(diagnoses||[]).some(d=>d.reliable)) return {label:'판정 보류',color:'#94a3b8',icon:'⚪'};
+  // 최종 상태는 EWMA 중심, 모노토니는 반복 부하 경고로 보완한다. 롤링은 참고값이다.
+  const hasHigh=usable.some(r=>r.peak>=1.5||r.monotony>=2);
+  const hasWarn=usable.some(r=>r.peak>=1.3||r.monotony>=1.5);
+  if(hasHigh) return {label:'부하 확인',color:'#f87171',icon:'🔴'};
+  if(hasWarn) return {label:'확인 필요',color:'#fb923c',icon:'🟠'};
+  return {label:'안정',color:'#4ade80',icon:'🟢'};
+}
+
+function periodForecastFlag(value,type){
+  if(value==null||!isFinite(value)) return {level:0,label:'',color:'var(--text2)',bg:'transparent'};
+  const high=type==='monotony'?2:1.5;
+  const warn=type==='monotony'?1.5:1.3;
+  if(value>=high) return {level:2,label:'높음',color:'#f87171',bg:'rgba(248,113,113,0.12)'};
+  if(value>=warn) return {level:1,label:'주의',color:'#fb923c',bg:'rgba(251,146,60,0.10)'};
+  return {level:0,label:'안정',color:'#4ade80',bg:'transparent'};
+}
+
+function mergePeriodPlan(dayMap,overrides={}){
+  const merged={...dayMap};
+  Object.entries(overrides).forEach(([ds,vals])=>{
+    merged[ds]={...(dayMap?.[ds]||{})};
+    Object.entries(vals).forEach(([metricId,value])=>{merged[ds][PERIOD_TARGET_KEYS[metricId]]=value;});
+  });
+  return merged;
+}
+
+// 직전 28일을 그 이전 28일과 비교한다. 기록일과 계획상 REST만 '확인된 날짜'로 센다.
+function calcPriorLoadDiagnosis(block,dayMap,metricId,forecastRow){
+  const start=new Date(block.start_date+'T00:00:00');
+  const recentEnd=new Date(start); recentEnd.setDate(recentEnd.getDate()-1);
+  const recentStart=new Date(start); recentStart.setDate(recentStart.getDate()-28);
+  const prevEnd=new Date(recentStart); prevEnd.setDate(prevEnd.getDate()-1);
+  const prevStart=new Date(recentStart); prevStart.setDate(prevStart.getDate()-28);
+  const fmtDate=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const windowStat=(a,b)=>{
+    const dates=periodDateRange(fmtDate(a),fmtDate(b));
+    let known=0,sum=0;
+    dates.forEach(ds=>{
+      const hasActual=Object.prototype.hasOwnProperty.call(_periodForecastActual,ds);
+      const hasRecord=Object.prototype.hasOwnProperty.call(_periodForecastKnown,ds);
+      const isRest=(dayMap?.[ds]?.day_label||'').trim().toUpperCase()==='REST';
+      if(hasRecord||isRest) known++;
+      if(hasActual) sum+=_periodForecastActual[ds]?.[metricId]||0;
+    });
+    return {known,coverage:known/28,weekly:sum/4};
+  };
+  const recent=windowStat(recentStart,recentEnd), previous=windowStat(prevStart,prevEnd);
+  const reliable=recent.coverage>=0.75&&previous.coverage>=0.5&&previous.weekly>0;
+  if(!reliable) return {reliable:false,recent,previous,state:'unknown',interpretation:'과거 기록 부족 — 언더로드/오버로드 판정 보류'};
+  const ratio=recent.weekly/previous.weekly;
+  const state=ratio<0.8?'under':ratio>1.2?'high':'normal';
+  const rising=(forecastRow?.peak??0)>=1.3;
+  const interpretation=state==='under'&&rising?'기반 부하가 낮은 상태에서 계획 부하 증가'
+    :state==='high'&&rising?'이전 부하가 높은 상태에서 추가 증가'
+    :state==='under'?'지속적인 언더로드 가능성'
+    :state==='high'?'최근 28일 부하가 이전보다 높음':'이전 부하 적정 범위';
+  return {reliable:true,recent,previous,ratio,state,interpretation};
+}
+
+function priorDiagnosisText(d,metric){
+  const unit=['td','hsr','spr'].includes(metric.id)?'m/주':'회/주';
+  if(!d.reliable) return `<span style="color:#94a3b8">${d.interpretation}</span><br><small style="color:var(--text3)">최근 28일 확인 ${d.recent.known}/28일 · 이전 28일 ${d.previous.known}/28일</small>`;
+  const color=d.state==='under'?'#60a5fa':d.state==='high'?'#f87171':'#4ade80';
+  const label=d.state==='under'?'언더로드':d.state==='high'?'높은 부하':'적정';
+  return `<b style="color:${color}">${label}</b> · ${d.interpretation}<br><small style="color:var(--text3)">최근 ${Math.round(d.recent.weekly).toLocaleString()}${unit} / 이전 ${Math.round(d.previous.weekly).toLocaleString()}${unit} (${Math.round(d.ratio*100)}%)</small>`;
+}
+
+function renderWeekForecast(block,dayMap){
+  const el=document.getElementById('wd-forecast'); if(!el) return;
+  const rows=calcPeriodBlockForecast(block,dayMap);
+  const diagnoses=rows.map(r=>calcPriorLoadDiagnosis(block,dayMap,r.m.id,r));
+  const status=getPeriodForecastStatus(rows,diagnoses);
+  const fmt=v=>v==null?'—':v.toFixed(2);
+  const cell=(v,type)=>{const f=periodForecastFlag(v,type);return `<td style="text-align:center;color:${f.color};background:${f.bg}"><b>${fmt(v)}</b>${f.level?`<span style="display:inline-block;margin-left:4px;padding:1px 4px;border-radius:3px;border:1px solid ${f.color}66;font-size:8px;font-weight:700">${f.label}</span>`:''}</td>`;};
+  const reason=r=>{
+    if(!r.enough) return `실제 데이터 ${r.actualCount}일 — 최소 7일 필요`;
+    const issues=[];
+    const ef=periodForecastFlag(r.peak,'ratio'), mf=periodForecastFlag(r.monotony,'monotony');
+    if(ef.level) issues.push(`EWMA ${ef.label} (${fmt(r.peak)})`);
+    if(mf.level) issues.push(`반복 부하 ${mf.label} (${fmt(r.monotony)})`);
+    return issues.length?issues.join(' · '):'특이 신호 없음';
+  };
+  el.innerHTML=`<div style="padding:10px 12px;border-radius:9px;background:var(--bg);border:1px solid var(--border)">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:7px">
+      <div><b style="font-size:12px;color:var(--text2)">📈 블록 GPS 계획 부하 예측</b><div style="font-size:9px;color:var(--text3);margin-top:2px">주 판단: EWMA 7/28 · 반복 부하: 모노토니 · 롤링은 참고</div></div>
+      <span style="font-size:10px;font-weight:700;color:${status.color};white-space:nowrap">${status.icon} ${status.label}</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:1000px">
+      <thead><tr style="color:var(--text3)"><th style="padding:4px;text-align:left">지표</th><th>EWMA 최고</th><th>최고 날짜</th><th>롤링 최고<br><small>(참고)</small></th><th>모노토니 최고</th><th>스트레인 최고</th><th style="text-align:left;padding-left:8px">계획 신호</th><th style="text-align:left;padding-left:8px">이전 부하 진단</th></tr></thead>
+      <tbody>${rows.map((r,i)=>`<tr style="border-top:1px solid var(--border)"><td style="padding:5px 4px;font-weight:700;color:${r.m.color}">${r.m.label}</td>${cell(r.peak,'ratio')}<td style="text-align:center;color:var(--text2)">${r.peakDate?r.peakDate.slice(5):'—'}</td><td style="text-align:center;color:var(--text3)">${fmt(r.rolling)} <small>참고</small></td>${cell(r.monotony,'monotony')}<td style="text-align:center;color:var(--text2)">${r.strain==null?'—':Math.round(r.strain).toLocaleString()}</td><td style="padding:5px 8px;color:${reason(r)==='특이 신호 없음'?'#4ade80':r.enough?'#fb923c':'#94a3b8'};font-weight:600">${reason(r)}</td><td style="padding:5px 8px;line-height:1.45">${priorDiagnosisText(diagnoses[i],r.m)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div style="font-size:9px;color:var(--text3);margin-top:7px;line-height:1.5"><b style="color:#fb923c">주의 기준</b> EWMA 1.30 이상 · 모노토니 1.50 이상 / <b style="color:#f87171">높음 기준</b> EWMA 1.50 이상 · 모노토니 2.00 이상<br>이전 부하는 최근 28일 주간평균을 그 이전 28일과 비교합니다. 기록 완성도가 낮으면 감량 처방 대신 판정을 보류합니다.</div>
+  </div>`;
+}
+
+function renderBlockModalForecast(){
+  const el=document.getElementById('bm-forecast'); if(!el) return;
+  const start=document.getElementById('bm-start')?.value, end=document.getElementById('bm-end')?.value;
+  if(!start||!end||start>end){
+    el.innerHTML='<div style="padding:10px 12px;border:1px dashed var(--border2);border-radius:8px;color:var(--text3);font-size:11px">시작일과 종료일을 선택하면 GPS 부하 예측이 표시됩니다.</div>';
+    return;
+  }
+  const block={start_date:start,end_date:end};
+  const planned=periodDateRange(start,end).filter(ds=>{const d=_daysData[ds];return d&&Object.values(PERIOD_TARGET_KEYS).some(k=>(d[k]||0)>0);}).length;
+  if(!planned){
+    el.innerHTML='<div style="padding:10px 12px;border:1px dashed var(--border2);border-radius:8px;color:var(--text3);font-size:11px"><b style="color:var(--text2)">📈 GPS 계획 부하 예측</b><br>이 기간에 입력된 훈련량이 없습니다. 블록을 저장한 뒤 날짜별 훈련량을 설정하면 같은 EWMA 기준으로 즉시 계산됩니다.</div>';
+    return;
+  }
+  const rows=calcPeriodBlockForecast(block,_daysData);
+  const diagnoses=rows.map(r=>calcPriorLoadDiagnosis(block,_daysData,r.m.id,r));
+  const status=getPeriodForecastStatus(rows,diagnoses);
+  const fmt=v=>v==null?'—':v.toFixed(2);
+  el.innerHTML=`<div style="padding:10px 12px;border:1px solid var(--border2);border-radius:8px;background:var(--bg)">
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:6px"><div><b style="font-size:11px;color:var(--text2)">📈 현재 블록 GPS 예측</b><div style="font-size:9px;color:var(--text3)">EWMA 주 판단 · 모노토니 반복 부하 · 롤링 참고</div></div><b style="font-size:10px;color:${status.color}">${status.icon} ${status.label}</b></div>
+    ${rows.map((r,i)=>{const ef=periodForecastFlag(r.peak,'ratio'),mf=periodForecastFlag(r.monotony,'monotony');const issue=!r.enough?`실제 ${r.actualCount}일`:ef.level?`EWMA ${ef.label}`:mf.level?`반복 부하 ${mf.label}`:'안정';const c=!r.enough?'#94a3b8':ef.level?ef.color:mf.level?mf.color:'#4ade80';return `<div style="display:grid;grid-template-columns:45px .8fr .9fr 1fr 2.6fr;gap:6px;padding:5px 0;border-top:1px solid var(--border);font-size:10px;align-items:start"><b style="color:${r.m.color}">${r.m.label}</b><span>EWMA <b>${fmt(r.peak)}</b></span><span>모노토니 <b>${fmt(r.monotony)}</b></span><b style="color:${c}">${issue}</b><span style="line-height:1.4">${priorDiagnosisText(diagnoses[i],r.m)}</span></div>`;}).join('')}
+  </div>`;
+}
+
+function renderPeriodForecastPreview(){
+  const el=document.getElementById('dm-forecast');
+  if(!el||!_dmEditDate) return;
+  const block=getBlockForDate(_dmEditDate);
+  if(!block){el.innerHTML='';return;}
+  const draft=getDraftDayTargets();
+  if(document.getElementById('dm-rest')?.checked) DM_METRICS.forEach(m=>draft[m.id]=0);
+  const before=calcPeriodBlockForecast(block,_daysData);
+  const draftMap=mergePeriodPlan(_daysData,{[_dmEditDate]:draft});
+  const after=calcPeriodBlockForecast(block,draftMap);
+  const diagnoses=after.map(r=>calcPriorLoadDiagnosis(block,draftMap,r.m.id,r));
+  const previewStatus=getPeriodForecastStatus(after,diagnoses);
+  const arrow=(a,b,type,integer=false)=>{const f=type?periodForecastFlag(b,type):{color:'var(--text2)',label:'',level:0};return `${a==null?'—':integer?Math.round(a).toLocaleString():a.toFixed(2)} <span style="color:var(--text3)">→</span> <b style="color:${f.color}">${b==null?'—':integer?Math.round(b).toLocaleString():b.toFixed(2)}</b>${f.level?` <small style="color:${f.color}">${f.label}</small>`:''}`;};
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:7px">
+      <div><div style="font-size:12px;font-weight:700;color:var(--text2)">📈 이 날짜 변경이 블록에 미치는 영향</div><div style="font-size:9px;color:var(--text3)">현재 저장 계획 → 지금 입력한 계획</div></div>
+      <span style="font-size:9px;font-weight:700;color:${previewStatus.color}">${previewStatus.icon} ${previewStatus.label}</span>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:430px">
+      <thead><tr style="color:var(--text3)"><th style="text-align:left;padding:4px">지표</th><th>EWMA 최고</th><th>모노토니 최고</th><th>스트레인 최고</th></tr></thead>
+      <tbody>${after.map((r,i)=>`<tr style="border-top:1px solid var(--border)"><td style="padding:5px 4px;font-weight:700;color:${r.m.color}">${r.m.label}${r.enough?'':`<div style="font-size:8px;color:#94a3b8;font-weight:400">실제 ${r.actualCount}일</div>`}</td><td style="text-align:center">${arrow(before[i].peak,r.peak,'ratio')}</td><td style="text-align:center">${arrow(before[i].monotony,r.monotony,'monotony')}</td><td style="text-align:center">${arrow(before[i].strain,r.strain,null,true)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div style="margin-top:7px;padding-top:6px;border-top:1px solid var(--border)">
+      <div style="font-size:9px;font-weight:700;color:var(--text3);margin-bottom:3px">이전 부하 상태와 계획 해석</div>
+      ${after.map((r,i)=>`<div style="display:grid;grid-template-columns:38px 1fr;gap:5px;padding:3px 0;font-size:9px"><b style="color:${r.m.color}">${r.m.label}</b><span>${priorDiagnosisText(diagnoses[i],r.m)}</span></div>`).join('')}
+    </div>
+    <div style="margin-top:6px;font-size:9px;color:var(--text3);line-height:1.5">값을 바꾸면 즉시 비교됩니다. 저장하기 전 판단을 돕는 참고값입니다.</div>`;
 }
 
 async function loadPeriodMatchAvg() {
@@ -25525,6 +25818,12 @@ function renderPeriodCalendar() {
         });
         blockSums[block.id]={sumTD,sumHSR,sumSPR,sumACC,sumRHI,hasSums:dayCnt>0&&avg.td>0};
       });
+      const blockForecasts={};
+      weekBlocks.forEach(block=>{
+        const rows=calcPeriodBlockForecast(block,_daysData);
+        const diagnoses=rows.map(r=>calcPriorLoadDiagnosis(block,_daysData,r.m.id,r));
+        blockForecasts[block.id]=getPeriodForecastStatus(rows,diagnoses);
+      });
 
       // 타이틀 행
       html+='<tr>';
@@ -25539,6 +25838,7 @@ function renderPeriodCalendar() {
           else break;
         }
         const {sumTD,sumHSR,sumSPR,sumACC,sumRHI,hasSums}=blockSums[block.id]||{};
+        const forecastStatus=blockForecasts[block.id]||getPeriodForecastStatus([]);
         const blockTitle=[block.context,block.label].filter(Boolean).join(' · ');
         const sumsRow=(hasSums&&block.show_totals!==false)?`
           <div style="background:rgba(0,0,0,0.25);margin:2px -10px -4px;padding:2px 10px;display:flex;gap:10px;justify-content:center;white-space:nowrap;overflow:hidden">
@@ -25551,7 +25851,10 @@ function renderPeriodCalendar() {
         html+=`<td colspan="${span}" onclick="openWeekDetail('${block.id}')"
           style="padding:3px 10px 4px;background:${block.color}33;border:1px solid ${block.color}66;border-bottom:none;
           border-radius:4px 4px 0 0;text-align:center;cursor:pointer;overflow:hidden">
-          <div style="font-size:11px;font-weight:700;color:${block.color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${blockTitle}</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:7px;white-space:nowrap;overflow:hidden">
+            <span style="font-size:11px;font-weight:700;color:${block.color};overflow:hidden;text-overflow:ellipsis">${blockTitle}</span>
+            <span style="font-size:8px;font-weight:700;color:${forecastStatus.color};border:1px solid ${forecastStatus.color}55;background:${forecastStatus.color}18;border-radius:4px;padding:1px 4px;flex-shrink:0">${forecastStatus.icon} ${forecastStatus.label}</span>
+          </div>
           ${sumsRow}
         </td>`;
         dow+=span;
@@ -25690,6 +25993,7 @@ function openBlockModal(blockId){
       document.getElementById('block-modal-title').textContent='📅 블록 편집';
     }
   }
+  renderBlockModalForecast();
   document.getElementById('block-modal').style.display='flex';
 }
 
@@ -25921,6 +26225,7 @@ function onDmLabelChange(val) {
   } else {
     badge.style.display = 'none';
   }
+  renderPeriodForecastPreview();
 }
 
 const DM_METRICS = [
@@ -25980,6 +26285,7 @@ function onDmSlider(id, pctVal){
   document.getElementById('dm-pct-'+id).style.color=gc;
   document.getElementById('dm-pct-'+id).value=pctVal;
   document.getElementById('dm-abs-'+id).value=absVal||'';
+  renderPeriodForecastPreview();
 }
 
 function onDmPct(id, pctVal){
@@ -25996,6 +26302,7 @@ function onDmPct(id, pctVal){
   document.getElementById('dm-pct-'+id).style.color=gc;
   document.getElementById('dm-slider-'+id).value=sliderPct;
   document.getElementById('dm-abs-'+id).value=absVal||'';
+  renderPeriodForecastPreview();
 }
 
 function onDmAbs(id, absVal){
@@ -26012,6 +26319,7 @@ function onDmAbs(id, absVal){
   document.getElementById('dm-pct-'+id).style.color=gc2;
   document.getElementById('dm-pct-'+id).value=pct;
   document.getElementById('dm-slider-'+id).value=sliderPct;
+  renderPeriodForecastPreview();
 }
 
 
@@ -26027,6 +26335,7 @@ function toggleDmRest(isRest){
   }
   document.getElementById('dm-training-area').style.display = isRest?'none':'block';
   document.getElementById('dm-gauge-area').style.display    = isRest?'none':'block';
+  renderPeriodForecastPreview();
 }
 
 function openDayModal(dateStr){
@@ -26079,6 +26388,7 @@ function openDayModal(dateStr){
 
   // 항목별 슬라이더+절대값 렌더링
   renderDmMetrics(dayRow);
+  renderPeriodForecastPreview();
 
   document.getElementById('dm-delete-btn').style.display=dayRow.id?'block':'none';
   document.getElementById('day-modal').style.display='flex';
@@ -26182,9 +26492,10 @@ async function openWeekDetail(blockId) {
   }
 
   // block_days 로드
-  const {data:days} = await supa.from('block_days').select('*').eq('track','ALL').in('plan_date', dates);
+  const {data:days} = await supa.from('block_days').select('*').eq('track',_periodTrack).in('plan_date', dates);
   const dayMap = {};
   (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
+  renderWeekForecast(block,dayMap);
 
   // 경기 % 기준: 이 블록의 계획들이 어떤 최근 3경기를 기준으로 짜였는지 표시
   const basisEl = document.getElementById('wd-basis');
