@@ -1092,7 +1092,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
             <option value="FT">FT (풀타임)</option>
             <option value="1Q">1Q (전반)</option>
             <option value="2Q">2Q (후반)</option>
-            <option value="Top-up">Top-up (추가훈련)</option>
+            <option value="TOP">TOP (추가훈련)</option>
           </select>
         </div>
       </div>
@@ -22801,19 +22801,20 @@ async function loadMatchDetail(date, opponent){
 async function loadMatchPlayerDetail(){
   const pid=document.getElementById('match-player-sel')?.value;
   const timeType=document.getElementById('match-time-sel')?.value||'FT';
+  const isTop=['TOP','TOP-UP'].includes((timeType||'').trim().toUpperCase());
+  const typeLabel=isTop?'TOP':timeType;
   const out=document.getElementById('match-player-output');
   if(!pid||!out) return;
 
   const player=_players.find(p=>p.id===pid);
   out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
 
-  const {data:rows}=await supa.from('match_records')
-    .select('*')
-    .eq('player_id',pid).eq('time_type',timeType)
-    .order('match_date',{ascending:false});
+  let query=supa.from('match_records').select('*').eq('player_id',pid);
+  query=isTop?query.in('time_type',['Top','TOP','Top-up']):query.eq('time_type',timeType);
+  const {data:rows}=await query.order('match_date',{ascending:false});
 
   if(!rows?.length){
-    out.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3)">${player?.name||''} · ${timeType} 경기 데이터 없음</div>`;
+    out.innerHTML=`<div style="text-align:center;padding:2rem;color:var(--text3)">${player?.name||''} · ${typeLabel} 데이터 없음</div>`;
     return;
   }
 
@@ -22887,7 +22888,7 @@ async function loadMatchPlayerDetail(){
 
   out.innerHTML=`
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px">
-      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">${player?.name||''} · ${player?.position||''} · ${timeType} ${rows.length}경기</div>
+      <div style="font-size:13px;font-weight:600;color:var(--text);margin-bottom:10px">${player?.name||''} · ${player?.position||''} · ${typeLabel} ${rows.length}회</div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${summaryCards}</div>
     </div>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
