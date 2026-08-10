@@ -556,6 +556,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <h3>📊 선수 통합 관리</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">팀 요약</button>
+      <button class="btn-exp" onclick="setPlayerView('suitability')" id="pvbtn-suitability">🧬 훈련 적합성 판정</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('period')" id="pvbtn-period">📅 주기화</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('training')" id="pvbtn-training">📋 훈련 데이터</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('match')" id="pvbtn-match">🏟️ 경기 데이터</button>
@@ -767,6 +768,23 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <button onclick="closePlayerForm()" style="flex:1;padding:11px;background:var(--surface2);border:1px solid var(--border2);color:var(--text2);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit">취소</button>
         <button onclick="savePlayerForm()" style="flex:2;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit">💾 저장</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 훈련 적합성 판정 뷰 -->
+  <div id="pv-suitability" style="display:none">
+    <div class="vm-bar" style="margin-bottom:12px">
+      <h3>🧬 훈련 적합성 판정</h3>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="date" id="suit-date" class="inp" style="width:auto;font-size:12px;padding:5px 8px" onchange="loadTrainingSuitability()">
+        <button onclick="loadTrainingSuitability()" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 다시 계산</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:12px">
+      오늘 훈련 계획과 선수 상태(부하·최고속도 노출·웰니스)를 종합해 판정합니다 · 최종 결정은 코치가 합니다
+    </div>
+    <div id="suit-output">
+      <div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">불러오는 중...</div>
     </div>
   </div>
 
@@ -7592,7 +7610,7 @@ function setPlayerView(view){
     const el=document.getElementById(id);
     if(el) el.style.display=(view==='period'&&id==='tab-period')||(view==='exercise'&&id==='tab-exercise')?'block':'none';
   });
-  ['team','wellness','roster','dashboard','upload','match','training'].forEach(v=>{
+  ['team','suitability','wellness','roster','dashboard','upload','match','training'].forEach(v=>{
     const el = document.getElementById(`pv-${v}`);
     if(el) el.style.display = (!_isExternal && v===view) ? 'block' : 'none';
     const btn = document.getElementById(`pvbtn-${v}`);
@@ -7620,6 +7638,11 @@ function setPlayerView(view){
     if(dateEl && !dateEl.value) dateEl.value = today;
     window._todayBlockLoaded = false;
     loadOverviewBlocks().then(()=>loadTeamOverview());
+  }
+  if(view==='suitability'){
+    const d = document.getElementById('suit-date');
+    if(d && !d.value) d.value = getKSTDateStr();
+    loadTrainingSuitability();
   }
   if(view==='roster') loadRosterList();
   if(view==='wellness') initWellnessView();
@@ -8526,6 +8549,11 @@ async function getMicrocycleStart(todayStr) {
 // Morning Report — 로그인 첫 화면 레포트
 // ══════════════════════════════════════════════════════════════════
 
+// 경기 당일 RPE 미입력분 환산용 — 풀타임 경기 체감강도 통상값(CR10).
+// 경기는 RPE를 따로 받지 않아 sRPE가 0이 되고, 부하 대부분이 경기인 주전이 통째로 누락된다.
+// 해당 날짜에 실제 RPE가 입력돼 있으면 언제나 실입력값이 우선한다.
+const MATCH_RPE_EST = 8;
+
 const MD_LOAD_TARGETS = {
   'MATCH': { td:[10,12],   hsr:[1200,1600], sRPE:[700,900],  label:'경기일' },
   'MD-4':  { td:[7.5,9],   hsr:[600,900],   sRPE:[400,550],  label:'고볼륨/중강도' },
@@ -9012,7 +9040,9 @@ async function loadMorningReport(){
       srpeByDate2[r.date]=(srpeByDate2[r.date]||0)+(rv&&du?rv*du:0);
     });
     pgps.forEach(r=>{ if(!(r.session_date in srpeByDate2)) srpeByDate2[r.session_date]=0; });
-    pmatch.forEach(r=>{ if(!(r.match_date in srpeByDate2)) srpeByDate2[r.match_date]=0; });
+    // 경기일 RPE 미입력 → 출전시간 × 경기 RPE 추정치로 환산 (0으로 두면 주전 부하가 통째로 누락)
+    pmatch.forEach(r=>{ if(!(r.match_date in srpeByDate2))
+      srpeByDate2[r.match_date]=(_pMatchDurD[r.match_date]||0)*MATCH_RPE_EST; });
     // calcACWR는 rpe×dur로 sRPE 계산 → dur=1, rpe=합산sRPE 로 전달
     const sessForACWR = Object.entries(srpeByDate2).map(([d,srpe])=>({date:d,rpe:srpe,dur:1}));
     const sessForMV   = [
@@ -15047,6 +15077,242 @@ function calcRiskLevel(acwr, mvExp, wellnessRisk){
   return { score, level, flags };
 }
 
+// ══════════════════════════════════════════════════════════════════
+// 🧬 훈련 적합성 판정 — 선수 상태 × 오늘 훈련 계획
+// ══════════════════════════════════════════════════════════════════
+// 선수 상태만으로 판정하지 않는다. 같은 ACWR 1.4라도 회복일이면 문제없고
+// 고강도일이면 위험하므로, 오늘 계획의 요구 강도와 교차해서 결정한다.
+
+// MD 단계 → 오늘 요구 강도
+const MD_DEMAND = {
+  'MATCH':'high', 'MD-3':'high',
+  'MD-4':'mid',   'MD-2':'mid',
+  'MD-1':'low',   'MD+1':'low',
+};
+
+// 위험도 × 요구강도 → 적합성 (adjust=조정 필요 / review=조정 검토 / ok=정상)
+function calcSuitability(riskLevel, demand){
+  const M = {
+    red:    { high:'adjust', mid:'adjust', low:'review' },
+    amber:  { high:'adjust', mid:'review', low:'ok'     },
+    yellow: { high:'review', mid:'ok',     low:'ok'     },
+    green:  { high:'ok',     mid:'ok',     low:'ok'     },
+  };
+  return (M[riskLevel] || M.green)[demand || 'mid'] || 'ok';
+}
+
+// 권장사항 — 위험 종류에 따라 처방이 다르다.
+// 특히 MV(최고속도 노출 부족)는 부하를 '줄이는' 게 아니라 '노출을 늘리는' 처방이다.
+function suitabilityAdvice(risk, demand, verdict){
+  if(verdict === 'ok') return '계획대로 진행';
+  const t = new Set((risk.flags || []).map(f => f.type));
+  const out = [];
+  if(t.has('W'))    out.push('웰니스 재확인 후 참여 결정 · 수면/영양 점검');
+  if(t.has('ACWR')) out.push(demand === 'high' ? '고강도 세션 제외 · 볼륨 60~70%로 축소' : '볼륨 80% 수준으로 조절');
+  if(t.has('MV'))   out.push('최고속도 90% 노출 필요 — 스프린트 드릴 포함');
+  if(!out.length)   out.push(verdict === 'adjust' ? '부하 감소 후 재평가' : '모니터링 강화');
+  return out.join(' · ');
+}
+
+async function loadTrainingSuitability(){
+  const out = document.getElementById('suit-output');
+  if(!out) return;
+  const day = document.getElementById('suit-date')?.value || getKSTDateStr();
+  out.innerHTML = '<div style="text-align:center;padding:2rem;color:var(--text3);font-size:13px">⏳ 판정 중...</div>';
+
+  const _d = n => { const x = new Date(day+'T12:00:00'); x.setDate(x.getDate()-n); return x.toISOString().split('T')[0]; };
+  const s28 = _d(28), s7 = _d(7);
+
+  if(!_players.length){
+    const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
+    _players = data || [];
+  }
+
+  const [{data:planRows},{data:gpsAll},{data:matchAll},{data:rpeAll},{data:wellAll},{data:injRows}] = await Promise.all([
+    supa.from('block_days')
+      .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
+      .eq('plan_date', day).in('track',['ALL']),
+    supa.from('gps_records')
+      .select('player_id,session_date,max_speed,duration,session_label')
+      .gte('session_date', s28).lte('session_date', day),
+    supa.from('match_records')
+      .select('player_id,match_date,max_speed,duration')
+      .gte('match_date', s28).lte('match_date', day),
+    supa.from('session_records')
+      .select('player_id,record_date,rpe,duration,session_type,session_order')
+      .gte('record_date', s28).lte('record_date', day),
+    supa.from('wellness_records')
+      .select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness')
+      .gte('record_date', s7).lte('record_date', day).order('record_date',{ascending:false}),
+    supa.from('injury_records')
+      .select('player_id,status,body_part')
+      .in('status',['치료중','재활중','부분 참여']),
+  ]);
+
+  // 오늘 계획 → 요구 강도
+  const plan = (planRows && planRows[0]) || null;
+  const label = (plan?.day_label || '').toUpperCase();
+  const mdKey = Object.keys(MD_DEMAND).find(k => label.includes(k)) || null;
+  const demand = mdKey ? MD_DEMAND[mdKey] : null;
+
+  const injMap = {};
+  (injRows||[]).forEach(r => { if(!injMap[r.player_id]) injMap[r.player_id] = r; });
+
+  const rows = [];
+  for(const p of _players){
+    const pid = p.id;
+    // 치료중·재활중은 판정 대상이 아니라 '훈련 불가'로 먼저 드러내야 한다
+    if(injMap[pid]){
+      rows.push({ p, verdict:'out', risk:{level:'red',flags:[]},
+                  headline:`${injMap[pid].status}${injMap[pid].body_part?' ('+injMap[pid].body_part+')':''}`,
+                  reason:'부상 기록 있음', advice:'의무팀 판단 우선 · 개별 재활 프로그램', acwr:null });
+      continue;
+    }
+    const pgps   = (gpsAll||[]).filter(r => r.player_id === pid);
+    const pmatch = (matchAll||[]).filter(r => r.player_id === pid);
+    const prpe   = (rpeAll||[]).filter(r => r.player_id === pid);
+    const pwell  = (wellAll||[]).filter(r => r.player_id === pid);
+    if(!pgps.length && !prpe.length && !pmatch.length) continue;
+
+    const gpsDur = {}; pgps.forEach(r => { const k=r.session_date+'__'+(r.session_label||'AM').toUpperCase();
+                                           if(!gpsDur[k]) gpsDur[k]=parseFloat(r.duration)||0; });
+    const mDur   = {}; pmatch.forEach(r => { if(!mDur[r.match_date]) mDur[r.match_date]=parseFloat(r.duration)||0; });
+
+    const srpe = {};
+    prpe.forEach(r => {
+      const rv = parseFloat(r.rpe)||0;
+      const lbl = (r.session_type || ((r.session_order||1)===1?'AM':'PM')).toUpperCase();
+      const du = parseFloat(r.duration) || gpsDur[r.record_date+'__'+lbl] || mDur[r.record_date] || 0;
+      srpe[r.record_date] = (srpe[r.record_date]||0) + (rv&&du ? rv*du : 0);
+    });
+    pgps.forEach(r => { if(!(r.session_date in srpe)) srpe[r.session_date]=0; });
+    // 경기일 RPE 미입력 → 출전시간 × 경기 RPE 추정치로 환산
+    pmatch.forEach(r => { if(!(r.match_date in srpe)) srpe[r.match_date]=(mDur[r.match_date]||0)*MATCH_RPE_EST; });
+
+    const acwrData = calcACWR(Object.entries(srpe).map(([d,v])=>({date:d,rpe:v,dur:1})), day);
+    const mss = parseFloat(p.mss)||0;
+    const mvExp = mss>0 ? calcMVExposure([
+      ...pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),
+      ...pmatch.map(r=>({date:r.match_date,maxSpeed:parseFloat(r.max_speed)||0})),
+    ], mss, day) : null;
+    const todayW = pwell.find(r=>r.record_date===day) || (pwell.length?pwell[0]:null);
+    const wellData = (todayW && pwell.length>1) ? calcWellnessRisk(pwell.slice(1), todayW) : null;
+
+    const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
+    const verdict = calcSuitability(risk.level, demand);
+    const top = risk.flags.slice().sort((a,b)=>({red:0,amber:1,yellow:2}[a.level]-{red:0,amber:1,yellow:2}[b.level]))[0];
+
+    rows.push({
+      p, verdict, risk, acwr: acwrData.acwr,
+      headline: top ? ({ACWR:'부하 급증',MV:'속도 노출 부족',W:'컨디션 저하'}[top.type] || '—') : '—',
+      reason: risk.flags.map(f=>f.msg).join(' · ') || '특이사항 없음',
+      advice: suitabilityAdvice(risk, demand, verdict),
+    });
+  }
+
+  const ORDER = { out:0, adjust:1, review:2, ok:3 };
+  rows.sort((a,b) => ORDER[a.verdict]-ORDER[b.verdict] || (b.risk.score||0)-(a.risk.score||0));
+  renderSuitability(rows, plan, mdKey, demand, day);
+}
+
+function renderSuitability(rows, plan, mdKey, demand, day){
+  const out = document.getElementById('suit-output');
+  if(!out) return;
+
+  const V = {
+    out:    { label:'⛔ 훈련 불가', color:'#f87171', bg:'rgba(239,68,68,0.10)' },
+    adjust: { label:'🔴 조정 필요', color:'#f87171', bg:'rgba(239,68,68,0.08)' },
+    review: { label:'🟠 조정 검토', color:'#fb923c', bg:'rgba(249,115,22,0.08)' },
+    ok:     { label:'🟢 정상',      color:'#4ade80', bg:'transparent' },
+  };
+  const DEMAND_LBL = { high:'고강도', mid:'중강도', low:'저강도·회복' };
+  const cnt = k => rows.filter(r=>r.verdict===k).length;
+  const teamStatus = cnt('adjust')||cnt('out') ? {t:'🔴 조정 필요',c:'#f87171'}
+                   : cnt('review')             ? {t:'🟠 조정 검토',c:'#fb923c'}
+                   : {t:'🟢 정상',c:'#4ade80'};
+  const tgt = (v,u) => v!=null && v!=='' ? `${v}${u}` : '—';
+
+  out.innerHTML = `
+    <!-- 오늘 훈련 계획 -->
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2)">📅 오늘 훈련 계획 <span style="color:var(--text3);font-weight:400">· ${day}</span></div>
+          <div style="font-size:17px;font-weight:700;color:var(--text);margin-top:4px">
+            ${plan?.day_label || '계획 미입력'}
+            ${mdKey?`<span style="font-size:11px;font-weight:600;color:var(--accent2);margin-left:6px">${MD_LOAD_TARGETS[mdKey]?.label||''}</span>`:''}
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:3px">
+            요구 강도 ${demand?`<strong style="color:var(--text2)">${DEMAND_LBL[demand]}</strong>`:'<span style="color:#f59e0b">판정 불가 — MD 라벨 없음</span>'}
+            ${plan?.am_session?` · AM ${plan.am_session}`:''}${plan?.pm_session?` · PM ${plan.pm_session}`:''}
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:2px">팀 상태</div>
+          <div style="font-size:15px;font-weight:700;color:${teamStatus.c}">${teamStatus.t}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text3);border-top:1px solid var(--border);padding-top:9px">
+        <span>TD <strong style="color:var(--text2)">${tgt(plan?.td_target,'m')}</strong></span>
+        <span>HSR <strong style="color:var(--text2)">${tgt(plan?.hsr_target,'m')}</strong></span>
+        <span>Sprint <strong style="color:var(--text2)">${tgt(plan?.spr_target,'m')}</strong></span>
+        <span>ACC <strong style="color:var(--text2)">${tgt(plan?.acc_target,'회')}</strong></span>
+        <span>RHIE <strong style="color:var(--text2)">${tgt(plan?.rhie_target,'회')}</strong></span>
+      </div>
+    </div>
+
+    <!-- 판정 요약 -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      ${['out','adjust','review','ok'].map(k=>`
+        <div style="flex:1;min-width:80px;background:${V[k].bg||'var(--surface2)'};border:1px solid ${V[k].color}33;border-radius:8px;padding:8px 12px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:${V[k].color};line-height:1.15">${cnt(k)}</div>
+          <div style="font-size:10px;font-weight:600;color:${V[k].color}">${V[k].label}</div>
+        </div>`).join('')}
+    </div>
+
+    ${!demand?`<div style="font-size:11px;color:#fbbf24;background:var(--surface2);border-radius:6px;padding:7px 10px;margin-bottom:10px">
+      ⚠️ 오늘 주기화에 MD 라벨이 없어 요구 강도를 중강도로 가정했습니다 — 주기화 탭에서 오늘 계획을 입력하면 정확해집니다
+    </div>`:''}
+
+    <!-- 선수별 판정 -->
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:820px">
+        <thead>
+          <tr style="background:var(--surface2)">
+            <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">선수</th>
+            <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">훈련 적합성</th>
+            <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">핵심 위험</th>
+            ${isTeamAdmin?'<th style="padding:8px;text-align:right;color:var(--text3);white-space:nowrap">ACWR</th>':''}
+            <th style="padding:8px;text-align:left;color:var(--text3)">이유</th>
+            <th style="padding:8px;text-align:left;color:var(--text3)">권장사항</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length?rows.map(r=>`
+            <tr style="border-bottom:1px solid var(--border);background:${V[r.verdict].bg}">
+              <td style="padding:8px;white-space:nowrap">
+                <div style="font-weight:600;color:var(--text)">${r.p.name}</div>
+                <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
+              </td>
+              <td style="padding:8px;font-weight:700;color:${V[r.verdict].color};white-space:nowrap">${V[r.verdict].label}</td>
+              <td style="padding:8px;color:var(--text2);white-space:nowrap">${r.headline}</td>
+              ${isTeamAdmin?`<td style="padding:8px;text-align:right;color:${r.acwr==null?'var(--text3)':r.acwr>1.5?'#f87171':r.acwr>1.3?'#fbbf24':'var(--text2)'}">${r.acwr!=null?r.acwr.toFixed(2):'—'}</td>`:''}
+              <td style="padding:8px;color:var(--text3);font-size:11px;line-height:1.5">${r.reason}</td>
+              <td style="padding:8px;color:var(--text2);font-size:11px;line-height:1.5">${r.advice}</td>
+            </tr>`).join('')
+          :`<tr><td colspan="${isTeamAdmin?6:5}" style="padding:2rem;text-align:center;color:var(--text3)">판정할 데이터가 없습니다</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+
+    <div style="margin-top:10px;font-size:10px;color:var(--text3);line-height:1.7;background:var(--surface2);border-radius:6px;padding:8px 10px">
+      <strong style="color:var(--text2)">판정 방식</strong> — 선수 상태(부하 ACWR · 최고속도 노출 · 웰니스)를 오늘 계획의 요구 강도와 교차해 결정합니다.
+      같은 위험도라도 <strong>회복일이면 정상, 고강도일이면 조정 필요</strong>로 갈립니다 ·
+      경기일 RPE 미입력분은 출전시간 × RPE ${MATCH_RPE_EST}로 환산해 부하에 반영 ·
+      <strong style="color:var(--text2)">최종 결정은 코치가 합니다</strong>
+    </div>`;
+}
+
 // ── 메인 분석 함수 ────────────────────────────────────────────────
 async function runInjuryRiskAnalysis(){
   const out = document.getElementById('injury-risk-output');
@@ -15124,7 +15390,9 @@ async function runInjuryRiskAnalysis(){
       srpeByDate[r.record_date]=(srpeByDate[r.record_date]||0)+(rv&&du?rv*du:0);
     });
     pgps.forEach(r => { if(!(r.session_date in srpeByDate)) srpeByDate[r.session_date]=0; });
-    pmatch.forEach(r => { if(!(r.match_date in srpeByDate)) srpeByDate[r.match_date]=0; });
+    // 경기일 RPE 미입력 → 출전시간 × 경기 RPE 추정치로 환산 (0으로 두면 주전 부하가 통째로 누락)
+    pmatch.forEach(r => { if(!(r.match_date in srpeByDate))
+      srpeByDate[r.match_date]=(_pMatchDur[r.match_date]||0)*MATCH_RPE_EST; });
 
     // calcACWR는 rpe×dur로 sRPE 계산 → dur=1, rpe=합산sRPE 로 전달
     const sessionsForACWR = Object.entries(srpeByDate).map(([date, srpe]) => ({ date, rpe: srpe, dur: 1 }));
@@ -19433,7 +19701,6 @@ async function generateMatchReport(){
   //  (부하 대부분이 경기인 주전은 낮게, 훈련만 하는 비주전은 높게 나와 축이 뒤집힘)
   //  match_records의 출전시간 × 경기 RPE 추정치로 환산해 더한다.
   //  같은 날짜에 이미 RPE가 입력돼 있으면 실제 입력값을 신뢰하고 건너뛴다(중복 합산 방지).
-  const MATCH_RPE_EST=8;             // 풀타임 경기 체감강도 통상값(CR10). 실입력이 있으면 그 값이 우선
   const _haveRpe=new Set((loadHist||[]).filter(r=>parseFloat(r.rpe)>0)
                                        .map(r=>r.player_id+'|'+r.record_date));
   const {data:matchHist} = await supa.from('match_records')
