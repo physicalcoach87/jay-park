@@ -8975,10 +8975,20 @@ async function loadMorningReport(){
   // ── 어제 RPE 집계 (전날 세션 상세용) ───────────────────────────
   const yRpeRespondedIds = new Set(yRpeRows.map(r=>r.player_id));
 
-  // ── 오늘 RPE 미응답 선수 (rpe28에서 JS 필터링 — PostgREST .not() 버그 우회) ──
+  // ── 오늘 RPE 참여 현황 ────────────────────────────────────────
+  // M/S는 코치의 부하 분류일 뿐 참가 여부가 아니므로 RPE 대상 필터에 사용하지 않는다.
+  // 현재 팀 운영상 선수단 전원이 세션에 참여하므로 활성 선수 전체를 대상으로 한다.
   const todayRpeRows = (rpe28||[]).filter(r => r.record_date === today && parseFloat(r.rpe) > 0);
   const todayRpeRespondedIds = new Set(todayRpeRows.map(r => r.player_id));
-  const noTodayRpeResp = _players.filter(p=>!todayRpeRespondedIds.has(p.id));
+  const _rpeByPlayer={};
+  todayRpeRows.forEach(r=>{ if(!_rpeByPlayer[r.player_id]) _rpeByPlayer[r.player_id]=[]; _rpeByPlayer[r.player_id].push(parseFloat(r.rpe)||0); });
+  const _rpePlayerAvgs=Object.values(_rpeByPlayer).map(vals=>vals.reduce((a,b)=>a+b,0)/vals.length);
+  const todayRpeAvg = _rpePlayerAvgs.length
+    ? _rpePlayerAvgs.reduce((a,b)=>a+b,0)/_rpePlayerAvgs.length
+    : null;
+  const todayRpeEligible = _players;
+  const todaySessionHasData = (weekGps||[]).some(r=>r.session_date===today) || todayRpeRows.length>0;
+  const noTodayRpeResp = todayRpeEligible.filter(p=>!todayRpeRespondedIds.has(p.id));
   window._noRpeRespPlayers = noTodayRpeResp.map(p=>({id:p.id,name:p.name}));
   const ySRPE   = (yDur&&yRpeAvg) ? Math.round(yDur*yRpeAvg) : null;
   const yWell   = (well7||[]).filter(r=>r.record_date===yesterdayStr);
@@ -9129,7 +9139,9 @@ async function loadMorningReport(){
 
   // ── PM RPE 미입력 선수: 오늘 block_days에 pm_session 있고, session_records가 1개(AM만)인 선수 ──
   const todayHasPmSession = !!(todayBlockDay?.pm_session);
-  const pmNoRpeResp = todayHasPmSession
+  const todayGpsLabels=[...new Set((weekGps||[]).filter(r=>r.session_date===today).map(r=>(r.session_label||'AM').toUpperCase()))];
+  const todayPmHasData=todayGpsLabels.some(x=>x.includes('PM')) || todayRpeRows.some(r=>(r.session_type||'').toUpperCase()==='PM'||gymTiming(r.session_type)==='PM');
+  const pmNoRpeResp = todayHasPmSession && todayPmHasData
     ? _players.filter(p=>{
         const cnt = todayRpeRows.filter(r=>r.player_id===p.id).length;
         return cnt===1; // AM만 입력, PM 미입력
@@ -9186,6 +9198,8 @@ async function loadMorningReport(){
   // 목표: 항상 오늘까지 합산 (GPS 유무 무관)
   // 실제: GPS 있는 날까지만 합산
   const todayHasGps = todayGpsM.length > 0;
+  const todayIsRest = (todayBlockDay?.day_label||'').trim().toUpperCase()==='REST';
+  const weekProgressPending = !todayHasGps && !todayIsRest && !!todayBlockDay;
   const weekCutLabel = todayHasGps ? '오늘' : '오늘';
 
   const weekTargetSum = { td:0, hsr:0, spr:0, acc:0, rhie:0 };
@@ -9249,11 +9263,14 @@ async function loadMorningReport(){
     if(!targetSet && !actualVal) return '';
     const aDisp = (actualVal != null && actualVal > 0) ? actualVal.toLocaleString()+unit : (targetSet ? '0'+unit : '—');
     const tDisp = targetSet ? targetVal.toLocaleString()+unit : '—';
+    const statusHtml = weekProgressPending
+      ? '<span style="font-size:10px;padding:1px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#93c5fd;font-weight:600;white-space:nowrap">진행 중</span>'
+      : achBadge(actualVal,targetVal,targetSet);
     return '<tr style="border-top:0.5px solid var(--border)">'+
       '<td style="padding:5px 8px;color:var(--text3)">'+label+'</td>'+
       '<td style="padding:5px 8px;text-align:right;color:var(--text3)">'+tDisp+'</td>'+
       '<td style="padding:5px 8px;text-align:right;color:'+color+';font-weight:600">'+aDisp+'</td>'+
-      '<td style="padding:5px 8px;text-align:right">'+achBadge(actualVal,targetVal,targetSet)+'</td>'+
+      '<td style="padding:5px 8px;text-align:right">'+statusHtml+'</td>'+
       '</tr>';
   };
 
@@ -9344,7 +9361,10 @@ async function loadMorningReport(){
 
       // 왼쪽: 이번 주 누적
       '<div style="background:var(--surface2);border-radius:8px;padding:10px;border:0.5px solid var(--border)">'+
-        '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 <span style="font-weight:400;color:var(--text3);font-size:9px">('+weekStartStr+' ~ '+blockEndDate+')</span></div>'+
+        '<div style="font-size:10px;font-weight:600;color:var(--text3);margin-bottom:6px;letter-spacing:.03em">📅 이번 주 누적 · 오늘까지 <span style="font-weight:400;color:var(--text3);font-size:9px">('+weekStartStr+' ~ '+today+')</span></div>'+
+        (weekProgressPending
+          ? '<div style="font-size:9px;line-height:1.4;color:#93c5fd;background:rgba(59,130,246,0.08);border-radius:5px;padding:5px 7px;margin-bottom:5px">⏳ 오늘 목표 포함 · 실제는 현재 업로드된 GPS까지</div>'
+          : '')+
         '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
         '<thead><tr>'+
           '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
@@ -9367,20 +9387,25 @@ async function loadMorningReport(){
           '<span style="font-weight:400;font-size:9px">('+today+')'+
           (todayBlockDay?.day_label?' · '+todayBlockDay.day_label:'')+
         '</span></div>'+
-        '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
-        '<thead><tr>'+
-          '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
-          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">목표</th>'+
-          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">실제</th>'+
-          '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
-        '</tr></thead>'+
-        '<tbody>'+
-          yestRow('TD',     todayBlockDay?.td_target,   todayGpsM.length?todayActualVal.td:null,   'm',  '#60a5fa', null)+
-          yestRow('HSR',    todayBlockDay?.hsr_target,  todayGpsM.length?todayActualVal.hsr:null,  'm',  '#f59e0b', null)+
-          yestRow('Sprint', todayBlockDay?.spr_target,  todayGpsM.length?todayActualVal.spr:null,  'm',  '#ef4444', null)+
-          yestRow('가속',   todayBlockDay?.acc_target,  todayGpsM.length?todayActualVal.acc:null,  '회', '#fb923c', null)+
-          yestRow('RHIE',   todayBlockDay?.rhie_target, todayGpsM.length?todayActualVal.rhie:null, '회', '#34d399', null)+
-        '</tbody></table>'+
+        (!todayHasGps
+          ? '<div style="min-height:126px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border-radius:7px;background:rgba(59,130,246,0.06);border:0.5px dashed rgba(96,165,250,0.35);padding:12px;box-sizing:border-box">'+
+              '<div style="font-size:12px;font-weight:700;color:#93c5fd;margin-bottom:5px">⏳ 훈련 전 · GPS 데이터 대기</div>'+
+              '<div style="font-size:10px;line-height:1.5;color:var(--text3)">훈련 후 GPS 데이터를 업로드하면<br>목표 대비 실제 달성률이 표시됩니다.</div>'+
+            '</div>'
+          : '<table style="width:100%;border-collapse:collapse;font-size:10px">'+
+            '<thead><tr>'+
+              '<th style="padding:3px 4px;text-align:left;font-weight:500;color:var(--text3)"></th>'+
+              '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">목표</th>'+
+              '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">실제</th>'+
+              '<th style="padding:3px 4px;text-align:right;font-weight:500;color:var(--text3)">달성</th>'+
+            '</tr></thead>'+
+            '<tbody>'+
+              yestRow('TD',     todayBlockDay?.td_target,   todayActualVal.td,   'm',  '#60a5fa', null)+
+              yestRow('HSR',    todayBlockDay?.hsr_target,  todayActualVal.hsr,  'm',  '#f59e0b', null)+
+              yestRow('Sprint', todayBlockDay?.spr_target,  todayActualVal.spr,  'm',  '#ef4444', null)+
+              yestRow('가속',   todayBlockDay?.acc_target,  todayActualVal.acc,  '회', '#fb923c', null)+
+              yestRow('RHIE',   todayBlockDay?.rhie_target, todayActualVal.rhie, '회', '#34d399', null)+
+            '</tbody></table>')+
       '</div>'+
     '</div>';
 
@@ -9388,6 +9413,10 @@ async function loadMorningReport(){
   const todayWellAll = todayWell||[];
   const respondedIds = new Set(todayWellAll.map(r=>r.player_id));
   const noResp = _players.filter(p=>!respondedIds.has(p.id));
+  const _wellTotal=r=>(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0);
+  const wellDanger=todayWellAll.filter(r=>_wellTotal(r)<8);
+  const wellCaution=todayWellAll.filter(r=>_wellTotal(r)>=8&&_wellTotal(r)<12);
+  const wellGood=todayWellAll.filter(r=>_wellTotal(r)>=12);
   const wellAvg = field => todayWellAll.length
     ? todayWellAll.reduce((a,r)=>a+(r[field]||0),0)/todayWellAll.length : null;
   const wFat=wellAvg('fatigue'), wSleep=wellAvg('sleep_quality'), wStress=wellAvg('stress'), wMuscle=wellAvg('muscle_soreness');
@@ -9409,7 +9438,8 @@ async function loadMorningReport(){
   const noRespHtml = noResp.length ? `
     <div style="height:0.5px;background:var(--border2);margin:10px 0"></div>
     <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">⚠️ 미응답 (${noResp.length}명)</div>
-    <div style="display:flex;flex-direction:column;gap:5px">
+    <details style="margin-bottom:6px"><summary style="font-size:10px;color:#60a5fa;cursor:pointer;padding:5px 7px;background:rgba(59,130,246,.06);border-radius:6px">미응답 명단·개별 요청 보기</summary>
+    <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px">
       ${noResp.map(p=>`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:8px">
           <div>
@@ -9421,6 +9451,8 @@ async function loadMorningReport(){
             ${_indRemindStr('wellness',p.id,today)?`✅ ${_indRemindStr('wellness',p.id,today)} 발송`:'📨 웰니스 입력 요청'}
           </button>
         </div>`).join('')}
+    </div></details>
+    <div style="display:flex;flex-direction:column;gap:5px">
       <button id="remind-well-btn" onclick="sendWellnessReminderAll(window._noRespPlayers,this)"
         style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #185FA5;background:#0c1a2e;color:#60a5fa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit;opacity:${_remindLastStr('wellness',today)?'0.75':'1'}">
         ${_remindLastStr('wellness',today)?'🔄 재발송':'📨 미응답 전원에게 발송'}
@@ -9429,10 +9461,15 @@ async function loadMorningReport(){
     </div>` : `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ 전원 응답 완료</div>`;
 
   // ── 오늘 RPE 미응답 HTML ─────────────────────────────────────────
-  const noRpeRespHtml = noTodayRpeResp.length ? `
+  const noRpeRespHtml = !todaySessionHasData ? `
+    <div style="margin-top:8px;min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;border:0.5px dashed rgba(139,92,246,.35);border-radius:8px;background:rgba(139,92,246,.05);padding:12px;box-sizing:border-box">
+      <div style="font-size:12px;font-weight:700;color:#c4b5fd;margin-bottom:5px">⏳ 훈련 전 · RPE 입력 대기</div>
+      <div style="font-size:10px;line-height:1.5;color:var(--text3)">세션 데이터가 확인되면 참가 선수 전원을 기준으로<br>미입력 현황과 입력 요청 기능이 활성화됩니다.</div>
+    </div>` : noTodayRpeResp.length ? `
     <div style="height:0.5px;background:var(--border2);margin:10px 0"></div>
     <div style="font-size:11px;font-weight:500;color:var(--text2);margin-bottom:8px">⚠️ RPE 미입력 (${noTodayRpeResp.length}명)</div>
-    <div style="display:flex;flex-direction:column;gap:5px">
+    <details style="margin-bottom:6px"><summary style="font-size:10px;color:#c4b5fd;cursor:pointer;padding:5px 7px;background:rgba(139,92,246,.06);border-radius:6px">미입력 명단·개별 요청 보기</summary>
+    <div style="display:flex;flex-direction:column;gap:5px;margin-top:6px">
       ${noTodayRpeResp.map(p=>`
         <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface2);border-radius:8px">
           <div>
@@ -9444,6 +9481,8 @@ async function loadMorningReport(){
             ${_indRemindStr('rpe',p.id,today)?`✅ ${_indRemindStr('rpe',p.id,today)} 발송`:'📨 RPE 입력 요청'}
           </button>
         </div>`).join('')}
+    </div></details>
+    <div style="display:flex;flex-direction:column;gap:5px">
       <button id="remind-rpe-btn" onclick="sendRpeReminderAll(window._noRpeRespPlayers,this)"
         style="margin-top:2px;width:100%;padding:7px;border-radius:8px;border:0.5px solid #7c3aed;background:#1a0a2e;color:#a78bfa;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit;opacity:${_remindLastStr('rpe',today)?'0.75':'1'}">
         ${_remindLastStr('rpe',today)?'🔄 재발송':'📨 미입력 전원에게 발송'}
@@ -9474,75 +9513,88 @@ async function loadMorningReport(){
       <div id="remind-pm-rpe-info" style="font-size:10px;color:var(--text3);text-align:center;margin-top:3px">${_remindLastStr('pm_rpe',today)?`마지막 발송: ${_remindLastStr('pm_rpe',today)}`:''}</div>
     </div>` : (todayHasPmSession && noTodayRpeResp.length===0 ? `<div style="margin-top:8px;font-size:12px;color:#4ade80;text-align:center">✅ PM RPE 전원 입력 완료</div>` : '');
 
-  // ── Priority Alert 계산 ──────────────────────────────────────
+  // ── 오늘 훈련 관리 요약 ─────────────────────────────────────
+  // 스포츠 사이언스 > 훈련 적합성 판정과 같은 기준(오늘 계획 요구도 × 선수 위험)을 사용한다.
   const _paList = [];
   const _injuredActiveIds = new Set(
     (injuredAll||[]).filter(r=>['치료중','재활중','부분 참여'].includes(r.status)).map(r=>r.player_id)
   );
+  const _paMdKey = Object.keys(MD_DEMAND).find(k=>(todayBlockDay?.day_label||'').toUpperCase().includes(k))||null;
+  const _paDemandInfo = deriveDemand(todayBlockDay,_paMdKey);
+  const _paDemand = _paDemandInfo.demand;
+  let _paNormalCount=0;
   for(const player of _players){
-    const pid = player.id;
-    let score = 0; const flags = [];
-    // 부상 중인 선수는 제외 (부상자 현황에서 이미 표시)
-    if(_injuredActiveIds.has(pid)) continue;
-    // CRI & ACWR (riskResults에서)
-    const rd = riskResults.find(r=>r.player.id===pid);
-    if(rd){
-      if(rd.risk.level==='red')   { score+=35; rd.risk.flags.forEach(f=>flags.push(f.msg)); }
-      else if(rd.risk.level==='amber')  { score+=20; rd.risk.flags.forEach(f=>flags.push(f.msg)); }
-      else if(rd.risk.level==='yellow') { score+=10; rd.risk.flags.forEach(f=>flags.push(f.msg)); }
-      const acwr = rd.acwrData?.acwr;
-      if(acwr!=null){ if(acwr>1.5) score+=25; else if(acwr>1.3) score+=15; else if(acwr<0.8){ score+=10; flags.push('Underload — 자극 부족'); } }
+    if(_injuredActiveIds.has(player.id)) continue; // 부상·재활 현황에서 별도 관리
+    const rd=riskResults.find(r=>r.player.id===player.id);
+    const hasDecisionData=(gps28||[]).some(r=>r.player_id===player.id)
+      ||(match28||[]).some(r=>r.player_id===player.id)
+      ||((rpeMap28[player.id]||[]).length>0);
+    if(!_paDemand){
+      _paList.push({player,verdict:'unknown',flags:['오늘 훈련 계획 확인 필요'],riskLevel:'yellow',score:0,advice:'주기화 탭에서 오늘 훈련 목표 확인'});
+      continue;
     }
-    // 오늘 웰니스 (웰니스 사용 모드에서만)
-    const tw = currentUseWellness ? todayWellAll.find(r=>r.player_id===pid) : null;
-    if(currentUseWellness){
-      if(!tw){ score+=5; flags.push('웰니스 미응답'); }
-      else {
-        const wt=(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0);
-        if(wt<8){ score+=20; flags.push(`웰니스 위험 ${wt}/20`); }
-        else if(wt<12){ score+=10; flags.push(`웰니스 주의 ${wt}/20`); }
-      }
-      // 웰니스 3일 트렌드
-      const pw7 = (well7||[]).filter(r=>r.player_id===pid).sort((a,b)=>b.record_date.localeCompare(a.record_date));
-      if(pw7.length>=3){
-        const t = pw7.slice(0,3).map(r=>(r.fatigue||0)+(r.sleep_quality||0)+(r.stress||0)+(r.muscle_soreness||0));
-        if(t[0]<t[1]&&t[1]<t[2]){ score+=10; flags.push('웰니스 3일 연속 하락'); }
-        else if(t[0]<t[1]){ score+=5; flags.push('웰니스 하락 추세'); }
-      }
+    if(!rd){
+      if(hasDecisionData){ _paNormalCount++; continue; }
+      _paList.push({player,verdict:'unknown',flags:['최근 판정 데이터 부족'],riskLevel:'yellow',score:0,advice:'최근 GPS·경기·RPE 데이터 확인'});
+      continue;
     }
-    if(score>0) _paList.push({player, score, flags:[...new Set(flags)], riskLevel: rd?.risk?.level||'yellow', acwr: rd?.acwrData?.acwr||null, wellTotal: tw?(tw.fatigue||0)+(tw.sleep_quality||0)+(tw.stress||0)+(tw.muscle_soreness||0):null});
+    const verdict=calcSuitability(rd.risk.level,_paDemand,rd.risk.flags,true);
+    if(verdict==='ok'){ _paNormalCount++; continue; }
+    const flags=(rd.risk.flags||[]).map(f=>f.msg);
+    _paList.push({
+      player, verdict, flags:[...new Set(flags)], riskLevel:rd.risk.level,
+      score:rd.risk.score||0, advice:suitabilityAdvice(rd.risk,_paDemand,verdict)
+    });
   }
-  _paList.sort((a,b)=>b.score-a.score);
-  const _paTop = _paList.slice(0,5);
+  const _paOrder={adjust:0,review:1,unknown:2};
+  _paList.sort((a,b)=>(_paOrder[a.verdict]??9)-(_paOrder[b.verdict]??9)||b.score-a.score);
+  const _paAdjust=_paList.filter(x=>x.verdict==='adjust');
+  const _paReview=_paList.filter(x=>x.verdict==='review');
+  const _paUnknown=_paList.filter(x=>x.verdict==='unknown');
+  const _paReviewFirst=_paReview.slice(0,5);
+  const _paReviewMore=_paReview.slice(5);
+  const _paVerdictCfg={
+    adjust:{label:'🔴 조정 필요',color:'#f87171',bg:'rgba(239,68,68,0.08)',border:'#ef4444'},
+    review:{label:'🟠 조정 검토',color:'#fb923c',bg:'rgba(249,115,22,0.08)',border:'#f97316'},
+    unknown:{label:'⚪ 데이터 확인',color:'#94a3b8',bg:'rgba(148,163,184,0.08)',border:'#64748b'}
+  };
+  const _paRowHtml=(item)=>{
+    const cfg=_paVerdictCfg[item.verdict]||_paVerdictCfg.unknown;
+    return `<div onclick="goToSuitabilityFromBrief()" style="display:grid;grid-template-columns:minmax(125px,.7fr) minmax(220px,1.35fr) minmax(260px,1.7fr);gap:10px;align-items:center;background:${cfg.bg};border-left:3px solid ${cfg.border};border-radius:7px;padding:8px 10px;cursor:pointer">
+      <div><span style="font-size:12px;font-weight:700;color:var(--text)">${item.player.name}</span><span style="font-size:9px;color:var(--text3);margin-left:4px">${item.player.position||''}</span><div style="font-size:9px;color:${cfg.color};font-weight:600;margin-top:2px">${cfg.label}</div></div>
+      <div style="font-size:10px;color:${cfg.color};line-height:1.45">${item.flags.slice(0,2).map(f=>`• ${f}`).join('<br>')||'• 데이터 확인 필요'}</div>
+      <div style="font-size:10px;line-height:1.45;color:var(--text2)"><strong style="color:${cfg.color}">오늘:</strong> ${item.advice}</div>
+    </div>`;
+  };
 
-  const priorityAlertHtml = _paTop.length ? `
+  const priorityAlertHtml = _paList.length ? `
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3)">🎯 오늘 관리 우선순위</div>
-        <span style="font-size:10px;color:var(--text3)">${_paList.length}명 중 상위 ${_paTop.length}명</span>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2)">🧬 오늘 훈련 관리 요약</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px">오늘 훈련 계획 × 선수 상태 · 중요 판정만 표시</div>
+        </div>
+        <button onclick="goToSuitabilityFromBrief()" style="font-size:10px;padding:4px 9px;border-radius:6px;border:0.5px solid #8b5cf6;background:rgba(139,92,246,0.08);color:#c4b5fd;cursor:pointer;font-family:inherit">전체 판정 보기 →</button>
       </div>
-      <div style="display:grid;grid-template-columns:repeat(${_paTop.length},1fr);gap:8px">
-        ${_paTop.map((item,idx)=>{
-          const cfg=levelCfg[item.riskLevel]||levelCfg.yellow;
-          const acwrStr=item.acwr!=null?`ACWR ${item.acwr.toFixed(2)}`:'ACWR —';
-          const wellStr=item.wellTotal!=null?`웰니스 ${item.wellTotal}/20`:'웰니스 미응답';
-          return `<div onclick="goToPlayerFromRisk('${item.player.id}')"
-            style="background:${cfg.bg};border:0.5px solid ${cfg.border};border-radius:8px;padding:10px 12px;cursor:pointer;transition:opacity .12s"
-            onmouseover="this.style.opacity='.8'" onmouseout="this.style.opacity='1'">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-              <div>
-                <span style="font-size:10px;color:${cfg.color};font-weight:600;margin-right:4px">${idx+1}</span>
-                <span style="font-size:13px;font-weight:600;color:var(--text)">${item.player.name}</span>
-                <span style="font-size:10px;color:var(--text3);margin-left:4px">${item.player.position}</span>
-              </div>
-              <span style="font-size:9px;padding:1px 6px;border-radius:5px;background:${cfg.border}33;color:${cfg.color};font-weight:600;white-space:nowrap">${cfg.label.split(' ')[0]}</span>
-            </div>
-            <div style="font-size:10px;color:${cfg.color};margin-bottom:4px">${item.flags.slice(0,2).map(f=>`• ${f}`).join('<br>')}</div>
-            <div style="font-size:10px;color:var(--text3)">${acwrStr} · ${wellStr}</div>
-          </div>`;
-        }).join('')}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(239,68,68,.1);color:#f87171">⛔ 훈련 불가 ${_injuredActiveIds.size}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(239,68,68,.1);color:#f87171">🔴 조정 필요 ${_paAdjust.length}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(249,115,22,.1);color:#fb923c">🟠 조정 검토 ${_paReview.length}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(148,163,184,.1);color:#94a3b8">⚪ 데이터 확인 ${_paUnknown.length}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(34,197,94,.1);color:#4ade80">🟢 정상 ${_paNormalCount}</span>
       </div>
-    </div>` : '';
+      <div style="display:flex;flex-direction:column;gap:5px">
+        ${_paAdjust.map(_paRowHtml).join('')}
+        ${_paReviewFirst.map(_paRowHtml).join('')}
+        <div id="brief-review-more" style="display:none;flex-direction:column;gap:5px">${_paReviewMore.map(_paRowHtml).join('')}</div>
+        ${_paUnknown.map(_paRowHtml).join('')}
+      </div>
+      ${_paReviewMore.length?`<button id="brief-review-toggle" onclick="event.stopPropagation();toggleBriefReviewMore(this)" style="margin-top:8px;width:100%;padding:6px;border-radius:7px;border:0.5px solid #f9731666;background:rgba(249,115,22,.06);color:#fb923c;cursor:pointer;font-size:10px;font-family:inherit">조정 검토 ${_paReviewMore.length}명 더보기 ↓</button>`:''}
+    </div>` : `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-size:11px;font-weight:600;color:var(--text2)">🧬 오늘 훈련 관리 요약</div><div style="font-size:10px;color:#4ade80;margin-top:3px">중요 조정 대상 없음 · 정상 ${_paNormalCount}명</div></div>
+      <button onclick="goToSuitabilityFromBrief()" style="font-size:10px;padding:4px 9px;border-radius:6px;border:0.5px solid #8b5cf6;background:rgba(139,92,246,0.08);color:#c4b5fd;cursor:pointer;font-family:inherit">전체 판정 보기 →</button>
+    </div>`;
 
   // ── 최종 렌더링 ───────────────────────────────────────────────
   const nowStr = `${now.getUTCHours()}:${String(now.getUTCMinutes()).padStart(2,'0')} 자동 생성`;
@@ -9662,13 +9714,21 @@ async function loadMorningReport(){
 
     <!-- 섹션5: 웰니스 + RPE -->
     ${(currentUseWellness||currentUseRpe) ? `
-    <div style="display:grid;grid-template-columns:${(currentUseWellness&&currentUseRpe)?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;align-items:start">
+    <div style="display:grid;grid-template-columns:${(currentUseWellness&&currentUseRpe)?'1fr 1fr':'1fr'};gap:8px;margin-bottom:10px;align-items:stretch">
 
       ${currentUseWellness ? `
       <!-- 오늘 웰니스 -->
-      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">💚 오늘 웰니스 (${todayWellAll.length}/${_players.length}명)</div>
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px;height:100%;box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:var(--text2)">💚 오늘 웰니스</div><div style="font-size:12px;font-weight:700;color:${noResp.length?'#fbbf24':'#4ade80'}">${todayWellAll.length}/${_players.length}명 · ${Math.round(todayWellAll.length/Math.max(_players.length,1)*100)}%</div></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(239,68,68,.1);color:#f87171">🔴 위험 ${wellDanger.length}</span>
+          <span style="font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(249,115,22,.1);color:#fb923c">🟠 주의 ${wellCaution.length}</span>
+          <span style="font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(34,197,94,.1);color:#4ade80">🟢 양호 ${wellGood.length}</span>
+          <span style="font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(148,163,184,.1);color:#94a3b8">⚪ 미응답 ${noResp.length}</span>
+        </div>
         ${todayWellAll.length ? `
+          <details>
+          <summary style="font-size:10px;color:#86efac;cursor:pointer;padding:5px 7px;background:rgba(34,197,94,.06);border-radius:6px;margin-bottom:6px">입력 결과 전체 보기 (${todayWellAll.length}명)</summary>
           <div style="overflow-x:auto">
             <table style="width:100%;border-collapse:collapse;font-size:11px">
               <tr style="background:var(--surface2)">
@@ -9699,16 +9759,22 @@ async function loadMorningReport(){
                 </tr>`;
               }).join('')}
             </table>
-          </div>
+          </div></details>
         ` : ''}
         ${noRespHtml}
       </div>` : ''}
 
       ${currentUseRpe ? `
       <!-- 오늘 RPE -->
-      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px">
-        <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:8px">📋 오늘 RPE (${todayRpeRespondedIds.size}/${_players.length}명)</div>
+      <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:12px;overflow-y:auto;max-height:440px;height:100%;box-sizing:border-box">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:11px;font-weight:600;color:var(--text2)">📋 오늘 RPE</div><div style="display:flex;align-items:center;gap:8px"><span style="font-size:10px;color:#c4b5fd;font-weight:600">평균 RPE ${todayRpeAvg!=null?todayRpeAvg.toFixed(1):'—'}</span><span style="font-size:12px;font-weight:700;color:${todaySessionHasData?(noTodayRpeResp.length?'#fbbf24':'#4ade80'):'#a78bfa'}">${todaySessionHasData?`${todayRpeRespondedIds.size}/${todayRpeEligible.length}명 · ${Math.round(todayRpeRespondedIds.size/Math.max(todayRpeEligible.length,1)*100)}%`:'입력 대기'}</span></div></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;min-height:22px;align-items:center">
+          <span style="font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(139,92,246,.1);color:#c4b5fd">🟣 입력 ${todayRpeRespondedIds.size}</span>
+          <span style="font-size:10px;padding:3px 7px;border-radius:5px;background:rgba(148,163,184,.1);color:#94a3b8">⚪ 미입력 ${todaySessionHasData?noTodayRpeResp.length:todayRpeEligible.length}</span>
+        </div>
         ${todayRpeRows.length ? `
+          <details>
+          <summary style="font-size:10px;color:#c4b5fd;cursor:pointer;padding:5px 7px;background:rgba(139,92,246,.06);border-radius:6px;margin-bottom:6px">입력 결과 전체 보기 (${todayRpeRespondedIds.size}명)</summary>
           <div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">
             ${(()=>{
               // 선수별로 묶기
@@ -9733,7 +9799,7 @@ async function loadMorningReport(){
                 </div>`;
               }).join('');
             })()}
-          </div>` : ''}
+          </div></details>` : ''}
         ${noRpeRespHtml}
         ${pmNoRpeHtml}
       </div>` : ''}
@@ -9742,8 +9808,7 @@ async function loadMorningReport(){
 
     `;
 
-  // 부상위험 상세 분석 자동 실행
-  runInjuryRiskAnalysis();
+  // 상세 판정은 스포츠 사이언스 > 훈련 적합성 판정에서 필요할 때 실행한다.
 }
 
 
@@ -9756,6 +9821,24 @@ function goToPlayerFromRisk(playerId){
   window._prevMainTab = 'report'; // 이전으로 버튼용
   const tabBtn = document.querySelector('[onclick*=players]');
   if(tabBtn) switchTab('players', tabBtn);
+}
+
+function goToSuitabilityFromBrief(){
+  window._prevMainTab = 'report';
+  const tabBtn=document.getElementById('tab-btn-players')||document.querySelector('[onclick*=players]');
+  if(tabBtn) switchTab('players',tabBtn);
+  setPlayerView('suitability');
+}
+
+function toggleBriefReviewMore(btn){
+  const box=document.getElementById('brief-review-more');
+  if(!box) return;
+  const opening=box.style.display==='none'||!box.style.display;
+  box.style.display=opening?'flex':'none';
+  if(btn){
+    const count=box.children.length;
+    btn.textContent=opening?'조정 검토 접기 ↑':`조정 검토 ${count}명 더보기 ↓`;
+  }
 }
 
 
@@ -15242,9 +15325,12 @@ function suitabilityAdvice(risk, demand, verdict){
   if(verdict === 'unknown') return '최근 부하·MSS·웰니스 데이터와 오늘 훈련 계획 확인';
   if(verdict === 'ok') return '계획대로 진행';
   const t = new Set((risk.flags || []).map(f => f.type));
+  const hasUnderload = (risk.flags||[]).some(f=>f.type==='ACWR'&&(f.msg||'').includes('과소부하'));
   const out = [];
   if(t.has('W'))    out.push('웰니스 재확인 후 참여 결정 · 수면/영양 점검');
-  if(t.has('ACWR')) out.push(demand === 'high' ? '고강도 세션 제외 · 볼륨 60~70%로 축소' : '볼륨 80% 수준으로 조절');
+  if(t.has('ACWR')) out.push(hasUnderload
+    ? '부하 감량 금지 · 계획 범위에서 볼륨과 강도를 점진적으로 확보'
+    : demand === 'high' ? '고강도 세션 제외 · 볼륨 60~70%로 축소' : '볼륨 80% 수준으로 조절');
   if(t.has('MV'))   out.push('최고속도 90% 노출 필요 — 스프린트 드릴 포함');
   if(!out.length)   out.push(verdict === 'adjust' ? '부하 감소 후 재평가' : '모니터링 강화');
   return out.join(' · ');
