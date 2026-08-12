@@ -559,7 +559,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button class="btn-exp" onclick="setPlayerView('suitability')" id="pvbtn-suitability">🧬 훈련 적합성 판정</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('period')" id="pvbtn-period">📅 주기화</button>
       <button class="btn-exp admin-only" onclick="setGpsDataView('daily')" id="pvbtn-training">📡 GPS 데이터</button>
-      <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 웰니스 / RPE</button>
+      <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 컨디션 모니터링</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('exercise')" id="pvbtn-exercise">🏋️ 운동 처방</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">👤 선수 개인데이터</button>
     </div>
@@ -590,24 +590,50 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div id="wellness-admin-view" style="display:none">
       <!-- 서브탭 버튼 -->
       <div style="display:flex;gap:6px;margin-bottom:14px">
-        <button id="wtab-well" onclick="switchWellTab('well')" style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2)">💚 웰니스</button>
+        <button id="wtab-response" onclick="switchWellTab('response')" style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2)">📈 선수 반응 분석</button>
+        <button id="wtab-well" onclick="switchWellTab('well')" style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2)">💚 웰니스</button>
         <button id="wtab-rpe"  onclick="switchWellTab('rpe')"  style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2)">💢 RPE</button>
         <button id="wtab-bc"   onclick="switchWellTab('bc')"   style="padding:6px 16px;border-radius:7px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2)">⚖️ 체성분</button>
       </div>
 
+      <!-- 선수 반응 분석: GPS 수행 → RPE 반응 → 다음 날 웰니스 → 체성분 -->
+      <div id="wpanel-response">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:14px;margin-bottom:14px">
+          <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:3px">📈 선수 반응 흐름</div>
+          <div style="font-size:11px;color:var(--text3);line-height:1.55">훈련 수행(GPS) → 주관적 반응(RPE) → 다음 날 회복(웰니스) → 장기 변화(체성분)를 연결해 봅니다. 오늘 훈련 결정은 훈련 적합성 판정에서 확인하세요.</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:7px;margin-top:11px">
+            <div style="padding:8px 10px;border-radius:7px;background:var(--surface2);border-left:3px solid #60a5fa">
+              <div style="font-size:10px;font-weight:700;color:#60a5fa;margin-bottom:3px">GPS EWMA ACWR 기준</div>
+              <div style="font-size:9px;color:var(--text3);line-height:1.5"><b style="color:#94a3b8">&lt;0.80 과소부하</b> · <b style="color:#4ade80">0.80–1.29 적정</b><br><b style="color:#fbbf24">1.30–1.49 주의</b> · <b style="color:#f87171">≥1.50 높음</b></div>
+            </div>
+            <div style="padding:8px 10px;border-radius:7px;background:var(--surface2);border-left:3px solid #c084fc">
+              <div style="font-size:10px;font-weight:700;color:#c084fc;margin-bottom:3px">sRPE 모노토니 기준</div>
+              <div style="font-size:9px;color:var(--text3);line-height:1.5"><b style="color:#4ade80">&lt;1.50 일반</b> · <b style="color:#fbbf24">1.50–1.99 주의</b><br><b style="color:#f87171">≥2.00 높음</b> · 같은 부하의 반복 정도</div>
+            </div>
+            <div style="padding:8px 10px;border-radius:7px;background:var(--surface2);border-left:3px solid #f472b6">
+              <div style="font-size:10px;font-weight:700;color:#f472b6;margin-bottom:3px">sRPE 스트레인 기준</div>
+              <div style="font-size:9px;color:var(--text3);line-height:1.5"><b style="color:var(--text2)">7일 sRPE 합계 × 모노토니</b><br>보편적 절대 기준 없음 · 개인 최근 4주 기준과 비교</div>
+            </div>
+          </div>
+        </div>
+        <div class="ctrls" style="margin-bottom:12px">
+          <div class="ctrl"><label>분석 기간</label><select id="response-days-sel" style="width:100%" onchange="loadPlayerResponseRoster()"><option value="14">최근 14일</option><option value="28">최근 28일</option></select></div>
+        </div>
+        <input type="hidden" id="response-player-id">
+        <div id="response-roster-output"><div style="padding:2rem;text-align:center;color:var(--text3);font-size:12px">선수 요약을 불러오는 중...</div></div>
+        <div id="response-analysis-output" style="display:none"></div>
+      </div>
+
       <!-- 웰니스 패널 -->
-      <div id="wpanel-well">
-        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px" id="wellness-two-week-label">최근 2주 웰니스 현황 — 날짜 클릭 시 하단 상세 표시</div>
-        <div id="wellness-two-week-cal"></div>
-        <div id="wellness-two-week-detail" style="display:none;margin-top:12px"></div>
-        <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
+      <div id="wpanel-well" style="display:none">
         <div class="ctrls g2" style="margin-bottom:12px">
           <div class="ctrl">
-            <label>날짜 조회</label>
+            <label>기준 날짜</label>
             <input type="date" id="wellness-view-date" style="width:100%" onchange="loadTeamWellness()">
           </div>
-          <div class="ctrl" style="display:flex;align-items:flex-end">
-            <button class="btn-gen" style="margin:0;padding:10px 20px;width:100%" onclick="loadTeamWellness()">조회</button>
+          <div class="ctrl">
+            <label>상세 분석 기간</label>
+            <select id="wellness-history-days" style="width:100%" onchange="loadTeamWellness()"><option value="14">최근 14일</option><option value="28">최근 28일</option></select>
           </div>
         </div>
         <div id="team-wellness-output"></div>
@@ -615,61 +641,21 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
       <!-- RPE 패널 -->
       <div id="wpanel-rpe" style="display:none">
-        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px">
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap">
           <div class="ctrl" style="flex:1">
-            <label style="font-size:11px;color:var(--text3)">날짜 조회</label>
+            <label style="font-size:11px;color:var(--text3)">기준 날짜</label>
             <input type="date" id="rpe-view-date" style="width:100%" onchange="loadWellnessRpeView()">
           </div>
-          <button class="btn-gen" style="margin:0;padding:10px 20px" onclick="loadWellnessRpeView()">조회</button>
+          <div class="ctrl" style="flex:1"><label style="font-size:11px;color:var(--text3)">상세 분석 기간</label><select id="rpe-history-days" style="width:100%" onchange="loadWellnessRpeView()"><option value="14">최근 14일</option><option value="28">최근 28일</option></select></div>
         </div>
         <div id="rpe-view-output"></div>
       </div>
 
       <!-- 체성분 패널 -->
       <div id="wpanel-bc" style="display:none">
-        <!-- 팀 최근 측정 현황 -->
-        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">⚖️ 팀 최근 체성분 현황 — 선수별 마지막 측정 기준</div>
+        <div class="ctrl" style="margin-bottom:12px"><label>상세 분석 기간</label><select id="bc-history-days" style="width:100%" onchange="loadBodyComp()"><option value="30">최근 30일</option><option value="90">최근 90일</option><option value="180">최근 180일</option><option value="365">최근 1년</option></select></div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">⚖️ 팀 최근 체성분 현황 — 선수 행을 클릭하면 기간별 측정 기록 표시</div>
         <div id="bc-team-summary"></div>
-
-        <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
-
-        <!-- 날짜 범위 조회 -->
-        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">📅 기간별 측정 이력 조회</div>
-        <div class="ctrls g2" style="margin-bottom:12px">
-          <div class="ctrl">
-            <label>시작일</label>
-            <input type="date" id="bc-date-from" style="width:100%">
-          </div>
-          <div class="ctrl">
-            <label>종료일</label>
-            <input type="date" id="bc-date-to" style="width:100%">
-          </div>
-        </div>
-        <button class="btn-gen" style="margin:0 0 14px;width:100%;padding:10px" onclick="loadBodyCompHistory()">조회</button>
-        <div id="bc-history-output"></div>
-
-        <div style="height:1px;background:var(--border2);margin:18px 0 14px"></div>
-
-        <!-- 선수 개인 체성분 조회 -->
-        <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">🏃 선수 개인 체성분 추이</div>
-        <div class="ctrls g2" style="margin-bottom:12px">
-          <div class="ctrl">
-            <label>선수</label>
-            <select id="bc-player-sel" style="width:100%">
-              <option value="">선수 선택</option>
-            </select>
-          </div>
-          <div class="ctrl">
-            <label>조회 수</label>
-            <select id="bc-limit-sel" style="width:100%">
-              <option value="6">최근 6회</option>
-              <option value="12">최근 12회</option>
-              <option value="999">전체</option>
-            </select>
-          </div>
-        </div>
-        <button class="btn-gen" style="margin:0 0 14px;width:100%;padding:10px" onclick="loadPlayerBodyComp()">조회</button>
-        <div id="bc-player-output"></div>
       </div>
     </div>
   </div>
@@ -7744,8 +7730,8 @@ async function initWellnessView(){
     document.getElementById('wellness-admin-view').style.display='block';
     const dateEl = document.getElementById('wellness-view-date');
     if(dateEl && !dateEl.value) dateEl.value = today;
-    loadTeamWellness();
-    loadWellnessTwoWeekCal(today);
+    initResponseAnalysis();
+    switchWellTab('response');
   } else {
     // 선수(player) 역할: 본인 컨디션 입력 폴백
     document.getElementById('wellness-player-view').style.display='block';
@@ -10401,14 +10387,215 @@ async function downloadDashboardExcel(){
 }
 
 
-// ── 웰니스 / RPE 서브탭 전환 ──────────────────────────────────────
+// ── 선수 반응 분석 ────────────────────────────────────────────────
+window._conditionExportCache=window._conditionExportCache||{};
+
+function conditionExportBar(key){
+  return `<div class="condition-export-actions" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <button onclick="event.stopPropagation();exportConditionExcel('${key}',this)" style="padding:5px 9px;border-radius:6px;border:1px solid rgba(34,197,94,.55);background:rgba(34,197,94,.08);color:#4ade80;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">📊 엑셀</button>
+    <button onclick="event.stopPropagation();exportConditionPdf('${key}',this)" style="padding:5px 9px;border-radius:6px;border:1px solid rgba(96,165,250,.55);background:rgba(59,130,246,.08);color:#93c5fd;font-size:10px;font-weight:700;cursor:pointer;font-family:inherit">📄 PDF</button>
+  </div>`;
+}
+
+function safeConditionFileName(text){
+  return String(text||'컨디션_보고서').replace(/[\\/:*?"<>|]/g,'_').replace(/\s+/g,'_');
+}
+
+async function exportConditionExcel(key,btn){
+  const pack=window._conditionExportCache?.[key];
+  if(!pack){alert('먼저 선수 세부 정보를 열어 주세요.');return;}
+  const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='⏳ 생성 중';}
+  try{
+    const XLSX=await import('https://cdn.sheetjs.com/xlsx-0.20.0/package/xlsx.mjs');
+    const wb=XLSX.utils.book_new();
+    (pack.sheets||[{name:'기록',rows:pack.rows||[]}]).forEach((sheet,index)=>{
+      const rows=sheet.rows?.length?sheet.rows:[{'안내':'선택한 기간에 기록이 없습니다.'}];
+      const ws=XLSX.utils.json_to_sheet(rows),headers=Object.keys(rows[0]||{});
+      ws['!cols']=headers.map(h=>({wch:Math.min(38,Math.max(10,h.length+4,...rows.map(r=>String(r[h]??'').length+2)))}));
+      XLSX.utils.book_append_sheet(wb,ws,(sheet.name||`Sheet${index+1}`).slice(0,31));
+    });
+    XLSX.writeFile(wb,`${safeConditionFileName(pack.fileName||pack.title)}.xlsx`);
+  }catch(e){console.error('condition excel export error',e);alert('엑셀 생성에 실패했습니다: '+(e.message||e));}
+  finally{if(btn){btn.disabled=false;btn.textContent=old||'📊 엑셀';}}
+}
+
+async function exportConditionPdf(key,btn){
+  const pack=window._conditionExportCache?.[key],source=pack&&document.getElementById(pack.elementId);
+  if(!pack||!source){alert('먼저 선수 세부 정보를 열어 주세요.');return;}
+  if(typeof html2canvas!=='function'||!window.jspdf?.jsPDF){alert('PDF 생성 도구를 불러오지 못했습니다. 새로고침 후 다시 시도해 주세요.');return;}
+  const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='⏳ 생성 중';}
+  const sheet=document.createElement('div');
+  sheet.style.cssText='position:fixed;left:-12000px;top:0;width:1000px;padding:28px;background:#fff;color:#111827;z-index:-1;--surface:#fff;--surface2:#f5f6f8;--border:#d9dde5;--border2:#c9ced8;--text:#111827;--text2:#374151;--text3:#6b7280;--accent:#2563eb;--accent2:#2563eb;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",Arial,sans-serif';
+  const clone=source.cloneNode(true);clone.querySelectorAll('.condition-export-actions,button').forEach(x=>x.remove());
+  const printColors={'#fbbf24':'#a16207','#c084fc':'#6d28d9','#f472b6':'#be185d','#4ade80':'#15803d','#60a5fa':'#1d4ed8','#f87171':'#b91c1c','rgba(251,191,36,.45)':'#2563eb','rgba(74,222,128,.35)':'#15803d'};
+  clone.querySelectorAll('*').forEach(el=>{let style=el.getAttribute('style')||'';Object.entries(printColors).forEach(([from,to])=>{style=style.split(from).join(to);});style=style.split('var(--text3)').join('#4b5563').split('var(--text2)').join('#1f2937').split('var(--text)').join('#111827');el.setAttribute('style',style);});
+  sheet.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #111827;padding-bottom:9px;margin-bottom:14px"><div><div style="font-size:22px;font-weight:800">${pack.title}</div><div style="font-size:11px;color:#6b7280;margin-top:3px">${pack.subtitle||''}</div></div><div style="font-size:10px;color:#6b7280;text-align:right">생성 ${new Date().toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})}<br>최종 판단은 코치가 합니다</div></div>`;
+  sheet.appendChild(clone);document.body.appendChild(sheet);
+  try{
+    const canvas=await html2canvas(sheet,{scale:1.5,backgroundColor:'#fff',useCORS:true,logging:false});
+    const {jsPDF}=window.jspdf,landscape=canvas.width/canvas.height>1.15;
+    const pdf=new jsPDF({orientation:landscape?'landscape':'portrait',unit:'mm',format:'a4',compress:true});
+    const pageW=pdf.internal.pageSize.getWidth(),pageH=pdf.internal.pageSize.getHeight(),margin=8,usableW=pageW-margin*2,usableH=pageH-margin*2;
+    const targetPages=1,pagePx=canvas.height;
+    for(let page=0;page<targetPages;page++){
+      const y=page*pagePx,h=Math.min(pagePx,canvas.height-y);if(h<=0)break;
+      const part=document.createElement('canvas');part.width=canvas.width;part.height=h;part.getContext('2d').drawImage(canvas,0,y,canvas.width,h,0,0,canvas.width,h);
+      if(page)pdf.addPage('a4',landscape?'landscape':'portrait');
+      let imgW=usableW,imgH=h/canvas.width*imgW;if(imgH>usableH){imgH=usableH;imgW=canvas.width/h*imgH;}
+      pdf.addImage(part.toDataURL('image/jpeg',.94),'JPEG',margin+(usableW-imgW)/2,margin,imgW,imgH,undefined,'FAST');
+    }
+    pdf.save(`${safeConditionFileName(pack.fileName||pack.title)}.pdf`);
+  }catch(e){console.error('condition pdf export error',e);alert('PDF 생성에 실패했습니다: '+(e.message||e));}
+  finally{sheet.remove();if(btn){btn.disabled=false;btn.textContent=old||'📄 PDF';}}
+}
+
+function initResponseAnalysis(){
+  if(!_players?.length) return;
+  loadPlayerResponseRoster();
+}
+
+function responseDateShift(date,days){
+  const d=new Date(date+'T00:00:00'); d.setDate(d.getDate()+days);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+async function loadPlayerResponseRoster(){
+  const out=document.getElementById('response-roster-output');
+  const detail=document.getElementById('response-analysis-output');
+  const days=parseInt(document.getElementById('response-days-sel')?.value)||14;
+  if(!out||!_players?.length) return;
+  out.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3);font-size:12px">전체 선수의 반응 흐름을 계산하는 중...</div>';
+  const today=getKSTDateStr(), metricFrom=responseDateShift(today,-27), displayFrom=responseDateShift(today,-(days-1));
+  const playerIds=_players.map(p=>p.id).filter(Boolean);
+  const [gpsRes,rpeRes,wellRes]=await Promise.all([
+    supa.from('gps_records').select('player_id,session_date,td').in('player_id',playerIds).gte('session_date',metricFrom).lte('session_date',today),
+    supa.from('session_records').select('player_id,record_date,rpe,duration').in('player_id',playerIds).gte('record_date',metricFrom).lte('record_date',today),
+    supa.from('wellness_records').select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness').in('player_id',playerIds).gte('record_date',metricFrom).lte('record_date',today)
+  ]);
+  const queryError=gpsRes.error||rpeRes.error||wellRes.error;
+  if(queryError){out.innerHTML=`<div style="padding:1rem;color:#f87171;font-size:12px">데이터 조회 오류: ${queryError.message}</div>`;return;}
+  const dates=periodDateRange(metricFrom,today), displayDates=periodDateRange(displayFrom,today), byPlayer={};
+  playerIds.forEach(id=>byPlayer[id]={gps:{},rpe:{},well:{}});
+  (gpsRes.data||[]).forEach(r=>{const x=byPlayer[r.player_id];if(x)x.gps[r.session_date]=(x.gps[r.session_date]||0)+(parseFloat(r.td)||0);});
+  (rpeRes.data||[]).forEach(r=>{const x=byPlayer[r.player_id];if(!x)return;const d=r.record_date;if(!x.rpe[d])x.rpe[d]={sum:0,n:0,srpe:0};const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0;if(rv){x.rpe[d].sum+=rv;x.rpe[d].n++;if(du)x.rpe[d].srpe+=rv*du;}});
+  (wellRes.data||[]).forEach(r=>{const x=byPlayer[r.player_id];if(!x)return;const vals=['fatigue','sleep_quality','stress','muscle_soreness'].map(k=>parseFloat(r[k])).filter(Number.isFinite);if(vals.length)x.well[r.record_date]=vals.reduce((a,b)=>a+b,0)/vals.length;});
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const fmt=(v,d=1)=>v==null||!Number.isFinite(v)?'—':v.toFixed(d);
+  const summaries=_players.map(p=>{
+    const x=byPlayer[p.id]||{gps:{},rpe:{},well:{}};
+    const gpsMetric=calcGpsForecastMetrics(dates.map(d=>x.gps[d]||0));
+    const intMetric=calcGpsForecastMetrics(dates.map(d=>x.rpe[d]?.srpe||0));
+    const rpeVals=displayDates.map(d=>x.rpe[d]?.n?x.rpe[d].sum/x.rpe[d].n:null).filter(Number.isFinite);
+    const wellVals=displayDates.map(d=>x.well[d]).filter(Number.isFinite);
+    const recentRpe=avg(rpeVals),recentWell=avg(wellVals);
+    let score=0,signal='안정';
+    if(gpsMetric.ewma>=1.5){score+=2;signal='외적 부하 급증';}else if(gpsMetric.ewma>=1.3){score++;signal='외적 부하 증가';}
+    if(Number.isFinite(intMetric.monotony)&&intMetric.monotony>=2){score+=2;signal='반복 부하 높음';}else if(Number.isFinite(intMetric.monotony)&&intMetric.monotony>=1.5){score++;if(signal==='안정')signal='반복 부하 주의';}
+    if(recentWell!=null&&recentWell<3){score+=2;signal='웰니스 저하';}else if(recentWell!=null&&recentWell<3.5){score++;if(signal==='안정')signal='웰니스 확인';}
+    if(recentRpe!=null&&recentRpe>=8){score++;if(signal==='안정')signal='높은 RPE';}
+    const enough=(gpsRes.data||[]).some(r=>r.player_id===p.id)||(rpeRes.data||[]).some(r=>r.player_id===p.id)||(wellRes.data||[]).some(r=>r.player_id===p.id);
+    return {p,gpsMetric,intMetric,recentRpe,recentWell,score,signal,enough};
+  }).sort((a,b)=>b.score-a.score||(a.p.position||'').localeCompare(b.p.position||'')||(a.p.name||'').localeCompare(b.p.name||''));
+  const selected=document.getElementById('response-player-id')?.value||'';
+  out.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><div style="font-size:12px;font-weight:700;color:var(--text2)">전체 선수 ${summaries.length}명 · 최근 ${days}일 평균</div><div style="font-size:10px;color:var(--text3)">확인 신호가 있는 선수 우선 · 행을 클릭하면 세부 분석</div></div><div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:9px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px"><thead><tr style="background:var(--surface2);color:var(--text3)"><th style="padding:8px;text-align:left">선수</th><th style="padding:8px;text-align:left">확인 신호</th><th style="padding:8px;text-align:center">GPS EWMA<br><small>ACWR</small></th><th style="padding:8px;text-align:center">평균 RPE</th><th style="padding:8px;text-align:center">모노토니</th><th style="padding:8px;text-align:right">스트레인</th><th style="padding:8px;text-align:center">웰니스</th><th style="padding:8px;text-align:center">세부</th></tr></thead><tbody>${summaries.map(s=>{
+    const c=!s.enough?'#94a3b8':s.score>=3?'#f87171':s.score?'#fbbf24':'#4ade80';
+    const active=s.p.id===selected;
+    return `<tr data-response-player="${s.p.id}" onclick="selectResponsePlayer('${s.p.id}')" style="border-top:1px solid var(--border);background:${active?'var(--accent-bg)':'transparent'};cursor:pointer"><td style="padding:8px"><div style="font-size:12px;font-weight:800;color:var(--text)">${s.p.name}</div><div style="font-size:9px;color:var(--text3)">${s.p.position||''}</div></td><td style="padding:8px;color:${c};font-weight:700">${s.enough?s.signal:'데이터 부족'}</td><td style="padding:8px;text-align:center;color:#60a5fa;font-weight:700">${fmt(s.gpsMetric.ewma,2)}</td><td style="padding:8px;text-align:center;color:#fbbf24;font-weight:700">${fmt(s.recentRpe)}</td><td style="padding:8px;text-align:center;color:#c084fc;font-weight:700">${fmt(s.intMetric.monotony,2)}</td><td style="padding:8px;text-align:right;color:#f472b6;font-weight:700">${s.intMetric.strain!=null&&Number.isFinite(s.intMetric.strain)?Math.round(s.intMetric.strain).toLocaleString():'—'}</td><td style="padding:8px;text-align:center;color:#4ade80;font-weight:700">${fmt(s.recentWell)}</td><td data-response-toggle="${s.p.id}" style="padding:8px;text-align:center;color:var(--text3)">${active?'접기 ⌃':'보기 ›'}</td></tr><tr data-response-detail="${s.p.id}" style="display:${active?'table-row':'none'};background:var(--surface2)"><td colspan="8" style="padding:12px 14px;border-left:3px solid var(--accent)"><div id="response-inline-detail-${s.p.id}">${active?'<div style="padding:1rem;text-align:center;color:var(--text3)">세부 데이터를 불러오는 중...</div>':''}</div></td></tr>`;
+  }).join('')}</tbody></table></div>`;
+  if(selected){
+    if(_players.some(p=>p.id===selected)) loadPlayerResponseAnalysis();
+    else if(detail) detail.innerHTML='<div style="padding:1.5rem;text-align:center;color:var(--text3);font-size:12px">선수를 클릭하면 세부 흐름을 보여줍니다.</div>';
+  }
+}
+
+function selectResponsePlayer(playerId){
+  const hidden=document.getElementById('response-player-id');
+  const collapse=hidden?.value===playerId;
+  if(hidden) hidden.value=collapse?'':playerId;
+  document.querySelectorAll('[data-response-player]').forEach(btn=>{
+    const active=!collapse&&btn.dataset.responsePlayer===playerId;
+    btn.style.background=active?'var(--accent-bg)':'transparent';
+    btn.style.boxShadow=active?'inset 3px 0 0 var(--accent)':'none';
+  });
+  document.querySelectorAll('[data-response-detail]').forEach(row=>{
+    row.style.display=!collapse&&row.dataset.responseDetail===playerId?'table-row':'none';
+  });
+  document.querySelectorAll('[data-response-toggle]').forEach(cell=>{
+    cell.textContent=!collapse&&cell.dataset.responseToggle===playerId?'접기 ⌃':'보기 ›';
+  });
+  if(collapse) return;
+  loadPlayerResponseAnalysis();
+}
+
+async function loadPlayerResponseAnalysis(){
+  const playerId=document.getElementById('response-player-id')?.value;
+  const out=document.getElementById(`response-inline-detail-${playerId}`)||document.getElementById('response-analysis-output');
+  const days=parseInt(document.getElementById('response-days-sel')?.value)||14;
+  if(!out||!playerId){ if(out) out.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3);font-size:12px">선수를 선택하면 훈련과 회복의 연결 흐름을 보여줍니다.</div>'; return; }
+  out.innerHTML='<div style="padding:2rem;text-align:center;color:var(--text3);font-size:12px">훈련과 회복 데이터를 연결하는 중...</div>';
+  const today=getKSTDateStr(), from=responseDateShift(today,-(days-1)), metricFrom=responseDateShift(today,-27), wellnessTo=responseDateShift(today,1);
+  const [gpsRes,rpeRes,wellRes,bodyRes]=await Promise.all([
+    supa.from('gps_records').select('session_date,td,running_high,sprint,accel,rhie,duration,session_type2').eq('player_id',playerId).gte('session_date',metricFrom).lte('session_date',today),
+    supa.from('session_records').select('record_date,rpe,duration,session_type').eq('player_id',playerId).gte('record_date',metricFrom).lte('record_date',today),
+    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness').eq('player_id',playerId).gte('record_date',metricFrom).lte('record_date',wellnessTo),
+    supa.from('body_comp_records').select('record_date,weight,muscle_mass,body_fat_pct').eq('player_id',playerId).order('record_date',{ascending:false}).limit(2)
+  ]);
+  const queryError=gpsRes.error||rpeRes.error||wellRes.error||bodyRes.error;
+  if(queryError){ out.innerHTML=`<div style="padding:1rem;color:#f87171;font-size:12px">데이터 조회 오류: ${queryError.message}</div>`; return; }
+  const dates=periodDateRange(metricFrom,today), displayDates=periodDateRange(from,today), gpsBy={},rpeBy={},wellBy={};
+  (gpsRes.data||[]).forEach(r=>{const d=r.session_date;if(!gpsBy[d])gpsBy[d]={td:0,hsr:0,spr:0,acc:0,rhie:0,dur:0};gpsBy[d].td+=parseFloat(r.td)||0;gpsBy[d].hsr+=parseFloat(r.running_high)||0;gpsBy[d].spr+=parseFloat(r.sprint)||0;gpsBy[d].acc+=parseFloat(r.accel)||0;gpsBy[d].rhie+=parseFloat(r.rhie)||0;gpsBy[d].dur+=parseFloat(r.duration)||0;});
+  (rpeRes.data||[]).forEach(r=>{const d=r.record_date;if(!rpeBy[d])rpeBy[d]={sum:0,n:0,srpe:0};const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0;if(rv){rpeBy[d].sum+=rv;rpeBy[d].n++;if(du)rpeBy[d].srpe+=rv*du;}});
+  (wellRes.data||[]).forEach(r=>{const vals=['fatigue','sleep_quality','stress','muscle_soreness'].map(k=>parseFloat(r[k])).filter(Number.isFinite);wellBy[r.record_date]=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;});
+  const tdSeries=dates.map(d=>gpsBy[d]?.td||0), srpeSeries=dates.map(d=>rpeBy[d]?.srpe||0);
+  const gpsMetric=calcGpsForecastMetrics(tdSeries), internalMetric=calcGpsForecastMetrics(srpeSeries);
+  const rpeValues=dates.map(d=>rpeBy[d]?.n?rpeBy[d].sum/rpeBy[d].n:null).filter(Number.isFinite);
+  const wellValues=dates.map(d=>wellBy[d]).filter(Number.isFinite);
+  const avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const recentRpe=avg(rpeValues.slice(-3)), baseRpe=avg(rpeValues.slice(0,-3));
+  const recentWell=avg(wellValues.slice(-3)), baseWell=avg(wellValues.slice(0,-3));
+  const notes=[];
+  if(recentRpe!=null&&baseRpe!=null&&recentRpe-baseRpe>=1) notes.push('같은 훈련을 최근 더 힘들게 느끼는 흐름');
+  if(recentWell!=null&&baseWell!=null&&baseWell-recentWell>=.5) notes.push('최근 웰니스가 개인 기간 평균보다 하락');
+  if(gpsMetric.ewma!=null&&gpsMetric.ewma>=1.5) notes.push('GPS 외적 부하가 최근 기준보다 급증');
+  else if(gpsMetric.ewma!=null&&gpsMetric.ewma>=1.3) notes.push('GPS 외적 부하 증가 확인 필요');
+  if(internalMetric.monotony!=null&&Number.isFinite(internalMetric.monotony)&&internalMetric.monotony>=2) notes.push('sRPE 반복 부하가 단조롭게 누적');
+  const body=(bodyRes.data||[]), curBody=body[0],prevBody=body[1];
+  if(curBody?.weight!=null&&prevBody?.weight!=null&&Math.abs(curBody.weight-prevBody.weight)>=1.5) notes.push(`최근 체중 ${curBody.weight>prevBody.weight?'증가':'감소'} ${Math.abs(curBody.weight-prevBody.weight).toFixed(1)}kg`);
+  const fmt=(v,d=2)=>v==null||!Number.isFinite(v)?'—':v.toFixed(d);
+  const badge=(label,value,sub,color)=>`<div style="background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:11px"><div style="font-size:10px;color:var(--text3);margin-bottom:5px">${label}</div><div style="font-size:18px;font-weight:800;color:${color}">${value}</div><div style="font-size:9px;color:var(--text3);margin-top:3px">${sub}</div></div>`;
+  const exportRows=[];
+  const rows=displayDates.slice().reverse().map(d=>{const g=gpsBy[d],r=rpeBy[d],nextWell=wellBy[responseDateShift(d,1)],noLoad=!g&&!r;const rpeAvg=r?.n?r.sum/r.n:null,gpsTd=g?Math.round(g.td):0,srpe=r?.srpe?Math.round(r.srpe):0;exportRows.push({'날짜':d,'일일 상태':noLoad?'휴식·무부하':'훈련 기록','GPS TD(m)':gpsTd,'RPE':rpeAvg!=null?Number(rpeAvg.toFixed(1)):null,'sRPE':srpe,'다음 날 웰니스':nextWell!=null?Number(nextWell.toFixed(1)):null});return `<tr style="border-top:1px solid var(--border);background:${noLoad?'rgba(148,163,184,.06)':'transparent'}"><td style="padding:7px 8px;white-space:nowrap;color:var(--text2)">${d.slice(5)}${noLoad?'<span style="display:block;font-size:8px;color:var(--text3);margin-top:2px">휴식·무부하</span>':''}</td><td style="padding:7px 8px;text-align:right;color:${noLoad?'var(--text3)':'var(--text)'}">${gpsTd.toLocaleString()}m</td><td style="padding:7px 8px;text-align:center;color:${rpeAvg!=null?'#fbbf24':'var(--text3)'}">${rpeAvg!=null?fmt(rpeAvg,1):'—'}</td><td style="padding:7px 8px;text-align:right;color:${noLoad?'var(--text3)':'#c4b5fd'}">${srpe.toLocaleString()}</td><td style="padding:7px 8px;text-align:center;color:${nextWell!=null?(nextWell<3?'#f87171':nextWell<3.5?'#fbbf24':'#4ade80'):'var(--text3)'}">${nextWell!=null?fmt(nextWell,1):'—'}</td></tr>`;}).join('');
+  const p=_players.find(x=>x.id===playerId);
+  const exportKey=`response-${playerId}`;
+  window._conditionExportCache[exportKey]={title:`${p?.name||'선수'} 선수 반응 분석`,subtitle:`${from} ~ ${today} · 최근 ${days}일`,days,fileName:`${p?.name||'선수'}_선수반응_${from}_${today}`,elementId:`response-inline-detail-${playerId}`,sheets:[{name:'요약',rows:[{'선수':p?.name||'','포지션':p?.position||'','분석 시작일':from,'분석 종료일':today,'GPS EWMA ACWR':gpsMetric.ewma==null?null:Number(gpsMetric.ewma.toFixed(2)),'평균 RPE':recentRpe==null?null:Number(recentRpe.toFixed(1)),'sRPE 모노토니':internalMetric.monotony==null||!Number.isFinite(internalMetric.monotony)?null:Number(internalMetric.monotony.toFixed(2)),'sRPE 스트레인':internalMetric.strain==null||!Number.isFinite(internalMetric.strain)?null:Math.round(internalMetric.strain),'최근 웰니스':recentWell==null?null:Number(recentWell.toFixed(1)),'확인할 흐름':notes.join(' / ')||'뚜렷한 변화 신호 없음'}]},{name:'일자별 기록',rows:exportRows}]};
+  out.innerHTML=`
+    <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap"><div><div style="font-size:15px;font-weight:800;color:var(--text)">${p?.name||''} <span style="font-size:11px;color:var(--text3);font-weight:500">${p?.position||''} · 최근 ${days}일</span></div><div style="font-size:10px;color:var(--text3);margin-top:3px">외적 부하와 선수 반응을 분리해 해석합니다.</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">${conditionExportBar(exportKey)}<button onclick="setPlayerView('suitability')" style="padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);font-size:10px;cursor:pointer;font-family:inherit">오늘 훈련 판단 보기 →</button></div></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:10px">
+      ${badge('GPS EWMA ACWR',fmt(gpsMetric.ewma),'TD 기반 외적 부하','#60a5fa')}
+      ${badge('평균 RPE',recentRpe==null?'—':fmt(recentRpe,1),'최근 입력 3회','#fbbf24')}
+      ${badge('sRPE 모노토니',fmt(internalMetric.monotony),'내적 반복 부하','#c084fc')}
+      ${badge('sRPE 스트레인',internalMetric.strain==null||!Number.isFinite(internalMetric.strain)?'—':Math.round(internalMetric.strain).toLocaleString(),'7일 총부하 × 모노토니','#f472b6')}
+      ${badge('최근 웰니스',recentWell==null?'—':fmt(recentWell,1)+'/5','최근 입력 3회','#4ade80')}
+    </div>
+    <div style="background:${notes.length?'rgba(37,99,235,.08)':'rgba(21,128,61,.07)'};border:2px solid ${notes.length?'#3b82f6':'#16a34a'};border-radius:9px;padding:11px;margin-bottom:10px"><div style="font-size:11px;font-weight:800;color:${notes.length?'#60a5fa':'#4ade80'};margin-bottom:5px">${notes.length?'확인할 흐름':'뚜렷한 변화 신호 없음'}</div><div style="font-size:11px;color:var(--text);font-weight:600;line-height:1.7">${notes.length?notes.map(n=>`• ${n}`).join('<br>'):'현재 기간에서는 부하와 회복 반응의 뚜렷한 변화가 보이지 않습니다.'}</div></div>
+    <div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:9px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:520px"><thead><tr style="background:var(--surface2);color:var(--text3)"><th style="padding:7px 8px;text-align:left">날짜</th><th style="padding:7px 8px;text-align:right">GPS TD</th><th style="padding:7px 8px">RPE</th><th style="padding:7px 8px;text-align:right">sRPE</th><th style="padding:7px 8px">다음 날 웰니스</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div style="margin-top:10px;padding:9px 11px;background:var(--surface2);border-radius:8px;font-size:10px;color:var(--text3);line-height:1.55">체성분 보조 신호 · ${curBody?`${curBody.record_date} 체중 ${curBody.weight??'—'}kg · 근육량 ${curBody.muscle_mass??'—'}kg · 체지방 ${curBody.body_fat_pct??'—'}%`:'최근 측정 기록 없음'}<br>EWMA는 GPS 외적 부하, 모노토니·스트레인은 sRPE 내적 부하로 분리합니다. 이 화면은 원인 확인용이며 부상이나 훈련 가능 여부를 자동 확정하지 않습니다.</div>`;
+}
+
+// ── 컨디션 모니터링 서브탭 전환 ──────────────────────────────────
 function switchWellTab(tab){
-  const panels = {well:'wpanel-well', rpe:'wpanel-rpe', bc:'wpanel-bc'};
-  const btns   = {well:'wtab-well',   rpe:'wtab-rpe',   bc:'wtab-bc'};
+  const panels = {response:'wpanel-response', well:'wpanel-well', rpe:'wpanel-rpe', bc:'wpanel-bc'};
+  const btns   = {response:'wtab-response',   well:'wtab-well',   rpe:'wtab-rpe',   bc:'wtab-bc'};
   Object.entries(panels).forEach(([k,id])=>{
     const el=document.getElementById(id);
     if(el) el.style.display = k===tab ? '' : 'none';
   });
+  if(tab==='response') initResponseAnalysis();
+  if(tab==='well'){
+    const el=document.getElementById('wellness-view-date');
+    if(el&&!el.value) el.value=getKSTDateStr();
+    loadTeamWellness(); loadWellnessTwoWeekCal(el?.value||getKSTDateStr());
+  }
   Object.entries(btns).forEach(([k,id])=>{
     const btn=document.getElementById(id);
     if(!btn) return;
@@ -10451,7 +10638,7 @@ async function loadBodyComp(){
   if(playerIds.length) q = q.in('player_id', playerIds);
   const {data:allRecs0, error:bcErr} = await q;
   if(bcErr) console.error('body_comp_records 조회 오류:', bcErr);
-  const allRecs = (allRecs0||[]).filter(r=>r.muscle_mass!=null||r.body_fat_pct!=null);
+  const allRecs = (allRecs0||[]).filter(r=>r.weight!=null||r.muscle_mass!=null||r.body_fat_pct!=null);
 
   if(!allRecs || !allRecs.length){
     const errMsg = bcErr ? `조회 오류: ${bcErr.message}` : (allRecs0?.length ? '근육량/체지방 데이터가 없습니다.' : '체성분 측정 기록이 없습니다.');
@@ -10482,20 +10669,20 @@ async function loadBodyComp(){
     const recs = playerMap[player_id] || [];
     const cur  = recs[0] || null;
     const prev = recs[1] || null;
-    if(!cur) return `<tr style="border-bottom:0.5px solid var(--border)">
+    if(!cur) return `<tr data-bc-player="${p.id}" onclick="toggleBodyCompHistory('${p.id}')" style="border-bottom:0.5px solid var(--border);cursor:pointer">
       <td style="padding:6px 8px"><div style="font-weight:600;font-size:12px">${p.name}</div><div style="font-size:10px;color:var(--text3)">${p.position}</div></td>
       <td colspan="4" style="padding:6px 8px;font-size:11px;color:var(--text3);text-align:center">측정 기록 없음</td>
-    </tr>`;
+    </tr><tr data-bc-detail="${p.id}" style="display:none;background:var(--surface2)"><td colspan="5" style="padding:12px 14px;border-left:3px solid #fbbf24"><div id="bc-inline-${p.id}"></div></td></tr>`;
     const wt   = cur.weight ? `${cur.weight}kg${diffArrow(cur.weight, prev?.weight,'kg')}` : '—';
     const mu   = cur.muscle_mass    ? `${cur.muscle_mass}kg${diffArrow(cur.muscle_mass, prev?.muscle_mass,'kg')}` : '—';
     const fat  = cur.body_fat_pct   ? `${cur.body_fat_pct}%${diffArrow(cur.body_fat_pct, prev?.body_fat_pct,'%',true)}` : '—';
-    return `<tr style="border-bottom:0.5px solid var(--border)">
+    return `<tr data-bc-player="${p.id}" onclick="toggleBodyCompHistory('${p.id}')" style="border-bottom:0.5px solid var(--border);cursor:pointer">
       <td style="padding:6px 8px"><div style="font-weight:600;font-size:12px">${p.name}</div><div style="font-size:10px;color:var(--text3)">${p.position}</div></td>
       <td style="padding:6px 8px;font-size:11px;color:var(--text3);text-align:center">${cur.record_date||'—'}</td>
       <td style="padding:6px 8px;font-size:12px;text-align:center">${wt}</td>
       <td style="padding:6px 8px;font-size:12px;text-align:center">${mu}</td>
       <td style="padding:6px 8px;font-size:12px;text-align:center">${fat}</td>
-    </tr>`;
+    </tr><tr data-bc-detail="${p.id}" style="display:none;background:var(--surface2)"><td colspan="5" style="padding:12px 14px;border-left:3px solid #fbbf24"><div id="bc-inline-${p.id}"></div></td></tr>`;
   }).join('');
 
   summaryEl.innerHTML = `
@@ -10521,6 +10708,19 @@ async function loadBodyComp(){
     const from = new Date(now); from.setDate(from.getDate()-30);
     if(fromEl && !fromEl.value) fromEl.value = from.toISOString().split('T')[0];
   }
+}
+
+async function toggleBodyCompHistory(playerId){
+  const row=document.querySelector(`[data-bc-detail="${playerId}"]`),box=document.getElementById(`bc-inline-${playerId}`);if(!row||!box)return;
+  const open=row.style.display!=='none';document.querySelectorAll('[data-bc-detail]').forEach(x=>x.style.display='none');if(open)return;
+  row.style.display='table-row';box.innerHTML='<div style="padding:1rem;text-align:center;color:var(--text3)">기간별 체성분을 불러오는 중...</div>';
+  const days=parseInt(document.getElementById('bc-history-days')?.value)||30,to=getKSTDateStr(),from=responseDateShift(to,-(days-1));
+  const {data,error}=await supa.from('body_comp_records').select('record_date,weight,muscle_mass,body_fat_pct').eq('player_id',playerId).gte('record_date',from).lte('record_date',to).order('record_date',{ascending:false});
+  if(error){box.innerHTML=`<div style="color:#f87171">조회 오류: ${error.message}</div>`;return;}
+  const rows=(data||[]).map(r=>`<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${r.record_date}</td><td style="text-align:center">${r.weight!=null?r.weight+'kg':'—'}</td><td style="text-align:center">${r.muscle_mass!=null?r.muscle_mass+'kg':'—'}</td><td style="text-align:center">${r.body_fat_pct!=null?r.body_fat_pct+'%':'—'}</td></tr>`).join('');
+  const p=_players.find(x=>x.id===playerId),exportKey=`body-${playerId}`;
+  window._conditionExportCache[exportKey]={title:`${p?.name||'선수'} 체성분`,subtitle:`${from} ~ ${to} · 최근 ${days}일`,days,fileName:`${p?.name||'선수'}_체성분_${from}_${to}`,elementId:`bc-inline-${playerId}`,rows:(data||[]).map(r=>({'측정일':r.record_date,'체중(kg)':r.weight??null,'근육량(kg)':r.muscle_mass??null,'체지방(%)':r.body_fat_pct??null}))};
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap"><div style="font-size:12px;font-weight:700">${p?.name||''} · 최근 ${days}일 체성분</div>${conditionExportBar(exportKey)}</div><table style="width:100%;border-collapse:collapse;font-size:10px"><thead><tr style="color:var(--text3)"><th style="text-align:left;padding:6px 8px">측정일</th><th>체중</th><th>근육량</th><th>체지방%</th></tr></thead><tbody>${rows||'<tr><td colspan="4" style="padding:1rem;text-align:center;color:var(--text3)">기간 내 측정 기록 없음</td></tr>'}</tbody></table>`;
 }
 
 async function loadBodyCompHistory(){
@@ -10696,7 +10896,7 @@ async function applyGymBulkDuration(date){
   loadWellnessRpeView();
 }
 
-async function loadWellnessRpeView(){
+async function loadWellnessRpeViewLegacy(){
   const date = document.getElementById('rpe-view-date')?.value;
   const out  = document.getElementById('rpe-view-output');
   if(!out||!date) return;
@@ -10819,7 +11019,39 @@ async function loadWellnessRpeView(){
     </div>`;
 }
 
-async function loadTeamWellness(){
+async function loadWellnessRpeView(){
+  const date=document.getElementById('rpe-view-date')?.value,out=document.getElementById('rpe-view-output');
+  if(!out||!date)return;
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">RPE 현황을 불러오는 중...</div>';
+  await syncRpeDurationsForDate(date);
+  const {data,error}=await supa.from('session_records').select('id,player_id,rpe,duration,session_type,session_order,created_at,coach_edited').eq('record_date',date).order('session_order');
+  if(error){out.innerHTML=`<div style="padding:1rem;color:#f87171">조회 오류: ${error.message}</div>`;return;}
+  const records=data||[];_lastSessData=records.map(r=>({...r,record_date:date}));
+  const grouped={};records.forEach(r=>{if(!grouped[r.player_id])grouped[r.player_id]={am:[],pm:[]};const s=(r.session_type||'AM').toUpperCase(),timing=s==='PM'||gymTiming(s)==='PM'?'pm':'am';grouped[r.player_id][timing].push(r);});
+  const hasRpe=p=>(grouped[p.id]?.am||[]).concat(grouped[p.id]?.pm||[]).some(r=>(parseFloat(r.rpe)||0)>0);
+  const missing=_players.filter(p=>!hasRpe(p));window._wellnessRpeMissingPlayers=missing.map(p=>({id:p.id,name:p.name}));
+  const block=recs=>{if(!recs?.length)return '<span style="color:var(--text3)">—</span>';return recs.map(r=>{const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0,s=(r.session_type||'').toUpperCase();return `<span style="display:inline-block;margin:1px 3px;padding:2px 5px;border-radius:5px;background:var(--surface2);color:${rv>=8?'#f87171':rv>=6?'#fb923c':rv>=4?'#facc15':'#4ade80'}">${isGymType(s)?'GYM ':''}${rv||'—'}${du?` · ${du}분`:''}</span>`;}).join('');};
+  const rows=sortByPos(_players).map(p=>{const d=grouped[p.id]||{am:[],pm:[]},all=[...d.am,...d.pm],entered=all.some(r=>(parseFloat(r.rpe)||0)>0),edited=all.some(r=>r.coach_edited),name=(p.name||'').replace(/'/g,"\\'");return `<tr data-rpe-player="${p.id}" onclick="toggleRpeHistory('${p.id}')" style="border-top:1px solid var(--border);cursor:pointer"><td style="padding:8px"><b>${p.name}</b><small style="display:block;color:var(--text3)">${p.position||''}</small></td><td style="padding:8px;text-align:center">${block(d.am)}</td><td style="padding:8px;text-align:center">${block(d.pm)}</td><td style="padding:8px;text-align:center;white-space:nowrap"><button onclick="event.stopPropagation();openCoachRpeModal('${date}','${p.id}','${name}')" style="font-size:10px;padding:4px 8px;border-radius:5px;border:1px solid rgba(251,191,36,.45);background:transparent;color:#fbbf24;cursor:pointer">${entered?'수정':'입력'}</button>${entered?'':`<button onclick="event.stopPropagation();sendRpeReminder('${p.id}','${name}',this)" style="font-size:10px;padding:4px 8px;margin-left:4px;border-radius:5px;border:1px solid rgba(167,139,250,.4);background:transparent;color:#a78bfa;cursor:pointer">🔔 요청</button>`}${edited?'<small style="display:block;color:#60a5fa;margin-top:3px">코치 수정</small>':''}</td></tr><tr data-rpe-detail="${p.id}" style="display:none;background:var(--surface2)"><td colspan="4" style="padding:12px 14px;border-left:3px solid #c084fc"><div id="rpe-inline-${p.id}"></div></td></tr>`;}).join('');
+  out.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><div><div style="font-size:14px;font-weight:700">${date} RPE · ${_players.length-missing.length}/${_players.length}명 입력</div><div style="font-size:10px;color:var(--text3);margin-top:2px">오전·오후 세션 · 선수 행 클릭 시 기간별 기록</div></div>${missing.length?`<button onclick="sendRpeReminderAll(window._wellnessRpeMissingPlayers,this)" style="font-size:11px;padding:6px 12px;border-radius:7px;border:1px solid #7c3aed;background:rgba(124,58,237,.12);color:#c4b5fd;cursor:pointer">📨 미입력 ${missing.length}명 전원 요청</button>`:'<span style="color:#4ade80;font-size:11px">✅ 전원 입력 완료</span>'}</div><div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:9px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px"><thead><tr style="background:var(--surface2);color:var(--text3)"><th style="padding:8px;text-align:left">선수</th><th style="padding:8px">오전</th><th style="padding:8px">오후</th><th style="padding:8px">입력·수정·알림</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function toggleRpeHistory(playerId){
+  const row=document.querySelector(`[data-rpe-detail="${playerId}"]`),box=document.getElementById(`rpe-inline-${playerId}`);if(!row||!box)return;
+  const open=row.style.display!=='none';document.querySelectorAll('[data-rpe-detail]').forEach(x=>x.style.display='none');if(open)return;
+  row.style.display='table-row';box.innerHTML='<div style="padding:1rem;text-align:center;color:var(--text3)">기간별 RPE를 불러오는 중...</div>';
+  const to=document.getElementById('rpe-view-date')?.value||getKSTDateStr(),days=parseInt(document.getElementById('rpe-history-days')?.value)||14,from=responseDateShift(to,-(days-1));
+  const {data,error}=await supa.from('session_records').select('record_date,rpe,duration,session_type,coach_edited').eq('player_id',playerId).gte('record_date',from).lte('record_date',to).order('record_date',{ascending:false});
+  if(error){box.innerHTML=`<div style="color:#f87171">조회 오류: ${error.message}</div>`;return;}
+  const byDate={};(data||[]).forEach(r=>{if(!byDate[r.record_date])byDate[r.record_date]={am:[],pm:[]};const s=(r.session_type||'AM').toUpperCase(),timing=s==='PM'||gymTiming(s)==='PM'?'pm':'am';byDate[r.record_date][timing].push(r);});
+  const show=recs=>recs.length?recs.map(r=>`${isGymType((r.session_type||'').toUpperCase())?'GYM ':''}${r.rpe??'—'}${r.duration?` · ${r.duration}분`:''}`).join(' / '):'—';
+  const exportRows=[];
+  const rows=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,v])=>{const all=[...v.am,...v.pm],srpe=Math.round(all.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0))||null,edited=all.some(r=>r.coach_edited);exportRows.push({'날짜':d,'오전':show(v.am),'오후':show(v.pm),'총 sRPE':srpe,'수정 여부':edited?'코치 수정':''});return `<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${d}</td><td style="text-align:center">${show(v.am)}</td><td style="text-align:center">${show(v.pm)}</td><td style="text-align:right;color:#c084fc;font-weight:700">${srpe?.toLocaleString()||'—'}</td><td style="text-align:center;color:#60a5fa">${edited?'코치 수정':'—'}</td></tr>`;}).join('');
+  const p=_players.find(x=>x.id===playerId),exportKey=`rpe-${playerId}`;
+  window._conditionExportCache[exportKey]={title:`${p?.name||'선수'} RPE`,subtitle:`${from} ~ ${to} · 최근 ${days}일`,days,fileName:`${p?.name||'선수'}_RPE_${from}_${to}`,elementId:`rpe-inline-${playerId}`,rows:exportRows};
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap"><div style="font-size:12px;font-weight:700">${p?.name||''} · 최근 ${days}일 RPE</div>${conditionExportBar(exportKey)}</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:620px"><thead><tr style="color:var(--text3)"><th style="text-align:left;padding:6px 8px">날짜</th><th>오전</th><th>오후</th><th style="text-align:right">총 sRPE</th><th>수정 여부</th></tr></thead><tbody>${rows||'<tr><td colspan="5" style="padding:1rem;text-align:center;color:var(--text3)">기간 내 기록 없음</td></tr>'}</tbody></table></div>`;
+}
+
+async function loadTeamWellnessLegacy(){
   const date = document.getElementById('wellness-view-date')?.value;
   const out = document.getElementById('team-wellness-output');
   if(!out||!date) return;
@@ -10898,6 +11130,56 @@ async function loadTeamWellness(){
     <div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:8px;font-size:12px;color:var(--text3)">
       ⚠️ 미응답: ${_players.filter(p=>!records.find(r=>r.player_id===p.id)).map(p=>p.name).join(', ')}
     </div>`:''}`; 
+}
+
+async function loadTeamWellness(){
+  const date=document.getElementById('wellness-view-date')?.value;
+  const out=document.getElementById('team-wellness-output');
+  if(!out||!date)return;
+  out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">웰니스 현황을 불러오는 중...</div>';
+  const [wellRes,bodyRes]=await Promise.all([
+    supa.from('wellness_records').select('*').eq('record_date',date).order('created_at'),
+    supa.from('body_comp_records').select('player_id,record_date,weight').in('player_id',_players.map(p=>p.id)).order('record_date',{ascending:false})
+  ]);
+  const error=wellRes.error||bodyRes.error;
+  if(error){out.innerHTML=`<div style="padding:1rem;color:#f87171">조회 오류: ${error.message}</div>`;return;}
+  const records=wellRes.data||[],byPlayer={};records.forEach(r=>byPlayer[r.player_id]=r);
+  const latestWeight={};(bodyRes.data||[]).forEach(r=>{if(latestWeight[r.player_id]==null&&r.weight!=null)latestWeight[r.player_id]=r.weight;});
+  const missing=_players.filter(p=>!byPlayer[p.id]);
+  window._wellnessTableMissing=missing.map(p=>({id:p.id,name:p.name}));
+  const responders=records.length;
+  const avg=key=>responders?records.reduce((a,r)=>a+(parseFloat(r[key])||0),0)/responders:null;
+  const avgTotal=responders?['fatigue','sleep_quality','stress','muscle_soreness'].reduce((a,k)=>a+avg(k),0):null;
+  const valueColor=v=>v==null?'var(--text3)':WELLNESS_COLORS[Math.max(1,Math.min(5,Math.round(v)))]||'var(--text3)';
+  const rows=sortByPos(_players).map(p=>{
+    const r=byPlayer[p.id],total=r?(parseFloat(r.fatigue)||0)+(parseFloat(r.sleep_quality)||0)+(parseFloat(r.stress)||0)+(parseFloat(r.muscle_soreness)||0):null;
+    const status=total==null?'미체크':total>=16?'최상 🟢':total>=12?'양호 🟡':total>=8?'주의 🟠':'위험 🔴';
+    const sc=total==null?'#94a3b8':total>=16?'#4ade80':total>=12?'#facc15':total>=8?'#fb923c':'#f87171';
+    const tm=r?.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';
+    const wt=r?.weight??latestWeight[p.id];
+    const name=(p.name||'').replace(/'/g,"\\'");
+    return `<tr data-wellness-player="${p.id}" onclick="toggleWellnessHistory('${p.id}')" style="border-top:1px solid var(--border);cursor:pointer"><td style="padding:8px"><b>${p.name}</b><small style="display:block;color:var(--text3)">${p.position||''}</small></td>${['fatigue','sleep_quality','stress','muscle_soreness'].map(k=>`<td style="padding:8px;text-align:center;color:${valueColor(r?.[k])};font-weight:700">${r?.[k]??'—'}</td>`).join('')}<td style="padding:8px;text-align:center;font-weight:700;color:${sc}">${total==null?'—':total+'/20'}</td><td style="padding:8px;text-align:center;color:${sc};font-weight:700">${status}</td><td style="padding:8px;text-align:center">${wt!=null?wt+'kg':'—'}</td><td style="padding:8px;text-align:center;color:var(--text3)">${tm}</td><td style="padding:8px;text-align:center">${r?'<span style="color:#4ade80">완료</span>':`<button onclick="event.stopPropagation();sendWellnessReminder('${p.id}','${name}',this)" style="font-size:10px;padding:4px 8px;border-radius:5px;border:1px solid rgba(96,165,250,.4);background:transparent;color:#60a5fa;cursor:pointer">🔔 요청</button>`}</td></tr><tr data-wellness-detail="${p.id}" style="display:none;background:var(--surface2)"><td colspan="10" style="padding:12px 14px;border-left:3px solid #4ade80"><div id="wellness-inline-${p.id}"></div></td></tr>`;
+  }).join('');
+  out.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><div><div style="font-size:14px;font-weight:700">${date} 웰니스 · ${responders}/${_players.length}명 입력</div><div style="font-size:10px;color:var(--text3);margin-top:2px">팀 평균 ${avgTotal==null?'—':avgTotal.toFixed(1)+'/20'} · 선수 행 클릭 시 기간별 기록</div></div>${missing.length?`<button onclick="sendWellnessReminderAll(window._wellnessTableMissing,this)" style="font-size:11px;padding:6px 12px;border-radius:7px;border:1px solid #2563eb;background:rgba(37,99,235,.12);color:#93c5fd;cursor:pointer">📨 미체크 ${missing.length}명 전원 요청</button>`:'<span style="font-size:11px;color:#4ade80">✅ 전원 체크 완료</span>'}</div><div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:9px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:950px"><thead><tr style="background:var(--surface2);color:var(--text3)"><th style="padding:8px;text-align:left">선수</th><th>피로도</th><th>수면질</th><th>스트레스</th><th>근육통</th><th>총점</th><th>상태</th><th>체중</th><th>체크시간</th><th>알림</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function toggleWellnessHistory(playerId){
+  const row=document.querySelector(`[data-wellness-detail="${playerId}"]`),box=document.getElementById(`wellness-inline-${playerId}`);
+  if(!row||!box)return;
+  const open=row.style.display!=='none';document.querySelectorAll('[data-wellness-detail]').forEach(x=>x.style.display='none');
+  if(open)return;row.style.display='table-row';box.innerHTML='<div style="padding:1rem;text-align:center;color:var(--text3)">기간별 웰니스를 불러오는 중...</div>';
+  const to=document.getElementById('wellness-view-date')?.value||getKSTDateStr(),days=parseInt(document.getElementById('wellness-history-days')?.value)||14,from=responseDateShift(to,-(days-1));
+  const [wellRes,bodyRes]=await Promise.all([
+    supa.from('wellness_records').select('record_date,fatigue,sleep_quality,stress,muscle_soreness,created_at').eq('player_id',playerId).gte('record_date',from).lte('record_date',to).order('record_date',{ascending:false}),
+    supa.from('body_comp_records').select('record_date,weight').eq('player_id',playerId).gte('record_date',from).lte('record_date',to)
+  ]);
+  const error=wellRes.error||bodyRes.error;if(error){box.innerHTML=`<div style="color:#f87171">조회 오류: ${error.message}</div>`;return;}
+  const weightByDate={};(bodyRes.data||[]).forEach(r=>{if(r.weight!=null)weightByDate[r.record_date]=r.weight;});
+  const exportRows=[];
+  const p=_players.find(x=>x.id===playerId),rows=(wellRes.data||[]).map(r=>{const total=['fatigue','sleep_quality','stress','muscle_soreness'].reduce((a,k)=>a+(parseFloat(r[k])||0),0),status=total>=16?'최상':total>=12?'양호':total>=8?'주의':'위험',tm=r.created_at?new Date(r.created_at).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}):'—';exportRows.push({'날짜':r.record_date,'피로도':r.fatigue??null,'수면질':r.sleep_quality??null,'스트레스':r.stress??null,'근육통':r.muscle_soreness??null,'총점':total,'상태':status,'체중(kg)':weightByDate[r.record_date]??null,'체크시간':tm});return `<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${r.record_date}</td><td style="text-align:center">${r.fatigue??'—'}</td><td style="text-align:center">${r.sleep_quality??'—'}</td><td style="text-align:center">${r.stress??'—'}</td><td style="text-align:center">${r.muscle_soreness??'—'}</td><td style="text-align:center;font-weight:700">${total}/20</td><td style="text-align:center">${status}</td><td style="text-align:center">${weightByDate[r.record_date]!=null?weightByDate[r.record_date]+'kg':'—'}</td><td style="text-align:center;color:var(--text3)">${tm}</td></tr>`;}).join('');
+  const exportKey=`wellness-${playerId}`;
+  window._conditionExportCache[exportKey]={title:`${p?.name||'선수'} 웰니스`,subtitle:`${from} ~ ${to} · 최근 ${days}일`,days,fileName:`${p?.name||'선수'}_웰니스_${from}_${to}`,elementId:`wellness-inline-${playerId}`,rows:exportRows};
+  box.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap"><div style="font-size:12px;font-weight:700">${p?.name||''} · 최근 ${days}일 웰니스</div>${conditionExportBar(exportKey)}</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px;min-width:700px"><thead><tr style="color:var(--text3)"><th style="text-align:left;padding:6px 8px">날짜</th><th>피로도</th><th>수면질</th><th>스트레스</th><th>근육통</th><th>총점</th><th>상태</th><th>체중</th><th>체크시간</th></tr></thead><tbody>${rows||'<tr><td colspan="9" style="padding:1rem;text-align:center;color:var(--text3)">기간 내 기록 없음</td></tr>'}</tbody></table></div>`;
 }
 
 function setSettingsView(view){
