@@ -1501,6 +1501,14 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       운영 그룹 수 = ⌈참가인원 ÷ 그룹당인원⌉ = ⌈12 ÷ 3⌉ = <strong style="color:#60a5fa">4그룹</strong><br>
       <span style="color:var(--text3)">총 운동 동작 수와 스테이션 구성은 STEP 8과 운동 방법을 기준으로 별도 계산됩니다.</span>
     </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:9px;font-size:11px;color:var(--text3);flex-wrap:wrap">
+      <b style="color:#60a5fa">운동 구성</b>
+      <select id="gym-group-station-mode" onchange="updateStationCount()" style="padding:6px 9px;border:1px solid #1d4ed8;border-radius:6px;background:var(--surface2);color:var(--text);font-size:11px;font-family:inherit">
+        <option value="unique">그룹 수만큼 서로 다른 운동</option>
+        <option value="duplicate2" selected>같은 운동을 2스테이션씩 배치</option>
+      </select>
+      <span id="gym-group-exercise-plan"></span>
+    </div>
   </div>
 
   <!-- 개인 설정 패널 (대상 선수 선택 — 선택 사항) -->
@@ -1551,11 +1559,11 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     </select></div>
   </div>
 
-  <!-- STEP 8: 총 운동 동작 수 (개인·단체 공통) -->
+  <!-- STEP 8: 운동 수 (수퍼세트는 주운동 수, 나머지는 전체 동작 수) -->
   <div id="gym-step3-num" style="order:8;margin-bottom:14px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-      <span style="font-size:11px;font-weight:700;color:#818cf8">STEP 8 · 총 운동 동작 수</span>
-      <span style="font-size:10px;color:var(--text3);font-weight:400">운동 방법이 달라도 실제 동작 수 기준</span>
+      <span id="gym-numex-title" style="font-size:11px;font-weight:700;color:#818cf8">STEP 8 · 운동 수</span>
+      <span id="gym-numex-caption" style="font-size:10px;color:var(--text3);font-weight:400">실제 처방할 운동 수</span>
     </div>
     <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px">
       <button id="gym-numex-btn-2" onclick="setGymNumEx(2)" style="padding:12px 6px;border-radius:9px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit;text-align:center;transition:all .15s"><div style="font-size:16px;font-weight:800;margin-bottom:2px">2</div><div style="font-size:9px;opacity:.7">가지</div></button>
@@ -5172,7 +5180,8 @@ let _gymSafetyExcluded=[];
 let _gymPlannedMd=null;
 let _gymMdSourceText='';
 let _currentGymMethod='슈퍼세트';
-let _gymMethodOptions={straightRest:'3분',supersetType:'주동근-길항근',supersetGap:'즉시',clusterReps:'1+1+1+1',clusterRest:'15초',circuitRounds:'3',circuitMoveRest:'20초',circuitRoundRest:'2분',contrastGap:'90초'};
+let _gymMethodOptions={straightRest:'3분',supersetType:'주동근-길항근',supersetGap:'즉시',clusterReps:'1+1+1+1',clusterRest:'15초',circuitRounds:'3',circuitWork:'30초',circuitMoveRest:'30초',circuitRestEvery:'매 1라운드',circuitRoundRest:'2분',contrastGap:'90초'};
+let _gymMethodOptionEdited={}; // 코치가 직접 바꾼 방법 설정만 목적·MD 권장값을 덮어쓴다.
 let _currentGymLocation=null;    // 'clubhouse' | 'external'
 let _gymCurrentSettings=null;    // {id?, name, gym_type, equipment:[{name,quantity}]}
 let _gymExternalSessionSettings=null; // 외부 GYM: 현재 페이지의 이번 처방에만 유지
@@ -5382,7 +5391,7 @@ function initGymTab(){
     if(indConfig)indConfig.style.display='';
     if(grpBasis)grpBasis.style.display='none';
     if(grpConfig)grpConfig.style.display='none';
-    if(step3)step3.style.display=(_currentGymBodyPart&&_currentGymBodyPart!=='Multi')?'':'none';
+    if(step3)step3.style.display='none';
   } else {
     if(indConfig)indConfig.style.display='none';
     if(grpBasis)grpBasis.style.display='';
@@ -5498,8 +5507,17 @@ function renderGymNumExGuide(){
   const el=document.getElementById('gym-numex-guide');if(!el)return;
   const rec=getGymNumExRecommendation(),selected=parseInt(document.getElementById('gym-num-ex')?.value||'0');
   const method=_currentGymMethod;
-  const paired=['슈퍼세트','컨트라스트'].includes(method);
-  const composition=selected?(paired?`${method}: ${Math.floor(selected/2)}쌍${selected%2?' + 단독 1개':''} · 총 ${selected}개 동작`:`${method}: 총 ${selected}개 동작`):'';
+  const isSuperset=method==='슈퍼세트';
+  const isContrast=method==='컨트라스트';
+  const paired=isSuperset||isContrast;
+  const title=document.getElementById('gym-numex-title');
+  const caption=document.getElementById('gym-numex-caption');
+  if(title)title.textContent=paired?'STEP 8 · 주운동 수':'STEP 8 · 총 운동 동작 수';
+  if(caption)caption.textContent=isSuperset?'보조(반대 운동)는 각 주운동에 자동 배정됩니다.':isContrast?'폭발·파워 운동은 각 주운동에 자동 배정됩니다.':'실제 처방할 전체 동작 수';
+  const composition=selected?(isSuperset
+    ?`슈퍼세트: 주운동 ${selected}개 + 자동 보조 ${selected}개 · 총 ${selected}쌍/${selected*2}개 동작`
+    :isContrast?`컨트라스트: 주운동 ${selected}개 + 자동 파워 ${selected}개 · 총 ${selected}쌍/${selected*2}개 동작`
+    :`${method}: 총 ${selected}개 동작`):'';
   if(rec.level==='danger'){
     el.innerHTML=`<div style="font-size:10px;padding:7px 9px;border:1px solid #f8717155;background:#f871710d;color:#f87171;border-radius:7px">🔴 ${rec.adjustment}</div>`;return;
   }
@@ -5710,8 +5728,13 @@ function updateStationCount(){
   const n=Math.ceil(total/gs);
   const dispEl=document.getElementById('gym-station-display');
   if(dispEl)dispEl.textContent=n;
+  const mode=document.getElementById('gym-group-station-mode')?.value||'duplicate2';
+  const uniqueCount=mode==='duplicate2'?Math.ceil(n/2):n;
+  const copies=mode==='duplicate2'?2:1;
+  const planEl=document.getElementById('gym-group-exercise-plan');
+  if(planEl)planEl.innerHTML=`<strong style="color:#4ade80">${uniqueCount}종목 × 최대 ${copies}스테이션 = ${n}그룹 운영</strong>`;
   const fmlEl=document.getElementById('gym-station-formula');
-  if(fmlEl)fmlEl.innerHTML=`운영 그룹 수 = ⌈참가인원 ÷ 그룹당인원⌉ = ⌈${total} ÷ ${gs}⌉ = <strong style="color:#60a5fa">${n}그룹</strong><br><span style="color:var(--text3)">총 운동 동작 수와 스테이션 구성은 STEP 8과 운동 방법을 기준으로 별도 계산됩니다.</span>`;
+  if(fmlEl)fmlEl.innerHTML=`운영 그룹 수 = ⌈참가인원 ÷ 그룹당인원⌉ = ⌈${total} ÷ ${gs}⌉ = <strong style="color:#60a5fa">${n}그룹</strong><br><span style="color:var(--text3)">단체 운동 수는 운영 그룹에 맞춰 자동 계산됩니다. 개인용 STEP 8 운동 수는 적용하지 않습니다.</span>`;
   return n;
 }
 
@@ -5720,7 +5743,7 @@ function onGymGenerate(){
   if(!_currentGymLocation){showToast('STEP 3에서 GYM을 먼저 선택해주세요.');return;}
   if(!document.getElementById('gym-md')?.value){showToast('STEP 4에서 MD 단계 또는 자유 처방을 선택해주세요.');document.getElementById('gym-md')?.focus();return;}
   if(!_currentGymBodyPart){showToast('STEP 6에서 운동 부위를 선택해주세요.');document.getElementById('gym-body-section')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
-  if(_currentGymBodyPart!=='Multi'&&!document.getElementById('gym-num-ex')?.value){showToast('STEP 8에서 총 운동 동작 수를 선택해주세요.');document.getElementById('gym-step3-num')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
+  if(_currentGymSessionType==='individual'&&_currentGymBodyPart!=='Multi'&&!document.getElementById('gym-num-ex')?.value){showToast('STEP 8에서 총 운동 동작 수를 선택해주세요.');document.getElementById('gym-step3-num')?.scrollIntoView({behavior:'smooth',block:'center'});return;}
   if(_currentGymSessionType==='individual'&&_gymConditionBasis==='condition'&&!document.getElementById('gym-player-select')?.value){
     showToast('현재 상태를 반영할 선수를 선택해주세요. 일반 처방은 정상 상태 가정을 선택하면 됩니다.');
     document.getElementById('gym-player-select')?.focus();
@@ -5730,18 +5753,94 @@ function onGymGenerate(){
   else generateGym();
 }
 
+let _devExerciseMasterRows=null;
+async function loadDevExerciseMasterRows(){
+  if(_devExerciseMasterRows)return _devExerciseMasterRows;
+  const response=await fetch(`data/exercise-master-v2-runtime.json?v=20260814`);
+  if(!response.ok)throw new Error(`개발 운동 마스터 로드 실패 (${response.status})`);
+  const rows=await response.json();
+  _devExerciseMasterRows=(rows||[]).filter(row=>row.is_active!==false);
+  return _devExerciseMasterRows;
+}
+
+class DevExerciseReadQuery{
+  constructor(){this.filters=[];}
+  select(){return this;}
+  eq(field,value){this.filters.push(row=>row[field]===value);return this;}
+  contains(field,values){this.filters.push(row=>values.every(value=>(row[field]||[]).includes(value)));return this;}
+  in(field,values){this.filters.push(row=>values.includes(row[field]));return this;}
+  then(resolve,reject){
+    return loadDevExerciseMasterRows()
+      .then(rows=>({data:rows.filter(row=>this.filters.every(filter=>filter(row))),error:null}))
+      .then(resolve,reject);
+  }
+}
+
+function gymExerciseReadSource(){
+  return {select:()=>new DevExerciseReadQuery()};
+}
+
+function buildGroupMultiSelection(rows,queryPurpose,rankCfg,targetCount=0){
+  const bodyByPart={UB:'상체',LB:'하체',AB:'전신',Core:'코어'};
+  const order=['UB','LB','AB','Core'];
+  const selectedByPart={};
+  const used=new Set();
+  order.forEach(partKey=>{
+    const config=_multiConfig[partKey];
+    if(!config?.on||config.cnt<1)return;
+    const requiredPurpose=partKey==='AB'?'파워':queryPurpose;
+    const candidates=rankExercisesForPrescription(
+      rows.filter(ex=>ex.body_part===bodyByPart[partKey]&&(ex.purposes||[]).includes(requiredPurpose)&&!used.has(ex.id)),
+      {...rankCfg,purpose:requiredPurpose}
+    );
+    selectedByPart[partKey]=buildBalancedExercises(candidates,config.cnt);
+    selectedByPart[partKey].forEach(ex=>used.add(ex.id));
+  });
+  const result=[];
+  let round=0;
+  while(order.some(partKey=>(selectedByPart[partKey]||[])[round])){
+    order.forEach(partKey=>{
+      const exercise=(selectedByPart[partKey]||[])[round];
+      if(exercise)result.push(exercise);
+    });
+    round++;
+  }
+  // 단체 운영에 필요한 종목 수가 멀티 부위의 수동 합계보다 많으면,
+  // 활성화된 부위 안에서만 후보를 보충해 운영 그룹 수를 맞춘다.
+  if(targetCount>result.length){
+    const enabledParts=order.filter(partKey=>_multiConfig[partKey]?.on);
+    const extraCandidates=[];
+    enabledParts.forEach(partKey=>{
+      const requiredPurpose=partKey==='AB'?'파워':queryPurpose;
+      const candidates=rankExercisesForPrescription(
+        rows.filter(ex=>ex.body_part===bodyByPart[partKey]&&(ex.purposes||[]).includes(requiredPurpose)&&!used.has(ex.id)),
+        {...rankCfg,purpose:requiredPurpose}
+      );
+      candidates.forEach(ex=>extraCandidates.push(ex));
+    });
+    while(result.length<targetCount&&extraCandidates.length){
+      const ex=extraCandidates.shift();
+      if(used.has(ex.id))continue;
+      result.push(ex);
+      used.add(ex.id);
+    }
+  }
+  return result;
+}
+
 async function generateGroupGym(){
   const md=document.getElementById('gym-md').value;
   const time=parseInt(document.getElementById('gym-time')?.value||60);
   const bp=_currentGymBodyPart;
   const purpKey=_currentGymPurpose;
   const purpT=getEffectiveGymPurpose(purpKey);
-  if(_currentGymMethod==='스트레이트 세트')purpT.rest=_gymMethodOptions.straightRest;
+  if(_currentGymMethod==='스트레이트 세트'&&_gymMethodOptionEdited.straightRest)purpT.rest=_gymMethodOptions.straightRest;
   const totalPlayers=parseInt(document.getElementById('gym-total-players')?.value||12);
   const groupSize=parseInt(document.getElementById('gym-group-size')?.value||3);
-  const totalMoves=parseInt(document.getElementById('gym-num-ex')?.value||'0');
-  const pairedMethod=['슈퍼세트','컨트라스트'].includes(_currentGymMethod);
-  const requestedStations=pairedMethod?Math.ceil(totalMoves/2):totalMoves;
+  const groupCount=Math.ceil(totalPlayers/Math.max(1,groupSize));
+  const stationMode=document.getElementById('gym-group-station-mode')?.value||'duplicate2';
+  const duplicateCount=stationMode==='duplicate2'?2:1;
+  const requestedStations=stationMode==='duplicate2'?Math.ceil(groupCount/2):groupCount;
   const mdL=document.getElementById('gym-md').selectedOptions[0].text;
   const timeL=document.getElementById('gym-time').selectedOptions[0].text;
   const out=document.getElementById('gym-output');
@@ -5756,38 +5855,51 @@ async function generateGroupGym(){
   const queryPurpose=method==='컨트라스트'?'근력':supaPurpose;
 
   try {
-    let query=supa.from('exercises').select('*').contains('purposes',[queryPurpose]);
+    let query=gymExerciseReadSource().select('*').eq('is_active',true);
+    if(bp!=='Multi')query=query.contains('purposes',[queryPurpose]);
     if(bp!=='Multi'){const supaBp=bpMap[bp];if(supaBp)query=query.eq('body_part',supaBp);}
     const {data,error}=await query;
     if(error)throw error;
-    const filtered=rankExercisesForPrescription(
-      (data||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq))),
-      {md,method,purpose:queryPurpose,equipment:supaEquip,condition:_gymConditionBasis==='condition'?'condition':''}
-    );
+    const equipmentReady=(data||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq)));
+    const rankCfg={md,method,purpose:queryPurpose,equipment:supaEquip,condition:_gymConditionBasis==='condition'?'condition':''};
+    const filtered=bp==='Multi'
+      ? buildGroupMultiSelection(equipmentReady,queryPurpose,rankCfg,requestedStations)
+      : rankExercisesForPrescription(equipmentReady,rankCfg);
     if(!filtered.length){
       out.innerHTML=`${gymSafetyFilterSummaryHtml()}<p style="color:var(--text3);padding:1rem">조건에 맞는 안전한 운동 후보가 없습니다. 부위·기구를 바꾸거나 의무팀 허용 범위를 확인하세요.</p>`;
       return;
     }
+    const fullPartnerPool=method==='슈퍼세트'
+      ?await loadGymAlternativePool(bpMap[bp]||null,supaEquip,{md,method,purpose:queryPurpose,equipment:supaEquip,condition:_gymConditionBasis==='condition'?'condition':''},filtered)
+      :filtered;
     let pairs;
     if(method==='서킷'){
-      pairs=buildCircuitStations(filtered,requestedStations);
+      pairs=bp==='Multi'?filtered.map(ex=>({a:ex,b:null,type:'circuit'})):buildCircuitStations(filtered,requestedStations);
     } else if(method==='컨트라스트'){
       pairs=await buildContrastPairs(filtered,requestedStations,supaEquip);
     } else if(method==='스트레이트 세트'){
-      pairs=buildStraightSets(filtered,requestedStations);
+      pairs=bp==='Multi'?filtered.map(ex=>({a:ex,b:null,type:'straight'})):buildStraightSets(filtered,requestedStations);
     } else if(method==='클러스터 세트'){
-      pairs=buildClusterSets(filtered,requestedStations);
+      pairs=bp==='Multi'?filtered.map(ex=>({a:ex,b:null,type:'cluster'})):buildClusterSets(filtered,requestedStations);
     } else {
-      pairs=buildSupersetPairs(filtered,requestedStations);
+      pairs=buildSupersetPairs(filtered,requestedStations,fullPartnerPool);
     }
-    pairs=limitGymPairsToMoves(pairs,totalMoves);
+    const uniquePairs=pairs.slice(0,requestedStations);
+    if(uniquePairs.length<requestedStations)showToast(`운동 후보 부족: 서로 다른 ${requestedStations}종목 중 ${uniquePairs.length}종목 생성 · 일부 스테이션은 반복 배치됩니다.`);
+    pairs=[];
+    if(uniquePairs.length){
+      for(let i=0;i<groupCount;i++){
+        const source=uniquePairs[i%uniquePairs.length];
+        pairs.push({...source,_exerciseNo:(i%uniquePairs.length)+1,_stationCopy:Math.floor(i/uniquePairs.length)+1,_duplicateCount:duplicateCount});
+      }
+    }
     const numStations=pairs.length;
     // 처방 swap용 전역 저장
     _currentGymPairs=pairs;
-    _gymAllExercises=filtered;
+    _gymAllExercises=method==='슈퍼세트'?fullPartnerPool:await loadGymAlternativePool(bpMap[bp]||null,supaEquip,{md,method,purpose:queryPurpose,equipment:supaEquip,condition:_gymConditionBasis==='condition'?'condition':''},filtered);
     _currentGymPurpT=purpT;
-    _currentGymSessionCfg={totalPlayers,groupSize,numStations,mdL,time,timeL,method,mode:'group'};
-    renderGroupSession(pairs,purpT,{totalPlayers,groupSize,numStations,mdL,time,timeL,method});
+    _currentGymSessionCfg={totalPlayers,groupSize,numStations,uniqueExercises:uniquePairs.length,stationMode,mdL,time,timeL,method,mode:'group'};
+    renderGroupSession(pairs,purpT,{totalPlayers,groupSize,numStations,uniqueExercises:uniquePairs.length,stationMode,mdL,time,timeL,method});
   } catch(err){
     out.innerHTML=`<p style="color:#ef4444;padding:1rem">오류: ${err.message}</p>`;
   }
@@ -5862,11 +5974,24 @@ function localGymExerciseSafety(ex,partKey,subKey){
   return safety.level!=='exclude';
 }
 
+function dedupeGymExercises(exercises){
+  const norm=s=>String(s||'').toLowerCase().replace(/[\s()\-_\/]/g,'');
+  const map=new Map();
+  (exercises||[]).forEach(ex=>{
+    const key=norm(ex.name_en||ex.name_ko);if(!key)return;
+    const prev=map.get(key);
+    const exHasKorean=/[가-힣]/.test(ex.name_ko||'');
+    const prevHasKorean=/[가-힣]/.test(prev?.name_ko||'');
+    if(!prev||(exHasKorean&&!prevHasKorean))map.set(key,ex);
+  });
+  return [...map.values()];
+}
+
 function rankExercisesForPrescription(exercises,context={}){
   const md=normalizeGymMd(context.md);
   const method=context.method||'';
   const purpose=context.purpose||'';
-  return (exercises||[])
+  const ranked=(exercises||[])
     .filter(ex=>ex.is_active!==false)
     .map(ex=>{
       let score=0;
@@ -5895,6 +6020,7 @@ function rankExercisesForPrescription(exercises,context={}){
     })
     .filter(Boolean)
     .sort((a,b)=>b._recommendScore-a._recommendScore||String(a.name_ko).localeCompare(String(b.name_ko),'ko'));
+  return dedupeGymExercises(ranked);
 }
 
 function gymRecommendationReasonHtml(ex){
@@ -5973,9 +6099,12 @@ function gymPrescriptionQualityHtml(pairs,method){
   }
 
   const scored=checks.filter(c=>c.status!=='info');
-  const value=scored.length?Math.round(scored.reduce((n,c)=>n+(c.status==='pass'?1:(c.status==='warn'?0.5:0)),0)/scored.length*100):0;
+  const hasUnknown=checks.some(c=>c.status==='info');
+  const rawValue=scored.length?Math.round(scored.reduce((n,c)=>n+(c.status==='pass'?1:(c.status==='warn'?0.5:0)),0)/scored.length*100):0;
+  // 핵심 메타데이터가 비어 있으면 만점으로 오해하지 않도록 부분 검증 상한을 둔다.
+  const value=hasUnknown?Math.min(85,rawValue):rawValue;
   const color=value>=90?'#4ade80':value>=75?'#60a5fa':value>=60?'#fb923c':'#f87171';
-  const label=value>=90?'추천 품질 양호':value>=75?'적용 가능':value>=60?'코치 확인 필요':'재구성 권장';
+  const label=hasUnknown?'부분 검증':value>=90?'추천 품질 양호':value>=75?'적용 가능':value>=60?'코치 확인 필요':'재구성 권장';
   const cfg={pass:['#4ade80','✓'],warn:['#fb923c','!'],fail:['#f87171','×'],info:['#94a3b8','·']};
   return `<div style="border:1px solid ${color}66;background:${color}0a;border-radius:10px;padding:11px 12px;margin-bottom:12px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:8px"><b style="font-size:12px;color:var(--text2)">🔎 처방 품질 검사</b><b style="font-size:12px;color:${color}">${value}점 · ${label}</b></div>
@@ -6015,6 +6144,21 @@ function buildBalancedExercises(exercises, num){
 function buildCircuitStations(exercises,numStations){
   return buildBalancedExercises(exercises,numStations).map(ex=>({a:ex,b:null,type:'circuit'}));
 }
+
+async function loadGymAlternativePool(bodyPart,equipment,rankCfg,fallback=[]){
+  try{
+    let query=gymExerciseReadSource().select('*').eq('is_active',true);
+    if(bodyPart)query=query.eq('body_part',bodyPart);
+    const {data,error}=await query;if(error)throw error;
+    return rankExercisesForPrescription(
+      (data||[]).filter(e=>(e.equipment_priority||[]).some(eq=>equipment.includes(eq))),
+      rankCfg
+    );
+  }catch(e){
+    console.warn('대체 운동 풀 로드 실패',e);
+    return fallback;
+  }
+}
 function buildStraightSets(exercises,num){
   return buildBalancedExercises(exercises,num).map(ex=>({a:ex,b:null,type:'straight'}));
 }
@@ -6022,9 +6166,51 @@ function buildClusterSets(exercises,num){
   return buildBalancedExercises(exercises,num).map(ex=>({a:ex,b:null,type:'cluster'}));
 }
 
+function gymSupersetPattern(ex){
+  const text=[ex?.region,ex?.body_part,ex?.sub_area,ex?.display_group,ex?.movement_pattern,ex?.primary_muscle_ko,ex?.name_ko,ex?.name_en].filter(Boolean).join(' ').toLowerCase();
+  if(/가슴|대흉|수평 밀기|체스트|벤치 프레스|push.?up|chest|bench press/.test(text))return'upper_push';
+  if(/등|광배|승모|능형|수평 당기기|수직 당기기|로우|풀다운|풀업|row|pull.?down|pull.?up/.test(text))return'upper_pull';
+  if(/어깨 프레스|측면 어깨|전면 어깨|오버헤드|숄더 프레스|lateral raise|front raise|overhead|shoulder press/.test(text))return'shoulder_press';
+  if(/후면 어깨|회전근개|견갑 안정|외회전|내회전|rear delt|rotator|external rotation|internal rotation/.test(text))return'shoulder_stability';
+  if(/이두|팔꿈치 굴곡|바이셉|biceps|elbow flex/.test(text))return'arm_flexion';
+  if(/삼두|팔꿈치 신전|트라이셉|triceps|elbow extension/.test(text))return'arm_extension';
+  if(/대퇴사두|무릎 우세|무릎 신전|스쿼트|런지|quadriceps|knee dominant|squat|lunge/.test(text))return'knee_dominant';
+  if(/햄스트링|후면사슬|힙힌지|무릎 굴곡|데드리프트|hamstring|posterior chain|hip hinge|deadlift/.test(text))return'posterior_chain';
+  if(/족저굴곡|비복근|가자미근|카프|plantar|calf/.test(text))return'plantar_flexion';
+  if(/배측굴곡|전경골|티비알리스|dorsiflex|tibialis/.test(text))return'dorsi_flexion';
+  if(/고관절 외전|중둔근|hip abduction/.test(text))return'hip_abduction';
+  if(/내전근|고관절 내전|adductor|hip adduction/.test(text))return'hip_adduction';
+  if(/항신전/.test(text))return'core_anti_extension';
+  if(/항회전/.test(text))return'core_anti_rotation';
+  if(/항측굴/.test(text))return'core_anti_lateral';
+  return'';
+}
+
+function gymSupersetRelationScore(a,b){
+  if(!a||!b||a.id===b.id)return 0;
+  let score=0;
+  if(a.antagonist_ko&&b.primary_muscle_ko===a.antagonist_ko)score+=120;
+  if(b.antagonist_ko&&b.antagonist_ko===a.primary_muscle_ko)score+=100;
+  const pa=gymSupersetPattern(a),pb=gymSupersetPattern(b);
+  const opposite={
+    upper_push:'upper_pull',upper_pull:'upper_push',
+    shoulder_press:'shoulder_stability',shoulder_stability:'shoulder_press',
+    arm_flexion:'arm_extension',arm_extension:'arm_flexion',
+    knee_dominant:'posterior_chain',posterior_chain:'knee_dominant',
+    plantar_flexion:'dorsi_flexion',dorsi_flexion:'plantar_flexion',
+    hip_abduction:'hip_adduction',hip_adduction:'hip_abduction',
+    core_anti_extension:'core_anti_rotation',core_anti_rotation:'core_anti_extension',
+    core_anti_lateral:'core_anti_rotation'
+  };
+  if(pa&&opposite[pa]===pb)score+=80;
+  if((b.available_roles||[]).includes('보조')||b.primary_role==='보조')score+=8;
+  if((b.available_roles||[]).includes('활성화')||b.primary_role==='활성화')score+=4;
+  return score;
+}
+
 async function buildContrastPairs(strengthExercises,numStations,equipList){
   // 파워/점프 운동 조회
-  const {data:powerData}=await supa.from('exercises').select('*').in('category',['특수_파워','특수_점프']);
+  const {data:powerData}=await gymExerciseReadSource().select('*').eq('is_active',true).in('category',['특수_파워','특수_점프']);
   const powerEx=rankExercisesForPrescription(
     (powerData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>equipList.includes(eq))),
     {md:document.getElementById('gym-md')?.value,method:'컨트라스트',purpose:'파워',equipment:equipList}
@@ -6034,27 +6220,42 @@ async function buildContrastPairs(strengthExercises,numStations,equipList){
   const usedPower=new Set();
   const pairs=[];
   for(let i=0;i<balanced.length;i++){
-    const power=powerEx.find(p=>!usedPower.has(p.id));
+    const strength=balanced[i];
+    const normalizePattern=value=>String(value||'').replace(/폭발적\s*/g,'').replace(/경사\s*/g,'').trim();
+    const power=powerEx.filter(p=>!usedPower.has(p.id)).map(p=>{
+      let score=Number(p._recommendScore||0);
+      if(p.body_part===strength.body_part)score+=100;
+      if(p.primary_muscle_ko&&p.primary_muscle_ko===strength.primary_muscle_ko)score+=140;
+      const aPattern=normalizePattern(strength.movement_pattern),bPattern=normalizePattern(p.movement_pattern);
+      if(aPattern&&bPattern&&(aPattern===bPattern||aPattern.includes(bPattern)||bPattern.includes(aPattern)))score+=180;
+      if(/스쿼트|무릎|런지|고관절|힙|힌지/.test(aPattern)&&/점프|도약|신전|올림픽|드라이브/.test(bPattern))score+=90;
+      return {exercise:p,score};
+    }).sort((x,y)=>y.score-x.score)[0]?.exercise||null;
     if(power)usedPower.add(power.id);
-    pairs.push({a:balanced[i],b:power||null,type:'contrast'});
+    pairs.push({a:strength,b:power||null,type:'contrast'});
   }
   return pairs;
 }
 
-function buildSupersetPairs(exercises,maxPairs){
-  // 충분한 풀을 균형있게 뽑아서 주동-길항 매칭
-  const arr=buildBalancedExercises(exercises,Math.min(exercises.length,maxPairs*3));
+function buildSupersetPairs(exercises,maxPairs,partnerExercises=exercises){
+  // A는 선택 목적에 맞는 주운동에서 고르고, B는 같은 부위의 전체 안전 후보에서 길항근을 찾는다.
+  // 앞 페어의 B로 사용된 후보는 다음 A에서 건너뛸 수 있도록 A 후보를 넉넉히 유지한다.
+  const mains=buildBalancedExercises(exercises,exercises.length);
+  const partnerPool=buildBalancedExercises(partnerExercises,partnerExercises.length);
   const used=new Set();
   const pairs=[];
-  for(const ex of arr){
+  for(const ex of mains){
     if(used.has(ex.id)||pairs.length>=maxPairs)break;
     used.add(ex.id);
-    const partner=arr.find(e=>!used.has(e.id)&&ex.antagonist_ko&&e.primary_muscle_ko===ex.antagonist_ko);
+    const partner=partnerPool
+      .filter(e=>!used.has(e.id)&&e.id!==ex.id)
+      .map(e=>({exercise:e,score:gymSupersetRelationScore(ex,e)}))
+      .filter(x=>x.score>0)
+      .sort((x,y)=>y.score-x.score||(y.exercise._recommendScore||0)-(x.exercise._recommendScore||0))[0]?.exercise;
     if(partner){used.add(partner.id);pairs.push({a:ex,b:partner,type:'superset'});}
     else{
-      const filler=arr.find(e=>!used.has(e.id));
-      if(filler){used.add(filler.id);pairs.push({a:ex,b:filler,type:'straight'});}
-      else pairs.push({a:ex,b:null,type:'single'});
+      // 반대 운동을 확인할 수 없으면 무관한 운동을 억지로 붙이지 않는다.
+      pairs.push({a:ex,b:null,type:'single'});
     }
   }
   return pairs.slice(0,maxPairs);
@@ -6095,7 +6296,7 @@ function gymResultSafetyHtml(){
   </div>`;
 }
 
-function gymResultActionsHtml(){return `<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;padding:10px;border:1px dashed var(--border2);border-radius:9px"><span style="font-size:10px;color:var(--text3);align-self:center;margin-right:auto">✏️ 운동과 처방값을 편집한 뒤 초안 저장 또는 확정·배정하세요.</span><button class="btn-exp" onclick="document.getElementById('gym-md-heading')?.scrollIntoView({behavior:'smooth'})">⚙️ 선택값 수정</button><button class="btn-exp" onclick="saveGymPrescription('draft',this)">💾 초안 저장</button><button class="btn-exp pri" onclick="saveGymPrescription('assigned',this)">✅ 확정·배정</button><button class="btn-exp" onclick="showGymDeliveryPreview()">📱 전달 화면</button><button class="btn-exp" onclick="downloadGymPrescriptionPdf(this)">📄 PDF</button><button class="btn-exp" onclick="showGymPrescriptionManager()">📚 처방 관리</button><button class="btn-exp" onclick="onGymGenerate()">🔄 다시 생성</button></div><div id="gym-prescription-action-msg" style="font-size:10px;color:var(--text3);margin-top:5px"></div>`;}
+function gymResultActionsHtml(){return `<div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:12px;padding:10px;border:1px dashed var(--border2);border-radius:9px"><span style="font-size:10px;color:var(--text3);align-self:center;margin-right:auto">✏️ 운동과 처방값을 편집한 뒤 초안 저장 또는 확정·배정하세요.</span><button class="btn-exp" onclick="document.getElementById('gym-md-heading')?.scrollIntoView({behavior:'smooth'})">⚙️ 선택값 수정</button><button class="btn-exp" onclick="saveGymPrescription('draft',this)">💾 초안 저장</button><button class="btn-exp pri" onclick="saveGymPrescription('assigned',this)">✅ 확정·배정</button><button class="btn-exp" onclick="showGymDeliveryPreview()">📄 전달 보고서</button><button class="btn-exp" onclick="downloadGymDeliveryReport('jpg',this)">🖼 JPG</button><button class="btn-exp" onclick="downloadGymDeliveryReport('pdf',this)">📄 PDF</button><button class="btn-exp" onclick="showGymPrescriptionManager()">📚 처방 관리</button><button class="btn-exp" onclick="onGymGenerate()">🔄 다시 생성</button></div><div id="gym-prescription-action-msg" style="font-size:10px;color:var(--text3);margin-top:5px"></div>`;}
 
 function showToast(message){
   let el=document.getElementById('coach-toast');if(!el){el=document.createElement('div');el.id='coach-toast';el.style.cssText='position:fixed;left:50%;bottom:30px;transform:translateX(-50%);z-index:11000;padding:10px 16px;border-radius:9px;background:#172033;border:1px solid #60a5fa88;color:#e2e8f0;font-size:12px;box-shadow:0 8px 30px #0008';document.body.appendChild(el);}
@@ -6123,6 +6324,14 @@ function collectGymPrescriptionItems(){
 }
 function gymPrescriptionContext(){
   return {md:document.getElementById('gym-md')?.value||'',purpose:_currentGymPurpose||'',method:_currentGymMethod||'',gym:document.querySelector('input[name="gym-place"]:checked')?.value||'',condition_basis:_gymConditionBasis||'',quality_version:1};
+}
+function gymAthleteMethodLabel(method){
+  return {'스트레이트 세트':'일반 세트'}[method]||method||'일반 세트';
+}
+function gymClusterTotalReps(value){
+  const nums=String(value||'').match(/\d+(?:\.\d+)?/g)||[];
+  const total=nums.reduce((sum,n)=>sum+Number(n),0);
+  return total||'—';
 }
 async function saveGymPrescription(status,btn){
   const items=collectGymPrescriptionItems();if(!items.length){alert('저장할 운동이 없습니다.');return;}
@@ -6163,12 +6372,115 @@ async function downloadGymPrescriptionPdf(btn){
 }
 function gymDeliveryText(items=collectGymPrescriptionItems()){
   const ctx=gymPrescriptionContext();
-  return [`운동 처방 · ${getKSTDateStr()}`,`${ctx.md||'자유'} · ${ctx.purpose||''} · ${ctx.method||''}`,...items.map(it=>`${it.order}. ${(it.exercises||[]).map(e=>`${e.slot} ${e.name}`).join(' / ')}\n   ${it.prescription.sets||'—'}세트 × ${it.prescription.reps||'—'}회 · ${it.prescription.load||'강도 코치 지정'} · ${it.prescription.rpe||'—'} · 휴식 ${it.prescription.rest||'—'}${it.prescription.note?`\n   메모: ${it.prescription.note}`:''}`),'통증 또는 비정상적인 불편감이 있으면 즉시 중단하고 코치에게 알려주세요.'].join('\n');
+  const contrastGuide=ctx.method==='컨트라스트'?`\n컨트라스트 수행 · A 주운동 완료 후 ${_gymMethodOptions.contrastGap||'60초'} 이내 B 파워운동을 실시합니다. B는 최대 속도·높이로 수행하고 출력이 떨어지면 종료합니다.`:'';
+  const coaching=GYM_PURPOSE_TEMPLATE[_currentGymPurpose]?.coaching||'반복 횟수보다 정확한 자세와 동작 품질을 우선합니다.';
+  const prescriptionLine=it=>{
+    const p=it.prescription||{};
+    if(p.circuit_rounds){
+      return `${p.circuit_rounds||'—'}라운드 · 운동 ${p.circuit_work||'—'} / 운동 간 ${p.circuit_move_rest||'—'} · ${gymCircuitRestCycleLabel(p.circuit_rest_every)} 후 ${p.circuit_round_rest||'—'} 휴식 · ${p.rpe||'강도 코치 지정'}`;
+    }
+    if(p.cluster_sets){
+      return `총 ${p.cluster_sets||'—'}세트 · 세트당 ${gymClusterTotalReps(p.cluster_reps)}회 (${p.cluster_reps||'—'}) · 반복 사이 ${p.mini_rest||'—'} 휴식 · 세트 간 ${p.rest||'—'} 휴식 · ${p.rpe||'강도 코치 지정'}`;
+    }
+    if(p.work_sec||p.rest_sec){
+      return `${p.sets||'—'}세트 · 운동 ${p.work_sec||'—'}초 / 휴식 ${p.rest_sec||'—'}초 · 권장 반복 ${p.recommended_reps||'—'}회 · ${p.rpe||'강도 코치 지정'}`;
+    }
+    return `${p.sets||'—'}세트 × ${p.reps||'—'}회 · ${p.load||'강도 코치 지정'} · ${p.rpe||'—'} · 휴식 ${p.rest||'—'}`;
+  };
+  return [`운동 처방 · ${getKSTDateStr()}`,`${ctx.md||'자유'} · ${ctx.purpose||''} · ${gymAthleteMethodLabel(ctx.method)}${contrastGuide}`,...items.map(it=>`${it.order}. ${(it.exercises||[]).map(e=>`${e.slot} ${e.name}`).join(' / ')}\n   ${prescriptionLine(it)}${ctx.method==='컨트라스트'?`\n   ⚡ A 완료 후 ${_gymMethodOptions.contrastGap||'60초'} 이내 B 실시 (PAP)` :''}${it.prescription.note?`\n   메모: ${it.prescription.note}`:''}`),`\n코칭 포인트 · ${coaching}`,'중단 기준 · 통증, 어지럼증, 저림 또는 자세 붕괴가 나타나면 즉시 중단하고 코치에게 알려주세요.'].join('\n');
+}
+
+function gymDeliveryReportHtml(items=collectGymPrescriptionItems()){
+  const safe=v=>String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const ctx=gymPrescriptionContext();
+  const playerSel=document.getElementById('gym-player-select');
+  const playerName=_currentGymSessionType==='group'?'팀 단체 처방':(playerSel?.selectedOptions?.[0]?.textContent||'선수 개인 처방');
+  const mdText=document.getElementById('gym-md')?.selectedOptions?.[0]?.textContent||ctx.md||'자유 처방';
+  const purpose=GYM_PURPOSE_TEMPLATE[_currentGymPurpose]?.label||ctx.purpose||'근력운동';
+  const purposeTemplate=GYM_PURPOSE_TEMPLATE[_currentGymPurpose]||{};
+  const isContrast=ctx.method==='컨트라스트';
+  const contrastGap=_gymMethodOptions.contrastGap||'60초';
+  const purposeGuide={
+    recovery:'편안한 호흡과 부드러운 가동범위를 유지합니다. 세션 전보다 몸이 가벼운 상태로 마쳐야 합니다.',
+    stab:'반복 속도보다 자세와 관절 정렬을 우선합니다. 흔들림이 커지면 범위나 저항을 줄입니다.',
+    endur:'정해진 반복 범위 안에서 일정한 템포를 유지합니다. 마지막 반복까지 자세가 유지되는 중량을 사용합니다.',
+    hyper:'반동을 최소화하고 목표 근육의 긴장을 유지합니다. 마지막 2-3회가 도전적이되 자세는 유지되어야 합니다.',
+    strength:'매 반복 동일한 셋업과 기술을 유지합니다. 충분히 회복한 뒤 다음 세트를 시작합니다.',
+    power:'모든 반복을 최대 의도 속도로 수행합니다. 속도나 점프 높이가 떨어지기 전에 세트를 끝냅니다.'
+  }[_currentGymPurpose]||'반복 횟수보다 정확한 자세와 동작 품질을 우선합니다.';
+  const rows=items.map(it=>{
+    const p=it.prescription||{};
+    const rx=p.circuit_rounds
+      ?`${p.circuit_rounds||'—'}라운드 · 운동 ${p.circuit_work||'—'} / 운동 간 ${p.circuit_move_rest||'—'} · ${gymCircuitRestCycleLabel(p.circuit_rest_every)} 후 ${p.circuit_round_rest||'—'} 휴식 · ${p.rpe||'—'}`
+      :p.cluster_sets
+      ?`총 ${p.cluster_sets||'—'}세트 · 세트당 ${gymClusterTotalReps(p.cluster_reps)}회 (${p.cluster_reps||'—'}) · 반복 사이 ${p.mini_rest||'—'} 휴식 · 세트 간 ${p.rest||'—'} 휴식 · ${p.rpe||'—'}`
+      :(p.work_sec||p.rest_sec)
+      ?`${p.sets||'—'}세트 · 운동 ${p.work_sec||'—'}초 / 휴식 ${p.rest_sec||'—'}초 · 권장 ${p.recommended_reps||'—'}회 · ${p.rpe||'—'}`
+      :`${p.sets||'—'}세트 × ${p.reps||'—'}회 · ${p.load||'강도 코치 지정'} · ${p.rpe||'—'} · 휴식 ${p.rest||'—'}`;
+    return `<div style="border:1px solid #dbe3ef;border-radius:12px;padding:14px 16px;margin-top:10px;break-inside:avoid;background:#fff">
+      <div style="display:flex;align-items:center;gap:10px"><span style="width:27px;height:27px;border-radius:8px;background:#2563eb;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800">${it.order}</span><div style="font-size:16px;font-weight:800;color:#0f172a">${safe((it.exercises||[]).map(e=>`${e.slot}. ${e.name}`).join(' / '))}</div></div>
+      <div style="margin-top:9px;padding:9px 11px;border-radius:8px;background:#eff6ff;color:#1e3a8a;font-size:13px;font-weight:700">${safe(rx)}</div>
+      ${isContrast?`<div style="margin-top:8px;padding:9px 11px;border-radius:8px;background:#fff7ed;border-left:4px solid #f59e0b;color:#92400e;font-size:12px;font-weight:800">⚡ 수행 순서: A 주운동 완료 → ${safe(contrastGap)} 이내 B 파워운동 실시 (PAP)</div>`:''}
+      ${p.note?`<div style="margin-top:8px;font-size:12px;color:#475569"><b style="color:#0f172a">코치 메모</b> · ${safe(p.note)}</div>`:''}
+    </div>`;
+  }).join('');
+  return `<div id="gym-delivery-report-sheet" style="width:760px;box-sizing:border-box;background:#fff;color:#0f172a;padding:34px 38px;font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Noto Sans KR',sans-serif">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #2563eb;padding-bottom:16px">
+      <div><div style="font-size:11px;letter-spacing:1.5px;color:#2563eb;font-weight:900">BUSAN IPARK PERFORMANCE</div><div style="font-size:26px;font-weight:900;margin-top:5px">근력운동 처방 보고서</div><div style="font-size:14px;color:#475569;margin-top:7px">${safe(playerName)}</div></div>
+      <div style="text-align:right;font-size:11px;color:#64748b;line-height:1.7"><b style="font-size:13px;color:#0f172a">${getKSTDateStr()}</b><br>코칭스태프 처방</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:18px">
+      <div style="padding:11px;border-radius:9px;background:#f1f5f9"><div style="font-size:10px;color:#64748b">MD 단계</div><b style="font-size:13px">${safe(mdText)}</b></div>
+      <div style="padding:11px;border-radius:9px;background:#f1f5f9"><div style="font-size:10px;color:#64748b">운동 목적</div><b style="font-size:13px">${safe(purpose)}</b></div>
+      <div style="padding:11px;border-radius:9px;background:#f1f5f9"><div style="font-size:10px;color:#64748b">운동 방법</div><b style="font-size:13px">${safe(gymAthleteMethodLabel(ctx.method))}</b></div>
+    </div>
+    <div style="font-size:13px;font-weight:900;margin-top:20px;color:#1e3a8a">오늘의 운동 처방</div>${rows}
+    ${isContrast?`<div style="margin-top:14px;padding:13px 15px;border-radius:10px;background:#fffbeb;border:1px solid #f59e0b;color:#78350f;font-size:11px;line-height:1.7;break-inside:avoid"><b style="font-size:13px">🔥 컨트라스트 PAP 수행 안내</b><br>1. A 주운동을 정확한 자세와 계획된 강도로 수행합니다.<br>2. A 종료 후 <b>${safe(contrastGap)} 이내</b> B 파워운동을 시작합니다.<br>3. B는 최대 의도 속도·점프 높이로 수행하고, 출력이나 기술이 떨어지면 즉시 세트를 종료합니다.<br>4. 다음 A 세트 전에는 처방된 완전 휴식을 확보합니다.</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-top:16px;break-inside:avoid">
+      <div style="padding:13px 14px;border-radius:10px;background:#eff6ff;border-left:4px solid #2563eb;font-size:11px;line-height:1.65;color:#1e3a8a"><b style="font-size:12px">💡 코칭 포인트</b><br>${safe(purposeGuide)}</div>
+      <div style="padding:13px 14px;border-radius:10px;background:#fff7ed;border-left:4px solid #f97316;font-size:11px;line-height:1.65;color:#7c2d12"><b style="font-size:12px">⚠️ 중단·조절 기준</b><br>• 통증 또는 기존 부상 부위의 불편감이 증가하면 즉시 중단<br>• 자세·가동범위·착지 제어가 무너지면 중량 또는 세트 감량<br>• 목표 RPE를 1 이상 초과하면 다음 세트 부하를 5-10% 감량<br>• 어지럼증·저림·날카로운 통증이 나타나면 코치에게 즉시 보고</div>
+    </div>
+    <div style="margin-top:10px;padding:10px 12px;border-radius:9px;background:#f8fafc;border:1px solid #e2e8f0;font-size:10px;line-height:1.6;color:#475569"><b style="color:#0f172a">선수 확인사항</b> · 당일 컨디션과 통증 여부를 코치에게 공유하고, 의무팀 또는 코치의 개별 제한 지시가 이 보고서보다 우선합니다.</div>
+    <div style="margin-top:19px;border-top:1px solid #e2e8f0;padding-top:10px;text-align:right;font-size:9px;color:#94a3b8">부산아이파크 선수 관리 시스템 · ${getKSTDateStr()}</div>
+  </div>`;
+}
+
+function downloadGymReportBlob(blob,filename){
+  if(!(blob instanceof Blob)||blob.size<1000)throw new Error('생성된 파일 내용이 비어 있습니다. 다시 시도해주세요.');
+  const url=URL.createObjectURL(blob),link=document.createElement('a');
+  link.href=url;link.download=filename;link.style.display='none';document.body.appendChild(link);link.click();
+  // 인앱 브라우저가 Blob 내용을 파일로 복사할 시간을 충분히 확보한다.
+  setTimeout(()=>{link.remove();URL.revokeObjectURL(url);},60000);
+}
+
+async function downloadGymDeliveryReport(kind,btn){
+  if(typeof html2canvas!=='function'){alert('이미지 도구를 불러오지 못했습니다. 새로고침 후 다시 시도하세요.');return;}
+  let source=document.getElementById('gym-delivery-report-sheet'),temporary=null;
+  if(!source){
+    const items=collectGymPrescriptionItems();if(!items.length){alert('먼저 처방을 생성하세요.');return;}
+    temporary=document.createElement('div');temporary.style.cssText='position:fixed;left:-12000px;top:0;background:#fff;z-index:-1';temporary.innerHTML=gymDeliveryReportHtml(items);document.body.appendChild(temporary);source=temporary.querySelector('#gym-delivery-report-sheet');
+  }
+  const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='생성 중...';}
+  try{
+    const canvas=await html2canvas(source,{scale:2,backgroundColor:'#ffffff',useCORS:true});
+    const player=document.getElementById('gym-player-select')?.selectedOptions?.[0]?.textContent||'팀';
+    const filename=`${player.replace(/[^가-힣a-zA-Z0-9_-]/g,'_')}_근력운동처방_${getKSTDateStr()}`;
+    if(kind==='jpg'){
+      const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('JPG 파일 변환에 실패했습니다.')),'image/jpeg',.94));
+      downloadGymReportBlob(blob,filename+'.jpg');
+    }else{
+      if(!window.jspdf?.jsPDF)throw new Error('PDF 도구를 불러오지 못했습니다.');
+      const {jsPDF}=window.jspdf,pdf=new jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+      const maxW=190,maxH=277,ratio=Math.min(maxW/canvas.width,maxH/canvas.height),w=canvas.width*ratio,h=canvas.height*ratio;
+      pdf.addImage(canvas.toDataURL('image/jpeg',.94),'JPEG',(210-w)/2,10,w,h);
+      downloadGymReportBlob(pdf.output('blob'),filename+'.pdf');
+    }
+  }catch(e){console.error('[GYM_REPORT_EXPORT]',e);alert('보고서 생성 실패: '+e.message);}finally{temporary?.remove();if(btn){btn.disabled=false;btn.textContent=old;}}
 }
 function showGymDeliveryPreview(){
   const items=collectGymPrescriptionItems();if(!items.length){alert('먼저 처방을 생성하세요.');return;}
   let modal=document.getElementById('gym-delivery-preview');if(!modal){modal=document.createElement('div');modal.id='gym-delivery-preview';modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:10030;display:flex;align-items:center;justify-content:center;padding:20px';document.body.appendChild(modal);}
-  const txt=gymDeliveryText(items);modal.style.display='flex';modal.innerHTML=`<div style="width:min(520px,95vw);max-height:86vh;overflow:auto;background:#f8fafc;color:#0f172a;border-radius:16px;padding:20px"><div style="display:flex;justify-content:space-between;align-items:center"><b style="font-size:17px">📱 선수 전달용 처방</b><button onclick="this.closest('#gym-delivery-preview').style.display='none'" style="border:0;background:none;font-size:20px;cursor:pointer">✕</button></div><pre id="gym-delivery-text" style="white-space:pre-wrap;font-family:inherit;font-size:12px;line-height:1.7;background:#fff;border:1px solid #cbd5e1;border-radius:9px;padding:14px;margin-top:12px">${txt.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</pre><div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="navigator.clipboard.writeText(gymDeliveryText());this.textContent='✅ 복사됨'" style="padding:9px 13px;border-radius:7px;border:1px solid #2563eb;background:#eff6ff;color:#1d4ed8;cursor:pointer">📋 메시지 복사</button><button onclick="downloadGymPrescriptionPdf(this)" style="padding:9px 13px;border-radius:7px;border:0;background:#2563eb;color:#fff;cursor:pointer">📄 PDF</button></div></div>`;
+  modal.style.display='flex';modal.innerHTML=`<div style="width:min(860px,96vw);max-height:92vh;overflow:auto;background:#e2e8f0;color:#0f172a;border-radius:16px;padding:16px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-size:17px">📄 선수 전달용 보고서</b><button onclick="this.closest('#gym-delivery-preview').style.display='none'" style="border:0;background:none;font-size:22px;cursor:pointer">✕</button></div><div style="overflow:auto;border-radius:10px;box-shadow:0 8px 28px #0f172a33">${gymDeliveryReportHtml(items)}</div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap"><button onclick="navigator.clipboard.writeText(gymDeliveryText());this.textContent='✅ 복사됨'" style="padding:9px 13px;border-radius:7px;border:1px solid #2563eb;background:#eff6ff;color:#1d4ed8;cursor:pointer">📋 메시지 복사</button><button onclick="downloadGymDeliveryReport('jpg',this)" style="padding:9px 13px;border-radius:7px;border:1px solid #0f766e;background:#ecfdf5;color:#0f766e;cursor:pointer">🖼 JPG 저장</button><button onclick="downloadGymDeliveryReport('pdf',this)" style="padding:9px 13px;border-radius:7px;border:0;background:#2563eb;color:#fff;cursor:pointer">📄 PDF 저장</button></div></div>`;
 }
 
 async function showGymPrescriptionManager(){
@@ -6226,18 +6538,103 @@ function gymCardEditorHtml(){
     <button onclick="gymDeleteCard(this)" title="처방에서 삭제" style="padding:3px 7px;border:1px solid rgba(248,113,113,.5);border-radius:5px;background:rgba(248,113,113,.07);color:#f87171;cursor:pointer">🗑 삭제</button>
   </div>`;
 }
+function getGymExerciseRx(ex,purpT,opts={}){
+  const contrast=!!opts.contrast;
+  const perStation=Number(opts.perStation)||0;
+  const isPower=contrast||ex?.category==='특수_파워'||ex?.category==='특수_점프'||(ex?.available_roles||[]).includes('파워');
+  if(isPower){
+    return {
+      sets:perStation&&perStation<=10?'2–3':'3–4',reps:'2–4',load:'최대 속도·높이',rpe:'RPE 6–8',rest:perStation&&perStation<=10?'90–120초':'2–3분',
+      note:'반복 속도·점프 높이가 약 10–20% 저하되거나 기술이 무너지면 세트를 종료합니다.'
+    };
+  }
+  const rx={sets:purpT?.sets||'3',reps:purpT?.reps||'8',load:'코치 입력',rpe:purpT?.rpe||'RPE 7',rest:purpT?.rest||'90초',note:''};
+  if(perStation&&perStation<=10){
+    if(_currentGymPurpose==='strength'){
+      rx.sets='2–3';rx.rest='2–3분';rx.note='스테이션 제한 시간에 맞춘 최대근력 유지 처방입니다. 충분한 휴식이 필요하면 스테이션 시간을 늘리세요.';
+    }else if(_currentGymPurpose==='hyper'){
+      rx.sets='3';rx.rest='60–90초';rx.note='제한 시간 안에서 품질을 유지하도록 볼륨을 조정했습니다.';
+    }else if(_currentGymPurpose==='endur'){
+      rx.sets='3';rx.rest='45–60초';rx.note='스테이션 시간에 맞춰 세트 수와 휴식을 조정했습니다.';
+    }
+  }
+  return rx;
+}
+
+function getGymGroupIntervalRx(ex,purpT,opts={}){
+  const recommended=getGymExerciseRx(ex,purpT,opts);
+  const isPower=opts.contrast||ex?.category==='특수_파워'||ex?.category==='특수_점프'||(ex?.available_roles||[]).includes('파워');
+  if(isPower)return {...recommended,setsValue:3,workSec:15,restSec:90};
+  if(_currentGymPurpose==='strength')return {...recommended,setsValue:3,workSec:20,restSec:120};
+  if(_currentGymPurpose==='hyper')return {...recommended,setsValue:3,workSec:35,restSec:40};
+  if(_currentGymPurpose==='endur')return {...recommended,setsValue:3,workSec:40,restSec:20};
+  if(_currentGymPurpose==='recovery')return {...recommended,setsValue:2,workSec:30,restSec:30};
+  return {...recommended,setsValue:2,workSec:30,restSec:25};
+}
+
+function applyGymRxEdits(btn){
+  const details=btn.closest('.gym-rx-editor'),card=btn.closest('.gym-rx-card');
+  if(!details||!card)return;
+  const values={};details.querySelectorAll('[data-rx-field]').forEach(el=>values[el.dataset.rxField]=el.value.trim());
+  const isInterval=!!(values.work_sec||values.rest_sec);
+  const isCluster=!!values.cluster_sets;
+  const isCircuit=!!values.circuit_rounds;
+  const summary=isCircuit
+    ?`${values.circuit_rounds||'—'}라운드 · 운동 ${values.circuit_work||'—'} / 운동 간 ${values.circuit_move_rest||'—'} · ${gymCircuitRestCycleLabel(values.circuit_rest_every)} 후 ${values.circuit_round_rest||'—'} · ${values.rpe||'—'}`
+    :isCluster
+    ?`${values.cluster_sets||'—'}클러스터 × (${values.cluster_reps||'—'})회 · 미니 휴식 ${values.mini_rest||'—'} · ${values.rpe||'—'} · 완전 휴식 ${values.rest||'—'}`
+    :isInterval
+    ?`${values.sets||'—'}세트 · 운동 ${values.work_sec||'—'}초 / 휴식 ${values.rest_sec||'—'}초 · 권장 ${values.recommended_reps||'—'}회 · ${values.rpe||'강도 코치 지정'}`
+    :`${values.sets||'—'}세트 × ${values.reps||'—'}회 · ${values.load||'강도 코치 지정'} · ${values.rpe||'—'} · 휴식 ${values.rest||'—'}`;
+  card.querySelectorAll('[data-rx-prescription-display="primary"]').forEach(el=>el.textContent=summary);
+  let badge=card.querySelector('.gym-rx-applied-badge');
+  if(!badge){badge=document.createElement('span');badge.className='gym-rx-applied-badge';badge.style.cssText='margin-left:6px;color:#4ade80;font-size:9px;font-weight:800';details.querySelector('summary')?.appendChild(badge);}
+  badge.textContent='✓ 변경 적용됨';
+  details.open=false;
+  showToast('세부 처방값을 적용했습니다.');
+}
+
 function gymRxFieldsHtml(purpT,opts={}){
   const contrast=!!opts.contrast;
-  const sets=contrast?'3–5':(purpT?.sets||'3');
-  const reps=contrast?'3–5':(purpT?.reps||'8');
-  const rpe=contrast?'최대속도':(purpT?.rpe||'RPE 7');
-  const rest=contrast?'180초':(purpT?.rest||'90초');
+  const rx=getGymExerciseRx(opts.exercise,purpT,{contrast,perStation:opts.perStation});
   const field=(key,label,value,type='text')=>`<label style="font-size:9px;color:var(--text3);display:flex;flex-direction:column;gap:3px">${label}<input data-rx-field="${key}" type="${type}" value="${String(value).replace(/"/g,'&quot;')}" style="width:100%;box-sizing:border-box;padding:5px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:10px;font-family:inherit"></label>`;
+  if(opts.groupInterval){
+    const interval=getGymGroupIntervalRx(opts.exercise,purpT,{contrast,perStation:opts.perStation});
+    return `<details class="gym-rx-editor" style="margin:0 0 9px;border:1px solid var(--border);border-radius:7px;background:rgba(96,165,250,.035)">
+      <summary style="padding:6px 8px;font-size:10px;color:#93c5fd;cursor:pointer;font-weight:700">⏱️ 단체 운영시간 편집 · 권장 ${interval.sets}세트 × ${interval.reps}회</summary>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(75px,1fr));gap:6px;padding:3px 8px 8px">
+        ${field('sets','세트 수',interval.setsValue,'number')}${field('work_sec','운동 시간(초)',interval.workSec,'number')}${field('rest_sec','휴식 시간(초)',interval.restSec,'number')}${field('recommended_reps','권장 반복',interval.reps)}${field('rpe','권장 강도',interval.rpe)}
+        <label style="grid-column:1/-1;font-size:9px;color:var(--text3);display:flex;flex-direction:column;gap:3px">코치 메모<textarea data-rx-field="note" rows="2" placeholder="운영 방식과 중단 기준" style="resize:vertical;padding:6px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:10px;font-family:inherit">${interval.note}</textarea></label>
+        <button type="button" onclick="applyGymRxEdits(this)" style="grid-column:1/-1;padding:7px;border-radius:6px;border:1px solid #22c55e;background:rgba(34,197,94,.1);color:#4ade80;font-size:10px;font-weight:800;cursor:pointer">✓ 변경 적용</button>
+      </div>
+    </details>`;
+  }
+  if(opts.circuit){
+    return `<details class="gym-rx-editor" style="margin:0 0 9px;border:1px solid var(--border);border-radius:7px;background:rgba(59,130,246,.035)">
+      <summary style="padding:6px 8px;font-size:10px;color:#60a5fa;cursor:pointer;font-weight:700">🔁 서킷 운영 방식 편집</summary>
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(72px,1fr));gap:6px;padding:3px 8px 8px">
+        ${field('circuit_rounds','총 라운드',_gymMethodOptions.circuitRounds,'number')}${field('circuit_work','운동 시간',_gymMethodOptions.circuitWork)}${field('circuit_move_rest','운동 간 휴식',_gymMethodOptions.circuitMoveRest)}${field('circuit_rest_every','긴 휴식 주기',_gymMethodOptions.circuitRestEvery)}${field('circuit_round_rest','긴 휴식',_gymMethodOptions.circuitRoundRest)}${field('rpe','RPE·속도',rx.rpe)}
+        <label style="grid-column:1/-1;font-size:9px;color:var(--text3);display:flex;flex-direction:column;gap:3px">코치 메모<textarea data-rx-field="note" rows="2" placeholder="운동 순서, 라운드 진행 및 중단 기준" style="resize:vertical;padding:6px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:10px;font-family:inherit">${rx.note}</textarea></label>
+        <button type="button" onclick="applyGymRxEdits(this)" style="grid-column:1/-1;padding:7px;border-radius:6px;border:1px solid #22c55e;background:rgba(34,197,94,.1);color:#4ade80;font-size:10px;font-weight:800;cursor:pointer">✓ 변경 적용</button>
+      </div>
+    </details>`;
+  }
+  if(opts.cluster){
+    return `<details class="gym-rx-editor" style="margin:0 0 9px;border:1px solid var(--border);border-radius:7px;background:rgba(249,115,22,.035)">
+      <summary style="padding:6px 8px;font-size:10px;color:#fb923c;cursor:pointer;font-weight:700">⚡ 클러스터 처방값 편집</summary>
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(72px,1fr));gap:6px;padding:3px 8px 8px">
+        ${field('cluster_sets','클러스터 수',rx.sets,'number')}${field('cluster_reps','클러스터 구성',_gymMethodOptions.clusterReps)}${field('mini_rest','미니 휴식',_gymMethodOptions.clusterRest)}${field('load','중량·강도',rx.load)}${field('rpe','RPE·속도',rx.rpe)}${field('rest','완전 휴식',rx.rest)}
+        <label style="grid-column:1/-1;font-size:9px;color:var(--text3);display:flex;flex-direction:column;gap:3px">코치 메모<textarea data-rx-field="note" rows="2" placeholder="반복 속도 저하, 기술 붕괴 등 중단 기준" style="resize:vertical;padding:6px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:10px;font-family:inherit">${rx.note}</textarea></label>
+        <button type="button" onclick="applyGymRxEdits(this)" style="grid-column:1/-1;padding:7px;border-radius:6px;border:1px solid #22c55e;background:rgba(34,197,94,.1);color:#4ade80;font-size:10px;font-weight:800;cursor:pointer">✓ 변경 적용</button>
+      </div>
+    </details>`;
+  }
   return `<details class="gym-rx-editor" style="margin:0 0 9px;border:1px solid var(--border);border-radius:7px;background:rgba(96,165,250,.035)">
     <summary style="padding:6px 8px;font-size:10px;color:#93c5fd;cursor:pointer;font-weight:700">✏️ 세부 처방값 편집</summary>
     <div style="display:grid;grid-template-columns:repeat(5,minmax(75px,1fr));gap:6px;padding:3px 8px 8px">
-      ${field('sets','세트',sets)}${field('reps','횟수',reps)}${field('load','중량·강도',contrast?'폭발적 수행':'코치 입력')}${field('rpe','RPE·속도',rpe)}${field('rest','휴식',rest)}
-      <label style="grid-column:1/-1;font-size:9px;color:var(--text3);display:flex;flex-direction:column;gap:3px">코치 메모<textarea data-rx-field="note" rows="2" placeholder="통증 반응, 속도 저하 시 중단 기준 등" style="resize:vertical;padding:6px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:10px;font-family:inherit"></textarea></label>
+      ${field('sets','세트',rx.sets)}${field('reps','횟수',rx.reps)}${field('load','중량·강도',rx.load)}${field('rpe','RPE·속도',rx.rpe)}${field('rest','휴식',rx.rest)}
+      <label style="grid-column:1/-1;font-size:9px;color:var(--text3);display:flex;flex-direction:column;gap:3px">코치 메모<textarea data-rx-field="note" rows="2" placeholder="통증 반응, 속도 저하 시 중단 기준 등" style="resize:vertical;padding:6px;border-radius:5px;border:1px solid var(--border2);background:var(--bg2);color:var(--text);font-size:10px;font-family:inherit">${rx.note}</textarea></label>
+      <button type="button" onclick="applyGymRxEdits(this)" style="grid-column:1/-1;padding:7px;border-radius:6px;border:1px solid #22c55e;background:rgba(34,197,94,.1);color:#4ade80;font-size:10px;font-weight:800;cursor:pointer">✓ 변경 적용</button>
     </div>
   </details>`;
 }
@@ -6267,12 +6664,18 @@ function getGymEquipmentWarningHtml(pairs,groups){
 }
 
 function renderGroupSession(pairs,purpT,cfg){
-  const {totalPlayers,groupSize,numStations,mdL,time,timeL}=cfg;
+  const {totalPlayers,groupSize,numStations,uniqueExercises=numStations,stationMode='unique',mdL,time,timeL}=cfg;
   const warmup=10,cooldown=5;
   const workMin=time-warmup-cooldown;
-  const perStation=Math.round(workMin/numStations);
+  // 같은 운동을 여러 스테이션에 복제한 경우 물리 스테이션 수가 아니라
+  // 각 그룹이 실제로 순환하는 서로 다른 운동 수를 기준으로 시간을 배분한다.
+  const perStation=Math.max(1,Math.round(workMin/Math.max(1,uniqueExercises)));
   const groups=Math.ceil(totalPlayers/groupSize);
   const totalMoves=pairs.reduce((sum,p)=>sum+(p.b?2:1),0);
+  const copiesPerExercise=stationMode==='duplicate2'?2:1;
+  const stationLayoutText=stationMode==='duplicate2'
+    ?`${uniqueExercises}종목 × 최대 ${copiesPerExercise}스테이션 = ${numStations}개 운영`
+    :`${uniqueExercises}종목 × 1스테이션 = ${numStations}개 운영`;
 
   const {method='슈퍼세트'}=cfg;
   const stationsHtml=pairs.map((pair,i)=>{
@@ -6288,16 +6691,17 @@ function renderGroupSession(pairs,purpT,cfg){
     const typeLabel=tm.label,typeBg=tm.bg,typeColor=tm.color;
     const muscleInfo=pair.b?`${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}`:pair.a.primary_muscle_ko;
     const contrastNote=pair.type==='contrast'?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;padding:4px 8px;background:rgba(245,158,11,0.1);border-radius:4px">⚡ A 완료 후 60–120초 이내 B 실시 (PAP 효과)</div>`:'';
-    // 처방 텍스트 — 클러스터 세트는 별도 형식
-    const rxText=pair.type==='cluster'
-      ?`${purpT.sets}클러스터 × (${_gymMethodOptions.clusterReps})회 &nbsp;·&nbsp; 미니 휴식 ${_gymMethodOptions.clusterRest} &nbsp;·&nbsp; 완전 휴식 ${purpT.rest}`
-      :`${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}`;
+    const rxA=getGymGroupIntervalRx(pair.a,purpT,{contrast:pair.type==='contrast',perStation});
+    const rxB=pair.b?getGymGroupIntervalRx(pair.b,purpT,{contrast:pair.type==='contrast',perStation}):null;
+    const standardRxText=rx=>`${rx.setsValue}세트 · 운동 ${rx.workSec}초 / 휴식 ${rx.restSec}초 &nbsp;·&nbsp; 권장 ${rx.reps}회 · ${rx.rpe}`;
+    const rxText=standardRxText(rxA);
     return `<div class="gym-rx-card" style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
       ${gymCardEditorHtml()}
-      ${gymRxFieldsHtml(purpT,{contrast:pair.type==='contrast'})}
+      ${gymRxFieldsHtml(purpT,{contrast:pair.type==='contrast',exercise:pair.a,perStation,groupInterval:true})}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
         <div class="gym-rx-order" style="width:28px;height:28px;border-radius:8px;background:#1d4ed8;color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</div>
         <div style="font-size:13px;font-weight:700;color:var(--text)">Station ${i+1}</div>
+        ${pair._duplicateCount>1?`<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(34,197,94,.12);color:#4ade80">운동 ${pair._exerciseNo} · 배치 ${pair._stationCopy}/${pair._duplicateCount}</span>`:''}
         <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${typeBg};color:${typeColor};font-weight:600">${typeLabel}</span>
         <span style="font-size:11px;color:var(--text3);margin-left:auto">${muscleInfo}</span>
       </div>
@@ -6308,7 +6712,7 @@ function renderGroupSession(pairs,purpT,cfg){
           <span style="font-size:11px;color:var(--text3)">${pair.a.name_en||''}</span>
           <button onclick="showGymAlternatives(${i},'a')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
         </div>
-        <div style="font-size:12px;color:var(--text2)">${rxText}</div>
+        <div data-rx-prescription-display="primary" style="font-size:12px;color:var(--text2)">${rxText}</div>
         ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
         ${gymRecommendationReasonHtml(pair.a)}
         ${gymDescHtml(`gym-ex-${i}-a`,pair.a.name_ko,pair.a.name_en)}
@@ -6320,7 +6724,7 @@ function renderGroupSession(pairs,purpT,cfg){
           <span style="font-size:11px;color:var(--text3)">${pair.b.name_en||''}</span>
           ${pair.type!=='contrast'?`<button onclick="showGymAlternatives(${i},'b')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.1);color:#fbbf24;border:1px solid rgba(245,158,11,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>`:''}
         </div>
-        <div style="font-size:12px;color:var(--text2)">${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}</div>
+        <div data-rx-prescription-display="primary" style="font-size:12px;color:var(--text2)">${standardRxText(rxB)}</div>
         ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
         ${gymRecommendationReasonHtml(pair.b)}
         ${gymDescHtml(`gym-ex-${i}-b`,pair.b.name_ko,pair.b.name_en)}
@@ -6328,6 +6732,12 @@ function renderGroupSession(pairs,purpT,cfg){
       ${contrastNote}
     </div>`;
   }).join('');
+  const rxSummaries=pairs.flatMap(pair=>[pair.a,pair.b].filter(Boolean).map(ex=>{
+    const rx=getGymGroupIntervalRx(ex,purpT,{contrast:pair.type==='contrast',perStation});
+    return `${rx.workSec}초/${rx.restSec}초`;
+  }));
+  const uniqueRx=[...new Set(rxSummaries)];
+  const rxSummaryText=uniqueRx.length===1?uniqueRx[0]:'운동별 조정';
 
   document.getElementById('gym-output').innerHTML=`
     ${gymResultDecisionHtml('group',purpT,method,totalMoves)}
@@ -6341,9 +6751,10 @@ function renderGroupSession(pairs,purpT,cfg){
       ${(()=>{const mi=GYM_METHOD_INFO[method];return mi?`<span class="chip" style="color:${mi.color};border-color:${mi.border};background:${mi.bg}">${mi.icon} ${mi.label||method}</span>`:'';})()}
       <span class="chip">⚙️ ${getGymMethodOptionSummary(method)}</span>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스테이션</div><div style="font-size:16px;font-weight:700;color:#60a5fa">${numStations}개</div></div>
-      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">세트×반복</div><div style="font-size:16px;font-weight:700;color:var(--text)">${purpT.sets}×${purpT.reps}</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">서로 다른 운동</div><div style="font-size:16px;font-weight:700;color:#4ade80">${uniqueExercises}종목</div></div>
+      <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">운동/휴식</div><div style="font-size:16px;font-weight:700;color:var(--text)">${rxSummaryText}</div></div>
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스테이션당</div><div style="font-size:16px;font-weight:700;color:#a78bfa">${perStation}분</div></div>
       <div style="background:var(--bg2);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">그룹 수</div><div style="font-size:16px;font-weight:700;color:var(--text)">${groups}팀</div></div>
     </div>
@@ -6358,9 +6769,10 @@ function renderGroupSession(pairs,purpT,cfg){
     </div>
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:4px">🔄 로테이션 방식</div>
+      <div style="font-size:12px;font-weight:700;color:#4ade80;margin-bottom:4px">${stationLayoutText}</div>
       <div style="font-size:12px;color:var(--text3)">${
         method==='서킷'
-          ?`${groups}개 그룹 · ${_gymMethodOptions.circuitRounds}라운드 순환 · 운동 간 ${_gymMethodOptions.circuitMoveRest} · 라운드 간 ${_gymMethodOptions.circuitRoundRest}`
+          ?`${groups}개 그룹 · ${_gymMethodOptions.circuitRounds}라운드 · 운동 ${_gymMethodOptions.circuitWork} / 운동 간 ${_gymMethodOptions.circuitMoveRest} · ${gymCircuitRestCycleLabel(_gymMethodOptions.circuitRestEvery)} 후 ${_gymMethodOptions.circuitRoundRest}`
           :method==='컨트라스트'
             ?`${groups}개 그룹 (각 ${groupSize}명) · A 세트 후 ${_gymMethodOptions.contrastGap} 내 B 실시 · 페어 수는 총 동작 수 기준`
             :`${groups}개 그룹 (각 ${groupSize}명) · 신호에 맞춰 다음 스테이션으로 이동 · 스테이션당 <strong style="color:var(--text2)">${perStation}분</strong>`
@@ -6390,7 +6802,7 @@ function setGymBodyPart(part, silent){
   if(part==='Multi') updateMultiConfig();
   // 운동 수 행: 개인 모드 + 단일 부위 선택 시만 표시
   const step3=document.getElementById('gym-step3-num');
-  if(step3) step3.style.display=(part&&part!=='Multi')?'':'none';
+  if(step3) step3.style.display=(_currentGymSessionType==='individual'&&part&&part!=='Multi')?'':'none';
   renderGymNumExGuide();
   if(_currentGymMode==='manual'&&!silent)renderGymManualSelector();
   renderGymBodyPartStatus();
@@ -6454,7 +6866,11 @@ function getEffectiveGymPurpose(key){
   const reduce=state==='볼륨·강도 조절'||state==='주의 관찰'||(Number.isFinite(avg)&&avg<3.5);
 
   if(md==='MD1'){
-    rx.sets='2-3';rx.reps=key==='power'?'2-3':'6-10';rx.rpe=key==='power'?'RPE 6-7':'RPE 3-5';rx.rest=key==='power'?'2-3분':'45-75초';
+    if(key==='endur'){
+      rx.sets='2';rx.reps='10-15';rx.rpe='RPE 4-6';rx.rest='45-60초';
+    }else{
+      rx.sets='2-3';rx.reps=key==='power'?'2-3':'6-10';rx.rpe=key==='power'?'RPE 6-7':'RPE 3-5';rx.rest=key==='power'?'2-3분':'45-75초';
+    }
     rx.adjustment='MD-1 테이퍼링: 피로를 만들지 않도록 볼륨 감량';
   }else if(md==='MD2'&&key==='power'){
     rx.sets='3-4';rx.reps='2-4';rx.rpe='RPE 7-8';rx.rest='2-3분';rx.adjustment='MD-2: 낮은 볼륨에서 최대 동작 속도 유지';
@@ -6555,35 +6971,44 @@ function getGymMethodCompatibility(method){
   };
   let level=table[p]?.[method]||'good';
   const md=document.getElementById('gym-md')?.value||'';
+  // 시스템이 해당 MD에 직접 추천한 방법은 동일 화면에서 다시 '주의'로 판정하지 않는다.
+  if(method===GYM_MD_METHOD[md]&&level==='caution')level='good';
   const restricted=_gymConditionBasis==='condition'&&(_gymPlayerJudgment?.state==='훈련 제외 검토'||_gymPlayerJudgment?.state==='볼륨·강도 조절'||(Number.isFinite(_gymTeamCondition?.avg)&&_gymTeamCondition.avg<3));
   if((md==='MD1'||restricted)&&['클러스터 세트','컨트라스트'].includes(method))level='bad';
   const messages={best:'목적·MD와 잘 맞는 추천 조합',good:'현재 목적에 적용 가능',caution:'목적은 유지하되 피로와 휴식 설정 확인 필요',bad:'현재 목적·MD·컨디션과 일치도가 낮음'};
   return {level,message:messages[level]};
 }
 
-function updateGymMethodOption(key,value){_gymMethodOptions[key]=value;renderGymMethodInfo();}
+function updateGymMethodOption(key,value){_gymMethodOptions[key]=value;_gymMethodOptionEdited[key]=true;renderGymMethodInfo();}
+
+function getGymStraightRest(){
+  if(_gymMethodOptionEdited.straightRest)return _gymMethodOptions.straightRest;
+  return getEffectiveGymPurpose(_currentGymPurpose).rest;
+}
 
 function getGymMethodOptionSummary(method=_currentGymMethod){
   const o=_gymMethodOptions;
-  if(method==='스트레이트 세트')return `세트 간 휴식 ${o.straightRest}`;
+  if(method==='스트레이트 세트')return `세트 간 휴식 ${getGymStraightRest()}${_gymMethodOptionEdited.straightRest?' · 코치 설정':' · 목적 권장'}`;
   if(method==='슈퍼세트')return `${o.supersetType} · A→B ${o.supersetGap}`;
   if(method==='클러스터 세트')return `${o.clusterReps}회 · 미니 휴식 ${o.clusterRest}`;
-  if(method==='서킷')return `${o.circuitRounds}라운드 · 운동 간 ${o.circuitMoveRest} · 라운드 간 ${o.circuitRoundRest}`;
+  if(method==='서킷')return `${o.circuitRounds}라운드 · 운동 ${o.circuitWork} / 운동 간 ${o.circuitMoveRest} · ${gymCircuitRestCycleLabel(o.circuitRestEvery)} 후 ${o.circuitRoundRest}`;
   return `근력→폭발 동작 간 ${o.contrastGap}`;
 }
+function gymCircuitRestCycleLabel(value){return value==='2라운드마다'?'2라운드 연속 진행': '각 라운드';}
 
 function renderGymMethodInfo(){
   const el=document.getElementById('gym-method-info');if(!el)return;
   const method=_currentGymMethod,mi=GYM_METHOD_INFO[method],fit=getGymMethodCompatibility(method),o=_gymMethodOptions;
   if(!mi){el.style.display='none';return;}
+  if(method==='스트레이트 세트'&&!_gymMethodOptionEdited.straightRest)o.straightRest=getGymStraightRest();
   const cfg={best:['#4ade80','✅ 추천'],good:['#60a5fa','🔵 적용 가능'],caution:['#fb923c','🟠 주의'],bad:['#f87171','🔴 비추천']}[fit.level];
   const select=(key,values)=>`<select onchange="updateGymMethodOption('${key}',this.value)" style="padding:5px 7px;border:1px solid var(--border2);border-radius:6px;background:var(--surface);color:var(--text);font-size:11px">${values.map(v=>`<option ${o[key]===v?'selected':''}>${v}</option>`).join('')}</select>`;
   let controls='';
-  if(method==='스트레이트 세트')controls=`세트 간 휴식 ${select('straightRest',['60초','90초','2분','3분','4분','5분'])}`;
+  if(method==='스트레이트 세트')controls=`세트 간 휴식 ${select('straightRest',['45-60초','45-75초','60초','60-90초','90초','2분','3분','4분','5분'])}<span style="color:var(--text3)">${_gymMethodOptionEdited.straightRest?'코치 설정':'목적·MD 권장 '+getGymStraightRest()}</span>`;
   else if(method==='슈퍼세트')controls=`페어 구성 ${select('supersetType',['주동근-길항근','상체-하체','메인-보완'])} A→B ${select('supersetGap',['즉시','15초','30초','60초'])}`;
   else if(method==='클러스터 세트')controls=`반복 구성 ${select('clusterReps',['1+1+1','1+1+1+1','2+2','2+2+2'])} 미니 휴식 ${select('clusterRest',['10초','15초','20초','30초'])}`;
-  else if(method==='서킷')controls=`${select('circuitRounds',['2','3','4','5'])}라운드 · 운동 간 ${select('circuitMoveRest',['즉시','15초','20초','30초'])} · 라운드 간 ${select('circuitRoundRest',['60초','90초','2분','3분'])}`;
-  else controls=`근력→폭발 동작 간 ${select('contrastGap',['60초','90초','120초'])}<span style="color:var(--text3)">페어 수는 STEP 8의 총 동작 수로 결정</span>`;
+  else if(method==='서킷')controls=`총 ${select('circuitRounds',['2','3','4','5'])}라운드 · 운동 ${select('circuitWork',['20초','30초','40초','45초','60초'])} · 운동 간 ${select('circuitMoveRest',['0초','10초','15초','20초','30초','45초','60초'])} · 긴 휴식 ${select('circuitRestEvery',['매 1라운드','2라운드마다'])} ${select('circuitRoundRest',['60초','90초','2분','3분'])}`;
+  else controls=`근력→폭발 동작 간 ${select('contrastGap',['60초','90초','120초'])}<span style="color:var(--text3)">STEP 8에서 선택한 주운동마다 폭발·파워 운동이 자동 배정됩니다.</span>`;
   el.style.display='';
   el.innerHTML=`<div style="border:1px solid ${cfg[0]}66;background:${cfg[0]}0d;border-radius:8px;padding:10px"><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><b style="font-size:11px;color:${cfg[0]}">${cfg[1]}</b><span style="font-size:10px;color:var(--text3)">${fit.message}</span></div><div style="font-size:10px;color:var(--text2);margin-top:5px">${mi.desc}</div><div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:8px;font-size:10px;color:var(--text3)"><b>⚙️ 세부 설정</b>${controls}</div></div>`;
 }
@@ -6829,7 +7254,7 @@ async function generateMultiContrast(){
   const mdL=document.getElementById('gym-md').selectedOptions[0].text;
   const purpKey=_currentGymPurpose;
   const purpT=getEffectiveGymPurpose(purpKey);
-  if(_currentGymMethod==='스트레이트 세트')purpT.rest=_gymMethodOptions.straightRest;
+  if(_currentGymMethod==='스트레이트 세트'&&_gymMethodOptionEdited.straightRest)purpT.rest=_gymMethodOptions.straightRest;
   const supaEquip=getGymEquipList();
   const playerSel=document.getElementById('gym-player-select');
   const playerName=(playerSel?.value&&playerSel.selectedOptions[0]?.textContent)||'';
@@ -6847,7 +7272,7 @@ async function generateMultiContrast(){
 
   try{
     // 전신 파워/점프 (B 폴백용)
-    const {data:jumpData}=await supa.from('exercises').select('*').in('category',['특수_파워','특수_점프']);
+    const {data:jumpData}=await gymExerciseReadSource().select('*').eq('is_active',true).in('category',['특수_파워','특수_점프']);
     const jumpPool=rankExercisesForPrescription((jumpData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq))),{md:document.getElementById('gym-md')?.value,method:'컨트라스트',purpose:'파워',equipment:supaEquip});
 
     const partPairs={};
@@ -6857,10 +7282,10 @@ async function generateMultiContrast(){
     for(const pk of enabledParts){
       const bpName=bpMap[pk];const cnt=_multiConfig[pk].cnt;
       // 부위 근력(A)
-      const {data:sData}=await supa.from('exercises').select('*').eq('body_part',bpName).contains('purposes',['근력']);
+      const {data:sData}=await gymExerciseReadSource().select('*').eq('is_active',true).eq('body_part',bpName).contains('purposes',['근력']);
       const strengthPool=rankExercisesForPrescription((sData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq))),{md:document.getElementById('gym-md')?.value,method:'컨트라스트',purpose:'근력',equipment:supaEquip});
       // 부위 파워(B 우선)
-      const {data:pData}=await supa.from('exercises').select('*').eq('body_part',bpName).contains('purposes',['파워']);
+      const {data:pData}=await gymExerciseReadSource().select('*').eq('is_active',true).eq('body_part',bpName).contains('purposes',['파워']);
       const partPower=rankExercisesForPrescription((pData||[]).filter(e=>(e.equipment_priority||[]).some(eq=>supaEquip.includes(eq))),{md:document.getElementById('gym-md')?.value,method:'컨트라스트',purpose:'파워',equipment:supaEquip});
       allStrength.push(...strengthPool);
       partPower.forEach(p=>{if(!allPower.find(x=>x.id===p.id))allPower.push(p);});
@@ -6912,7 +7337,7 @@ async function generateMultiContrast(){
             <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.15);color:#60a5fa">💪 근력</span>
             <button onclick="showGymAlternatives(${i},'a')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
           </div>
-          <div style="font-size:12px;color:var(--text2)">${aRx}</div>
+          <div data-rx-prescription-display="primary" style="font-size:12px;color:var(--text2)">${aRx}</div>
           ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
           ${gymRecommendationReasonHtml(pair.a)}
           ${gymDescHtml(`gym-ex-${i}-a`,pair.a.name_ko,pair.a.name_en)}
@@ -6924,7 +7349,7 @@ async function generateMultiContrast(){
             <span style="font-size:11px;color:var(--text3)">${pair.b.name_en||''}</span>
             <span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.15);color:#fbbf24">⚡ 파워</span>
           </div>
-          <div style="font-size:12px;color:var(--text2)">${bRx}</div>
+          <div data-rx-prescription-display="power" style="font-size:12px;color:var(--text2)">${bRx}</div>
           ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
           ${gymRecommendationReasonHtml(pair.b)}
           ${gymDescHtml(`gym-ex-${i}-b`,pair.b.name_ko,pair.b.name_en)}
@@ -6959,7 +7384,7 @@ async function generateGym(){
   const bp=_currentGymBodyPart;
   const purpKey=_currentGymPurpose;
   const purpT=getEffectiveGymPurpose(purpKey);
-  if(_currentGymMethod==='스트레이트 세트')purpT.rest=_gymMethodOptions.straightRest;
+  if(_currentGymMethod==='스트레이트 세트'&&_gymMethodOptionEdited.straightRest)purpT.rest=_gymMethodOptions.straightRest;
   const links=await loadL();
   const mdL=document.getElementById('gym-md').selectedOptions[0].text;
   const timeL=document.getElementById('gym-time').selectedOptions[0].text;
@@ -7068,11 +7493,11 @@ async function generateGym(){
       _currentMultiPicked.push({partKey:item.partKey,color:pool.color,a:{ex:item.aEx,subKey:item.aSubKey},b:item.bEx?{ex:item.bEx,subKey:item.bSubKey}:null});
       cardsHtml+=`<div id="gym-multi-pair-${pairIdx}" class="gym-rx-card" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:10px;border-left:5px solid ${pool.color}">
         ${gymCardEditorHtml()}
-        ${gymRxFieldsHtml(purpT)}
+        ${gymRxFieldsHtml(purpT,{cluster:_currentGymMethod==='클러스터 세트'})}
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
           <div class="gym-rx-order" style="width:22px;height:22px;border-radius:5px;background:${pool.color};color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${pairIdx}</div>
           <span style="font-size:11px;padding:1px 7px;border-radius:4px;background:${pool.color}22;color:${pool.color};font-weight:700">훈련 ${pairIdx} · ${GYM_PART_KOR[item.partKey]||item.partKey}</span>
-          <span style="font-size:10px;color:var(--text3);margin-left:auto">${purpT.sets}세트 · ${purpT.rpe} · 휴식 ${purpT.rest}</span>
+          <span data-rx-prescription-display="primary" style="font-size:10px;color:var(--text3);margin-left:auto">${purpT.sets}세트 × ${purpT.reps}회 · ${purpT.rpe} · 휴식 ${purpT.rest}</span>
         </div>
         ${multiSlotHtml(pairIdx,'a',item.aEx,item.aSubKey,pool.color,item.partKey)}
         ${multiSlotHtml(pairIdx,'b',item.bEx,item.bSubKey,pool.color,item.partKey)}
@@ -7110,14 +7535,15 @@ async function generateGym(){
   const supaBp2=bpMap2[bp];
   const totalMoves=parseInt(document.getElementById('gym-num-ex')?.value||'0');
   const method2=_currentGymMethod;
-  const requestedStations=['슈퍼세트','컨트라스트'].includes(method2)?Math.ceil(totalMoves/2):totalMoves;
+  // 슈퍼세트·컨트라스트의 선택 수는 주운동(A) 수다. B는 자동 생성한다.
+  const requestedStations=totalMoves;
   // 컨트라스트: A 운동은 '근력'으로 조회 (B 파워/점프는 buildContrastPairs 내부에서 별도 조회)
   const queryPurpose2=method2==='컨트라스트'?'근력':supaPurpose2;
   const out=document.getElementById('gym-output');
   out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">⏳ 운동 데이터 불러오는 중...</div>';
 
   try {
-    let query=supa.from('exercises').select('*').contains('purposes',[queryPurpose2]);
+    let query=gymExerciseReadSource().select('*').eq('is_active',true).contains('purposes',[queryPurpose2]);
     if(supaBp2) query=query.eq('body_part',supaBp2);
     const {data,error}=await query;
     if(error) throw error;
@@ -7127,6 +7553,9 @@ async function generateGym(){
     );
     if(!filtered.length){out.innerHTML=`${gymSafetyFilterSummaryHtml()}<p style="color:var(--text3);padding:1rem">조건에 맞는 안전한 운동 후보가 없습니다. 부위·기구를 바꾸거나 의무팀 허용 범위를 확인하세요.</p>`;return;}
 
+    const fullPartnerPool=method2==='슈퍼세트'
+      ?await loadGymAlternativePool(supaBp2,supaEquip2,{md,method:method2,purpose:queryPurpose2,equipment:supaEquip2,condition:_gymConditionBasis==='condition'?'condition':''},filtered)
+      :filtered;
     let pairs;
     if(method2==='서킷'){
       pairs=buildCircuitStations(filtered,requestedStations);
@@ -7137,15 +7566,21 @@ async function generateGym(){
     } else if(method2==='클러스터 세트'){
       pairs=buildClusterSets(filtered,requestedStations);
     } else {
-      pairs=buildSupersetPairs(filtered,requestedStations);
+      pairs=buildSupersetPairs(filtered,requestedStations,fullPartnerPool);
     }
-    pairs=limitGymPairsToMoves(pairs,totalMoves);
+    if(!['슈퍼세트','컨트라스트'].includes(method2))pairs=limitGymPairsToMoves(pairs,totalMoves);
     // 처방 swap용 전역 저장
     _currentGymPairs=pairs;
-    _gymAllExercises=filtered;
+    // 생성 후보는 선택 목적에 엄격히 맞추되, 변경 후보는 같은 부위의 전체 운동을 불러온다.
+    // 예: 푸시업 → 덤벨 벤치프레스/체스트 프레스 계열 선택 가능.
+    _gymAllExercises=method2==='슈퍼세트'?fullPartnerPool:await loadGymAlternativePool(supaBp2,supaEquip2,{md,method:method2,purpose:queryPurpose2,equipment:supaEquip2,condition:_gymConditionBasis==='condition'?'condition':''},filtered);
     _currentGymPurpT=purpT;
     _currentGymSessionCfg={bp,purpKey,method:method2,totalMoves,mdL,time,timeL,mode:'individual'};
     const totalEx=pairs.reduce((s,p)=>s+(p.b?2:1),0);
+    const autoPairMethod=['슈퍼세트','컨트라스트'].includes(method2);
+    const expectedEx=autoPairMethod?totalMoves*2:totalMoves;
+    const completePairCount=autoPairMethod?pairs.filter(p=>p.a&&p.b).length:0;
+    const shortageHtml=(totalEx<expectedEx||(autoPairMethod&&completePairCount<totalMoves))?`<div style="border:1px solid #f8717166;background:rgba(248,113,113,.08);border-radius:9px;padding:10px 12px;margin-bottom:12px;color:#fca5a5;font-size:11px"><b>⚠️ 운동 후보 부족 · 요청 ${expectedEx}개 중 ${totalEx}개만 생성</b><br><span style="color:var(--text3)">선택한 부위·목적·기구·선수 안전조건을 모두 만족하는 운동이 부족합니다. 다른 부위 운동으로 자동 대체하지 않았습니다. 기구 설정을 넓히거나 운동 관리에서 같은 움직임 패턴 운동을 추가해주세요.</span></div>`:'';
 
     const bpLabel={UB:'Upper Body',LB:'Lower Body',Core:'Core',AB:'All Body'}[bp]||bp;
     const bpColors={UB:{c:'#3b82f6',b:'#1e40af',bg:'rgba(59,130,246,0.12)'},LB:{c:'#22c55e',b:'#15803d',bg:'rgba(34,197,94,0.12)'},Core:{c:'#a855f7',b:'#7e22ce',bg:'rgba(168,85,247,0.12)'},AB:{c:'#f59e0b',b:'#b45309',bg:'rgba(245,158,11,0.12)'}};
@@ -7174,18 +7609,21 @@ async function generateGym(){
       const tm=indTypeMap[pair.type]||indTypeMap.single;
       const isContrast=pair.type==='contrast';
       const isCluster=pair.type==='cluster';
+      const isCircuit=pair.type==='circuit';
       const muscleInfo=pair.b
         ?(isContrast?`${pair.a.primary_muscle_ko} → ⚡ 파워/점프`:`${pair.a.primary_muscle_ko} ↔ ${pair.b.primary_muscle_ko}`)
         :pair.a.primary_muscle_ko||'';
       // 처방 텍스트 분기
       const bRx=isContrast?`3–5세트 × 3–5회 &nbsp;·&nbsp; 최대 속도/높이 &nbsp;·&nbsp; 휴식 3분`:`${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}`;
-      const aRx=isCluster
+      const aRx=isCircuit
+        ?`${_gymMethodOptions.circuitRounds}라운드 &nbsp;·&nbsp; 운동 ${_gymMethodOptions.circuitWork} / 운동 간 ${_gymMethodOptions.circuitMoveRest} &nbsp;·&nbsp; ${gymCircuitRestCycleLabel(_gymMethodOptions.circuitRestEvery)} 후 ${_gymMethodOptions.circuitRoundRest}`
+        :isCluster
         ?`${purpT.sets}클러스터 × (${_gymMethodOptions.clusterReps})회 &nbsp;·&nbsp; 미니 휴식 ${_gymMethodOptions.clusterRest} &nbsp;·&nbsp; 완전 휴식 ${purpT.rest}`
         :`${purpT.sets}세트 × ${purpT.reps}회 &nbsp;·&nbsp; ${purpT.rpe} &nbsp;·&nbsp; 휴식 ${purpT.rest}`;
       const contrastNote=isContrast?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;padding:5px 10px;background:rgba(245,158,11,0.1);border-radius:4px;border-left:3px solid #f59e0b">⚡ A 완료 후 ${_gymMethodOptions.contrastGap} 내 B 실시 — PAP(활성화 후 파워 증폭)</div>`:'';
       return `<div class="gym-rx-card" style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px">
         ${gymCardEditorHtml()}
-        ${gymRxFieldsHtml(purpT,{contrast:isContrast})}
+        ${gymRxFieldsHtml(purpT,{contrast:isContrast,cluster:isCluster,circuit:isCircuit})}
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
           <div class="gym-rx-order" style="width:24px;height:24px;border-radius:6px;background:${bc.b};color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center">${i+1}</div>
           <span style="font-size:11px;padding:2px 8px;border-radius:10px;background:${tm.bg};color:${tm.color};font-weight:600">${tm.label}</span>
@@ -7199,7 +7637,7 @@ async function generateGym(){
             ${isContrast?`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(59,130,246,0.15);color:#60a5fa">💪 근력</span>`:''}
             <button onclick="showGymAlternatives(${i},'a')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(59,130,246,0.1);color:#60a5fa;border:1px solid rgba(59,130,246,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>
           </div>
-          <div style="font-size:12px;color:var(--text2)">${aRx}</div>
+          <div data-rx-prescription-display="primary" style="font-size:12px;color:var(--text2)">${aRx}</div>
           ${pair.a.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.a.coaching_cue}</div>`:''}
           ${gymRecommendationReasonHtml(pair.a)}
           ${gymDescHtml(`gym-ex-${i}-a`,pair.a.name_ko,pair.a.name_en)}
@@ -7212,7 +7650,7 @@ async function generateGym(){
             ${isContrast?`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(245,158,11,0.15);color:#fbbf24">⚡ 파워/점프</span>`:
               `<button onclick="showGymAlternatives(${i},'b')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(245,158,11,0.1);color:#fbbf24;border:1px solid rgba(245,158,11,0.35);cursor:pointer;flex-shrink:0">🔄 변경</button>`}
           </div>
-          <div style="font-size:12px;color:var(--text2)">${bRx}</div>
+          <div data-rx-prescription-display="${isContrast?'power':'primary'}" style="font-size:12px;color:var(--text2)">${bRx}</div>
           ${pair.b.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${pair.b.coaching_cue}</div>`:''}
           ${gymRecommendationReasonHtml(pair.b)}
           ${gymDescHtml(`gym-ex-${i}-b`,pair.b.name_ko,pair.b.name_en)}
@@ -7226,15 +7664,18 @@ async function generateGym(){
       :method2==='서킷'
         ?`서킷 프로그램 — ${pairs.length}스테이션 연속 순환`
         :`개인 운동 프로그램 — ${totalEx}개 운동 · ${pairs.filter(p=>p.type==='superset').length}슈퍼세트`;
+    const circuitFlowHtml=method2==='서킷'?`<div style="border:1px solid #3b82f666;background:rgba(59,130,246,.06);border-radius:9px;padding:10px 12px;margin-bottom:12px;font-size:11px;line-height:1.7;color:var(--text2)"><b style="color:#60a5fa">🔁 실제 진행 순서</b><br>${pairs.map((p,i)=>`${String.fromCharCode(65+i)}. ${p.a.name_ko} ${_gymMethodOptions.circuitWork} → ${_gymMethodOptions.circuitMoveRest} 휴식`).join(' → ')}<br><b>${gymCircuitRestCycleLabel(_gymMethodOptions.circuitRestEvery)} 종료 후 ${_gymMethodOptions.circuitRoundRest} 긴 휴식</b> · 총 ${_gymMethodOptions.circuitRounds}라운드</div>`:'';
 
     out.innerHTML=`
       ${gymResultDecisionHtml('individual',purpT,method2,totalEx)}
+      ${shortageHtml}
       ${gymSafetyFilterSummaryHtml()}
       ${gymPrescriptionQualityHtml(pairs,method2)}
       <div class="chips"><span class="chip">${mdL}</span>${bpChip}${purpChip}${methodChip2}${playerChip}</div>
       <div class="goal-box"><p>${playerName?`<strong style="color:#4ade80">👤 ${playerName}</strong> &nbsp;|&nbsp; `:''}<strong>세션 목표:</strong> ${bpLabel} | ${purpT.icon} ${purpT.label} — ${purpT.desc}</p></div>
       ${purpBox}
       <div class="slabel" style="margin-bottom:10px">${summaryLabel}</div>
+      ${circuitFlowHtml}
       ${pairsHtml}
       <div class="slabel" style="margin-top:16px;margin-bottom:8px">코칭 포인트</div>
       <div class="coaching-box"><p>${method2==='컨트라스트'?'PAP 효과 극대화: A(근력) 세트 완료 후 60–120초 이내 반드시 B(파워) 실시. 피로 누적 시 B 세트 수 감소 가능. 세트 간 완전 회복 후 다음 세트.':purpT.coaching}</p></div>
@@ -7260,34 +7701,45 @@ function showGymAlternatives(pairIdx, slot){
   const curEx=slot==='a'?pair.a:pair.b;
   if(!curEx) return;
 
-  // 대안 풀: 같은 body_part만 — 5개 미만이면 다른 부위로 보충
+  // 대안 풀: 같은 주동근·동작 패턴 중심. 다른 부위 운동으로 억지 보충하지 않는다.
   const pool=(pair.type==='contrast'&&slot==='b')?_gymPowerExercises:_gymAllExercises;
-  const samePart=pool.filter(e=>e.id!==curEx.id&&e.body_part===curEx.body_part);
-  for(let i=samePart.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[samePart[i],samePart[j]]=[samePart[j],samePart[i]];}
-  let shown=samePart.slice(0,5);
-  if(shown.length<5){
-    const anyPart=pool.filter(e=>e.id!==curEx.id&&e.body_part!==curEx.body_part);
-    for(let i=anyPart.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[anyPart[i],anyPart[j]]=[anyPart[j],anyPart[i]];}
-    shown=[...shown,...anyPart].slice(0,5);
-  }
+  const norm=s=>String(s||'').toLowerCase().replace(/[\s()\-_\/]/g,'');
+  const identity=e=>norm(e.name_en||e.name_ko);
+  const usedNames=new Set([identity(curEx)]);
+  const candidates=[];
+  pool.forEach(e=>{
+    if(e.id===curEx.id||e.body_part!==curEx.body_part)return;
+    const key=identity(e);if(!key||usedNames.has(key))return;
+    usedNames.add(key);
+    const sameMuscle=!!curEx.primary_muscle_ko&&e.primary_muscle_ko===curEx.primary_muscle_ko;
+    const samePattern=!!curEx.movement_pattern&&e.movement_pattern===curEx.movement_pattern;
+    const sameSub=!!curEx.sub_area&&e.sub_area===curEx.sub_area;
+    // 같은 세부 부위조차 아니면 대체 운동으로 제시하지 않는다.
+    if(!sameMuscle&&!sameSub)return;
+    const tier=sameMuscle&&samePattern?1:sameMuscle?2:3;
+    candidates.push({...e,_altTier:tier});
+  });
+  candidates.sort((a,b)=>a._altTier-b._altTier||(b._recommendScore||0)-(a._recommendScore||0)||String(a.name_ko).localeCompare(String(b.name_ko),'ko'));
+  const shown=candidates.slice(0,8);
+  const tierLabel={1:'같은 주동근 · 같은 패턴',2:'같은 주동근 · 다른 패턴',3:'같은 세부 부위'};
 
   const panel=document.createElement('div');
   panel.className='gym-alt-panel';
   panel.style.cssText='margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--bg2);border:1px dashed #3b82f6';
   panel.innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <span style="font-size:11px;font-weight:700;color:#60a5fa">🔄 대체 운동 선택</span>
+      <span style="font-size:11px;font-weight:700;color:#60a5fa">🔄 ${curEx.name_ko} 대체 운동</span>
       <button onclick="cancelGymSwap(${pairIdx},'${slot}')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;line-height:1">✕</button>
     </div>
     ${shown.length?shown.map(ex=>`
       <div onclick="doGymSwap(${pairIdx},'${slot}','${ex.id}')" style="cursor:pointer;padding:6px 8px;border-radius:5px;border:1px solid var(--border2);margin-bottom:3px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--surface)';this.style.borderColor='#3b82f6'" onmouseout="this.style.background='transparent';this.style.borderColor='var(--border2)'">
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${ex.name_ko}</div>
-          <div style="font-size:10px;color:var(--text3)">${ex.primary_muscle_ko||''}</div>
+          <div style="font-size:10px;color:var(--text3)">${tierLabel[ex._altTier]} · ${ex.primary_muscle_ko||''}${ex.movement_pattern?` · ${ex.movement_pattern}`:''}</div>
         </div>
         <span style="font-size:10px;padding:1px 7px;border-radius:3px;background:rgba(59,130,246,0.15);color:#60a5fa;flex-shrink:0">선택</span>
       </div>`).join('')
-    :'<div style="font-size:12px;color:var(--text3);text-align:center;padding:4px">대체 운동 없음</div>'}
+    :'<div style="font-size:12px;color:var(--text3);text-align:center;padding:6px">같은 주동근·세부 부위의 대체 운동이 없습니다.<br>운동 관리에서 해당 운동의 주동근과 동작 패턴을 확인해주세요.</div>'}
   `;
   slotEl.appendChild(panel);
 }
@@ -7333,7 +7785,7 @@ function doGymSwap(pairIdx, slot, exId){
       ${(isContrast&&!isA)?'':
         `<button onclick="showGymAlternatives(${pairIdx},'${slot}')" style="margin-left:auto;font-size:10px;padding:2px 7px;border-radius:4px;background:${swapBtnColor};color:${swapBtnTxt};border:1px solid ${swapBtnBorder};cursor:pointer;flex-shrink:0">🔄 변경</button>`}
     </div>
-    <div style="font-size:12px;color:var(--text2)">${rx}</div>
+    <div data-rx-prescription-display="${isContrast&&!isA?'power':'primary'}" style="font-size:12px;color:var(--text2)">${rx}</div>
     ${newEx.coaching_cue?`<div style="font-size:11px;color:var(--text3);margin-top:4px">💡 ${newEx.coaching_cue}</div>`:''}
     ${gymDescHtml(`gym-ex-${pairIdx}-${slot}`,newEx.name_ko,newEx.name_en)}
   `;
@@ -7432,7 +7884,7 @@ async function buildManualGym(){
   const bp=_currentGymBodyPart;
   const purpKey=_currentGymPurpose;
   const purpT=getEffectiveGymPurpose(purpKey);
-  if(_currentGymMethod==='스트레이트 세트')purpT.rest=_gymMethodOptions.straightRest;
+  if(_currentGymMethod==='스트레이트 세트'&&_gymMethodOptionEdited.straightRest)purpT.rest=_gymMethodOptions.straightRest;
   const links=await loadL();
   const mdL=document.getElementById('gym-md').selectedOptions[0].text;
   const timeL=document.getElementById('gym-time').selectedOptions[0].text;
@@ -8265,7 +8717,7 @@ function loadCxIntoForm(name, isCustom){
 
 let _exerciseDbRows=[];
 async function loadExerciseDbRows(render=true){
-  const {data,error}=await supa.from('exercises').select('*').order('name_ko');
+  const {data,error}=await supa.from('exercises').select('*').eq('is_active',true).order('name_ko');
   if(!error)_exerciseDbRows=data||[];
   if(render&&cxTabMode==='database')renderAllExList(document.getElementById('cx-search')?.value||'');
   return {data:_exerciseDbRows,error};
