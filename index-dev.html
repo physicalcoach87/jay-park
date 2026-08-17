@@ -2434,8 +2434,17 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <button type="button" onclick="document.getElementById('dm-day-label').value='MD';onDmLabelChange('MD')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD</button>
           <button type="button" onclick="document.getElementById('dm-day-label').value='MD+1';onDmLabelChange('MD+1')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD+1</button>
           <button type="button" onclick="document.getElementById('dm-day-label').value='MD+2';onDmLabelChange('MD+2')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD+2</button>
-          <button type="button" onclick="document.getElementById('dm-day-label').value='연습경기';onDmLabelChange('연습경기')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">연습경기</button>
+          <button type="button" onclick="document.getElementById('dm-day-label').value='MD';document.getElementById('dm-match-type').value='FRIENDLY';onDmLabelChange('MD')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">연습경기</button>
           <button type="button" onclick="document.getElementById('dm-day-label').value='REST';onDmLabelChange('REST')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">REST</button>
+        </div>
+        <div id="dm-match-type-wrap" style="display:none;margin-top:9px;padding:9px 10px;border:1px solid #ef444455;background:#ef44440a;border-radius:8px">
+          <div style="font-size:11px;color:#fca5a5;font-weight:700;margin-bottom:6px">⚽ 경기 유형</div>
+          <select id="dm-match-type" style="width:100%;padding:7px 9px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px">
+            <option value="LEAGUE">리그 경기</option>
+            <option value="CUP">컵대회</option>
+            <option value="FRIENDLY">연습경기</option>
+          </select>
+          <div style="font-size:10px;color:var(--text3);margin-top:5px">리그·컵은 출전 가용성으로, 연습경기는 부하 조절이 가능한 훈련 적합성으로 판정합니다.</div>
         </div>
         <div id="dm-load-hint" style="display:none;margin-top:7px;padding:7px 10px;border-radius:7px;font-size:11px;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc">✨ 추천 운동량이 적용됐어요. 팀 상황에 맞게 수정하세요.</div>
         <div id="dm-mss-badge" style="display:none;margin-top:7px;padding:10px 12px;border-radius:8px;font-size:11px;border:1px solid">
@@ -10800,7 +10809,7 @@ async function loadMorningReport(){
   window._pmNoRpeRespPlayers = pmNoRpeResp.map(p=>({id:p.id,name:p.name}));
 
   // MD fallback (오늘 라벨 or GPS topic 기반)
-  const mdKey = Object.keys(MD_LOAD_TARGETS).find(k=>(todayBlockDay?.day_label||todayTopic).toUpperCase().includes(k));
+  const mdKey = normalizePlanMdKey(todayBlockDay?.day_label||todayTopic);
   const mdFallback = mdKey ? MD_LOAD_TARGETS[mdKey] : null;
 
   // 목표 출처 판별
@@ -10874,7 +10883,7 @@ async function loadMorningReport(){
 
   // 경기일 실제 부하 포함: 현재 트랙 블록에서 day_label='MD'(경기일)인 날의
   // match_records 팀 평균을 주간 실제에 합산 (경기는 gps_records에 없어 누락되던 것)
-  const _isMatchDay = lbl => { const u=(lbl||'').trim().toUpperCase(); return u==='MD'||u.includes('MATCH'); };
+  const _isMatchDay = lbl => normalizePlanMdKey(lbl)==='MATCH';
   const weekMatchDays = [...new Set((weekMatchRaw||[])
     .filter(r=>r.match_date>=weekStartStr && r.match_date<=weekActualCutDate
       && _isMatchDay(blockDayMap[r.match_date]?.day_label))
@@ -11169,9 +11178,10 @@ async function loadMorningReport(){
   const _injuredActiveIds = new Set(
     (injuredAll||[]).filter(r=>['치료중','재활중','부분 참여'].includes(r.status)).map(r=>r.player_id)
   );
-  const _paMdKey = Object.keys(MD_DEMAND).find(k=>(todayBlockDay?.day_label||'').toUpperCase().includes(k))||null;
+  const _paMdKey = normalizePlanMdKey(todayBlockDay?.day_label||'');
   const _paDemandInfo = deriveDemand(todayBlockDay,_paMdKey);
   const _paDemand = _paDemandInfo.demand;
+  const _paOfficialMatch=isOfficialMatchPlan(todayBlockDay);
   let _paNormalCount=0;
   for(const player of _players){
     if(_injuredActiveIds.has(player.id)) continue; // 부상·재활 현황에서 별도 관리
@@ -11188,12 +11198,16 @@ async function loadMorningReport(){
       _paList.push({player,verdict:'unknown',flags:['최근 판정 데이터 부족'],riskLevel:'yellow',score:0,advice:'최근 GPS·경기·RPE 데이터 확인'});
       continue;
     }
-    const verdict=calcSuitability(rd.risk.level,_paDemand,rd.risk.flags,true);
+    const verdict=_paOfficialMatch
+      ?calcOfficialMatchAvailability(rd.risk,true)
+      :calcSuitability(rd.risk.level,_paDemand,rd.risk.flags,true);
     if(verdict==='ok'){ _paNormalCount++; continue; }
     const flags=(rd.risk.flags||[]).map(f=>f.msg);
     _paList.push({
       player, verdict, flags:[...new Set(flags)], riskLevel:rd.risk.level,
-      score:rd.risk.score||0, advice:suitabilityAdvice(rd.risk,_paDemand,verdict)
+      score:rd.risk.score||0, advice:_paOfficialMatch
+        ?officialMatchAdvice(rd.risk,verdict)
+        :suitabilityAdvice(rd.risk,_paDemand,verdict)
     });
   }
   const _paOrder={adjust:0,review:1,unknown:2};
@@ -11204,8 +11218,8 @@ async function loadMorningReport(){
   const _paReviewFirst=_paReview.slice(0,5);
   const _paReviewMore=_paReview.slice(5);
   const _paVerdictCfg={
-    adjust:{label:'🔴 조정 필요',color:'#f87171',bg:'rgba(239,68,68,0.08)',border:'#ef4444'},
-    review:{label:'🟠 조정 검토',color:'#fb923c',bg:'rgba(249,115,22,0.08)',border:'#f97316'},
+    adjust:{label:_paOfficialMatch?'🔴 출전 재검토':'🔴 조정 필요',color:'#f87171',bg:'rgba(239,68,68,0.08)',border:'#ef4444'},
+    review:{label:_paOfficialMatch?'🟠 출전 전 확인':'🟠 조정 검토',color:'#fb923c',bg:'rgba(249,115,22,0.08)',border:'#f97316'},
     unknown:{label:'⚪ 데이터 확인',color:'#94a3b8',bg:'rgba(148,163,184,0.08)',border:'#64748b'}
   };
   const _paRowHtml=(item)=>{
@@ -11221,17 +11235,17 @@ async function loadMorningReport(){
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <div>
-          <div style="font-size:11px;font-weight:600;color:var(--text2)">🧬 오늘 훈련 관리 요약</div>
-          <div style="font-size:9px;color:var(--text3);margin-top:2px">오늘 훈련 계획 × 선수 상태 · 중요 판정만 표시</div>
+          <div style="font-size:11px;font-weight:600;color:var(--text2)">🧬 ${_paOfficialMatch?'오늘 경기 출전 가용성':'오늘 훈련 관리 요약'}</div>
+          <div style="font-size:9px;color:var(--text3);margin-top:2px">${_paOfficialMatch?`${MATCH_TYPE_LABEL[getPlanMatchType(todayBlockDay)]} · 부상·웰니스 중심 출전 판단`:'오늘 훈련 계획 × 선수 상태 · 중요 판정만 표시'}</div>
         </div>
         <button onclick="goToSuitabilityFromBrief()" style="font-size:10px;padding:4px 9px;border-radius:6px;border:0.5px solid #8b5cf6;background:rgba(139,92,246,0.08);color:#c4b5fd;cursor:pointer;font-family:inherit">전체 판정 보기 →</button>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
-        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(239,68,68,.1);color:#f87171">⛔ 훈련 불가 ${_injuredActiveIds.size}</span>
-        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(239,68,68,.1);color:#f87171">🔴 조정 필요 ${_paAdjust.length}</span>
-        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(249,115,22,.1);color:#fb923c">🟠 조정 검토 ${_paReview.length}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(239,68,68,.1);color:#f87171">⛔ ${_paOfficialMatch?'출전 불가':'훈련 불가'} ${_injuredActiveIds.size}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(239,68,68,.1);color:#f87171">🔴 ${_paOfficialMatch?'출전 재검토':'조정 필요'} ${_paAdjust.length}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(249,115,22,.1);color:#fb923c">🟠 ${_paOfficialMatch?'출전 전 확인':'조정 검토'} ${_paReview.length}</span>
         <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(148,163,184,.1);color:#94a3b8">⚪ 데이터 확인 ${_paUnknown.length}</span>
-        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(34,197,94,.1);color:#4ade80">🟢 정상 ${_paNormalCount}</span>
+        <span style="font-size:10px;padding:3px 8px;border-radius:6px;background:rgba(34,197,94,.1);color:#4ade80">🟢 ${_paOfficialMatch?'출전 가능':'정상'} ${_paNormalCount}</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:5px">
         ${_paAdjust.map(_paRowHtml).join('')}
@@ -14596,13 +14610,12 @@ async function buildWeeklyLoadHtml(forDate){
       if(!merged[pid]) merged[pid]={...r,_td:parseFloat(r.td)||0,_running_high:parseFloat(r.running_high)||0,_sprint:parseFloat(r.sprint)||0,_accel:parseFloat(r.accel)||0,_rhie:parseFloat(r.rhie)||0,_duration:parseFloat(r.duration)||0};
       else { ['td','running_high','sprint','accel','rhie','duration'].forEach(f=>{ merged[pid]['_'+f]=(merged[pid]['_'+f]||0)+(parseFloat(r[f])||0); }); }
     });
-    const vrs=Object.values(merged).map(r=>({...r,[field]:r['_'+field],duration:r._duration})).filter(r=>parseFloat(r[field])>0&&r.duration>0);
+    const vrs=Object.values(merged).map(r=>({...r,[field]:r['_'+field]})).filter(r=>parseFloat(r[field])>0);
     if(!vrs.length) return null;
-    const dc={};vrs.forEach(r=>{const d=Math.round(r.duration);dc[d]=(dc[d]||0)+1;});
-    const mode=parseFloat(Object.entries(dc).sort((a,b)=>b[1]-a[1]||parseFloat(b[0])-parseFloat(a[0]))[0][0]);
-    const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sd=vrs.reduce((a,r)=>a+(r.duration||0),0);
-    return sd>0?sv/sd*mode:null;
+    // 시간 정규화하지 않는다 — M 필터가 이미 정상 참여 선수만 걸러내므로 중복 보정이 된다.
+    // 정규화는 출전시간이 제각각인 경기 기준선(_mAvg)에서만 필요하고,
+    // 여기서 또 하면 같은 날 일일 데이터 팀 평균과 값이 어긋난다.
+    return vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0)/vrs.length;
   };
   const _avgF=(arr,field)=>{const v=arr.filter(r=>parseFloat(r[field])>0).map(r=>parseFloat(r[field]));return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
   const _ac=v=>v===null?'var(--text3)':v>1.5?'#ef4444':v>1.3?'#f59e0b':v<0.8?'#eab308':'#22c55e';
@@ -15009,7 +15022,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .eq('track',_summaryTrk)
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
-      .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie')
+      .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie,player_load')
       .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,max_speed,time_type,player_profiles(name,position)')
@@ -15300,7 +15313,27 @@ async function loadTeamSummary(forceDate, quiet=false){
     accel: _mAvgTs(ref3RowsTs,'accel'),
     rhie:  _mAvgTs(ref3RowsTs,'rhie'),
   };
+  // 선수 개인 경기 기준선 — 훈련 적합성(buildPersonalPlanTarget)과 같은 규칙을 쓴다.
+  // 최근 풀타임(80분↑) 3경기가 모두 있을 때만 개인 기준, 부족하면 팀 목표로 대체한다.
+  // pl(P.Load)은 주기화 목표가 없어 목표 달성률을 만들 수 없다. 경기 평균 자체를 기준으로 쓴다.
+  const PERSONAL_BASE_FIELD = { td:'td', hsr:'band4_td', sprint:'band5_td', accel:'accel', rhie:'rhie', pl:'player_load' };
+  const personalMAvg = {};
+  (matchRef||[]).forEach(r=>{ (personalMAvg[r.player_id]=personalMAvg[r.player_id]||[]).push(r); });
+  Object.keys(personalMAvg).forEach(pid=>{
+    const ft = personalMAvg[pid]
+      .filter(r=>(parseFloat(r.duration)||0)>=80)
+      .sort((a,b)=>(b.match_date||'').localeCompare(a.match_date||''))
+      .slice(0,3);
+    const avg = { _count: ft.length, _personal: ft.length===3 };
+    Object.entries(PERSONAL_BASE_FIELD).forEach(([key,f])=>{
+      const vals = ft.map(r=>parseFloat(r[f])).filter(Number.isFinite);
+      avg[key] = vals.length===3 ? vals.reduce((a,b)=>a+b,0)/3 : null;
+    });
+    personalMAvg[pid] = avg;
+  });
+
   const bd = blockDayRow || null;
+  const PERIOD_TARGET_COL = { td:'td_target', hsr:'hsr_target', sprint:'spr_target', accel:'acc_target', rhie:'rhie_target' };
   // periodPct: 저장된 기준(ref_basis) 우선 → 지난 날은 준비 당시 기준 고정, 없으면 현재 평균 역산
   const _pp = (targetCol, avgKey) => {
     if(!bd || bd[targetCol]==null) return null;
@@ -15320,23 +15353,45 @@ async function loadTeamSummary(forceDate, quiet=false){
   };
   const isTrainingMode = window._trainingMode === true;
 
-  // Match Max % 배지 — 훈련 데이터 모드: 개인 Match Max × periodPct% 기준 / 일반: Match Max 절대 기준
-  const mmPct = (val, mx, field) => {
+  // % 배지 — 훈련 데이터 모드: 개인 목표 달성률 / 일반: Match Max 절대 기준
+  // 개인 목표 = 개인 최근 풀타임 3경기 평균 × 주기화 목표%. 3경기가 없으면 팀 목표(절대값)를 쓴다.
+  const mmPct = (val, mx, field, pid) => {
     const v = parseFloat(val), m = parseFloat(mx);
-    if(!v || !m || isNaN(v) || isNaN(m)) return '';
-    let target = m, usedTarget = false;
+    if(!v || isNaN(v)) return '';
+    let target = m, usedTarget = false, teamBasis = false, matchAvgBasis = false;
+    const pa = personalMAvg[pid];
     if(isTrainingMode && field && periodPct[field] != null) {
-      target = m * periodPct[field] / 100;
+      if(pa && pa._personal && pa[field] != null){
+        target = pa[field] * periodPct[field] / 100;
+      } else {
+        target = parseFloat(bd?.[PERIOD_TARGET_COL[field]]);
+        teamBasis = true;
+      }
       usedTarget = true;
+    } else if(isTrainingMode && field === 'pl' && pa && pa._personal && pa.pl != null) {
+      // 주기화 목표가 없는 지표 — 개인 최근 풀타임 3경기 평균 자체를 기준으로 비교한다
+      target = pa.pl;
+      matchAvgBasis = true;
     }
-    if(!target) return '';
+    if(!target || isNaN(target)) return '';
     const pct = Math.round((v/target)*100);
     // 주기화 목표 달성률은 90/70(목표가 이미 MD단계로 낮춰져 있음), Match Max 절대 비교는 80/60
     // 공통: 110%↑ 초과부하 🟠, 130%↑ 🔴 (훈련이 경기를 넘을 수 있으므로 초과도 위험 신호)
     const color = usedTarget
       ? (pct>130?'#f87171':pct>=110?'#fb923c':pct>=90?'#4ade80':pct>=70?'#fbbf24':'#f87171')
       : (pct>130?'#f87171':pct>=110?'#fb923c':pct>=80?'#4ade80':pct>=60?'#fbbf24':'#f87171');
-    return `<span style="font-size:10px;color:#6b7280;margin:0 2px">/</span><span style="font-size:11px;color:${color};font-weight:600">${pct}%</span>`;
+    const tip = usedTarget
+      ? `${teamBasis?'팀':'개인'} 목표 ${Math.round(target).toLocaleString()} 대비 ${pct}%`
+        + (teamBasis?` · 개인 풀타임 ${personalMAvg[pid]?._count||0}/3경기라 팀 목표 사용`
+                    :` · 개인 최근 풀타임 3경기 평균 × ${Math.round(periodPct[field])}%`)
+      : matchAvgBasis
+        ? `개인 최근 풀타임 3경기 평균 ${Math.round(target).toLocaleString()} 대비 ${pct}% · 주기화 목표가 없는 지표`
+        : `경기 Max ${Math.round(target).toLocaleString()} 대비 ${pct}%`;
+    // 목표값을 숨기지 않는다 — "이 선수의 오늘 목표가 얼마인지"가 % 보다 먼저 보여야 한다
+    const tNum = Math.abs(target)>=100 ? Math.round(target).toLocaleString()
+                                       : (Math.round(target*10)/10).toString();
+    const tLabel = usedTarget ? (teamBasis?'팀목표':'목표') : (matchAvgBasis?'경기평균':'경기Max');
+    return `<div title="${tip}" style="font-size:10px;font-weight:500;margin-top:2px;color:var(--text3);white-space:nowrap">${tLabel} ${tNum} · <span style="color:${color};font-weight:600">${pct}%</span></div>`;
   };
 
   const renderTable = (arr) => arr.map((r,idx)=>{
@@ -15380,13 +15435,13 @@ async function loadTeamSummary(forceDate, quiet=false){
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
       </td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
-      <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td, 'td')}</td>
-      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr, 'hsr')}</td>
-      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint, 'sprint')}</td>
-      <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel, 'accel')}</td>
-      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie, 'rhie')}</td>`}
+      <td style="padding:7px 8px;text-align:right;color:var(--accent2);font-weight:600">${Math.round(r.td)||'-'}${mmPct(r.td, mx.match_max_td, 'td', r.player_id)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#f59e0b">${hsrVal?Math.round(hsrVal):'-'}${mmPct(hsrVal, mx.match_max_hsr, 'hsr', r.player_id)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#ef4444">${sprVal?Math.round(sprVal):'-'}${mmPct(sprVal, mx.match_max_sprint, 'sprint', r.player_id)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#fb923c">${r.accel||'-'}${mmPct(r.accel, mx.match_max_accel, 'accel', r.player_id)}</td>
+      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#34d399">${r.rhie||'-'}${mmPct(r.rhie, mx.match_max_rhie, 'rhie', r.player_id)}</td>`}
       <td style="padding:7px 8px;text-align:right;color:#60a5fa">${parseFloat(r.max_speed)>0?parseFloat(r.max_speed).toFixed(1):'-'}${mmPct(r.max_speed, mx.match_max_speed)}</td>
-      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#a78bfa">${parseFloat(r.player_load)>0?parseFloat(r.player_load).toFixed(1):'-'}${mmPct(r.player_load, mx.match_max_pl)}</td>`}
+      ${isV1plan?'': `<td style="padding:7px 8px;text-align:right;color:#a78bfa">${parseFloat(r.player_load)>0?parseFloat(r.player_load).toFixed(1):'-'}${mmPct(r.player_load, mx.match_max_pl, 'pl', r.player_id)}</td>`}
       ${currentUseRpe?`<td style="padding:7px 8px;text-align:right;color:#fbbf24;font-weight:600">${rpeDisp||'—'}</td>`:''}
       ${currentUseRpe?`<td style="padding:7px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>`:''}
       ${(currentUseRpe&&currentUseWellness)?`<td style="padding:7px 8px;text-align:right">
@@ -15420,21 +15475,44 @@ async function loadTeamSummary(forceDate, quiet=false){
   const mRpeAvg  = calcAvgRpe(fullGps);
   const mSrpeAvg = calcAvgSrpe(fullGps);
 
-  // 그룹 통계 한 줄 텍스트 (M/혼합/서브 공통)
-  const groupStatChips = (arr) => {
+  // 팀 목표 대비 달성 — 표기: "TD 목표 2,949m / 2,156m 73%달성"
+  const TEAM_TARGET_COL = { td:'td_target', running_high:'hsr_target', sprint:'spr_target', accel:'acc_target', rhie:'rhie_target' };
+
+  // 그룹 통계 한 줄 텍스트 (M/혼합/서브 공통) — 팀 목표는 팀 훈련 그룹에만 붙인다
+  const groupStatChips = (arr, withGoal=false) => {
     if(!arr.length) return '';
+    const chip = (label, field, unit, color, dec=0) => {
+      const val = avgGroup(arr, field, dec);
+      const valHtml = `<strong style="color:${color}">${val}${unit}</strong>`;
+      const tgt = withGoal ? parseFloat(bd?.[TEAM_TARGET_COL[field]]) : NaN;
+      if(!tgt || isNaN(tgt) || val==='-') return `${label} ${valHtml}`;
+      const pct = Math.round(parseFloat(val)/tgt*100);
+      const col = pct>130?'#f87171':pct>=110?'#fb923c':pct>=90?'#4ade80':pct>=70?'#fbbf24':'#f87171';
+      return `${label} 목표 ${Math.round(tgt).toLocaleString()}${unit} / ${valHtml} <span style="color:${col};font-weight:600">${pct}%달성</span>`;
+    };
     const parts = [
-      `TD <strong style="color:var(--accent2)">${avgGroup(arr,'td',0)}m</strong>`,
-      `HSR <strong style="color:#f59e0b">${avgGroup(arr,'running_high',0)}m</strong>`,
-      `Sprint <strong style="color:#ef4444">${avgGroup(arr,'sprint',0)}m</strong>`,
-      `가속 <strong style="color:#fb923c">${avgGroup(arr,'accel',0)}회</strong>`,
-      isV1plan?'':`RHIE <strong style="color:#34d399">${avgGroup(arr,'rhie',0)}회</strong>`,
+      chip('TD','td','m','var(--accent2)'),
+      chip('HSR','running_high','m','#f59e0b'),
+      chip('Sprint','sprint','m','#ef4444'),
+      chip('가속','accel','회','#fb923c'),
+      isV1plan?'':chip('RHIE','rhie','회','#34d399'),
       `최고속도 <strong style="color:#60a5fa">${avgGroup(arr,'max_speed',1)}km/h</strong>`,
       currentUseRpe?`RPE <strong style="color:#fbbf24">${calcAvgRpe(arr)}</strong>`:'',
       currentUseRpe?`sRPE <strong style="color:#c084fc">${calcAvgSrpe(arr)}</strong>`:''
     ].filter(Boolean);
-    return `<div style="font-size:11px;color:var(--text3);margin-bottom:10px">팀 평균 · ${parts.join(' · ')}</div>`;
+    return `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.9">팀 평균 · ${parts.join(' · ')}</div>`;
   };
+
+  // % 기준 안내 — 훈련 데이터 모드에서만 개인 목표 달성률이 된다
+  const _hasPeriodTarget = ['td','hsr','sprint','accel','rhie'].some(k=>periodPct[k]!=null);
+  const _pctLegend = (isTrainingMode && _hasPeriodTarget)
+    ? `<div style="font-size:10px;color:var(--text3);margin-bottom:8px;padding:6px 9px;background:var(--surface2);border-radius:6px;line-height:1.6">
+         ※ 큰 숫자 = 실제 · 작은 숫자 = <strong style="color:var(--text2)">그 선수의 오늘 목표 · 달성률%</strong>
+         <br>· <strong style="color:var(--text2)">목표</strong> = 그 선수의 최근 풀타임(80분↑) 3경기 평균 × 주기화 목표% ${['td','hsr','sprint','accel','rhie'].filter(k=>periodPct[k]!=null).map(k=>`${({td:'TD',hsr:'HSR',sprint:'SPR',accel:'ACC',rhie:'RHIE'})[k]} ${Math.round(periodPct[k])}%`).join(' · ')}
+         <br>· <strong style="color:var(--text2)">팀목표</strong> = 풀타임 3경기가 없어 개인 기준을 못 만드는 선수 (팀 전체 목표를 그대로 사용)
+         <br>· <strong style="color:var(--text2)">경기평균</strong> = 주기화 목표가 없는 지표(P.Load) — 개인 최근 풀타임 3경기 평균과 직접 비교 · 최고속도는 커리어 경기Max 기준 유지
+       </div>`
+    : '';
 
   // ── 웰니스 요약 통계 ──
   const _wellRows = rpeStatusRows.filter(r=>r.wellTotal!=null);
@@ -15533,7 +15611,8 @@ async function loadTeamSummary(forceDate, quiet=false){
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
         M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
       </div>
-      ${groupStatChips(fullGps)}
+      ${groupStatChips(fullGps, true)}
+      ${_pctLegend}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
@@ -15552,6 +15631,7 @@ async function loadTeamSummary(forceDate, quiet=false){
         오전·오후 분류가 다른 선수 (예: 오전 S / 오후 M). 하루 전체 합산 기준이며 M그룹 평균에는 포함하지 않습니다.
       </div>
       ${groupStatChips(mixedGps)}
+      ${_pctLegend}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
@@ -15570,6 +15650,7 @@ async function loadTeamSummary(forceDate, quiet=false){
         서브/미엔트리(S) ${indGps.length - ssGps.length - xGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">스페셜 세션(SS) '+ssGps.length+'명 — 팀 평균 미반영</span>' : ''}${xGps.length > 0 ? ' · <span style="color:#f87171;font-weight:600">엔트리 제외(X) '+xGps.length+'명 — 팀 평균 미반영</span>' : ''}
       </div>
       ${groupStatChips(indGps)}
+      ${_pctLegend}
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
           ${tableHeader}
@@ -17597,6 +17678,75 @@ const MD_DEMAND = {
   'MD-1':'low',   'MD+1':'low',   'MD+2':'low',
 };
 
+// 주기화에서는 경기일을 MD로 저장하고, 다른 화면에서는 MATCH로 사용한다.
+// 두 표기를 같은 경기일로 정규화해 계획 누락으로 오판하지 않게 한다.
+function normalizePlanMdKey(label){
+  const raw=(label||'').trim().toUpperCase();
+  if(raw==='MD'||raw==='MATCH'||raw.includes('MATCH')||raw.includes('연습경기'))return 'MATCH';
+  return Object.keys(MD_DEMAND).filter(k=>k!=='MD'&&k!=='MATCH').find(k=>raw.includes(k))||null;
+}
+
+const MATCH_TYPE_LABEL={LEAGUE:'리그 경기',CUP:'컵대회',FRIENDLY:'연습경기'};
+function getPlanMatchType(plan){
+  if(normalizePlanMdKey(plan?.day_label)!=='MATCH')return null;
+  const saved=(plan?.ref_basis?.match_type||'').toUpperCase();
+  if(MATCH_TYPE_LABEL[saved])return saved;
+  return (plan?.day_label||'').includes('연습경기')?'FRIENDLY':'LEAGUE';
+}
+function isOfficialMatchPlan(plan){
+  const type=getPlanMatchType(plan);
+  return type==='LEAGUE'||type==='CUP';
+}
+
+// 공식 경기는 훈련 부하를 줄이는 날이 아니라 출전 가능 여부를 판단하는 날이다.
+// 부상은 별도로 출전 불가 처리하고, 여기서는 심한 웰니스 이상만 출전 전 확인으로 올린다.
+function calcOfficialMatchAvailability(risk,hasData=true){
+  if(!hasData)return 'unknown';
+  const wellnessRed=(risk?.flags||[]).some(f=>f.type==='W'&&f.level==='red');
+  return wellnessRed?'review':'ok';
+}
+function officialMatchAdvice(risk,verdict){
+  if(verdict==='unknown')return '경기 전 웰니스·통증·의무팀 확인';
+  if(verdict==='review')return '출전 전 컨디션·통증 재확인 · 의무팀과 출전 여부 결정';
+  const types=new Set((risk?.flags||[]).map(f=>f.type));
+  if(types.has('ACWR'))return '경기 수행 · 교체 계획과 경기 후 회복 관리 강화';
+  if(types.has('MV'))return '경기 수행 · 정상 워밍업 후 경기 내 고속 노출로 관리';
+  return '출전 가능 · 계획대로 경기 수행';
+}
+
+const PERSONAL_TARGET_METRICS={
+  td:{plan:'td_target',base:'td',unit:'m'},
+  hsr:{plan:'hsr_target',base:'band4_td',unit:'m'},
+  sprint:{plan:'spr_target',base:'band5_td',unit:'m'},
+  accel:{plan:'acc_target',base:'accel',unit:'회'},
+  rhie:{plan:'rhie_target',base:'rhie',unit:'회'},
+};
+
+// 코치가 저장한 팀 %를 선수 개인 경기 기준에 적용한다.
+// 최근 3회의 풀타임(80분 이상) 기록이 모두 있을 때만 개인 기준을 사용하고,
+// 부족하면 계획에 저장된 팀 절대 목표를 그대로 사용한다.
+function buildPersonalPlanTarget(plan,playerMatchRows,teamRatios={}){
+  if(!plan)return null;
+  const fullTime=(playerMatchRows||[])
+    .filter(r=>(r.time_type||'').toUpperCase()==='FT'&&(parseFloat(r.duration)||0)>=80)
+    .sort((a,b)=>(b.match_date||'').localeCompare(a.match_date||''))
+    .slice(0,3);
+  const usePersonal=fullTime.length===3;
+  const pctSaved=plan?.ref_basis?.pct||{};
+  const pctMap={td:pctSaved.td,hsr:pctSaved.hsr,sprint:pctSaved.spr,accel:pctSaved.acc,rhie:pctSaved.rhie};
+  const values={};
+  Object.entries(PERSONAL_TARGET_METRICS).forEach(([key,m])=>{
+    const fallback=parseFloat(plan[m.plan]);
+    const pctRaw=parseFloat(pctMap[key]);
+    const pct=Number.isFinite(pctRaw)?pctRaw:(Number.isFinite(teamRatios[key])?teamRatios[key]:null);
+    if(usePersonal&&pct!=null){
+      const vals=fullTime.map(r=>parseFloat(r[m.base])).filter(Number.isFinite);
+      values[key]=vals.length===3?Math.round(vals.reduce((a,b)=>a+b,0)/3*pct/100):(Number.isFinite(fallback)?fallback:null);
+    }else values[key]=Number.isFinite(fallback)?fallback:null;
+  });
+  return {values,source:usePersonal?'personal':'team',matchCount:fullTime.length,pct:pctMap};
+}
+
 // 오늘 요구도 산출 — 절대 거리 대신 최근 팀 FT 경기 대비 목표 비율을 사용한다.
 // 볼륨은 TD, 강도는 HSR·Sprint·ACC·RHIE 중 높은 2개 비율의 평균으로 분리한다.
 function deriveDemand(plan, mdKey, matchBase=null){
@@ -17677,7 +17827,7 @@ async function loadTrainingSuitability(){
 
   const [{data:planRows},{data:gpsAll},{data:matchAll},{data:rpeAll},{data:wellAll},{data:injRows}] = await Promise.all([
     supa.from('block_days')
-      .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target')
+      .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,ref_basis')
       .eq('plan_date', day).in('track',['ALL']),
     supa.from('gps_records')
       .select('player_id,session_date,max_speed,duration,session_label,player_load,running_high,sprint,decel')
@@ -17702,7 +17852,7 @@ async function loadTrainingSuitability(){
   // 오늘 계획 → 요구 강도
   const plan = (planRows && planRows[0]) || null;
   const label = (plan?.day_label || '').toUpperCase();
-  const mdKey = Object.keys(MD_DEMAND).find(k => label.includes(k)) || null;
+  const mdKey = normalizePlanMdKey(label);
   // 최근 3경기 FT의 팀 평균을 경기 기준선으로 사용한다. 출전시간 차이는 해당 경기 최장시간으로 보정한다.
   const ftRows=(matchAll||[]).filter(r=>(r.time_type||'').toUpperCase()==='FT'&&(parseFloat(r.duration)||0)>0);
   const recentMatchDates=[...new Set(ftRows.map(r=>r.match_date))].sort((a,b)=>b.localeCompare(a)).slice(0,3);
@@ -17718,6 +17868,8 @@ async function loadTrainingSuitability(){
   const matchBase={td:matchAvg('td'),hsr:matchAvg('band4_td'),sprint:matchAvg('band5_td'),accel:matchAvg('accel'),rhie:matchAvg('rhie')};
   const demandInfo=deriveDemand(plan,mdKey,matchBase);
   const { demand, basis }=demandInfo;
+  const officialMatch=isOfficialMatchPlan(plan);
+  const matchType=getPlanMatchType(plan);
 
   const injMap = {};
   (injRows||[]).forEach(r => { if(!injMap[r.player_id]) injMap[r.player_id] = r; });
@@ -17770,32 +17922,37 @@ async function loadTrainingSuitability(){
       buildRecovBaseline(recovFtMatches), day);
     const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
     const hasDecisionData = acwrData.acwr !== null || mvExp?.hasData === true || wellData !== null || recov.hasBL;
-    const verdict = calcSuitability(risk.level, demand, risk.flags, hasDecisionData);
+    const verdict = officialMatch
+      ?calcOfficialMatchAvailability(risk,hasDecisionData)
+      :calcSuitability(risk.level, demand, risk.flags, hasDecisionData);
     const top = risk.flags.slice().sort((a,b)=>({red:0,amber:1,yellow:2}[a.level]-{red:0,amber:1,yellow:2}[b.level]))[0];
 
+    const personalTarget=buildPersonalPlanTarget(plan,pmatch,demandInfo.ratios);
     rows.push({
       p, verdict, risk, acwr: acwrData.acwr, recov,
+      personalTarget,
       headline: verdict === 'unknown' ? '데이터 부족' : top ? (top.type === 'ACWR' && top.msg.includes('과소부하') ? '부하 부족' : ({ACWR:'부하 급증',MV:'속도 노출 부족',W:'컨디션 저하'}[top.type] || '—')) : '—',
       reason: verdict === 'unknown' ? '판정에 필요한 최근 데이터 또는 오늘 훈련 계획이 부족함' : risk.flags.map(f=>f.msg).join(' · ') || '특이사항 없음',
-      advice: suitabilityAdvice(risk, demand, verdict),
+      advice: officialMatch?officialMatchAdvice(risk,verdict):suitabilityAdvice(risk, demand, verdict),
     });
   }
 
   const ORDER = { out:0, adjust:1, review:2, unknown:3, ok:4 };
   rows.sort((a,b) => ORDER[a.verdict]-ORDER[b.verdict] || (b.risk.score||0)-(a.risk.score||0));
-  renderSuitability(rows,plan,mdKey,demand,day,basis,demandInfo);
+  renderSuitability(rows,plan,mdKey,demand,day,basis,demandInfo,matchType);
 }
 
-function renderSuitability(rows, plan, mdKey, demand, day, basis, demandInfo={}){
+function renderSuitability(rows, plan, mdKey, demand, day, basis, demandInfo={},matchType=null){
   const out = document.getElementById('suit-output');
   if(!out) return;
 
+  const officialMatch=matchType==='LEAGUE'||matchType==='CUP';
   const V = {
-    out:    { label:'⛔ 훈련 불가', color:'#f87171', bg:'rgba(239,68,68,0.10)' },
-    adjust: { label:'🔴 조정 필요', color:'#f87171', bg:'rgba(239,68,68,0.08)' },
-    review: { label:'🟠 조정 검토', color:'#fb923c', bg:'rgba(249,115,22,0.08)' },
-    unknown:{ label:'⚪ 데이터 부족', color:'#94a3b8', bg:'rgba(148,163,184,0.08)' },
-    ok:     { label:'🟢 정상',      color:'#4ade80', bg:'transparent' },
+    out:    { label:officialMatch?'⛔ 출전 불가':'⛔ 훈련 불가', color:'#f87171', bg:'rgba(239,68,68,0.10)' },
+    adjust: { label:officialMatch?'🔴 출전 재검토':'🔴 조정 필요', color:'#f87171', bg:'rgba(239,68,68,0.08)' },
+    review: { label:officialMatch?'🟠 출전 전 확인':'🟠 조정 검토', color:'#fb923c', bg:'rgba(249,115,22,0.08)' },
+    unknown:{ label:officialMatch?'⚪ 출전 정보 확인':'⚪ 데이터 부족', color:'#94a3b8', bg:'rgba(148,163,184,0.08)' },
+    ok:     { label:officialMatch?'🟢 출전 가능':'🟢 정상', color:'#4ade80', bg:'transparent' },
   };
   const DEMAND_LBL = { high:'고강도', mid:'중강도', low:'저강도·회복' };
   const VOLUME_LBL = { high:'고볼륨', mid:'중볼륨', low:'저볼륨' };
@@ -17807,21 +17964,30 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis, demandInfo={})
             <div style="font-size:10px;color:var(--text3)">지수 ${rv.index}</div>`;
   };
   const cnt = k => rows.filter(r=>r.verdict===k).length;
-  const teamStatus = cnt('adjust')||cnt('out') ? {t:'🔴 조정 필요',c:'#f87171'}
-                   : cnt('review')             ? {t:'🟠 조정 검토',c:'#fb923c'}
+  const teamStatus = cnt('adjust')||cnt('out') ? {t:officialMatch?'🔴 출전 재검토':'🔴 조정 필요',c:'#f87171'}
+                   : cnt('review')             ? {t:officialMatch?'🟠 출전 전 확인':'🟠 조정 검토',c:'#fb923c'}
                    : cnt('unknown')            ? {t:'⚪ 데이터 확인 필요',c:'#94a3b8'}
-                   : {t:'🟢 정상',c:'#4ade80'};
+                   : {t:officialMatch?'🟢 출전 가능':'🟢 정상',c:'#4ade80'};
   const tgt = (v,u) => v!=null && v!=='' ? `${v}${u}` : '—';
   const ratioTxt=k=>Number.isFinite(demandInfo?.ratios?.[k])?` <span style="font-size:9px;color:var(--text3)">(${Math.round(demandInfo.ratios[k])}%)</span>`:'';
+  const personalTargetCell=target=>{
+    if(!target)return '<span style="color:var(--text3)">—</span>';
+    const v=target.values||{};
+    const metric=(label,key,unit,color)=>v[key]!=null?`<span style="white-space:nowrap"><b style="color:${color}">${label}</b> ${Number(v[key]).toLocaleString()}${unit}</span>`:'';
+    const values=[metric('TD','td','m','#60a5fa'),metric('HSR','hsr','m','#fb923c'),metric('SPR','sprint','m','#f87171'),metric('ACC','accel','회','#c084fc'),metric('RHIE','rhie','회','#d8b4fe')].filter(Boolean).join(' · ');
+    const personal=target.source==='personal';
+    return `<div style="font-size:10px;line-height:1.55;color:var(--text2)">${values||'—'}</div><div style="font-size:9px;margin-top:3px;color:${personal?'#4ade80':'#fbbf24'}">${personal?'개인 최근 풀타임 3경기 기준':'팀 평균 기준 · 개인 풀타임 '+target.matchCount+'/3경기'}</div>`;
+  };
 
   out.innerHTML = `
     <!-- 오늘 훈련 계획 -->
     <div style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;margin-bottom:10px">
         <div>
-          <div style="font-size:12px;font-weight:600;color:var(--text2)">📅 오늘 훈련 계획 <span style="color:var(--text3);font-weight:400">· ${day}</span></div>
+          <div style="font-size:12px;font-weight:600;color:var(--text2)">${officialMatch?'🏟️ 경기 출전 가용성':'📅 오늘 훈련 계획'} <span style="color:var(--text3);font-weight:400">· ${day}</span></div>
           <div style="font-size:17px;font-weight:700;color:var(--text);margin-top:4px">
             ${plan?.day_label || '계획 미입력'}
+            ${matchType?`<span style="font-size:10px;padding:2px 7px;border-radius:5px;background:#ef444418;border:1px solid #ef444455;color:#fca5a5;margin-left:6px">${MATCH_TYPE_LABEL[matchType]}</span>`:''}
             ${mdKey?`<span style="font-size:11px;font-weight:600;color:var(--accent2);margin-left:6px">${MD_LOAD_TARGETS[mdKey]?.label||''}</span>`:''}
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:3px">
@@ -17870,6 +18036,7 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis, demandInfo={})
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">선수</th>
+            <th style="padding:8px;text-align:left;color:var(--text3);min-width:250px">오늘 개인 목표</th>
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">훈련 적합성</th>
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">회복 소요</th>
             <th style="padding:8px;text-align:left;color:var(--text3);white-space:nowrap">핵심 위험</th>
@@ -17885,6 +18052,7 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis, demandInfo={})
                 <div style="font-weight:600;color:var(--text)">${r.p.name}</div>
                 <div style="font-size:10px;color:var(--text3)">${r.p.position||''}</div>
               </td>
+              <td style="padding:8px">${personalTargetCell(r.personalTarget)}</td>
               <td style="padding:8px;font-weight:700;color:${V[r.verdict].color};white-space:nowrap">${V[r.verdict].label}</td>
               <td style="padding:8px;white-space:nowrap">${recovCell(r.recov)}</td>
               <td style="padding:8px;color:var(--text2);white-space:nowrap">${r.headline}</td>
@@ -17892,15 +18060,16 @@ function renderSuitability(rows, plan, mdKey, demand, day, basis, demandInfo={})
               <td style="padding:8px;color:var(--text3);font-size:11px;line-height:1.5">${r.reason}</td>
               <td style="padding:8px;color:var(--text2);font-size:11px;line-height:1.5">${r.advice}</td>
             </tr>`).join('')
-          :`<tr><td colspan="${isTeamAdmin?7:6}" style="padding:2rem;text-align:center;color:var(--text3)">판정할 데이터가 없습니다</td></tr>`}
+          :`<tr><td colspan="${isTeamAdmin?8:7}" style="padding:2rem;text-align:center;color:var(--text3)">판정할 데이터가 없습니다</td></tr>`}
         </tbody>
       </table>
     </div>
 
     <div style="margin-top:10px;font-size:10px;color:var(--text3);line-height:1.7;background:var(--surface2);border-radius:6px;padding:8px 10px">
-      <strong style="color:var(--text2)">판정 방식</strong> — 선수 상태(부하 ACWR · 최고속도 노출 · 웰니스)를 오늘 계획의 요구 강도와 교차해 결정합니다.
+      <strong style="color:var(--text2)">판정 방식</strong> — ${officialMatch?'공식 경기는 ACWR·속도 노출을 참고 정보로 사용하고, 부상·웰니스 이상을 중심으로 출전 가용성을 판단합니다.':'선수 상태(부하 ACWR · 최고속도 노출 · 웰니스)를 오늘 계획의 요구 강도와 교차해 결정합니다.'}
       같은 위험도라도 <strong>회복일이면 정상, 고강도일이면 조정 필요</strong>로 갈립니다 ·
       경기일 RPE 미입력분은 출전시간 × RPE ${MATCH_RPE_EST}로 환산해 부하에 반영<br>
+      <strong style="color:var(--text2)">개인 목표</strong> — 주기화에서 저장한 팀 경기 대비 %를 개인 최근 풀타임 3경기 평균에 적용합니다. 3경기가 부족하면 준비 당시 팀 최근 3경기 평균 목표를 사용합니다.<br>
       <strong style="color:var(--text2)">회복 소요</strong> — 경기·훈련을 하나의 부하로 합산 ·
       <strong>지수 100 = 풀타임 경기 직후 수준</strong> · 감쇠 D+0 100 / D+1 50 / D+2 15 ·
       팀 공통 회복 곡선 기준이며 개인별 회복 속도는 웰니스 누적 후 반영 예정 ·
@@ -28501,7 +28670,7 @@ function getPeriodPlanProfile(dayRow,targetOverride=null){
     Object.entries(targetOverride).forEach(([id,v])=>{if(PERIOD_TARGET_KEYS[id]) plan[PERIOD_TARGET_KEYS[id]]=v;});
   }
   const label=(plan.day_label||'').toUpperCase();
-  const mdKey=Object.keys(MD_DEMAND).find(k=>label.includes(k))||null;
+  const mdKey=normalizePlanMdKey(label);
   return {...deriveDemand(plan,mdKey,_periodMatchAvg),mdKey,label:plan.day_label||'—'};
 }
 
@@ -28863,6 +29032,8 @@ function renderPeriodCalendar() {
         if(!block){ html+=`<td style="border:none;background:transparent;padding:0"></td>`; continue; }
         const dayRow=_daysData[ds];
         const label=dayRow?.day_label||'';
+        const matchType=getPlanMatchType(dayRow);
+        const matchTypeBadge=matchType?`<span style="font-size:8px;color:#fca5a5;border:1px solid #ef444455;background:#ef444418;border-radius:3px;padding:0 4px;margin-left:4px">${MATCH_TYPE_LABEL[matchType]}</span>`:'';
         const isRestDay=label.trim().toUpperCase()==='REST';
         const mssIcons={'MD-2':'⚡⚡','MD-3':'⚡','MD-4':'·','MD-1':'⚠️','MD+1':'✕'};
         const mssIcon=mssIcons[label.trim().toUpperCase()]||null;
@@ -28872,7 +29043,7 @@ function renderPeriodCalendar() {
         const mssCellBadge=mssCellInfo?`<span style="font-size:8px;font-weight:700;color:${mssCellInfo.color};background:${mssCellInfo.color}22;border:1px solid ${mssCellInfo.color}44;border-radius:3px;padding:0 4px;flex-shrink:0">MSS ${mssCellInfo.text}</span>`:'';
         const labelHtml=isRestDay
           ?`<span style="font-size:9px;color:#22c55e;font-weight:700">😴 REST</span>`
-          :label?`<div style="position:relative;text-align:center"><span style="font-size:9px;color:${block.color};font-weight:700">${label}</span>${mssCellBadge?`<span style="position:absolute;right:0;top:50%;transform:translateY(-50%)">${mssCellBadge}</span>`:''}</div>`
+          :label?`<div style="position:relative;text-align:center"><span style="font-size:9px;color:${block.color};font-weight:700">${label}</span>${matchTypeBadge}${mssCellBadge?`<span style="position:absolute;right:0;top:50%;transform:translateY(-50%)">${mssCellBadge}</span>`:''}</div>`
           :`<span style="font-size:9px;color:${block.color}44">—</span>`;
         html+=`<td style="padding:2px 4px;background:${block.color}22;border:1px solid ${block.color}44;border-bottom:2px solid ${block.color}">${labelHtml}</td>`;
       }
@@ -29180,6 +29351,12 @@ const MSS_LEVEL_STYLE = {
 
 function onDmLabelChange(val) {
   const key = val.trim().toUpperCase();
+  const matchWrap=document.getElementById('dm-match-type-wrap');
+  if(matchWrap)matchWrap.style.display=(key==='MD'||key==='MATCH'||key.includes('연습경기'))?'block':'none';
+  if(key.includes('연습경기')){
+    const matchType=document.getElementById('dm-match-type');
+    if(matchType)matchType.value='FRIENDLY';
+  }
   const defKey = Object.keys(MD_LOAD_DEFAULTS).find(k => k.toUpperCase() === key);
   const mssKey = Object.keys(MSS_GUIDE).find(k => k.toUpperCase() === key);
 
@@ -29368,6 +29545,9 @@ function openDayModal(dateStr){
   toggleDmRest(isRest);
 
   document.getElementById('dm-day-label').value = dayRow.day_label||'';
+  const matchTypeEl=document.getElementById('dm-match-type');
+  if(matchTypeEl)matchTypeEl.value=getPlanMatchType(dayRow)||'LEAGUE';
+  onDmLabelChange(dayRow.day_label||'');
   document.getElementById('dm-am').value = dayRow.am_session||'';
   document.getElementById('dm-pm').value = dayRow.pm_session||'';
 
@@ -29459,8 +29639,11 @@ async function saveDayPlan(){
     acc_target:  targets.acc,
     rhie_target: targets.rhie,
     // 이 계획이 어떤 경기 기준으로 짜였는지 스냅샷 (지난 날 고정 + 기록용)
-    ref_basis: (isRest||!hasAnyTarget) ? null : {
-      pct: pctOut, avg: basisAvg, matches: basisMatches, saved_at: new Date().toISOString()
+    ref_basis: (isRest||(!hasAnyTarget&&normalizePlanMdKey(document.getElementById('dm-day-label').value)!=='MATCH')) ? null : {
+      pct: pctOut, avg: basisAvg, matches: basisMatches, saved_at: new Date().toISOString(),
+      match_type: normalizePlanMdKey(document.getElementById('dm-day-label').value)==='MATCH'
+        ?(document.getElementById('dm-match-type')?.value||'LEAGUE')
+        :null
     },
   };
   let error;
@@ -29584,7 +29767,8 @@ async function openWeekDetail(blockId) {
     const wdMssMap={'MD-2':{text:'최적',color:'#22c55e'},'MD-3':{text:'가능',color:'#86efac'},'MD-4':{text:'보통',color:'#fbbf24'},'MD-1':{text:'주의',color:'#fb923c'},'MD+1':{text:'금지',color:'#f87171'}};
     const wdMssInfo=wdMssMap[lbl]||null;
     const wdMssBadge=wdMssInfo?`<span style="font-size:9px;font-weight:700;color:${wdMssInfo.color};background:${wdMssInfo.color}22;border:1px solid ${wdMssInfo.color}44;border-radius:3px;padding:0 4px;margin-left:4px">MSS ${wdMssInfo.text}</span>`:'';
-    const badge=dr?.day_label?`<div style="display:inline-flex;align-items:center;margin-top:3px;font-size:10px;font-weight:700;color:${isRest?'#22c55e':block.color};background:${isRest?'rgba(34,197,94,0.15)':block.color+'22'};padding:1px 7px;border-radius:4px;border:1px solid ${isRest?'#22c55e55':block.color+'44'}">${dr.day_label}${wdMssBadge}</div>`:'';
+    const matchType=getPlanMatchType(dr);
+    const badge=dr?.day_label?`<div style="display:inline-flex;align-items:center;margin-top:3px;font-size:10px;font-weight:700;color:${isRest?'#22c55e':block.color};background:${isRest?'rgba(34,197,94,0.15)':block.color+'22'};padding:1px 7px;border-radius:4px;border:1px solid ${isRest?'#22c55e55':block.color+'44'}">${dr.day_label}${matchType?` · ${MATCH_TYPE_LABEL[matchType]}`:''}${wdMssBadge}</div>`:'';
     hRow += th(`<span style="font-size:13px;font-weight:700;color:${dowColor}">${d.getDate()} ${dow}</span><br>${badge}`,
       `background:${bgColor};${isToday?'box-shadow:inset 0 -2px 0 '+block.color:''}`)
   });
