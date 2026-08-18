@@ -16921,6 +16921,7 @@ function renderGpsPreviewTable(){
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">준비대상</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">로빈</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">주기</th>
+      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">주기화</th>
       ${_isCoachRpe?'<th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">RPE</th><th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">체중(kg)</th>':''}
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">TD(m)</th>
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">HSR(m)</th>
@@ -16957,9 +16958,30 @@ function renderGpsPreviewTable(){
             placeholder="주제"
             style="width:72px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px">
         </td>
-        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.opponent||'<span style="color:var(--text3)">—</span>'}</td>
-        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.robin||'<span style="color:var(--text3)">—</span>'}</td>
-        <td style="padding:5px 8px;color:#fb923c;font-size:11px;white-space:nowrap">${r.cycle||'<span style="color:var(--text3)">—</span>'}</td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${r.opponent||''}"
+            onchange="updateGpsRow(${i},'opponent',this.value.trim()||null)"
+            placeholder="준비대상"
+            style="width:78px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:#fb923c;font-size:11px">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${r.robin||''}"
+            onchange="updateGpsRow(${i},'robin',this.value.trim()||null)"
+            placeholder="로빈"
+            style="width:78px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:#fb923c;font-size:11px">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${r.cycle||''}"
+            onchange="updateGpsRow(${i},'cycle',this.value.trim()||null)"
+            placeholder="MD-1"
+            style="width:62px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:#fb923c;font-size:11px">
+        </td>
+        <td style="padding:4px 6px">
+          <input type="text" value="${r.periodization||''}"
+            onchange="updateGpsRow(${i},'periodization',this.value.trim()||null)"
+            placeholder="1R-5DAY"
+            style="width:82px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:#fb923c;font-size:11px">
+        </td>
         ${_isCoachRpe?`
           <td style="padding:4px 6px"><input type="number" min="1" max="10" step="0.5" value="${r._rpe??''}"
             onchange="updateGpsRow(${i},'_rpe',this.value?parseFloat(this.value):null)"
