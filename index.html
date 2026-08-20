@@ -16715,6 +16715,16 @@ function handleFileSelect(e){
   if(e.target.files.length) parseGpsFiles(e.target.files);
 }
 
+// GPS 파일 끝에 붙는 집계 행 — 선수가 아니므로 미등록 경고 대상이 아니다.
+// (카타펄트 export는 파일마다 Average 행을 포함한다)
+const GPS_SUMMARY_NAMES = new Set([
+  'average','averages','team average','mean','total','totals','sum',
+  'max','maximum','min','minimum','sd','std','std dev','stdev',
+  '평균','팀평균','팀 평균','합계','총계','최대','최소',
+]);
+const isGpsSummaryRow = name =>
+  GPS_SUMMARY_NAMES.has(String(name||'').trim().toLowerCase().replace(/\s+/g,' '));
+
 // 파일명에서 날짜·세션구분·타입 자동 감지
 function parseFilename(filename){
   const name = filename.replace(/\.[^.]+$/,'');
@@ -16764,10 +16774,13 @@ async function parseSingleGpsFile(file, playerMap, cm, aliases={}){
 
         const rows=[];
         const unknown=new Set();
+        let summarySkipped=0;
         dataRows.forEach(row=>{
           const nameVal=fIdx.name>=0?row[fIdx.name]:null;
           if(!nameVal||!String(nameVal).trim()) return;
           const nameStr=String(nameVal).trim();
+          // 집계 행(Average 등)은 선수가 아니므로 미등록으로 세지 않는다
+          if(isGpsSummaryRow(nameStr)){ summarySkipped++; return; }
           // 1. 직접 매칭 → 2. 별칭 테이블 조회
           const resolvedName = playerMap[nameStr] ? nameStr : (aliases[nameStr] || null);
           const pid = resolvedName ? playerMap[resolvedName] : null;
@@ -16795,7 +16808,7 @@ async function parseSingleGpsFile(file, playerMap, cm, aliases={}){
             opponent:null, robin:null, score:null, result:null, home_away:null,
           });
         });
-        resolve({rows, unknown, label, isMatch, timeType, date, fileName:file.name});
+        resolve({rows, unknown, summarySkipped, label, isMatch, timeType, date, fileName:file.name});
       }catch(err){ reject(err); }
     };
     reader.readAsArrayBuffer(file);
@@ -16844,7 +16857,7 @@ async function parseGpsFiles(files){
               <span style="background:${r.isMatch?'rgba(251,191,36,0.15)':'rgba(96,165,250,0.15)'};color:${r.isMatch?'#fbbf24':'#60a5fa'};padding:1px 7px;border-radius:4px;font-size:10px">
                 ${r.isMatch?`경기 · ${r.timeType}`:`훈련 · ${r.label}`}
               </span>
-              <span style="color:var(--text3);font-size:10px">${r.rows.length}명</span>
+              <span style="color:var(--text3);font-size:10px">${r.rows.length}명${r.summarySkipped?` <span style="color:var(--text3);opacity:.7">· 요약행 ${r.summarySkipped}개 제외</span>`:''}</span>
             </div>`).join('')}
         </div>
         <div style="font-weight:600;color:var(--text3);margin-bottom:5px;font-size:10px">📡 컬럼 매핑 — ${mappedFields.length}개 / ${GPS_INTERNAL_FIELDS.length}개</div>
