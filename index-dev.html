@@ -10688,10 +10688,10 @@ async function loadMorningReport(){
   const since21 = new Date(now); since21.setDate(now.getDate()-21);
   const since21Str = since21.toISOString().split('T')[0];
   const {data:gps28} = await supa.from('gps_records')
-    .select('player_id,session_date,max_speed,duration,session_type2')
+    .select('player_id,session_date,max_speed,duration,session_type2,player_load,running_high,sprint,decel')
     .gte('session_date',since28Str).order('session_date',{ascending:false});
   const {data:match28} = await supa.from('match_records')
-    .select('player_id,match_date,max_speed,duration,time_type')
+    .select('player_id,match_date,max_speed,duration,time_type,player_load,band4_td,band5_td,decel,is_estimated')
     .in('time_type',['FT','ET','Top','Top-up','TOP'])
     .gte('match_date',since28Str).order('match_date',{ascending:false});
 
@@ -10734,8 +10734,13 @@ async function loadMorningReport(){
     const todayW    = (well7||[]).find(r=>r.player_id===pid&&r.record_date===today)||null;
     const p7well    = (well7||[]).filter(r=>r.player_id===pid);
     const wellData  = (todayW&&p7well.length>1)?calcWellnessRisk(p7well.slice(1),todayW):null;
-    const risk = calcRiskLevel(acwrData.acwr,mvExp,wellData);
-    if(risk.level!=='green') riskResults.push({player,risk,acwrData,mvExp,wellData});
+    // 회복 소요 — 경기 직후 절대 부하. ACWR로 못 잡는(평소도 부하가 높은 주전) 회복 부족을 잡는다.
+    const recovFtMatches = pmatch.filter(r=>r.time_type==='FT'&&!r.is_estimated).map(recovMapMatch);
+    const recov = calcRecoveryLoad(
+      [...pmatch.map(recovMapMatch), ...pgps.map(recovMapGps)],
+      buildRecovBaseline(recovFtMatches), today);
+    const risk = calcRiskLevel(acwrData.acwr,mvExp,wellData,recov);
+    if(risk.level!=='green') riskResults.push({player,risk,acwrData,mvExp,wellData,recov});
   }
   riskResults.sort((a,b)=>({'red':0,'amber':1,'yellow':2}[a.risk.level]-{'red':0,'amber':1,'yellow':2}[b.risk.level]));
   window._lastRiskResults = riskResults; // sendRiskAlertById에서 참조
@@ -18119,7 +18124,7 @@ async function loadTrainingSuitability(){
 
     // 회복 부하 — 경기·훈련을 하나의 부하 스트림으로 보고 감쇠 합산 (GK는 GPS 기반이라 산출 안 함)
     const recovMatches = pmatch.map(recovMapMatch);
-    const recovFtMatches = pmatch.filter(r=>r.time_type==='FT').map(recovMapMatch);
+    const recovFtMatches = pmatch.filter(r=>r.time_type==='FT'&&!r.is_estimated).map(recovMapMatch);
     const recov = isGK ? {hasBL:false} : calcRecoveryLoad(
       [...recovMatches, ...pgps.map(recovMapGps)],
       buildRecovBaseline(recovFtMatches), day);
@@ -18388,10 +18393,10 @@ async function runInjuryRiskAnalysis(){
   // 데이터 병렬 조회
   const [{data:gpsAll}, {data:matchAll}, {data:rpeAll}, {data:wellAll}, {data:injuredNow}] = await Promise.all([
     supa.from('gps_records')
-      .select('player_id,session_date,max_speed,duration,session_type2,session_label')
+      .select('player_id,session_date,max_speed,duration,session_type2,session_label,player_load,running_high,sprint,decel')
       .gte('session_date', since28Str).order('session_date', {ascending:false}),
     supa.from('match_records')
-      .select('player_id,match_date,max_speed,duration,time_type')
+      .select('player_id,match_date,max_speed,duration,time_type,player_load,band4_td,band5_td,decel,is_estimated')
       .in('time_type',['FT','ET','Top','Top-up','TOP'])  // 1Q/2Q는 FT의 부분집합 → 중복 합산 방지
       .gte('match_date', since28Str).order('match_date', {ascending:false}),
     supa.from('session_records')
@@ -18461,11 +18466,16 @@ async function runInjuryRiskAnalysis(){
     const todayWell   = pwell.find(r => r.record_date === today) || (pwell.length ? pwell[0] : null);
     const well7       = pwell.filter(r => r.record_date >= since7Str);
     const wellData    = (todayWell && well7.length > 1) ? calcWellnessRisk(well7.slice(1), todayWell) : null;
+    // 회복 소요 — 경기 직후 절대 부하. ACWR로 못 잡는(평소도 부하가 높은 주전) 회복 부족을 잡는다.
+    const recovFtMatches = pmatch.filter(r => r.time_type === 'FT' && !r.is_estimated).map(recovMapMatch);
+    const recov = calcRecoveryLoad(
+      [...pmatch.map(recovMapMatch), ...pgps.map(recovMapGps)],
+      buildRecovBaseline(recovFtMatches), today);
 
-    const risk = calcRiskLevel(acwrData.acwr, mvExpData, wellData);
+    const risk = calcRiskLevel(acwrData.acwr, mvExpData, wellData, recov);
 
     if(risk.level !== 'green' || risk.flags.length > 0){
-      results.push({ player, acwrData, mvExpData, wellData, risk });
+      results.push({ player, acwrData, mvExpData, wellData, recov, risk });
     }
   }
 
@@ -18517,7 +18527,7 @@ function renderRiskResults(results, today){
     <!-- 선수별 카드 -->
     ${results.map(r => {
       const cfg = levelCfg[r.risk.level];
-      const { player, acwrData, mvExpData, wellData, risk } = r;
+      const { player, acwrData, mvExpData, wellData, recov, risk } = r;
       const mss = parseFloat(player.mss) || 0;
 
       const acwrBar = acwrData.acwr !== null ? (() => {
@@ -18556,6 +18566,12 @@ function renderRiskResults(results, today){
           <div style="font-size:11px">7일 기준선 <span style="font-weight:600;color:var(--text)">${wellData.baseline}/5</span> → 오늘 <span style="font-weight:600;color:${parseFloat(wellData.dropPct)>=0.25?'#ef4444':'#f59e0b'}">${wellData.todayAvg}/5</span> (${(wellData.dropPct*100).toFixed(0)}% 하락)</div>
         </div>` : '';
 
+      const recovSection = (recov && recov.hasBL && recov.index != null) ? `
+        <div style="margin-top:6px;padding-top:6px;border-top:1px solid var(--border)">
+          <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🔋 회복 소요</div>
+          <div style="font-size:11px">지수 <span style="font-weight:600;color:${RECOV_COLOR[recov.level]||'var(--text)'}">${recov.index}</span> ${recov.hours?`· 완전 회복까지 ~${recov.hours}시간`:'· 회복 완료'}</div>
+        </div>` : '';
+
       const flagHtml = risk.flags.map(f => {
         const fc = f.level==='red'?'#f87171':f.level==='amber'?'#fbbf24':'#fde047';
         return `<div style="font-size:11px;color:${fc};margin-top:3px">• ${f.msg}</div>`;
@@ -18583,6 +18599,7 @@ function renderRiskResults(results, today){
           ${acwrBar}
           ${mvSection}
           ${wellSection}
+          ${recovSection}
         </div>`;
     }).join('')}
     <div style="font-size:11px;color:var(--text3);text-align:center;margin-top:8px">${today} 기준 · GPS 업로드 시 자동 갱신</div>`;
