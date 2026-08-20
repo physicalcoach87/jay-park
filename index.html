@@ -10315,7 +10315,7 @@ async function loadMorningReport(){
       .order('event_date',{ascending:true}).order('start_time',{ascending:true,nullsFirst:false}),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT')
+      .eq('time_type','FT').eq('is_estimated',false)
       .order('match_date',{ascending:false})
       .limit(300),
     supa.from('block_days')
@@ -13350,7 +13350,7 @@ async function loadTwoWeekCal(baseDate){
       .gte('record_date', startStr).lte('record_date', endStr),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT')
+      .eq('time_type','FT').eq('is_estimated',false)
       .order('match_date',{ascending:false})
       .limit(300),
   ]);
@@ -14583,7 +14583,7 @@ async function buildWeeklyLoadHtml(forDate){
       .gte('record_date',since28Str),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
+      .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false}).limit(200),
     supa.from('weekly_schedule')
       .select('event_date,md_stage,title,start_time')
       .gte('event_date',weekStartStr).lte('event_date',weekEndStr),
@@ -15027,7 +15027,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie,player_load')
-      .eq('time_type','FT').order('match_date',{ascending:false}).limit(200),
+      .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false}).limit(200),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,max_speed,time_type,player_profiles(name,position)')
       .eq('match_date',date)
@@ -16902,12 +16902,124 @@ async function parseGpsFiles(files){
             </select></div>`:''}
         </div>
         <button onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
-      </div>`;
+      </div>
+      ${hasMatch?`
+      <div style="background:var(--surface2);border:1px solid #78350f;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-weight:600;color:#fbbf24;margin-bottom:3px;font-size:12px">📟 GPS 미착용 선수 추정 입력</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:9px">출전 시간만 입력하면 그 선수의 최근 실측 FT 경기 분당 비율로 지표를 추정합니다. 최고속도는 추정하지 않습니다.</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+          <div style="flex:2;min-width:130px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">선수</div>
+            <select id="est-player" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="">선수 선택</option>
+              ${[..._players].sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>`<option value="${p.id}">${p.name||''}${p.position?' · '+p.position:''}</option>`).join('')}
+            </select></div>
+          <div style="width:78px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">구간</div>
+            <select id="est-timetype" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="FT">FT</option><option value="ET">ET</option>
+            </select></div>
+          <div style="width:92px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">출전 시간(분)</div>
+            <input id="est-minutes" type="number" min="1" max="150" placeholder="30" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+          <button onclick="addEstimatedMatchRow()" class="btn-exp" style="font-size:12px;padding:7px 14px">➕ 추정 추가</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-top:8px">추정 행은 <strong style="color:var(--text2)">Match Max와 최근 3경기 기준선에서 제외</strong>되고, 개인 부하·ACWR·부상위험에는 반영됩니다.</div>
+      </div>`:''}`;
 
     renderGpsPreviewTable();
   }catch(err){
     if(msg){msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)';}
   }
+}
+
+// ── GPS 미착용 선수 추정 입력 ──────────────────────────────────
+// 출전시간만 받아 그 선수의 최근 FT 실측 경기 분당 비율로 지표를 추정한다.
+// 단순 선형: 추정값 = (최근 실측 FT 지표 합 ÷ duration 합) × 입력 시간
+// 최고속도는 시간 비례 지표가 아니므로 비워둔다(MSS 자동갱신 오염 방지).
+const EST_FIELDS = ['td','hsr_total','running_medium','running_high','sprint',
+  'running_high_n','sprint_n','accel','decel','rhie','player_load',
+  'fmp_run_medium','fmp_run_high','fmp_dyn_medium','fmp_dyn_high'];
+// 내부 필드 ← match_records 컬럼
+const EST_SRC_COL = {td:'td', hsr_total:'hir_sprint', running_medium:'band3_td',
+  running_high:'band4_td', sprint:'band5_td', running_high_n:'band4_n',
+  sprint_n:'band5_n', accel:'accel', decel:'decel', rhie:'rhie',
+  player_load:'player_load', fmp_run_medium:'fmp_run_m', fmp_run_high:'fmp_run_h',
+  fmp_dyn_medium:'fmp_dyn_m', fmp_dyn_high:'fmp_dyn_h'};
+
+let _estRateCache = {};
+
+// 선수의 최근 실측 FT 3경기 분당 비율. 없으면 팀 최근 3경기 비율로 대체.
+async function getEstRates(playerId){
+  if(_estRateCache[playerId]) return _estRateCache[playerId];
+  const cols = Object.values(EST_SRC_COL).join(',');
+  const {data:mine} = await supa.from('match_records')
+    .select('match_date,duration,'+cols)
+    .eq('player_id',playerId).eq('time_type','FT').eq('is_estimated',false)
+    .gt('duration',0).order('match_date',{ascending:false}).limit(3);
+  let rows = mine||[], source='personal';
+  if(!rows.length){
+    const {data:team} = await supa.from('match_records')
+      .select('match_date,duration,'+cols)
+      .eq('time_type','FT').eq('is_estimated',false)
+      .gt('duration',0).order('match_date',{ascending:false}).limit(60);
+    const keys=[...new Set((team||[]).map(r=>r.match_date))].slice(0,3);
+    rows=(team||[]).filter(r=>keys.includes(r.match_date));
+    source='team';
+  }
+  const sumDur = rows.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
+  const rates={};
+  if(sumDur>0) EST_FIELDS.forEach(f=>{
+    const col=EST_SRC_COL[f];
+    const sv=rows.reduce((a,r)=>a+(parseFloat(r[col])||0),0);
+    rates[f]= sv>0 ? sv/sumDur : 0;
+  });
+  const out={rates, source, matches: source==='personal'?rows.length:[...new Set(rows.map(r=>r.match_date))].length, ok:sumDur>0};
+  _estRateCache[playerId]=out;
+  return out;
+}
+
+// 미착용 선수 1명을 업로드 미리보기에 추정 행으로 추가
+async function addEstimatedMatchRow(){
+  const msg = document.getElementById('upload-msg');
+  const pid = document.getElementById('est-player')?.value;
+  const tt  = document.getElementById('est-timetype')?.value || 'FT';
+  const min = parseFloat(document.getElementById('est-minutes')?.value)||0;
+  const show = (t,ok)=>{ if(!msg) return;
+    msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;'+
+      (ok?'background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80'
+         :'background:rgba(239,68,68,0.12);border:1px solid #7f1d1d;color:#f87171');
+    msg.textContent=t; };
+  if(!pid){ show('선수를 선택하세요.',false); return; }
+  if(!(min>0)){ show('출전 시간을 입력하세요.',false); return; }
+
+  const base = _gpsParseData.find(r=>r._isMatch);
+  if(!base){ show('경기 파일이 먼저 업로드되어 있어야 합니다.',false); return; }
+  if(_gpsParseData.some(r=>r._isMatch && r.player_id===pid && (r.time_type||'')===tt)){
+    show('이미 같은 구간의 행이 있습니다.',false); return; }
+
+  const player=_players.find(p=>p.id===pid);
+  show('추정 계산 중...',true);
+  const {rates, source, matches, ok} = await getEstRates(pid);
+  if(!ok){ show('기준으로 삼을 실측 경기 데이터가 없습니다.',false); return; }
+
+  const row={
+    player_name:(player?.name||'')+' (추정)', player_id:pid,
+    session_date: base.session_date, session_label:'Match',
+    _isMatch:true, _estimated:true, _srcFile:'수기 추정',
+    time_type: tt, duration: min,
+    opponent: base.opponent, home_away: base.home_away, robin: base.robin,
+    score: base.score, result: base.result,
+    cycle: base.cycle, periodization: base.periodization,
+    max_speed: null,   // 시간 비례 지표가 아니므로 추정하지 않는다
+  };
+  EST_FIELDS.forEach(f=>{
+    const v=(rates[f]||0)*min;
+    row[f]= v>0 ? parseFloat(v.toFixed(f==='player_load'?1:0)) : null;
+  });
+  row.td_per_min = row.td ? parseFloat((row.td/min).toFixed(1)) : null;
+
+  _gpsParseData.push(row);
+  renderGpsPreviewTable();
+  document.getElementById('est-minutes').value='';
+  show(`✅ ${player?.name||''} ${tt} ${min}분 추정 추가 — 기준: ${source==='personal'?`본인 최근 실측 ${matches}경기`:`팀 최근 ${matches}경기`} · TD ${row.td?row.td.toLocaleString():'—'}m`, true);
 }
 
 function renderGpsPreviewTable(){
@@ -16935,8 +17047,8 @@ function renderGpsPreviewTable(){
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">시간</th>
     </tr>
     ${_gpsParseData.map((r,i)=>`
-      <tr style="border-bottom:1px solid var(--border);background:${r._isMatch?'rgba(251,191,36,0.06)':'inherit'}">
-        <td style="padding:5px 8px;color:var(--text)">${r.player_name}</td>
+      <tr style="border-bottom:1px solid var(--border);background:${r._estimated?'rgba(168,85,247,0.10)':r._isMatch?'rgba(251,191,36,0.06)':'inherit'}">
+        <td style="padding:5px 8px;color:var(--text)">${r.player_name}${r._estimated?' <span style="font-size:9px;color:#c084fc;font-weight:700">추정</span>':''}</td>
         <td style="padding:5px 8px;color:var(--text2);white-space:nowrap">${r.session_date}</td>
         <td style="padding:5px 8px;color:var(--text3);white-space:nowrap">${r.session_label}</td>
         <td style="padding:4px 6px">
@@ -17064,7 +17176,7 @@ async function saveGpsData(){
   const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
   const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>r);
-  const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, time_type, session_label, session_type2, training_form,
+  const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, _estimated, time_type, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
     hr_140_plus, hr_120_140, hr_100_120, hr_80_100, hr_60_80, hr_40_60, hr_20_40,
@@ -17080,6 +17192,7 @@ async function saveGpsData(){
       fmp_run_m: fmp_run_medium, fmp_run_h: fmp_run_high,
       fmp_dyn_m: fmp_dyn_medium, fmp_dyn_h: fmp_dyn_high,
       score: r.score, result: r.result,
+      is_estimated: _estimated===true,
   }));
 
   let trainSaved = 0, matchSaved = 0;
@@ -17173,6 +17286,7 @@ async function saveGpsData(){
   loadGpsHistory();
 
   _gpsParseData = [];
+  _estRateCache = {};
   document.getElementById('upload-preview').style.display = 'none';
   document.getElementById('gps-file-input').value = '';
   btn.textContent = '💾 Supabase에 저장'; btn.disabled = false;
@@ -17754,7 +17868,7 @@ const PERSONAL_TARGET_METRICS={
 function buildPersonalPlanTarget(plan,playerMatchRows,teamRatios={}){
   if(!plan)return null;
   const fullTime=(playerMatchRows||[])
-    .filter(r=>(r.time_type||'').toUpperCase()==='FT'&&(parseFloat(r.duration)||0)>=80)
+    .filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&(parseFloat(r.duration)||0)>=80)
     .sort((a,b)=>(b.match_date||'').localeCompare(a.match_date||''))
     .slice(0,3);
   const usePersonal=fullTime.length===3;
@@ -17861,7 +17975,7 @@ async function loadTrainingSuitability(){
     // 경기는 120일 — 최근 부하(회복 지수)와 개인 경기 기준선을 함께 뽑는다.
     // calcACWR·calcMVExposure는 내부에서 28·21일로 자르므로 더 넣어도 안전하다.
     supa.from('match_records')
-      .select('player_id,match_date,max_speed,duration,td,player_load,band4_td,band5_td,accel,decel,rhie,time_type')
+      .select('player_id,match_date,max_speed,duration,td,player_load,band4_td,band5_td,accel,decel,rhie,time_type,is_estimated')
       .in('time_type',['FT','ET','Top','Top-up','TOP'])
       .gte('match_date', s120).lte('match_date', day),
     supa.from('session_records')
@@ -17880,7 +17994,7 @@ async function loadTrainingSuitability(){
   const label = (plan?.day_label || '').toUpperCase();
   const mdKey = normalizePlanMdKey(label);
   // 최근 3경기 FT의 팀 평균을 경기 기준선으로 사용한다. 출전시간 차이는 해당 경기 최장시간으로 보정한다.
-  const ftRows=(matchAll||[]).filter(r=>(r.time_type||'').toUpperCase()==='FT'&&(parseFloat(r.duration)||0)>0);
+  const ftRows=(matchAll||[]).filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&(parseFloat(r.duration)||0)>0);
   const recentMatchDates=[...new Set(ftRows.map(r=>r.match_date))].sort((a,b)=>b.localeCompare(a)).slice(0,3);
   const refRows=ftRows.filter(r=>recentMatchDates.includes(r.match_date));
   const matchAvg=field=>{
@@ -22661,7 +22775,7 @@ async function generateMatchReport(){
   // 최근 3경기 팀 합계용 (FT 전체)
   const {data:recentAll} = await supa.from('match_records')
     .select('player_id,match_date,opponent,duration,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
-    .eq('time_type','FT')
+    .eq('time_type','FT').eq('is_estimated',false)
     .order('match_date',{ascending:false})
     .limit(300);
 
@@ -25636,7 +25750,7 @@ async function updateMatchMax(playerIds){
   // 경기 데이터 (FT만)
   const {data:ftData}=await supa.from('match_records')
     .select('player_id,td,mpm,hir_sprint,band4_td,band5_td,band4_n,band5_n,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
-    .eq('time_type','FT')
+    .eq('time_type','FT').eq('is_estimated',false)
     .in('player_id',pids);
 
   // 훈련 GPS 전체 기간 최고속도 — 경기 데이터보다 높을 수 있음
@@ -25903,7 +26017,7 @@ async function loadMatchDetail(date, opponent){
               const mx=r.player_profiles;
               return `<tr style="border-bottom:1px solid var(--border)">
                 <td style="padding:6px 8px">
-                  <div style="font-weight:600;color:var(--text)">${mx?.name||'—'}</div>
+                  <div style="font-weight:600;color:var(--text)">${mx?.name||'—'}${r.is_estimated?' <span style="font-size:9px;color:#c084fc;font-weight:700">추정</span>':''}</div>
                   <div style="font-size:10px;color:var(--text3)">${mx?.position||''}</div>
                 </td>
                 <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
@@ -25959,7 +26073,7 @@ async function loadMatchDetail(date, opponent){
               const mx=r.player_profiles;
               return `<tr style="border-bottom:1px solid var(--border)">
                 <td style="padding:6px 8px">
-                  <div style="font-weight:600;color:var(--text)">${mx?.name||'—'}</div>
+                  <div style="font-weight:600;color:var(--text)">${mx?.name||'—'}${r.is_estimated?' <span style="font-size:9px;color:#c084fc;font-weight:700">추정</span>':''}</div>
                   <div style="font-size:10px;color:var(--text3)">${mx?.position||''}</div>
                 </td>
                 <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.duration||'—'}</td>
@@ -28984,7 +29098,7 @@ async function loadPeriodMatchAvg() {
   // 기존 앱과 동일한 로직: 출전시간 보정 팀 평균 (최근 3경기 FT)
   const {data}=await supa.from('match_records')
     .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
-    .eq('time_type','FT').order('match_date',{ascending:false});
+    .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false});
   if(!data||!data.length) return;
 
   // 최근 3경기 날짜+상대 키
@@ -29332,7 +29446,7 @@ async function backfillBlockBasis(apply){
   // 1) 전 경기(FT) 로드 — 시간보정 팀 평균 계산용
   const {data:matches} = await supa.from('match_records')
     .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
-    .eq('time_type','FT').order('match_date',{ascending:false});
+    .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false});
   const mAvg=(arr,field)=>{
     const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
     if(!vrs.length) return 0;

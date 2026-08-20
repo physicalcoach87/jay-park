@@ -142,13 +142,15 @@ injury_records    body_part, injury_type, severity, status,
 match_records     match_date, player_id, opponent, home_away,
                   time_type(FT/1Q/2Q/ET/Top), duration, td, mpm,
                   hir_sprint, band3~5_td, accel, decel,
-                  max_speed, rhie, fmp_*, score, result
+                  max_speed, rhie, fmp_*, score, result, is_estimated
                   ↳ FT  = 정규 경기 전체 (추가시간 포함, 연장 제외)
                     ET  = 연장 전체 (승부차기 제외) — 독립 가산
                     1Q/2Q = FT의 부분집합 (합산 금지)
                     Top = 경기 후 추가훈련 — 독립 가산
                     Match Max·최근 3경기 평균은 FT만 / 개인 부하는 FT+ET+Top
-                    상세 규격: MATCH_ET_SPEC.md
+                    is_estimated = GPS 미착용 선수의 코치 추정 입력 (출전시간 × 최근 실측 분당비율)
+                    → 기준선(Match Max·3경기 평균)에서 제외, 부하·보고서에는 포함
+                    상세 규격: MATCH_ET_SPEC.md · migrations/023_match_estimated.sql
 
 notifications     title, body, target_type, target_value
 ```
