@@ -17722,7 +17722,7 @@ function calcWellnessRisk(wellness7, todayWellness){
 }
 
 // 복합위험지수(CRI) 및 등급 산정
-function calcRiskLevel(acwr, mvExp, wellnessRisk){
+function calcRiskLevel(acwr, mvExp, wellnessRisk, recov){
   let score = 0;
   const flags = [];
 
@@ -17745,6 +17745,14 @@ function calcRiskLevel(acwr, mvExp, wellnessRisk){
     if(wellnessRisk.absScore <= 8)           { score += 2; flags.push({ type:'W', level:'red',   msg:`웰니스 총점 ${wellnessRisk.absScore}/20 — 과훈련 위험` }); }
     else if(wellnessRisk.dropPct >= 0.25)    { score += 2; flags.push({ type:'W', level:'red',   msg:`웰니스 ${(wellnessRisk.dropPct*100).toFixed(0)}% 급락` }); }
     else if(wellnessRisk.dropPct >= 0.15)    { score += 1; flags.push({ type:'W', level:'amber', msg:`웰니스 ${(wellnessRisk.dropPct*100).toFixed(0)}% 하락` }); }
+  }
+
+  // 회복 소요 모듈 — 경기 직후 몸에 남은 절대 부하(calcRecoveryLoad).
+  // ACWR은 "평소 대비 급성 부하가 튀었는지"만 보므로, 주전처럼 만성 부하가
+  // 항상 높은 선수는 ACWR로 못 걸린다. 이 모듈이 그 사각지대를 잡는다.
+  if(recov && recov.hasBL && recov.index != null){
+    if(recov.index >= 120)      { score += 3; flags.push({ type:'REC', level:'red',   msg:`회복 소요 지수 ${recov.index} — 아직 ~${recov.hours}시간 필요` }); }
+    else if(recov.index >= 70)  { score += 2; flags.push({ type:'REC', level:'amber', msg:`회복 소요 지수 ${recov.index} — 아직 ~${recov.hours}시간 필요` }); }
   }
 
   const level = score >= 4 ? 'red' : score >= 2 ? 'amber' : score >= 1 ? 'yellow' : 'green';
@@ -17995,6 +18003,7 @@ function suitabilityAdvice(risk, demand, verdict){
     ? '부하 감량 금지 · 계획 범위에서 볼륨과 강도를 점진적으로 확보'
     : demand === 'high' ? '고강도 세션 제외 · 볼륨 60~70%로 축소' : '볼륨 80% 수준으로 조절');
   if(t.has('MV'))   out.push('최고속도 90% 노출 필요 — 스프린트 드릴 포함');
+  if(t.has('REC'))  out.push('경기 직후 회복 우선 — 고강도·스프린트 최소화, 능동 회복 위주');
   if(!out.length)   out.push(verdict === 'adjust' ? '부하 감소 후 재평가' : '모니터링 강화');
   return out.join(' · ');
 }
@@ -18114,7 +18123,7 @@ async function loadTrainingSuitability(){
     const recov = isGK ? {hasBL:false} : calcRecoveryLoad(
       [...recovMatches, ...pgps.map(recovMapGps)],
       buildRecovBaseline(recovFtMatches), day);
-    const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData);
+    const risk = calcRiskLevel(acwrData.acwr, mvExp, wellData, recov);
     const hasDecisionData = acwrData.acwr !== null || mvExp?.hasData === true || wellData !== null || recov.hasBL;
     const verdict = officialMatch
       ?calcOfficialMatchAvailability(risk,hasDecisionData)
@@ -18125,7 +18134,7 @@ async function loadTrainingSuitability(){
     rows.push({
       p, verdict, risk, acwr: acwrData.acwr, recov, isGK,
       personalTarget,
-      headline: verdict === 'unknown' ? '데이터 부족' : top ? (top.type === 'ACWR' && top.msg.includes('과소부하') ? '부하 부족' : ({ACWR:'부하 급증',MV:'속도 노출 부족',W:'컨디션 저하'}[top.type] || '—')) : '—',
+      headline: verdict === 'unknown' ? '데이터 부족' : top ? (top.type === 'ACWR' && top.msg.includes('과소부하') ? '부하 부족' : ({ACWR:'부하 급증',MV:'속도 노출 부족',W:'컨디션 저하',REC:'회복 부족'}[top.type] || '—')) : '—',
       reason: verdict === 'unknown' ? '판정에 필요한 최근 데이터 또는 오늘 훈련 계획이 부족함' : risk.flags.map(f=>f.msg).join(' · ') || '특이사항 없음',
       advice: officialMatch?officialMatchAdvice(risk,verdict):suitabilityAdvice(risk, demand, verdict),
     });
