@@ -24236,6 +24236,114 @@ async function generateMatchReport(){
   })()}
 
   ${(()=>{
+    // ── FT + ET 합산 섹션 — 연장 경기에서 선수가 실제로 받은 총 부하 ──
+    // FT표와 ET표를 눈으로 더해야 알 수 있던 것을 한 표로 보여준다.
+    // 거리·횟수는 더하고, MPM은 합산 TD ÷ 합산 출전시간으로 재계산,
+    // Vmax는 시간 비례 지표가 아니므로 최댓값을 취한다.
+    if(!etRows.length) return '';
+    const nz = v => n(v) || 0;
+    const byPid = {};
+    ftRows.forEach(r=>{ (byPid[r.player_id] = byPid[r.player_id] || {}).ft = r; });
+    etRows.forEach(r=>{ (byPid[r.player_id] = byPid[r.player_id] || {}).et = r; });
+
+    const merged = Object.entries(byPid).map(([pid, o])=>{
+      const parts = [o.ft, o.et].filter(Boolean);
+      const sum = f => parts.reduce((a,r)=>a+nz(r[f]), 0);
+      const dur = sum('duration');
+      const td  = sum('td');
+      const base = o.ft || o.et;
+      return {
+        pid, base,
+        mx: base.player_profiles,
+        estimated: parts.some(r=>r.is_estimated),
+        allEst: parts.length>0 && parts.every(r=>r.is_estimated),
+        etOnly: !o.ft,
+        durFT: nz(o.ft?.duration), durET: nz(o.et?.duration),
+        dur, td,
+        // 합산값으로 재계산 — 두 구간의 mpm을 더하거나 평균내면 안 된다.
+        // 전 구간이 추정이면 TD가 과거 분당비율에서 나온 값이라 mpm이 그 비율 자체가
+        // 되어버린다(정보 없음). 실측이 한 구간이라도 섞였을 때만 표시한다.
+        mpm: (dur>0 && td>0 && !(parts.length>0 && parts.every(r=>r.is_estimated))) ? td/dur : null,
+        hir: sum('hir_sprint'), spr: sum('band5_td'),
+        acc: sum('accel'), rhie: sum('rhie'), pl: sum('player_load'),
+        vmax: Math.max(0, ...parts.map(r=>nz(r.max_speed))),  // 최댓값
+      };
+    }).sort((a,b)=>b.td-a.td);
+
+    const teamDur = merged.reduce((a,r)=>a+r.dur,0);
+    const teamTD  = merged.reduce((a,r)=>a+r.td,0);
+    const teamMpm = teamDur>0 ? teamTD/teamDur : null;
+
+    return card(`
+      ${secHead('🧮','FT + ET 합산 — 경기 총 부하','정규 + 연장을 더한 실제 부하 · MPM은 합산값으로 재계산 · Vmax는 최댓값')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:760px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">총 출전</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">구성</th>
+              <th style="padding:6px 8px;text-align:right;color:#60a5fa">TD (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
+              <th style="padding:6px 8px;text-align:right;color:#f97316">HIR+Sprint</th>
+              <th style="padding:6px 8px;text-align:right;color:#a78bfa">Sprint (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:#fb923c">가속</th>
+              <th style="padding:6px 8px;text-align:right;color:#34d399">RHIE</th>
+              <th style="padding:6px 8px;text-align:right;color:#4ade80">P.Load</th>
+              <th style="padding:6px 8px;text-align:right;color:#94a3b8">Vmax</th>
+              <th style="padding:6px 8px;text-align:right;color:#fbbf24">vs Match Max</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${merged.map(r=>{
+              const nm = r.mx?.name || r.pid || '?';
+              const pos = r.mx?.position || '';
+              const mmTd = n(r.mx?.match_max_td);
+              const ratio = (mmTd && r.td) ? Math.round(r.td/mmTd*100) : null;
+              // 연장 경기는 정규 풀타임을 넘는 게 정상 — 초과분이 곧 추가 부하량이다
+              const rc = ratio==null ? 'var(--text3)' : ratio>=120 ? '#f87171' : ratio>=110 ? '#fb923c' : 'var(--text2)';
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px">
+                  <span style="font-weight:600;color:var(--text)">${nm}</span>
+                  ${pos?`<span style="font-size:9px;color:var(--text3);margin-left:4px">${pos}</span>`:''}
+                  ${r.etOnly?`<span style="font-size:9px;color:#fbbf24;margin-left:4px">연장 투입</span>`:''}
+                  ${r.estimated?`<span style="font-size:9px;color:#c084fc;font-weight:700;margin-left:4px">추정</span>`:''}
+                </td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text);font-weight:600">${r.dur?Math.round(r.dur)+"'":'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text3);font-size:10px;white-space:nowrap">${r.durFT?Math.round(r.durFT):0}′+${r.durET?Math.round(r.durET):0}′</td>
+                <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:600">${r.td?Math.round(r.td).toLocaleString():'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${r.mpm?r.mpm.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#f97316">${r.hir?Math.round(r.hir):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#a78bfa">${r.spr?Math.round(r.spr):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.acc?Math.round(r.acc):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie?Math.round(r.rhie):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#4ade80">${r.pl?r.pl.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#94a3b8">${r.vmax?r.vmax.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:${rc};font-weight:600">${ratio!=null?ratio+'%':'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--surface2);border-top:2px solid var(--border2)">
+              <td style="padding:6px 8px;font-weight:700;color:var(--text2)">팀 합계 ${merged.length}명</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--text2);font-weight:600">${Math.round(teamDur)}'</td>
+              <td style="padding:6px 8px"></td>
+              <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:700">${Math.round(teamTD).toLocaleString()}</td>
+              <td style="padding:6px 8px;text-align:right;color:var(--text2)">${teamMpm?teamMpm.toFixed(1):'—'}</td>
+              <td colspan="7" style="padding:6px 8px;text-align:right;color:var(--text3);font-size:10px">팀 MPM = 총 TD ÷ 총 출전시간</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
+        <strong style="color:var(--text2)">vs Match Max</strong> = 합산 TD ÷ 개인 Match Max TD. 연장 경기는 정규 풀타임을 넘는 것이 정상이며,
+        <span style="color:#fb923c">110% 이상</span>·<span style="color:#f87171">120% 이상</span>은 평소 풀타임 대비 초과 부하량을 뜻합니다 — 회복 우선순위 판단에 쓰십시오.
+        Match Max 자체는 FT 실측만으로 계산되므로 이 표의 값이 기준선을 밀어올리지 않습니다.
+      </div>
+    `);
+  })()}
+
+  ${(()=>{
     // ── Top-up 섹션 (해당 경기에 Top-up 데이터 있을 때만 표시) ──
     if(!topRows.length) return '';
     const topSorted = [...topRows].sort((a,b)=>(n(b.td)||0)-(n(a.td)||0));
