@@ -959,6 +959,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       </div>
       <div id="match-history-section" style="margin-top:1.2rem">
         <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏟️ 업로드된 경기 기록</div>
+        <div id="baseline-comp-picker" style="margin-bottom:10px"></div>
         <div id="match-history-list"><div style="text-align:center;padding:1rem;color:var(--text3);font-size:12px">불러오는 중...</div></div>
       </div>
 
@@ -10315,7 +10316,7 @@ async function loadMorningReport(){
       .order('event_date',{ascending:true}).order('start_time',{ascending:true,nullsFirst:false}),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT').eq('is_estimated',false)
+      .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps())
       .order('match_date',{ascending:false})
       .limit(300),
     supa.from('block_days')
@@ -13350,7 +13351,7 @@ async function loadTwoWeekCal(baseDate){
       .gte('record_date', startStr).lte('record_date', endStr),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT').eq('is_estimated',false)
+      .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps())
       .order('match_date',{ascending:false})
       .limit(300),
   ]);
@@ -14583,7 +14584,7 @@ async function buildWeeklyLoadHtml(forDate){
       .gte('record_date',since28Str),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false}).limit(200),
+      .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false}).limit(200),
     supa.from('weekly_schedule')
       .select('event_date,md_stage,title,start_time')
       .gte('event_date',weekStartStr).lte('event_date',weekEndStr),
@@ -15027,7 +15028,7 @@ async function loadTeamSummary(forceDate, quiet=false){
       .eq('plan_date', date).maybeSingle(),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie,player_load')
-      .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false}).limit(200),
+      .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false}).limit(200),
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,max_speed,time_type,player_profiles(name,position)')
       .eq('match_date',date)
@@ -16899,6 +16900,10 @@ async function parseGpsFiles(files){
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">H/A</div>
             <select id="meta-ha" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
               <option value="">—</option><option value="H">H (홈)</option><option value="A">A (어웨이)</option>
+            </select></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">대회</div>
+            <select id="meta-competition" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}">${c}</option>`).join('')}
             </select></div>`:''}
         </div>
         <button onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
@@ -16906,16 +16911,16 @@ async function parseGpsFiles(files){
       ${hasMatch?`
       <div style="background:var(--surface2);border:1px solid #78350f;border-radius:8px;padding:12px 14px;margin-bottom:10px">
         <div style="font-weight:600;color:#fbbf24;margin-bottom:3px;font-size:12px">📟 GPS 미착용 선수 추정 입력</div>
-        <div style="font-size:10px;color:var(--text3);margin-bottom:9px">출전 시간만 입력하면 그 선수의 최근 실측 FT 경기 분당 비율로 지표를 추정합니다. 최고속도는 추정하지 않습니다.</div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:9px">출전 시간만 입력하면 그 선수의 최근 실측 FT 경기 분당 비율로 지표를 추정합니다. 최고속도는 추정하지 않습니다.<br>구간을 나눠 올렸다면 <strong style="color:var(--text2)">FT와 1Q/2Q를 각각</strong> 추가해야 합니다 — 1Q/2Q는 FT의 부분집합이라 전·후반 분석에만 쓰이고 부하에는 중복 합산되지 않습니다.</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
           <div style="flex:2;min-width:130px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">선수</div>
             <select id="est-player" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
               <option value="">선수 선택</option>
               ${[..._players].sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(p=>`<option value="${p.id}">${p.name||''}${p.position?' · '+p.position:''}</option>`).join('')}
             </select></div>
-          <div style="width:78px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">구간</div>
+          <div style="width:88px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">구간</div>
             <select id="est-timetype" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
-              <option value="FT">FT</option><option value="ET">ET</option>
+              <option value="FT">FT</option><option value="1Q">1Q</option><option value="2Q">2Q</option><option value="ET">ET</option>
             </select></div>
           <div style="width:92px"><div style="font-size:10px;color:var(--text3);margin-bottom:3px">출전 시간(분)</div>
             <input id="est-minutes" type="number" min="1" max="150" placeholder="30" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
@@ -16928,6 +16933,19 @@ async function parseGpsFiles(files){
   }catch(err){
     if(msg){msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)';}
   }
+}
+
+// ── 기준선 대회 필터 ────────────────────────────────────────
+// 최근 3경기 기준선에 어떤 대회를 포함할지. 기본은 리그만.
+// 컵대회는 로테이션 스쿼드·상대 수준 차이로 리그 요구도를 대표하지 못한다.
+const COMPETITIONS = ['리그','컵대회','연습경기','기타'];
+function getBaselineComps(){
+  try{ const v=JSON.parse(localStorage.getItem('baselineComps')||'null');
+       if(Array.isArray(v)&&v.length) return v; }catch(e){}
+  return ['리그'];
+}
+function setBaselineComps(list){
+  localStorage.setItem('baselineComps', JSON.stringify(list.length?list:['리그']));
 }
 
 // ── GPS 미착용 선수 추정 입력 ──────────────────────────────────
@@ -16952,13 +16970,13 @@ async function getEstRates(playerId){
   const cols = Object.values(EST_SRC_COL).join(',');
   const {data:mine} = await supa.from('match_records')
     .select('match_date,duration,'+cols)
-    .eq('player_id',playerId).eq('time_type','FT').eq('is_estimated',false)
+    .eq('player_id',playerId).eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false)
     .gt('duration',0).order('match_date',{ascending:false}).limit(3);
   let rows = mine||[], source='personal';
   if(!rows.length){
     const {data:team} = await supa.from('match_records')
       .select('match_date,duration,'+cols)
-      .eq('time_type','FT').eq('is_estimated',false)
+      .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false)
       .gt('duration',0).order('match_date',{ascending:false}).limit(60);
     const keys=[...new Set((team||[]).map(r=>r.match_date))].slice(0,3);
     rows=(team||[]).filter(r=>keys.includes(r.match_date));
@@ -17008,6 +17026,7 @@ async function addEstimatedMatchRow(){
     opponent: base.opponent, home_away: base.home_away, robin: base.robin,
     score: base.score, result: base.result,
     cycle: base.cycle, periodization: base.periodization,
+    competition: base.competition || '리그',
     max_speed: null,   // 시간 비례 지표가 아니므로 추정하지 않는다
   };
   EST_FIELDS.forEach(f=>{
@@ -17019,7 +17038,8 @@ async function addEstimatedMatchRow(){
   _gpsParseData.push(row);
   renderGpsPreviewTable();
   document.getElementById('est-minutes').value='';
-  show(`✅ ${player?.name||''} ${tt} ${min}분 추정 추가 — 기준: ${source==='personal'?`본인 최근 실측 ${matches}경기`:`팀 최근 ${matches}경기`} · TD ${row.td?row.td.toLocaleString():'—'}m`, true);
+  const sub = (tt==='1Q'||tt==='2Q') ? ' · FT의 부분집합이라 부하에는 합산되지 않습니다' : '';
+  show(`✅ ${player?.name||''} ${tt} ${min}분 추정 추가 — 기준: ${source==='personal'?`본인 최근 실측 ${matches}경기`:`팀 최근 ${matches}경기`} · TD ${row.td?row.td.toLocaleString():'—'}m${sub}`, true);
 }
 
 function renderGpsPreviewTable(){
@@ -17131,6 +17151,7 @@ function applyGpsBatchMeta(){
   const score    = document.getElementById('meta-score')?.value?.trim()||null;
   const result   = document.getElementById('meta-result')?.value||null;
   const ha       = document.getElementById('meta-ha')?.value||null;
+  const compet   = document.getElementById('meta-competition')?.value||null;
 
   _gpsParseData.forEach(r=>{
     if(label){ r.session_label=label; r._isMatch=(label==='Match'); }
@@ -17144,6 +17165,7 @@ function applyGpsBatchMeta(){
     if(score!==null)    r.score=score;
     if(result!==null)   r.result=result;
     if(ha!==null)       r.home_away=ha;
+    if(compet!==null)   r.competition=compet;
   });
 
   renderGpsPreviewTable();
@@ -17157,6 +17179,7 @@ function applyGpsBatchMeta(){
     if(score) parts.push(`스코어: ${score}`);
     if(result) parts.push(`결과: ${result}`);
     if(ha) parts.push(`H/A: ${ha}`);
+    if(compet) parts.push(`대회: ${compet}`);
     if(type) parts.push(`타입: ${type}`);
     if(track) parts.push(`팀: ${track==='B'?'B팀':'A팀'}`);
     if(topic) parts.push(`훈련주제: ${topic}`);
@@ -17193,6 +17216,7 @@ async function saveGpsData(){
       fmp_dyn_m: fmp_dyn_medium, fmp_dyn_h: fmp_dyn_high,
       score: r.score, result: r.result,
       is_estimated: _estimated===true,
+      competition: r.competition || '리그',
   }));
 
   let trainSaved = 0, matchSaved = 0;
@@ -17271,6 +17295,13 @@ async function saveGpsData(){
     const {error} = await supa.from('match_records').insert(matchRecords);
     if(error) errors.push('경기: '+error.message);
     else matchSaved = matchRecords.length;
+
+    // 추정 데이터가 한 명이라도 섞인 경기는 기준선에서 통째로 제외한다.
+    // 행 단위(is_estimated)로만 빼면 팀 기준선이 반쪽 스쿼드로 계산된다.
+    const estDates=[...new Set(matchRecords.filter(r=>r.is_estimated).map(r=>r.match_date))];
+    for(const d of estDates){
+      await supa.from('match_records').update({baseline_excluded:true}).eq('match_date', d);
+    }
   }
 
   if(errors.length){
@@ -17284,6 +17315,7 @@ async function saveGpsData(){
   if(matchSaved) await autoUpdateMSS(_gpsParseData.filter(r=>r._isMatch));
   runInjuryRiskAnalysis();
   loadGpsHistory();
+  loadMatchHistory();   // 경기 기록 목록도 갱신 — 대회 구분·추정·기준선 제외 상태 반영
 
   _gpsParseData = [];
   _estRateCache = {};
@@ -17868,7 +17900,7 @@ const PERSONAL_TARGET_METRICS={
 function buildPersonalPlanTarget(plan,playerMatchRows,teamRatios={}){
   if(!plan)return null;
   const fullTime=(playerMatchRows||[])
-    .filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&(parseFloat(r.duration)||0)>=80)
+    .filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&!r.baseline_excluded&&(parseFloat(r.duration)||0)>=80)
     .sort((a,b)=>(b.match_date||'').localeCompare(a.match_date||''))
     .slice(0,3);
   const usePersonal=fullTime.length===3;
@@ -17975,7 +18007,7 @@ async function loadTrainingSuitability(){
     // 경기는 120일 — 최근 부하(회복 지수)와 개인 경기 기준선을 함께 뽑는다.
     // calcACWR·calcMVExposure는 내부에서 28·21일로 자르므로 더 넣어도 안전하다.
     supa.from('match_records')
-      .select('player_id,match_date,max_speed,duration,td,player_load,band4_td,band5_td,accel,decel,rhie,time_type,is_estimated')
+      .select('player_id,match_date,max_speed,duration,td,player_load,band4_td,band5_td,accel,decel,rhie,time_type,is_estimated,baseline_excluded,competition')
       .in('time_type',['FT','ET','Top','Top-up','TOP'])
       .gte('match_date', s120).lte('match_date', day),
     supa.from('session_records')
@@ -17994,7 +18026,8 @@ async function loadTrainingSuitability(){
   const label = (plan?.day_label || '').toUpperCase();
   const mdKey = normalizePlanMdKey(label);
   // 최근 3경기 FT의 팀 평균을 경기 기준선으로 사용한다. 출전시간 차이는 해당 경기 최장시간으로 보정한다.
-  const ftRows=(matchAll||[]).filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&(parseFloat(r.duration)||0)>0);
+  const _blComps=getBaselineComps();
+  const ftRows=(matchAll||[]).filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&!r.baseline_excluded&&_blComps.includes(r.competition||'리그')&&(parseFloat(r.duration)||0)>0);
   const recentMatchDates=[...new Set(ftRows.map(r=>r.match_date))].sort((a,b)=>b.localeCompare(a)).slice(0,3);
   const refRows=ftRows.filter(r=>recentMatchDates.includes(r.match_date));
   const matchAvg=field=>{
@@ -22775,7 +22808,7 @@ async function generateMatchReport(){
   // 최근 3경기 팀 합계용 (FT 전체)
   const {data:recentAll} = await supa.from('match_records')
     .select('player_id,match_date,opponent,duration,td,mpm,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,player_load,rhie,max_speed,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
-    .eq('time_type','FT').eq('is_estimated',false)
+    .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps())
     .order('match_date',{ascending:false})
     .limit(300);
 
@@ -24873,12 +24906,13 @@ ${printContent}
 
 // ── 경기 업로드 기록 목록 조회 ───────────────────────────────────
 async function loadMatchHistory(){
+  renderBaselineCompPicker();
   const listEl = document.getElementById('match-history-list');
   if(!listEl) return;
   listEl.innerHTML = '<div style="text-align:center;padding:0.8rem;color:var(--text3);font-size:12px">불러오는 중...</div>';
 
   const {data, error} = await supa.from('match_records')
-    .select('match_date, opponent, home_away, time_type, player_id')
+    .select('match_date, opponent, home_away, time_type, player_id, competition, is_estimated, baseline_excluded')
     .order('match_date', {ascending: false})
     .limit(500);
 
@@ -24890,9 +24924,11 @@ async function loadMatchHistory(){
   // 날짜별 집계
   const byDate = {};
   data.forEach(r => {
-    if(!byDate[r.match_date]) byDate[r.match_date] = {opponent:r.opponent, ha:r.home_away, players:new Set(), types:new Set()};
+    if(!byDate[r.match_date]) byDate[r.match_date] = {opponent:r.opponent, ha:r.home_away, players:new Set(), types:new Set(), competition:r.competition||'리그', est:new Set(), excluded:!!r.baseline_excluded};
     byDate[r.match_date].players.add(r.player_id);
     if(r.time_type) byDate[r.match_date].types.add(r.time_type);
+    if(r.is_estimated) byDate[r.match_date].est.add(r.player_id);   // 행이 아니라 선수 기준 (한 선수의 FT+1Q는 1명)
+    if(r.baseline_excluded) byDate[r.match_date].excluded=true;
   });
 
   const rows = Object.entries(byDate).map(([date, info]) => {
@@ -24907,15 +24943,70 @@ async function loadMatchHistory(){
           ${haTag}
           <span style="font-size:12px;color:var(--accent2)">${info.opponent||'—'}</span>
           <span style="font-size:11px;color:var(--text3)">${info.players.size}명 · ${[...info.types].join('/')}</span>
+          ${info.est.size?`<span style="font-size:10px;padding:1px 5px;border-radius:3px;background:rgba(168,85,247,0.15);color:#c084fc;font-weight:700">추정 ${info.est.size}명</span>`:''}
         </div>
-        <button onclick="deleteMatchDate('${date}')"
-          style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
-          🗑 삭제
-        </button>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <select onchange="updateMatchCompetition('${date}',this.value)" title="대회 구분"
+            style="font-size:11px;padding:3px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit">
+            ${COMPETITIONS.map(c=>`<option value="${c}" ${info.competition===c?'selected':''}>${c}</option>`).join('')}
+          </select>
+          <label title="최근 3경기 기준선에서 이 경기를 제외합니다"
+            style="display:flex;align-items:center;gap:3px;font-size:10px;color:${info.excluded?'#fbbf24':'var(--text3)'};cursor:pointer;white-space:nowrap">
+            <input type="checkbox" ${info.excluded?'checked':''} onchange="updateMatchBaselineExcluded('${date}',this.checked)" style="cursor:pointer">기준선 제외
+          </label>
+          <button onclick="deleteMatchDate('${date}')"
+            style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">
+            🗑 삭제
+          </button>
+        </div>
       </div>`;
   }).join('');
 
   listEl.innerHTML = `<div style="border:1px solid var(--border);border-radius:8px;overflow:hidden">${rows}</div>`;
+}
+
+// ── 기준선에 포함할 대회 선택 ────────────────────────────────────
+// 최근 3경기 기준선은 "다음에 치를 경기"를 대표해야 한다.
+// 컵대회·연습경기가 섞이면 훈련 목표가 실제 리그 요구도에서 벗어난다.
+function renderBaselineCompPicker(){
+  const el=document.getElementById('baseline-comp-picker');
+  if(!el) return;
+  const sel=getBaselineComps();
+  el.innerHTML=`
+    <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:9px 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:600;color:var(--text2);white-space:nowrap">📐 최근 3경기 기준선에 포함할 대회</span>
+      ${COMPETITIONS.map(c=>`
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:${sel.includes(c)?'var(--text)':'var(--text3)'};cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${sel.includes(c)?'checked':''} onchange="toggleBaselineComp('${c}',this.checked)" style="cursor:pointer">${c}
+        </label>`).join('')}
+      <span style="font-size:10px;color:var(--text3)">추정 데이터가 섞인 경기는 자동으로 제외됩니다</span>
+    </div>`;
+}
+
+function toggleBaselineComp(comp, on){
+  const cur=new Set(getBaselineComps());
+  on?cur.add(comp):cur.delete(comp);
+  if(!cur.size){ alert('최소 하나는 선택해야 합니다.'); renderBaselineCompPicker(); return; }
+  setBaselineComps([...cur]);
+  renderBaselineCompPicker();
+}
+
+// ── 경기 대회 구분 변경 ──────────────────────────────────────────
+async function updateMatchCompetition(date, competition){
+  const {error} = await supa.from('match_records')
+    .update({competition}).eq('match_date', date);
+  if(error){ alert('대회 구분 변경 실패: '+error.message); return; }
+  loadMatchHistory();
+}
+
+// ── 경기 단위 기준선 제외 토글 ───────────────────────────────────
+// 추정 데이터가 섞였거나, 폭염·10명 경기 등 정상 조건이 아닌 경기를
+// 최근 3경기 기준선에서 통째로 뺀다.
+async function updateMatchBaselineExcluded(date, excluded){
+  const {error} = await supa.from('match_records')
+    .update({baseline_excluded: !!excluded}).eq('match_date', date);
+  if(error){ alert('기준선 제외 변경 실패: '+error.message); return; }
+  loadMatchHistory();
 }
 
 // ── 경기 날짜별 삭제 ─────────────────────────────────────────────
@@ -25750,7 +25841,7 @@ async function updateMatchMax(playerIds){
   // 경기 데이터 (FT만)
   const {data:ftData}=await supa.from('match_records')
     .select('player_id,td,mpm,hir_sprint,band4_td,band5_td,band4_n,band5_n,accel,rhie,max_speed,player_load,duration,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h')
-    .eq('time_type','FT').eq('is_estimated',false)
+    .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps())
     .in('player_id',pids);
 
   // 훈련 GPS 전체 기간 최고속도 — 경기 데이터보다 높을 수 있음
@@ -29098,7 +29189,7 @@ async function loadPeriodMatchAvg() {
   // 기존 앱과 동일한 로직: 출전시간 보정 팀 평균 (최근 3경기 FT)
   const {data}=await supa.from('match_records')
     .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
-    .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false});
+    .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false});
   if(!data||!data.length) return;
 
   // 최근 3경기 날짜+상대 키
@@ -29446,7 +29537,7 @@ async function backfillBlockBasis(apply){
   // 1) 전 경기(FT) 로드 — 시간보정 팀 평균 계산용
   const {data:matches} = await supa.from('match_records')
     .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
-    .eq('time_type','FT').eq('is_estimated',false).order('match_date',{ascending:false});
+    .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false});
   const mAvg=(arr,field)=>{
     const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
     if(!vrs.length) return 0;

@@ -142,15 +142,22 @@ injury_records    body_part, injury_type, severity, status,
 match_records     match_date, player_id, opponent, home_away,
                   time_type(FT/1Q/2Q/ET/Top), duration, td, mpm,
                   hir_sprint, band3~5_td, accel, decel,
-                  max_speed, rhie, fmp_*, score, result, is_estimated
+                  max_speed, rhie, fmp_*, score, result,
+                  is_estimated, competition, baseline_excluded
                   ↳ FT  = 정규 경기 전체 (추가시간 포함, 연장 제외)
                     ET  = 연장 전체 (승부차기 제외) — 독립 가산
                     1Q/2Q = FT의 부분집합 (합산 금지)
                     Top = 경기 후 추가훈련 — 독립 가산
                     Match Max·최근 3경기 평균은 FT만 / 개인 부하는 FT+ET+Top
-                    is_estimated = GPS 미착용 선수의 코치 추정 입력 (출전시간 × 최근 실측 분당비율)
-                    → 기준선(Match Max·3경기 평균)에서 제외, 부하·보고서에는 포함
-                    상세 규격: MATCH_ET_SPEC.md · migrations/023_match_estimated.sql
+                    is_estimated = GPS 미착용 선수의 코치 추정 입력 (행 단위)
+                      출전시간 × 그 선수 최근 실측 FT 분당비율. max_speed는 비움.
+                    competition = 리그 / 컵대회 / 연습경기 / 기타
+                      기준선에 포함할 대회는 코치가 선택 (기본: 리그만, localStorage)
+                    baseline_excluded = 이 경기를 3경기 기준선에서 통째로 제외 (경기 단위)
+                      추정이 한 명이라도 섞이면 저장 시 자동 true. 코치가 수동 토글도 가능.
+                    → 셋 다 기준선(Match Max·3경기 평균)에서만 제외, 부하·보고서에는 포함
+                    상세 규격: MATCH_ET_SPEC.md
+                      migrations/023_match_estimated.sql · 024_match_competition.sql
 
 notifications     title, body, target_type, target_value
 ```
