@@ -649,7 +649,7 @@ async function loadHome(){
   const blockEndFetch=new Date(now); blockEndFetch.setDate(now.getDate()+6);
   const blockEndFetchStr=blockEndFetch.toISOString().split('T')[0];
 
-  const [{data:injuries},{data:todayWell},{data:well7},{data:rpe28},{data:gps28},{data:matchFT},{data:weekBlockDays}]=await Promise.all([
+  const [{data:injuries},{data:todayWell},{data:well7},{data:rpe28},{data:gps28},{data:matchAll},{data:weekBlockDays}]=await Promise.all([
     supa.from('injury_records').select('player_id,body_part,injury_type,status,return_date,injury_date')
       .in('status',['치료중','재활중','부분 참여']).order('injury_date',{ascending:false}),
     supa.from('wellness_records').select('player_id,fatigue,sleep_quality,stress,muscle_soreness').eq('record_date',today),
@@ -657,8 +657,9 @@ async function loadHome(){
       .gte('record_date',since7Str).order('record_date',{ascending:false}),
     supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',since28Str),
     supa.from('gps_records').select('player_id,session_date,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2').gte('session_date',since28Str),
-    supa.from('match_records').select('match_date,opponent,home_away,player_id,duration,max_speed,td,band4_td,band5_td,accel,rhie,result,score')
-      .eq('time_type','FT').order('match_date',{ascending:false}).limit(300),
+    supa.from('match_records').select('match_date,opponent,home_away,player_id,duration,max_speed,td,band4_td,band5_td,accel,rhie,result,score,time_type')
+      .in('time_type',['FT','ET','Top','Top-up','TOP'])  // 부하 집계용 — 1Q/2Q는 FT의 부분집합이라 제외
+      .order('match_date',{ascending:false}).limit(300),
     supa.from('block_days').select('plan_date,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target').gte('plan_date',weekStartStr).lte('plan_date',blockEndFetchStr).order('plan_date',{ascending:true}),
   ]);
 
@@ -681,11 +682,15 @@ async function loadHome(){
   const injuredIds=new Set((injuries||[]).map(r=>r.player_id));
   const rpeMap={};
   (rpe28||[]).forEach(r=>{if(!rpeMap[r.player_id])rpeMap[r.player_id]=[];rpeMap[r.player_id].push({date:r.record_date,rpe:parseFloat(r.rpe)||0,dur:parseFloat(r.duration)||0});});
+  // 최근 3경기 기준·경기 표시는 FT 전용 (연장·Top-up은 기준선에 넣지 않는다)
+  const matchFT=(matchAll||[]).filter(r=>(r.time_type||'FT').trim().toUpperCase()==='FT');
+
   // 경기일 duration 폴백 (session_records.duration 미입력 시 경기 duration 사용)
+  // FT + ET + Top-up 합산 — 연장·추가훈련분이 빠지면 ACWR이 과소 계상된다
   const _matchDurByPid={};
-  (matchFT||[]).forEach(r=>{
+  (matchAll||[]).forEach(r=>{
     if(!_matchDurByPid[r.player_id]) _matchDurByPid[r.player_id]={};
-    if(!_matchDurByPid[r.player_id][r.match_date]) _matchDurByPid[r.player_id][r.match_date]=parseFloat(r.duration)||0;
+    _matchDurByPid[r.player_id][r.match_date]=(_matchDurByPid[r.player_id][r.match_date]||0)+(parseFloat(r.duration)||0);
   });
   Object.keys(rpeMap).forEach(pid=>{
     rpeMap[pid]=rpeMap[pid].map(r=>({...r, dur:r.dur||(_matchDurByPid[pid]||{})[r.date]||0}));
@@ -696,7 +701,7 @@ async function loadHome(){
     if(injuredIds.has(pl.id)) continue;
     const acwrData=calcACWR(rpeMap[pl.id]||[],today);
     const pgps=(gps28||[]).filter(r=>r.player_id===pl.id);
-    const pmatch=(matchFT||[]).filter(r=>r.player_id===pl.id);
+    const pmatch=(matchAll||[]).filter(r=>r.player_id===pl.id);
     const mss=parseFloat(pl.mss)||0;
     const mvExp=mss>0?calcMVExposure([
       ...pgps.map(r=>({date:r.session_date,maxSpeed:parseFloat(r.max_speed)||0})),
