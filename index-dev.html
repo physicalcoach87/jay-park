@@ -936,7 +936,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div style="font-size:32px;margin-bottom:8px">📂</div>
         <div style="font-size:14px;font-weight:600;color:var(--text2)">GPS 파일 클릭 또는 드래그</div>
         <div style="font-size:12px;color:var(--text3);margin-top:4px">.xlsx / .xls / .csv · 여러 파일 동시 선택 가능</div>
-        <div style="font-size:11px;color:var(--text3);margin-top:3px">파일명 규칙: YYYY-MM-DD-AM / PM / M_FT / M_1Q / M_2Q / M_Top</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">파일명 규칙: YYYY-MM-DD-AM / PM / M_FT / M_1Q / M_2Q / M_ET / M_Top</div>
       </div>
       <input type="file" id="gps-file-input" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleFileSelect(event)">
       <div id="upload-preview" style="display:none">
@@ -1099,6 +1099,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
             <option value="FT">FT (풀타임)</option>
             <option value="1Q">1Q (전반)</option>
             <option value="2Q">2Q (후반)</option>
+            <option value="ET">ET (연장)</option>
             <option value="TOP">TOP (추가훈련)</option>
           </select>
         </div>
@@ -5643,7 +5644,7 @@ async function onGymPlayerSelect(){
       supa.from('gps_records').select('session_date,td,max_speed')
         .eq('player_id',playerId).gte('session_date',since28).lte('session_date',today),
       supa.from('match_records').select('match_date,td,max_speed,time_type')
-        .eq('player_id',playerId).in('time_type',['FT','Top','Top-up','TOP']).gte('match_date',since28).lte('match_date',today),
+        .eq('player_id',playerId).in('time_type',['FT','ET','Top','Top-up','TOP']).gte('match_date',since28).lte('match_date',today),
       supa.from('session_records').select('record_date,rpe,duration')
         .eq('player_id',playerId).gte('record_date',since28).lte('record_date',today),
       supa.from('player_profiles').select('mss').eq('id',playerId).maybeSingle()
@@ -10690,7 +10691,7 @@ async function loadMorningReport(){
     .gte('session_date',since28Str).order('session_date',{ascending:false});
   const {data:match28} = await supa.from('match_records')
     .select('player_id,match_date,max_speed,duration,time_type')
-    .in('time_type',['FT','Top','Top-up','TOP'])
+    .in('time_type',['FT','ET','Top','Top-up','TOP'])
     .gte('match_date',since28Str).order('match_date',{ascending:false});
 
   // 치료중/재활중/부분참여 선수는 이미 부상자 현황에 표시되므로 위험 목록에서 제외
@@ -11898,7 +11899,7 @@ async function downloadDashboardExcel(){
     supa.from('match_records')
       .select('match_date,opponent,home_away,time_type,duration,td,hir_sprint,band3_td,band4_td,band5_td,band4_n,band5_n,accel,decel,max_speed,player_load,rhie,fmp_run_m,fmp_run_h,fmp_dyn_m,fmp_dyn_h,result,score')
       .eq('player_id',playerId).gte('match_date',sinceStr)
-      .in('time_type',['FT','Top','Top-up','TOP'])
+      .in('time_type',['FT','ET','Top','Top-up','TOP'])
       .order('match_date',{ascending:true}),
     supa.from('session_records')
       .select('record_date,rpe,duration,session_type,session_order')
@@ -11957,7 +11958,7 @@ async function downloadDashboardExcel(){
     ];
   });
 
-  // 경기 rows — 같은 날 FT + Top-up 합산 (개인 운동부하 기준)
+  // 경기 rows — 같은 날 FT + ET + Top-up 합산 (개인 운동부하 기준)
   const matchByDate = {};
   (matchData||[]).forEach(r=>{
     if(!matchByDate[r.match_date]) matchByDate[r.match_date]=[];
@@ -11966,32 +11967,35 @@ async function downloadDashboardExcel(){
   const n = v => parseFloat(v)||0;
   const matchRows = Object.entries(matchByDate).map(([date, recs])=>{
     const ft  = recs.find(r=>r.time_type==='FT');
+    const et  = recs.find(r=>(r.time_type||'').trim().toUpperCase()==='ET');
     const top = recs.find(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
-    const base = ft || top; // FT 없으면 Top-up만
+    const base = ft || et || top; // FT 없으면 ET(연장 투입), 그것도 없으면 Top-up만
+    const parts = [ft, et, top].filter(Boolean);
     const well = wellMap[date];
     const ha = (base.home_away||'').toUpperCase()==='HOME'?'홈':(base.home_away||'').toUpperCase()==='AWAY'?'원정':'';
     const resultLabel = {W:'승',D:'무',L:'패'}[base.result]||base.result||'';
-    const resultStr = ft ? [resultLabel, base.score].filter(Boolean).join(' ') : 'Top-up만';
+    const resultStr = (ft||et) ? [resultLabel, base.score].filter(Boolean).join(' ') : 'Top-up만';
     // 구간 레이블 — 합산 여부 명시
-    const typeLabel = ft && top ? 'FT+Top-up' : ft ? 'FT' : 'Top-up';
+    const typeLabel = [ft&&'FT', et&&'ET', top&&'Top-up'].filter(Boolean).join('+');
 
-    // FT + Top-up 합산 (숫자 지표는 더하기, 최고속도는 최댓값)
+    // FT + ET + Top-up 합산 (숫자 지표는 더하기, 최고속도는 최댓값)
+    const rawSum = (field) => parts.reduce((a,r)=>a+n(r[field]), 0);
     const sum = (field) => {
-      const v = n(ft?.[field]) + n(top?.[field]);
+      const v = rawSum(field);
       return v > 0 ? Math.round(v) : '';
     };
     const sumF = (field) => {
-      const v = n(ft?.[field]) + n(top?.[field]);
+      const v = rawSum(field);
       return v > 0 ? parseFloat(v.toFixed(1)) : '';
     };
     const maxVal = (field) => {
-      const v = Math.max(n(ft?.[field]), n(top?.[field]));
+      const v = Math.max(0, ...parts.map(r=>n(r[field])));
       return v > 0 ? parseFloat(v.toFixed(2)) : '';
     };
     const hsrTotal = (() => {
-      const v = n(ft?.hir_sprint||0) + n(top?.hir_sprint||0);
+      const v = rawSum('hir_sprint');
       if(v>0) return Math.round(v);
-      return (n(ft?.band4_td)+n(ft?.band5_td)+n(top?.band4_td)+n(top?.band5_td)) || '';
+      return (rawSum('band4_td')+rawSum('band5_td')) || '';
     })();
     return [
       date, '경기',
@@ -15027,7 +15031,7 @@ async function loadTeamSummary(forceDate, quiet=false){
     supa.from('match_records')
       .select('match_date,opponent,home_away,player_id,duration,td,band4_td,band5_td,accel,rhie,max_speed,time_type,player_profiles(name,position)')
       .eq('match_date',date)
-      .in('time_type',['FT','Top','Top-up','TOP']),
+      .in('time_type',['FT','ET','Top','Top-up','TOP']),
   ]);
 
   _lastGpsData = gps||[]; // 코치 RPE 모달에서 GPS duration 참조용
@@ -15778,7 +15782,7 @@ async function loadPlayerDashboardRoster(btn){
     const today=getKSTDateStr();
     const [{data:gps},{data:matches},{data:rpe},{data:well},{data:injuries}]=await Promise.all([
       supa.from('gps_records').select('player_id,session_date,td,max_speed,duration').gte('session_date',querySince),
-      supa.from('match_records').select('player_id,match_date,time_type,td,max_speed,duration').in('time_type',['FT','Top','Top-up','TOP']).gte('match_date',querySince),
+      supa.from('match_records').select('player_id,match_date,time_type,td,max_speed,duration').in('time_type',['FT','ET','Top','Top-up','TOP']).gte('match_date',querySince),
       supa.from('session_records').select('player_id,record_date,rpe,duration').gte('record_date',querySince),
       supa.from('wellness_records').select('player_id,record_date,fatigue,sleep_quality,stress,muscle_soreness').gte('record_date',querySince).order('record_date',{ascending:false}),
       supa.from('injury_records').select('player_id,status,body_part').in('status',['치료중','재활중','부분 참여'])
@@ -15924,7 +15928,7 @@ async function loadPlayerDashboard(){
     supa.from('match_records')
       .select('match_date,opponent,home_away,duration,td,band4_td,band5_td,accel,rhie,max_speed,player_load,hir_sprint,result,score,time_type')
       .eq('player_id',playerId)
-      .in('time_type',['FT','Top','Top-up','TOP'])
+      .in('time_type',['FT','ET','Top','Top-up','TOP'])
       .gte('match_date',sinceStr)
       .order('match_date',{ascending:false}),
     supa.from('session_records')
@@ -16716,7 +16720,7 @@ function parseFilename(filename){
   const dm = name.match(/(\d{4})-(\d{2})-(\d{2})/)||name.match(/(\d{4})(\d{2})(\d{2})/);
   const date = dm ? `${dm[1]}-${dm[2]}-${dm[3]}` : null;
   let label='AM', isMatch=false, timeType=null;
-  const tm = name.match(/[-_]M[-_](FT|1Q|2Q|Top|TOP)/i);
+  const tm = name.match(/[-_]M[-_](FT|1Q|2Q|ET|Top|TOP)/i);
   if(tm){
     isMatch=true; label='Match';
     timeType=tm[1].toUpperCase();
@@ -16948,7 +16952,7 @@ function renderGpsPreviewTable(){
             style="padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px;width:58px">
             <option value="">—</option>
             ${r._isMatch
-              ? ['FT','1Q','2Q','Top'].map(v=>`<option value="${v}" ${(r.time_type||'')==v?'selected':''}>${v}</option>`).join('')
+              ? ['FT','1Q','2Q','ET','Top'].map(v=>`<option value="${v}" ${(r.time_type||'')==v?'selected':''}>${v}</option>`).join('')
               : ['M','S','SS','X'].map(v=>`<option value="${v}" ${(r.session_type2||'')==v?'selected':''}>${v}</option>`).join('')}
           </select>
         </td>
@@ -17858,7 +17862,7 @@ async function loadTrainingSuitability(){
     // calcACWR·calcMVExposure는 내부에서 28·21일로 자르므로 더 넣어도 안전하다.
     supa.from('match_records')
       .select('player_id,match_date,max_speed,duration,td,player_load,band4_td,band5_td,accel,decel,rhie,time_type')
-      .in('time_type',['FT','Top','Top-up','TOP'])
+      .in('time_type',['FT','ET','Top','Top-up','TOP'])
       .gte('match_date', s120).lte('match_date', day),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration,session_type,session_order')
@@ -18197,7 +18201,8 @@ async function runInjuryRiskAnalysis(){
       .select('player_id,session_date,max_speed,duration,session_type2,session_label')
       .gte('session_date', since28Str).order('session_date', {ascending:false}),
     supa.from('match_records')
-      .select('player_id,match_date,max_speed,duration')
+      .select('player_id,match_date,max_speed,duration,time_type')
+      .in('time_type',['FT','ET','Top','Top-up','TOP'])  // 1Q/2Q는 FT의 부분집합 → 중복 합산 방지
       .gte('match_date', since28Str).order('match_date', {ascending:false}),
     supa.from('session_records')
       .select('player_id,record_date,rpe,duration,session_type,session_order')
@@ -18235,9 +18240,10 @@ async function runInjuryRiskAnalysis(){
       if(!_pGpsDur[key]) _pGpsDur[key]=parseFloat(r.duration)||0;
     });
     // 경기 duration 폴백 맵 (경기는 AM/PM 라벨이 없어 날짜로만 매칭)
+    // FT + ET + Top-up 합산 — 첫 행만 쓰면 연장·추가훈련분이 통째로 누락된다
     const _pMatchDur = {};
     pmatch.forEach(r=>{
-      if(!_pMatchDur[r.match_date]) _pMatchDur[r.match_date]=parseFloat(r.duration)||0;
+      _pMatchDur[r.match_date]=(_pMatchDur[r.match_date]||0)+(parseFloat(r.duration)||0);
     });
     // 날짜별 sRPE 합산 (AM+PM 모든 세션 rpe×duration, GPS/경기 폴백)
     const srpeByDate = {};
@@ -22648,6 +22654,7 @@ async function generateMatchReport(){
   const ftRows  = allRows.filter(r=>r.time_type==='FT');
   const q1Rows  = allRows.filter(r=>r.time_type==='1Q');
   const q2Rows  = allRows.filter(r=>r.time_type==='2Q');
+  const etRows  = allRows.filter(r=>(r.time_type||'').trim().toUpperCase()==='ET');
   const topRows = allRows.filter(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
   const hasHalf = q1Rows.length>0 && q2Rows.length>0;
 
@@ -22976,7 +22983,7 @@ async function generateMatchReport(){
     .select('player_id,match_date,duration,time_type')
     .gte('match_date',_chrFrom.toISOString().split('T')[0])
     .lt('match_date',date)
-    .in('time_type',['FT','Top','Top-up','TOP'])  // 1Q/2Q는 FT의 부분집합 → 중복 방지 위해 제외
+    .in('time_type',['FT','ET','Top','Top-up','TOP'])  // 1Q/2Q는 FT의 부분집합 → 중복 방지 위해 제외
     .limit(20000);
   let _mAdd=0;
   (matchHist||[]).forEach(r=>{
@@ -23049,24 +23056,33 @@ async function generateMatchReport(){
     b.hasBL=b.cnt>=5; // 최소 5경기 이상이어야 개인 베이스라인 신뢰
   });
 
-  // Top-up 데이터를 player_id 기준으로 맵핑
+  // ET / Top-up 데이터를 player_id 기준으로 맵핑
+  const etMap={};
+  etRows.forEach(r=>{ etMap[r.player_id]=r; });
   const topMap={};
   topRows.forEach(r=>{ topMap[r.player_id]=r; });
 
-  // FT 선수 + Top-up만 한 선수(미출전) 통합
+  // FT 선수 + ET만 출전한 선수(연장 투입) + Top-up만 한 선수(미출전) 통합
   const recovBase = [...ftRows];
-  topRows.forEach(r=>{ if(!ftRows.find(f=>f.player_id===r.player_id)) recovBase.push({...r, _topOnly:true}); });
+  etRows.forEach(r=>{ if(!ftRows.find(f=>f.player_id===r.player_id)) recovBase.push({...r, _etOnly:true}); });
+  topRows.forEach(r=>{ if(!recovBase.find(f=>f.player_id===r.player_id)) recovBase.push({...r, _topOnly:true}); });
 
   const recovList = recovBase.map(r=>{
     const pid=r.player_id;
     const bl=playerBaselines[pid]||{avgHsr:null,avgSpr:null,avgPl:null,avgDecel:null,hasBL:false,cnt:0};
+    const et=etMap[pid];   // 동일 선수의 ET(연장) 데이터
     const top=topMap[pid]; // 동일 선수의 Top-up 데이터
 
-    const dur   = (n(r.duration)||0) + (top&&!r._topOnly ? n(top.duration)||0 : 0);
-    const hsr   = (n(r.hir_sprint)||0) + (top&&!r._topOnly ? n(top.hir_sprint)||0 : 0);
-    const spr   = (n(r.band5_td)||0) + (top&&!r._topOnly ? n(top.band5_td)||0 : 0);
-    const pl    = (n(r.player_load)||0) + (top&&!r._topOnly ? n(top.player_load)||0 : 0);
-    const decel = (n(r.decel)||0) + (top&&!r._topOnly ? n(top.decel)||0 : 0);
+    // FT + ET + Top-up 합산. r 자신이 ET/Top 행이면 중복 합산하지 않는다.
+    const parts = [r,
+      (et  && !r._etOnly)  ? et  : null,
+      (top && !r._topOnly) ? top : null].filter(Boolean);
+    const sumP  = f => parts.reduce((a,x)=>a+(n(x[f])||0), 0);
+    const dur   = sumP('duration');
+    const hsr   = sumP('hir_sprint');
+    const spr   = sumP('band5_td');
+    const pl    = sumP('player_load');
+    const decel = sumP('decel');
 
     // 회복 부하 — 경기 전까지 쌓인 훈련 부채와 이번 경기분을 분리해 본다.
     // 경기만 보고 판단하면 "경기 전에 이미 쌓여 있었는가"가 안 보여 훈련-경기 연결이 끊긴다.
@@ -23996,6 +24012,59 @@ async function generateMatchReport(){
         <strong style="color:var(--text2)">훈련 처방 활용:</strong>
         Peak 5분 mpm = 경기에서 가장 강도 높은 5분 구간 → 훈련에서 이 값의 90% 이상 복제 목표
         · &gt;150 m/min 체류시간 = 고속 질주 노출 빈도 → 인터벌 처방의 목표 강도 기준
+      </div>
+    `);
+  })()}
+
+  ${(()=>{
+    // ── ET(연장) 섹션 (해당 경기에 연장 데이터 있을 때만 표시) ──
+    if(!etRows.length) return '';
+    const etSorted = [...etRows].sort((a,b)=>(n(b.td)||0)-(n(a.td)||0));
+    const ftIds = new Set(ftRows.map(r=>r.player_id));
+    return card(`
+      ${secHead('⏱️','ET (연장전)','정규시간 종료 후 연장 구간 · FT와 합산해 총 경기 부하가 됩니다')}
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:520px">
+          <thead>
+            <tr style="background:var(--surface2)">
+              <th style="padding:6px 8px;text-align:left;color:var(--text3)">선수</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">연장(분)</th>
+              <th style="padding:6px 8px;text-align:right;color:#60a5fa">TD (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">MPM</th>
+              <th style="padding:6px 8px;text-align:right;color:#f97316">HIR+Sprint</th>
+              <th style="padding:6px 8px;text-align:right;color:#a78bfa">Sprint (m)</th>
+              <th style="padding:6px 8px;text-align:right;color:#4ade80">P.Load</th>
+              <th style="padding:6px 8px;text-align:right;color:#94a3b8">Vmax</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${etSorted.map(r=>{
+              const nm = r.player_profiles?.name || r.player_id || '?';
+              const pos = r.player_profiles?.position || '';
+              const d = n(r.duration)||0;
+              const mpm = d>0 ? (n(r.td)/d) : null;
+              const etOnly = !ftIds.has(r.player_id);
+              return `<tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:6px 8px">
+                  <span style="font-weight:600;color:var(--text)">${nm}</span>
+                  ${pos?`<span style="font-size:9px;color:var(--text3);margin-left:4px">${pos}</span>`:''}
+                  ${etOnly?`<span style="font-size:9px;color:#fbbf24;margin-left:4px">연장 투입</span>`:''}
+                </td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${d?Math.round(d):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#60a5fa;font-weight:600">${n(r.td)?Math.round(n(r.td)).toLocaleString():'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:var(--text2)">${mpm?mpm.toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#f97316">${n(r.hir_sprint)?Math.round(n(r.hir_sprint)):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#a78bfa">${n(r.band5_td)?Math.round(n(r.band5_td)):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#4ade80">${n(r.player_load)?n(r.player_load).toFixed(1):'—'}</td>
+                <td style="padding:6px 8px;text-align:right;color:#94a3b8">${n(r.max_speed)?n(r.max_speed).toFixed(1):'—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:10px;color:var(--text3)">
+        MPM은 연장 구간만의 값입니다(TD ÷ 연장 출전시간). 연장 부하는 회복 우선순위와 ACWR에 FT와 합산 반영됩니다.
+        <strong style="color:var(--text2)">Match Max·최근 3경기 평균은 FT만</strong>으로 계산하므로 연장은 기준선에 영향을 주지 않습니다.
       </div>
     `);
   })()}
@@ -25795,10 +25864,11 @@ async function loadMatchDetail(date, opponent){
     return `${m}:${s.toString().padStart(2,'0')}`;
   };
 
-  // FT / 1Q / 2Q / Top-up 분리
+  // FT / 1Q / 2Q / ET / Top-up 분리
   const ftRows=rows.filter(r=>r.time_type==='FT');
   const q1Rows=rows.filter(r=>r.time_type==='1Q');
   const q2Rows=rows.filter(r=>r.time_type==='2Q');
+  const etRows=rows.filter(r=>(r.time_type||'').trim().toUpperCase()==='ET');
   const topRows=rows.filter(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
 
   const makeTable=(data,title)=>`
@@ -25862,6 +25932,7 @@ async function loadMatchDetail(date, opponent){
     ${ftRows.length?makeTable(ftRows,'FT (풀타임) — Match Max 대비 %'):''}
     ${q1Rows.length?makeTable(q1Rows,'1Q (전반)'):''}
     ${q2Rows.length?makeTable(q2Rows,'2Q (후반)'):''}
+    ${etRows.length?makeTable(etRows,'ET (연장)'):''}
     ${topRows.length?`
     <div style="margin-bottom:16px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:6px">🏃 Top-up (추가훈련)</div>
