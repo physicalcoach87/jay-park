@@ -2433,8 +2433,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <button type="button" onclick="newDayPlanVariant()" style="padding:5px 9px;border-radius:6px;border:1px solid #6366f1;background:transparent;color:#a5b4fc;font-size:10px;cursor:pointer;white-space:nowrap">＋ 계획 추가</button>
         </div>
         <div id="dm-plan-tabs" style="display:flex;gap:5px;flex-wrap:wrap"></div>
-        <div id="dm-plan-meta" style="display:none;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:7px;margin-top:10px">
+        <div id="dm-plan-meta" style="display:none;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;margin-top:10px">
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">계획 이름</div><input id="dm-plan-name" type="text" placeholder="예: 리그 준비" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
+          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">적용 유형</div><select id="dm-plan-session-type" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">공통</option><option value="M">M · 주전</option><option value="S">S · 서브</option><option value="SS">SS</option><option value="X">X · 비출전</option></select></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">기준 경기일</div><input id="dm-target-match-date" type="date" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 상대</div><input id="dm-plan-opponent" type="text" placeholder="상대팀" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="dm-plan-competition" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">—</option><option>리그</option><option>컵대회</option><option>연습경기</option><option>기타</option></select></div>
@@ -16921,7 +16922,7 @@ async function parseGpsFiles(files){
               <option value="ALL">A팀</option><option value="B">B팀</option>
             </select></div>`:''}
           ${!hasMatch?`<div><div style="font-size:10px;color:#a5b4fc;margin-bottom:3px">주기화 계획</div>
-            <select id="meta-period-plan" onchange="applyGpsPlanToAll(this.value)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid #6366f1;background:var(--surface);color:var(--text);font-size:12px">
+            <select id="meta-period-plan" onchange="previewGpsBatchPlan(this.value)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid #6366f1;background:var(--surface);color:var(--text);font-size:12px">
               ${gpsPlanOptionsHtml(firstRow.session_date,firstRow.track||'ALL',null,true)}
             </select></div>`:''}
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기 <span style="font-size:9px">(경기기준일)</span></div>
@@ -16948,7 +16949,7 @@ async function parseGpsFiles(files){
             </select></div>
           `:''}
         </div>
-        <button onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
+        <button id="gps-batch-apply-btn" onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
       </div>
       ${hasMatch?`
       <div style="background:var(--surface2);border:1px solid #78350f;border-radius:8px;padding:12px 14px;margin-bottom:10px">
@@ -16996,7 +16997,7 @@ async function loadGpsPeriodPlans(){
     (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',competition:PLAN_MATCH_COMPETITION[p.ref_basis?.match_type]||null});
   });
   (variants||[]).forEach(p=>{
-    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:`variant:${p.id}`});
+    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,session_type2:p.ref_basis?.load_group||null,_planKey:`variant:${p.id}`});
   });
 }
 
@@ -17012,17 +17013,89 @@ function gpsPlanOptionsHtml(date,track,selected,includePrompt=false){
 function applyGpsPlan(row,key){
   const plan=gpsPlansFor(row.session_date,row.track||'ALL').find(p=>p._planKey===key);
   if(!plan) return;
+  const label=(row.session_label||'AM').trim().toUpperCase();
+  const plannedTopic=label==='PM'
+    ?(plan.pm_session||plan.am_session)
+    :(plan.am_session||plan.pm_session);
   row._periodPlanKey=key;
   row.cycle=plan.day_label||row.cycle||null;
   row.periodization=plan.plan_name==='기본 계획'?(row.periodization||null):plan.plan_name;
+  if(plan.session_type2) row.session_type2=plan.session_type2;
+  // 공통 입력의 훈련주제는 기본 계획(M)에 유지하고,
+  // S/SS/X 추가 계획을 선택한 행만 해당 계획 세션명으로 교체한다.
+  if(plannedTopic&&String(plan._planKey||'').startsWith('variant:')) row.session_topic=plannedTopic;
   row.opponent=plan.opponent||row.opponent||null;
   row.competition=plan.competition||row.competition||null;
 }
 
+// GPS 타입을 실제로 확정하는 순간 그 타입용 계획을 자동 연결한다.
+// M 전용 추가 계획이 없으면 기존 block_days 기본 계획을 사용한다.
+function applyGpsPlanForType(row){
+  if(!row||row._isMatch) return false;
+  const plans=gpsPlansFor(row.session_date,row.track||'ALL');
+  const type=(row.session_type2||'').trim().toUpperCase();
+  const typed=plans.find(p=>(p.session_type2||'').toUpperCase()===type);
+  const base=plans.find(p=>String(p._planKey||'').startsWith('base:'));
+  const plan=typed||(type==='M'?base:null);
+  if(!plan) return false;
+  applyGpsPlan(row,plan._planKey);
+  return true;
+}
+
 function applyGpsPlanToAll(key){
   if(!key) return;
-  _gpsParseData.filter(r=>!r._isMatch).forEach(r=>applyGpsPlan(r,key));
+  const rows=_gpsParseData.filter(r=>!r._isMatch);
+  const sample=rows.find(r=>gpsPlansFor(r.session_date,r.track||'ALL').some(p=>p._planKey===key));
+  const plan=sample&&gpsPlansFor(sample.session_date,sample.track||'ALL').find(p=>p._planKey===key);
+  if(!plan) return;
+  // 추가 계획은 지정된 M/S/SS/X에만, 기본 계획은 M에만 적용한다.
+  const targetType=(plan.session_type2||'').toUpperCase()||(String(plan._planKey).startsWith('base:')?'M':'');
+  const targets=targetType?rows.filter(r=>(r.session_type2||'').toUpperCase()===targetType):rows;
+  targets.forEach(r=>applyGpsPlan(r,key));
   renderGpsPreviewTable();
+  const msg=document.getElementById('upload-msg');
+  if(msg){
+    msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80';
+    msg.textContent=`✅ ${plan.plan_name||'계획'} 적용 — ${targetType||'전체'} ${targets.length}명`;
+  }
+}
+
+function getGpsBatchPlan(key){
+  if(!key) return null;
+  for(const row of _gpsParseData){
+    if(row._isMatch) continue;
+    const plan=gpsPlansFor(row.session_date,row.track||'ALL').find(p=>p._planKey===key);
+    if(plan) return plan;
+  }
+  return null;
+}
+
+// 계획을 선택하는 단계에서는 선수 행을 건드리지 않고 공통 입력칸만 채운다.
+// 코치가 값을 확인·수정한 뒤 적용 버튼을 눌러야 실제 행에 반영된다.
+function previewGpsBatchPlan(key){
+  const plan=getGpsBatchPlan(key);
+  const btn=document.getElementById('gps-batch-apply-btn');
+  if(!plan){
+    if(btn) btn.textContent='⚡ 전체 적용';
+    return;
+  }
+  const targetType=(plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'');
+  const sample=_gpsParseData.find(r=>!r._isMatch&&(!targetType||(r.session_type2||'').toUpperCase()===targetType));
+  const label=(sample?.session_label||'AM').trim().toUpperCase();
+  const plannedTopic=label==='PM'?(plan.pm_session||plan.am_session):(plan.am_session||plan.pm_session);
+  const setValue=(id,value)=>{const el=document.getElementById(id);if(el&&value!=null)el.value=value;};
+  setValue('meta-type',targetType);
+  setValue('meta-topic',plannedTopic||'');
+  setValue('meta-cycle',plan.day_label||'');
+  if(String(plan._planKey||'').startsWith('variant:')) setValue('meta-period',plan.plan_name||'');
+  setValue('meta-opponent',plan.opponent||'');
+  setValue('meta-competition',plan.competition||'');
+  if(btn) btn.textContent=`⚡ ${targetType||'선택'} 유형 적용`;
+  const msg=document.getElementById('upload-msg');
+  if(msg){
+    msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(99,102,241,0.12);border:1px solid #4338ca;color:#a5b4fc';
+    msg.textContent=`✏️ ${plan.plan_name||'계획'} 값을 불러왔습니다. 수정 후 ${targetType||'해당'} 유형 적용을 눌러주세요.`;
+  }
 }
 
 function updateGpsRowPlan(idx,key){
@@ -17239,7 +17312,12 @@ function renderGpsPreviewTable(){
 }
 
 function updateGpsRow(idx, field, val){
-  if(_gpsParseData[idx]) _gpsParseData[idx][field] = val;
+  const row=_gpsParseData[idx]; if(!row) return;
+  row[field]=val;
+  if(field==='session_type2'){
+    applyGpsPlanForType(row);
+    renderGpsPreviewTable();
+  }
 }
 
 function applyGpsBatchMeta(){
@@ -17255,10 +17333,20 @@ function applyGpsBatchMeta(){
   const result   = document.getElementById('meta-result')?.value||null;
   const ha       = document.getElementById('meta-ha')?.value||null;
   const compet   = document.getElementById('meta-competition')?.value||null;
+  const planKey  = document.getElementById('meta-period-plan')?.value||null;
+  const plan     = getGpsBatchPlan(planKey);
+  const planType = plan?((plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'')):'';
+  // 계획이 선택된 경우에는 이미 그 유형으로 분류된 선수만 대상으로 삼는다.
+  // 계획 미선택 상태의 최초 공통 입력은 기존처럼 전체 행에 적용한다.
+  const targets=plan
+    ?_gpsParseData.filter(r=>!r._isMatch&&(!planType||(r.session_type2||'').toUpperCase()===planType))
+    :_gpsParseData;
 
-  _gpsParseData.forEach(r=>{
+  targets.forEach(r=>{
+    if(plan) applyGpsPlan(r,planKey);
     if(label){ r.session_label=label; r._isMatch=(label==='Match'); }
-    if(type){ r._isMatch?(r.time_type=type||null):(r.session_type2=type||null); }
+    // 선택 계획의 유형은 필터 기준이다. 계획이 없을 때만 전체 타입을 일괄 지정한다.
+    if(type&&!plan){ r._isMatch?(r.time_type=type||null):(r.session_type2=type||null); }
     if(track && !r._isMatch) r.track=track; // 훈련만 트랙 태깅 (A팀=ALL / B팀=B)
     if(topic!==null)    r.session_topic=topic;
     if(cycle!==null)    r.cycle=cycle;
@@ -17269,6 +17357,7 @@ function applyGpsBatchMeta(){
     if(result!==null)   r.result=result;
     if(ha!==null)       r.home_away=ha;
     if(compet!==null)   r.competition=compet;
+    if(type&&!plan&&!r._isMatch) applyGpsPlanForType(r);
   });
 
   renderGpsPreviewTable();
@@ -17287,7 +17376,8 @@ function applyGpsBatchMeta(){
     if(track) parts.push(`팀: ${track==='B'?'B팀':'A팀'}`);
     if(topic) parts.push(`훈련주제: ${topic}`);
     msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80';
-    msg.textContent=`✅ 전체 적용 완료 (${_gpsParseData.length}명) — ${parts.join(' · ')||'변경 없음'}`;
+    const scope=plan?`${planType||'선택'} 유형`:'전체';
+    msg.textContent=`✅ ${scope} 적용 완료 (${targets.length}명) — ${parts.join(' · ')||'변경 없음'}`;
   }
 }
 
@@ -29936,7 +30026,7 @@ function onDmLabelChange(val) {
       gaugeEl.style.background = gc;
       pctEl.style.color        = gc;
       pctEl.value              = pct;
-      sliderEl.value           = Math.min(200, pct);
+      sliderEl.value           = Math.min(m.maxPct||200, pct);
       absEl.value              = absVal ?? '';
     });
     // 이 MD단계의 추천 % 를 지표별로 표시
@@ -29973,7 +30063,7 @@ function onDmLabelChange(val) {
 
 const DM_METRICS = [
   {id:'td',   label:'TD',   color:'#60a5fa', unit:'m',  avgKey:'td'},
-  {id:'hsr',  label:'HSR',  color:'#f97316', unit:'m',  avgKey:'hsr'},
+  {id:'hsr',  label:'HSR',  color:'#f97316', unit:'m',  avgKey:'hsr', maxPct:500},
   {id:'spr',  label:'SPR',  color:'#fb923c', unit:'m',  avgKey:'sprint'},
   {id:'acc',  label:'ACC',  color:'#a855f7', unit:'회', avgKey:'accel'},
   {id:'rhie', label:'RHIE', color:'#c084fc', unit:'회', avgKey:'rhie'},
@@ -29988,7 +30078,8 @@ function renderDmMetrics(dayRow){
     const avgVal=avg[m.avgKey]||0;
     // 저장된 기준이 있으면 그 %를 보여줌(지난 날 고정), 없으면 현재 평균 기준
     const pct=frozenPct(dayRow, m.id, m.id+'_target', m.avgKey);
-    const sliderPct=pct!=null?Math.min(200,pct):0;
+    const maxPct=m.maxPct||200;
+    const sliderPct=pct!=null?Math.min(maxPct,pct):0;
     const gaugeW=Math.min(100,pct??0);
     const gaugeColor=pct!=null&&pct>=150?'#ef4444':pct!=null&&pct>=100?'#f97316':m.color;
     return `<div style="display:flex;align-items:center;gap:8px">
@@ -29997,11 +30088,11 @@ function renderDmMetrics(dayRow){
         <div style="height:6px;border-radius:3px;background:var(--border);margin-bottom:3px">
           <div id="dm-gauge-${m.id}" style="height:100%;border-radius:3px;background:${gaugeColor};width:${gaugeW}%;transition:width .15s"></div>
         </div>
-        <input id="dm-slider-${m.id}" type="range" min="0" max="200" value="${sliderPct}"
+        <input id="dm-slider-${m.id}" type="range" min="0" max="${maxPct}" value="${sliderPct}"
           oninput="onDmSlider('${m.id}',this.value)"
           style="width:100%;accent-color:${m.color};cursor:pointer;height:16px">
       </div>
-      <input id="dm-pct-${m.id}" type="number" value="${pct??''}" min="0" max="200"
+      <input id="dm-pct-${m.id}" type="number" value="${pct??''}" min="0" max="${maxPct}"
         oninput="onDmPct('${m.id}',this.value)"
         placeholder="—"
         style="width:52px;padding:4px 4px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:${pct!=null&&pct>=150?'#ef4444':pct!=null&&pct>=100?'#f97316':m.color};font-size:11px;font-weight:700;text-align:center;flex-shrink:0">
@@ -30037,7 +30128,7 @@ function onDmPct(id, pctVal){
   const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
   const avgVal=avg[m.avgKey]||0;
   const absVal=avgVal?Math.round(avgVal*pctVal/100):0;
-  const sliderPct=Math.min(200,pctVal);
+  const sliderPct=Math.min(m.maxPct||200,pctVal);
   const gaugeW=Math.min(100,pctVal);
   const gc=pctVal>=150?'#ef4444':pctVal>=100?'#f97316':m.color;
   document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
@@ -30054,7 +30145,7 @@ function onDmAbs(id, absVal){
   const m=DM_METRICS.find(x=>x.id===id); if(!m) return;
   const avgVal=avg[m.avgKey]||0;
   const pct=avgVal?Math.round(absVal/avgVal*100):0;
-  const sliderPct=Math.min(200,pct);
+  const sliderPct=Math.min(m.maxPct||200,pct);
   const gaugeW=Math.min(100,pct);
   const gc2=pct>=150?'#ef4444':pct>=100?'#f97316':m.color;
   document.getElementById('dm-gauge-'+id).style.width=gaugeW+'%';
@@ -30156,7 +30247,7 @@ function renderDayPlanTabs(){
   const el=document.getElementById('dm-plan-tabs'); if(!el) return;
   const activeBase=!_dmEditingVariant;
   el.innerHTML=`<button type="button" onclick="selectBaseDayPlan()" style="padding:5px 9px;border-radius:6px;border:1px solid ${activeBase?'#6366f1':'var(--border2)'};background:${activeBase?'rgba(99,102,241,.2)':'transparent'};color:${activeBase?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">기본 계획</button>`+
-    variantsForOpenDay().map(v=>`<button type="button" onclick="selectDayPlanVariant('${v.id}')" style="padding:5px 9px;border-radius:6px;border:1px solid ${_dmEditingVariant&&_dmEditId===v.id?'#6366f1':'var(--border2)'};background:${_dmEditingVariant&&_dmEditId===v.id?'rgba(99,102,241,.2)':'transparent'};color:${_dmEditingVariant&&_dmEditId===v.id?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">${periodPlanEsc(v.plan_name||'추가 계획')} · ${periodPlanEsc(v.day_label||'—')}</button>`).join('');
+    variantsForOpenDay().map(v=>{const loadGroup=v.session_type2||v.ref_basis?.load_group||'';return `<button type="button" onclick="selectDayPlanVariant('${v.id}')" style="padding:5px 9px;border-radius:6px;border:1px solid ${_dmEditingVariant&&_dmEditId===v.id?'#6366f1':'var(--border2)'};background:${_dmEditingVariant&&_dmEditId===v.id?'rgba(99,102,241,.2)':'transparent'};color:${_dmEditingVariant&&_dmEditId===v.id?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">${periodPlanEsc(v.plan_name||'추가 계획')}${loadGroup?' · '+periodPlanEsc(loadGroup):''} · ${periodPlanEsc(v.day_label||'—')}</button>`;}).join('');
 }
 
 function fillDayPlanEditor(row,isVariant){
@@ -30179,6 +30270,7 @@ function fillDayPlanEditor(row,isVariant){
   meta.style.display=isVariant?'grid':'none';
   if(isVariant){
     document.getElementById('dm-plan-name').value=row.plan_name||'';
+    document.getElementById('dm-plan-session-type').value=row.session_type2||row.ref_basis?.load_group||'';
     document.getElementById('dm-target-match-date').value=row.target_match_date||'';
     document.getElementById('dm-plan-opponent').value=row.opponent||'';
     document.getElementById('dm-plan-competition').value=row.competition||'';
@@ -30201,7 +30293,7 @@ function selectDayPlanVariant(id){
 function newDayPlanVariant(){
   _dmEditingVariant=true; _dmEditId=null; _dmEditRefBasis=null;
   const base=(_daysByTrack[_dmEditDate]&&_daysByTrack[_dmEditDate][_dmEditTrack])||{};
-  fillDayPlanEditor({...base,id:null,plan_name:'추가 계획',target_match_date:null,opponent:null,competition:null},true);
+  fillDayPlanEditor({...base,id:null,plan_name:'추가 계획',session_type2:null,target_match_date:null,opponent:null,competition:null},true);
   renderDayPlanTabs();
   setTimeout(()=>document.getElementById('dm-plan-name')?.select(),0);
 }
@@ -30277,6 +30369,8 @@ async function saveDayPlan(){
       opponent:document.getElementById('dm-plan-opponent').value.trim()||null,
       competition:document.getElementById('dm-plan-competition').value||null,
       updated_at:new Date().toISOString()};
+    variantRow.ref_basis={...(variantRow.ref_basis||{}),load_group:document.getElementById('dm-plan-session-type').value||null};
+    delete variantRow.session_type2;
     delete variantRow.block_id;
     if(_dmEditId)({error}=await supa.from('periodization_plan_variants').update(variantRow).eq('id',_dmEditId));
     else({error}=await supa.from('periodization_plan_variants').insert(variantRow));
