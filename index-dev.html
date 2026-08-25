@@ -17022,15 +17022,15 @@ function gpsPlanOptionsHtml(date,track,selected,includePrompt=false,variantsOnly
 }
 
 function gpsAdditionalMetaFieldsHtml(){
-  const input=(id,label,placeholder)=>`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><input id="${id}" type="text" placeholder="${placeholder}" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>`;
-  return `<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">타입 기본값</div><select id="alt-type" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="">—</option><option value="M">M (주전)</option><option value="S">S (서브)</option><option value="SS">SS</option><option value="X">X</option></select></div>
+  const input=(id,label,placeholder)=>`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><input id="${id}" type="text" oninput="syncGpsAdditionalMeta(false)" placeholder="${placeholder}" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>`;
+  return `<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">타입 기본값</div><select id="alt-type" onchange="syncGpsAdditionalMeta(false)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="">—</option><option value="M">M (주전)</option><option value="S">S (서브)</option><option value="SS">SS</option><option value="X">X</option></select></div>
     ${input('alt-topic','훈련 주제','예: 볼 소유, Tactical')}
-    <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">팀</div><select id="alt-track" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="ALL">A팀</option><option value="B">B팀</option></select></div>
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">팀</div><select id="alt-track" onchange="syncGpsAdditionalMeta(false)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="ALL">A팀</option><option value="B">B팀</option></select></div>
     ${input('alt-cycle','주기 (경기기준일)','MD-1, MD-2...')}
     ${input('alt-period','주기화 (구조)','1R-4DAY...')}
     ${input('alt-opponent','준비대상','상대 / Rest Week')}
     ${input('alt-robin','로빈','R1, R2...')}
-    <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="alt-competition" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>`;
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="alt-competition" onchange="syncGpsAdditionalMeta(false)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>`;
 }
 
 function applyGpsPlan(row,key){
@@ -17081,19 +17081,22 @@ function previewGpsAdditionalMeta(key){
   value('alt-competition',saved.competition||plan.competition||'');
 }
 
-function applyGpsAdditionalMeta(){
+function syncGpsAdditionalMeta(updateAssigned=false){
   const key=document.getElementById('alt-period-plan')?.value||'';
   const plan=getGpsBatchPlan(key);
-  const msg=document.getElementById('upload-msg');
-  if(!plan){
-    if(msg) msg.textContent='추가 주기화 계획을 먼저 선택해주세요.';
-    return;
-  }
+  if(!plan) return {key:'',plan:null,targets:[]};
   const read=id=>document.getElementById(id)?.value?.trim()||null;
   _gpsPlanMetaDrafts[key]={type:read('alt-type'),topic:read('alt-topic'),track:read('alt-track')||'ALL',cycle:read('alt-cycle'),period:read('alt-period'),opponent:read('alt-opponent'),robin:read('alt-robin'),competition:read('alt-competition')};
   const targets=_gpsParseData.filter(r=>!r._isMatch&&r._periodPlanKey===key);
-  targets.forEach(r=>applyGpsPlan(r,key));
-  renderGpsPreviewTable();
+  if(updateAssigned){targets.forEach(r=>applyGpsPlan(r,key));renderGpsPreviewTable();}
+  return {key,plan,targets};
+}
+
+function applyGpsAdditionalMeta(){
+  const result=syncGpsAdditionalMeta(true);
+  const {plan,targets}=result;
+  const msg=document.getElementById('upload-msg');
+  if(!plan){if(msg)msg.textContent='추가 주기화 계획을 먼저 선택해주세요.';return;}
   if(msg){
     msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(99,102,241,0.12);border:1px solid #4338ca;color:#a5b4fc';
     msg.textContent=`✅ ${plan.plan_name||'추가 계획'} 공통정보 설정 완료${targets.length?` · 기존 적용 선수 ${targets.length}명 갱신`:''} — 선수표의 적용 계획에서 선택하면 자동 입력됩니다.`;
@@ -17102,6 +17105,8 @@ function applyGpsAdditionalMeta(){
 
 function updateGpsRowPlan(idx,key){
   const row=_gpsParseData[idx]; if(!row) return;
+  // 현재 추가 계획 입력칸의 최신값을 먼저 기억한 뒤 선수에게 즉시 적용한다.
+  if(document.getElementById('alt-period-plan')?.value===key) syncGpsAdditionalMeta(false);
   applyGpsPlan(row,key); renderGpsPreviewTable();
 }
 function getBaselineComps(){
