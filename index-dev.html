@@ -17013,17 +17013,12 @@ function gpsPlanOptionsHtml(date,track,selected,includePrompt=false){
 function applyGpsPlan(row,key){
   const plan=gpsPlansFor(row.session_date,row.track||'ALL').find(p=>p._planKey===key);
   if(!plan) return;
-  const label=(row.session_label||'AM').trim().toUpperCase();
-  const plannedTopic=label==='PM'
-    ?(plan.pm_session||plan.am_session)
-    :(plan.am_session||plan.pm_session);
   row._periodPlanKey=key;
   row.cycle=plan.day_label||row.cycle||null;
   row.periodization=plan.plan_name==='기본 계획'?(row.periodization||null):plan.plan_name;
   if(plan.session_type2) row.session_type2=plan.session_type2;
-  // 공통 입력의 훈련주제는 기본 계획(M)에 유지하고,
-  // S/SS/X 추가 계획을 선택한 행만 해당 계획 세션명으로 교체한다.
-  if(plannedTopic&&String(plan._planKey||'').startsWith('variant:')) row.session_topic=plannedTopic;
+  // 주기화 계획 이름과 GPS 훈련 주제는 서로 다른 정보다.
+  // 훈련 주제는 계획의 AM/PM 세션에서 가져오지 않고 코치가 직접 입력한다.
   row.opponent=plan.opponent||row.opponent||null;
   row.competition=plan.competition||row.competition||null;
 }
@@ -17080,12 +17075,9 @@ function previewGpsBatchPlan(key){
     return;
   }
   const targetType=(plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'');
-  const sample=_gpsParseData.find(r=>!r._isMatch&&(!targetType||(r.session_type2||'').toUpperCase()===targetType));
-  const label=(sample?.session_label||'AM').trim().toUpperCase();
-  const plannedTopic=label==='PM'?(plan.pm_session||plan.am_session):(plan.am_session||plan.pm_session);
   const setValue=(id,value)=>{const el=document.getElementById(id);if(el&&value!=null)el.value=value;};
   setValue('meta-type',targetType);
-  setValue('meta-topic',plannedTopic||'');
+  // 훈련 주제는 계획과 독립된 코치 입력값이므로 자동으로 채우거나 지우지 않는다.
   setValue('meta-cycle',plan.day_label||'');
   if(String(plan._planKey||'').startsWith('variant:')) setValue('meta-period',plan.plan_name||'');
   setValue('meta-opponent',plan.opponent||'');
