@@ -2434,8 +2434,8 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         </div>
         <div id="dm-plan-tabs" style="display:flex;gap:5px;flex-wrap:wrap"></div>
         <div id="dm-plan-meta" style="display:none;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;margin-top:10px">
-          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">계획 이름</div><input id="dm-plan-name" type="text" placeholder="예: 리그 준비" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
-          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">적용 유형</div><select id="dm-plan-session-type" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">공통</option><option value="M">M · 주전</option><option value="S">S · 서브</option><option value="SS">SS</option><option value="X">X · 비출전</option></select></div>
+          <div id="dm-plan-name-wrap"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">계획 이름</div><input id="dm-plan-name" type="text" placeholder="예: 리그 준비" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
+          <div id="dm-plan-type-wrap"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">적용 유형</div><select id="dm-plan-session-type" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">공통</option><option value="M">M · 주전</option><option value="S">S · 서브</option><option value="SS">SS</option><option value="X">X · 비출전</option></select></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">기준 경기일</div><input id="dm-target-match-date" type="date" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 상대</div><input id="dm-plan-opponent" type="text" placeholder="상대팀" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="dm-plan-competition" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">—</option><option>리그</option><option>컵대회</option><option>연습경기</option><option>기타</option></select></div>
@@ -17005,7 +17005,10 @@ async function loadGpsPeriodPlans(){
   ]);
   (base||[]).forEach(p=>{
     const key=`base:${p.id}`;
-    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',competition:PLAN_MATCH_COMPETITION[p.ref_basis?.match_type]||null});
+    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',
+      target_match_date:p.ref_basis?.target_match_date||null,
+      opponent:p.ref_basis?.opponent||null,
+      competition:p.ref_basis?.competition||PLAN_MATCH_COMPETITION[p.ref_basis?.match_type]||null});
   });
   (variants||[]).forEach(p=>{
     (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,session_type2:p.ref_basis?.load_group||null,_planKey:`variant:${p.id}`});
@@ -30228,7 +30231,7 @@ function openDayModal(dateStr){
   renderPeriodForecastPreview();
 
   renderDayPlanTabs();
-  document.getElementById('dm-plan-meta').style.display='none';
+  renderDayPlanMeta(dayRow,false);
 
   document.getElementById('dm-delete-btn').style.display=dayRow.id?'block':'none';
   document.getElementById('day-modal').style.display='flex';
@@ -30249,6 +30252,20 @@ function renderDayPlanTabs(){
     variantsForOpenDay().map(v=>{const loadGroup=v.session_type2||v.ref_basis?.load_group||'';return `<button type="button" onclick="selectDayPlanVariant('${v.id}')" style="padding:5px 9px;border-radius:6px;border:1px solid ${_dmEditingVariant&&_dmEditId===v.id?'#6366f1':'var(--border2)'};background:${_dmEditingVariant&&_dmEditId===v.id?'rgba(99,102,241,.2)':'transparent'};color:${_dmEditingVariant&&_dmEditId===v.id?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">${periodPlanEsc(v.plan_name||'추가 계획')}${loadGroup?' · '+periodPlanEsc(loadGroup):''} · ${periodPlanEsc(v.day_label||'—')}</button>`;}).join('');
 }
 
+function renderDayPlanMeta(row,isVariant){
+  const meta=document.getElementById('dm-plan-meta');
+  meta.style.display='grid';
+  document.getElementById('dm-plan-name-wrap').style.display=isVariant?'block':'none';
+  document.getElementById('dm-plan-type-wrap').style.display=isVariant?'block':'none';
+  if(isVariant){
+    document.getElementById('dm-plan-name').value=row.plan_name||'';
+    document.getElementById('dm-plan-session-type').value=row.session_type2||row.ref_basis?.load_group||'';
+  }
+  document.getElementById('dm-target-match-date').value=row.target_match_date||row.ref_basis?.target_match_date||'';
+  document.getElementById('dm-plan-opponent').value=row.opponent||row.ref_basis?.opponent||'';
+  document.getElementById('dm-plan-competition').value=row.competition||row.ref_basis?.competition||'';
+}
+
 function fillDayPlanEditor(row,isVariant){
   const isRest=(row.day_label||'').trim().toUpperCase()==='REST';
   document.getElementById('dm-rest').checked=isRest;
@@ -30265,15 +30282,7 @@ function fillDayPlanEditor(row,isVariant){
   ['td','hsr','sprint','accel','rhie'].forEach(k=>{const el=document.getElementById('dm-avg-'+k);if(el)el.textContent=avg[k]?avg[k].toLocaleString():'—';});
   renderDmMetrics(row);
   renderPeriodForecastPreview();
-  const meta=document.getElementById('dm-plan-meta');
-  meta.style.display=isVariant?'grid':'none';
-  if(isVariant){
-    document.getElementById('dm-plan-name').value=row.plan_name||'';
-    document.getElementById('dm-plan-session-type').value=row.session_type2||row.ref_basis?.load_group||'';
-    document.getElementById('dm-target-match-date').value=row.target_match_date||'';
-    document.getElementById('dm-plan-opponent').value=row.opponent||'';
-    document.getElementById('dm-plan-competition').value=row.competition||'';
-  }
+  renderDayPlanMeta(row,isVariant);
   document.getElementById('dm-delete-btn').style.display=row.id?'block':'none';
 }
 
@@ -30359,6 +30368,12 @@ async function saveDayPlan(){
         :null
     },
   };
+  if(!_dmEditingVariant){
+    row.ref_basis={...(row.ref_basis||{}),
+      target_match_date:document.getElementById('dm-target-match-date').value||null,
+      opponent:document.getElementById('dm-plan-opponent').value.trim()||null,
+      competition:document.getElementById('dm-plan-competition').value||null};
+  }
   let error;
   if(_dmEditingVariant){
     const planName=document.getElementById('dm-plan-name').value.trim();
