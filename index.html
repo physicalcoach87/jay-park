@@ -9219,7 +9219,7 @@ function doImportPreset(){
 // ═══════════════════════════════════════════
 let _gpsParseData = [];   // 파싱된 GPS 데이터 임시 저장
 let _gpsPeriodPlans = {}; // GPS 업로드 날짜별 선택 가능한 주기화 계획
-let _gpsPlanTopicDrafts = {}; // 적용 계획별 공통 훈련 주제 임시값
+let _gpsPlanMetaDrafts = {}; // 추가 계획별 GPS 공통정보 템플릿
 let _matchParseData = []; // 파싱된 경기 데이터 임시 저장
 let _minuteParseData = null; // 파싱된 1분 롤링 데이터 (rows + meta)
 let _trainMinuteParseData = null; // 파싱된 훈련 1분 롤링 데이터 (rows + meta)
@@ -16862,7 +16862,7 @@ async function parseGpsFiles(files){
 
     // 결과 합치기
     _gpsParseData=results.flatMap(r=>r.rows);
-    _gpsPlanTopicDrafts={};
+    _gpsPlanMetaDrafts={};
     await loadGpsPeriodPlans();
     const allUnknown=new Set(results.flatMap(r=>[...r.unknown]));
 
@@ -16908,7 +16908,7 @@ async function parseGpsFiles(files){
     const firstRow=_gpsParseData[0]||{};
     document.getElementById('upload-meta-form').innerHTML=`
       <div style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:10px">
-        <div style="font-weight:600;color:var(--text2);margin-bottom:10px;font-size:12px">✏️ 공통 정보 입력 후 <strong style="color:var(--accent2)">전체 적용</strong> 클릭</div>
+        <div style="font-weight:600;color:var(--text2);margin-bottom:10px;font-size:12px">✏️ 기본 계획 공통정보 <strong style="color:var(--accent2)">전체 적용</strong></div>
         <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px">
           ${!hasMatch?`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">타입 기본값</div>
             <select id="meta-type" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
@@ -16917,15 +16917,11 @@ async function parseGpsFiles(files){
               <option value="SS">SS</option><option value="X">X</option>
             </select></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">훈련 주제 <span style="font-size:9px;color:#a5b4fc">(선택 유형 공통)</span></div>
-            <input id="meta-topic" type="text" value="" oninput="setGpsPlanTopicDraft(this.value)" placeholder="예: 볼 소유, Tactical" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+            <input id="meta-topic" type="text" value="" placeholder="예: Recovery" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">팀</div>
             <select id="meta-track" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
               <option value="">—</option>
               <option value="ALL">A팀</option><option value="B">B팀</option>
-            </select></div>`:''}
-          ${!hasMatch?`<div><div style="font-size:10px;color:#a5b4fc;margin-bottom:3px">주기화 계획</div>
-            <select id="meta-period-plan" onchange="previewGpsBatchPlan(this.value)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid #6366f1;background:var(--surface);color:var(--text);font-size:12px">
-              ${gpsPlanOptionsHtml(firstRow.session_date,firstRow.track||'ALL',null,true)}
             </select></div>`:''}
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기 <span style="font-size:9px">(경기기준일)</span></div>
             <input id="meta-cycle" type="text" value="" placeholder="MD-1, MD-2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
@@ -16951,8 +16947,21 @@ async function parseGpsFiles(files){
             </select></div>
           `:''}
         </div>
-        <button id="gps-batch-apply-btn" onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
+        <button id="gps-batch-apply-btn" onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 기본 계획 전체 적용</button>
       </div>
+      ${!hasMatch?`
+      <div style="background:var(--surface2);border:1px solid #4338ca;border-radius:8px;padding:12px 14px;margin-bottom:10px">
+        <div style="font-weight:600;color:#a5b4fc;margin-bottom:10px;font-size:12px">➕ 추가 계획 공통정보</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:10px">
+          <div><div style="font-size:10px;color:#a5b4fc;margin-bottom:3px">추가 주기화 계획</div>
+            <select id="alt-period-plan" onchange="previewGpsAdditionalMeta(this.value)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid #6366f1;background:var(--surface);color:var(--text);font-size:12px">
+              ${gpsPlanOptionsHtml(firstRow.session_date,firstRow.track||'ALL',null,true,true)}
+            </select></div>
+          ${gpsAdditionalMetaFieldsHtml()}
+        </div>
+        <button onclick="applyGpsAdditionalMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 추가 계획 정보 적용</button>
+        <span style="font-size:10px;color:var(--text3);margin-left:8px">선수표에서 적용 계획을 바꾸면 이 정보가 자동 입력됩니다.</span>
+      </div>`:''}
       ${hasMatch?`
       <div style="background:var(--surface2);border:1px solid #78350f;border-radius:8px;padding:12px 14px;margin-bottom:10px">
         <div style="font-weight:600;color:#fbbf24;margin-bottom:3px;font-size:12px">📟 GPS 미착용 선수 추정 입력</div>
@@ -17007,57 +17016,43 @@ function gpsPlansFor(date,track='ALL'){
   return (_gpsPeriodPlans[date]||[]).filter(p=>(p.track||'ALL')===(track||'ALL'));
 }
 
-function gpsPlanOptionsHtml(date,track,selected,includePrompt=false){
-  const plans=gpsPlansFor(date,track);
+function gpsPlanOptionsHtml(date,track,selected,includePrompt=false,variantsOnly=false){
+  const plans=(_gpsPeriodPlans[date]||[]).filter(p=>!variantsOnly||String(p._planKey||'').startsWith('variant:'));
   return `${includePrompt?'<option value="">계획 선택</option>':'<option value="">—</option>'}`+plans.map(p=>`<option value="${p._planKey}" ${selected===p._planKey?'selected':''}>${p.plan_name||'계획'} · ${p.day_label||'—'}${p.opponent?' · '+p.opponent:''}</option>`).join('');
 }
 
+function gpsAdditionalMetaFieldsHtml(){
+  const input=(id,label,placeholder)=>`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${label}</div><input id="${id}" type="text" placeholder="${placeholder}" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>`;
+  return `<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">타입 기본값</div><select id="alt-type" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="">—</option><option value="M">M (주전)</option><option value="S">S (서브)</option><option value="SS">SS</option><option value="X">X</option></select></div>
+    ${input('alt-topic','훈련 주제','예: 볼 소유, Tactical')}
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">팀</div><select id="alt-track" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="ALL">A팀</option><option value="B">B팀</option></select></div>
+    ${input('alt-cycle','주기 (경기기준일)','MD-1, MD-2...')}
+    ${input('alt-period','주기화 (구조)','1R-4DAY...')}
+    ${input('alt-opponent','준비대상','상대 / Rest Week')}
+    ${input('alt-robin','로빈','R1, R2...')}
+    <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="alt-competition" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>`;
+}
+
 function applyGpsPlan(row,key){
-  const plan=gpsPlansFor(row.session_date,row.track||'ALL').find(p=>p._planKey===key);
+  const plan=(_gpsPeriodPlans[row.session_date]||[]).find(p=>p._planKey===key);
   if(!plan) return;
   row._periodPlanKey=key;
   row.cycle=plan.day_label||row.cycle||null;
   // 적용 계획 이름은 별도 _periodPlanKey/적용 계획 열에서 표시한다.
   // periodization은 2R-5DAY 같은 주간 구조이므로 계획을 바꿔도 유지한다.
   if(plan.session_type2) row.session_type2=plan.session_type2;
-  // 주기화 계획 이름과 GPS 훈련 주제는 서로 다른 정보다.
-  // 훈련 주제는 계획의 AM/PM 세션이 아니라 공통정보에서 계획별로 미리 입력한 값을 쓴다.
-  if(Object.prototype.hasOwnProperty.call(_gpsPlanTopicDrafts,key)){
-    row.session_topic=_gpsPlanTopicDrafts[key]||null;
-  }
   row.opponent=plan.opponent||row.opponent||null;
   row.competition=plan.competition||row.competition||null;
-}
-
-// GPS 타입을 실제로 확정하는 순간 그 타입용 계획을 자동 연결한다.
-// M 전용 추가 계획이 없으면 기존 block_days 기본 계획을 사용한다.
-function applyGpsPlanForType(row){
-  if(!row||row._isMatch) return false;
-  const plans=gpsPlansFor(row.session_date,row.track||'ALL');
-  const type=(row.session_type2||'').trim().toUpperCase();
-  const typed=plans.find(p=>(p.session_type2||'').toUpperCase()===type);
-  const base=plans.find(p=>String(p._planKey||'').startsWith('base:'));
-  const plan=typed||(type==='M'?base:null);
-  if(!plan) return false;
-  applyGpsPlan(row,plan._planKey);
-  return true;
-}
-
-function applyGpsPlanToAll(key){
-  if(!key) return;
-  const rows=_gpsParseData.filter(r=>!r._isMatch);
-  const sample=rows.find(r=>gpsPlansFor(r.session_date,r.track||'ALL').some(p=>p._planKey===key));
-  const plan=sample&&gpsPlansFor(sample.session_date,sample.track||'ALL').find(p=>p._planKey===key);
-  if(!plan) return;
-  // 추가 계획은 지정된 M/S/SS/X에만, 기본 계획은 M에만 적용한다.
-  const targetType=(plan.session_type2||'').toUpperCase()||(String(plan._planKey).startsWith('base:')?'M':'');
-  const targets=targetType?rows.filter(r=>(r.session_type2||'').toUpperCase()===targetType):rows;
-  targets.forEach(r=>applyGpsPlan(r,key));
-  renderGpsPreviewTable();
-  const msg=document.getElementById('upload-msg');
-  if(msg){
-    msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80';
-    msg.textContent=`✅ ${plan.plan_name||'계획'} 적용 — ${targetType||'전체'} ${targets.length}명`;
+  const meta=_gpsPlanMetaDrafts[key];
+  if(meta){
+    row.session_type2=meta.type||row.session_type2||null;
+    row.session_topic=meta.topic||null;
+    row.track=meta.track||row.track||'ALL';
+    row.cycle=meta.cycle||row.cycle||null;
+    row.periodization=meta.period||row.periodization||null;
+    row.opponent=meta.opponent||row.opponent||null;
+    row.robin=meta.robin||row.robin||null;
+    row.competition=meta.competition||row.competition||null;
   }
 }
 
@@ -17065,50 +17060,43 @@ function getGpsBatchPlan(key){
   if(!key) return null;
   for(const row of _gpsParseData){
     if(row._isMatch) continue;
-    const plan=gpsPlansFor(row.session_date,row.track||'ALL').find(p=>p._planKey===key);
+    const plan=(_gpsPeriodPlans[row.session_date]||[]).find(p=>p._planKey===key);
     if(plan) return plan;
   }
   return null;
 }
 
-function setGpsPlanTopicDraft(value){
-  const key=document.getElementById('meta-period-plan')?.value||'';
-  if(key) _gpsPlanTopicDrafts[key]=(value||'').trim();
+function previewGpsAdditionalMeta(key){
+  const plan=getGpsBatchPlan(key);
+  if(!plan) return;
+  const saved=_gpsPlanMetaDrafts[key]||{};
+  const value=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
+  value('alt-type',saved.type||plan.session_type2||'');
+  value('alt-topic',saved.topic||'');
+  value('alt-track',saved.track||plan.track||'ALL');
+  value('alt-cycle',saved.cycle||plan.day_label||document.getElementById('meta-cycle')?.value||'');
+  value('alt-period',saved.period||document.getElementById('meta-period')?.value||'');
+  value('alt-opponent',saved.opponent||plan.opponent||'');
+  value('alt-robin',saved.robin||document.getElementById('meta-robin')?.value||'');
+  value('alt-competition',saved.competition||plan.competition||'');
 }
 
-// 계획을 선택하는 단계에서는 선수 행을 건드리지 않고 공통 입력칸만 채운다.
-// 코치가 값을 확인·수정한 뒤 적용 버튼을 눌러야 실제 행에 반영된다.
-function previewGpsBatchPlan(key){
-  const topicEl=document.getElementById('meta-topic');
-  const previousKey=topicEl?.dataset.planKey||'';
-  if(previousKey&&previousKey!==key) _gpsPlanTopicDrafts[previousKey]=(topicEl.value||'').trim();
+function applyGpsAdditionalMeta(){
+  const key=document.getElementById('alt-period-plan')?.value||'';
   const plan=getGpsBatchPlan(key);
-  const btn=document.getElementById('gps-batch-apply-btn');
+  const msg=document.getElementById('upload-msg');
   if(!plan){
-    if(topicEl) topicEl.dataset.planKey='';
-    if(btn) btn.textContent='⚡ 전체 적용';
+    if(msg) msg.textContent='추가 주기화 계획을 먼저 선택해주세요.';
     return;
   }
-  const targetType=(plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'');
-  const setValue=(id,value)=>{const el=document.getElementById(id);if(el&&value!=null)el.value=value;};
-  setValue('meta-type',targetType);
-  // 계획을 바꾸면 그 계획에 미리 적어둔 주제를 보여준다. 처음 선택한 계획은 현재 입력값을 이어받는다.
-  if(topicEl){
-    if(!previousKey&&!Object.prototype.hasOwnProperty.call(_gpsPlanTopicDrafts,key)){
-      _gpsPlanTopicDrafts[key]=(topicEl.value||'').trim();
-    }
-    if(!Object.prototype.hasOwnProperty.call(_gpsPlanTopicDrafts,key)) _gpsPlanTopicDrafts[key]='';
-    topicEl.value=_gpsPlanTopicDrafts[key];
-    topicEl.dataset.planKey=key;
-  }
-  setValue('meta-cycle',plan.day_label||'');
-  setValue('meta-opponent',plan.opponent||'');
-  setValue('meta-competition',plan.competition||'');
-  if(btn) btn.textContent=`⚡ ${targetType||'선택'} 유형 적용`;
-  const msg=document.getElementById('upload-msg');
+  const read=id=>document.getElementById(id)?.value?.trim()||null;
+  _gpsPlanMetaDrafts[key]={type:read('alt-type'),topic:read('alt-topic'),track:read('alt-track')||'ALL',cycle:read('alt-cycle'),period:read('alt-period'),opponent:read('alt-opponent'),robin:read('alt-robin'),competition:read('alt-competition')};
+  const targets=_gpsParseData.filter(r=>!r._isMatch&&r._periodPlanKey===key);
+  targets.forEach(r=>applyGpsPlan(r,key));
+  renderGpsPreviewTable();
   if(msg){
     msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(99,102,241,0.12);border:1px solid #4338ca;color:#a5b4fc';
-    msg.textContent=`✏️ ${plan.plan_name||'계획'} 값을 불러왔습니다. 수정 후 ${targetType||'해당'} 유형 적용을 눌러주세요.`;
+    msg.textContent=`✅ ${plan.plan_name||'추가 계획'} 공통정보 설정 완료${targets.length?` · 기존 적용 선수 ${targets.length}명 갱신`:''} — 선수표의 적용 계획에서 선택하면 자동 입력됩니다.`;
   }
 }
 
@@ -17232,8 +17220,8 @@ function renderGpsPreviewTable(){
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">날짜</th>
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">세션</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">팀</th>
-      <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">타입</th>
       <th style="padding:6px 8px;color:#a5b4fc;white-space:nowrap">적용 계획</th>
+      <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">타입</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">훈련주제</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">준비대상</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">로빈</th>
@@ -17262,6 +17250,9 @@ function renderGpsPreviewTable(){
           </select>`}
         </td>
         <td style="padding:4px 6px">
+          ${r._isMatch?'<span style="color:var(--text3);font-size:11px">—</span>':`<select onchange="updateGpsRowPlan(${i},this.value)" style="width:145px;padding:3px 5px;border-radius:5px;border:1px solid #6366f1;background:var(--surface2);color:var(--text);font-size:10px">${gpsPlanOptionsHtml(r.session_date,r.track||'ALL',r._periodPlanKey,false)}</select>`}
+        </td>
+        <td style="padding:4px 6px">
           <select onchange="updateGpsRow(${i},'${r._isMatch?'time_type':'session_type2'}',this.value||null)"
             style="padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px;width:58px">
             <option value="">—</option>
@@ -17269,9 +17260,6 @@ function renderGpsPreviewTable(){
               ? ['FT','1Q','2Q','ET','Top'].map(v=>`<option value="${v}" ${(r.time_type||'')==v?'selected':''}>${v}</option>`).join('')
               : ['M','S','SS','X'].map(v=>`<option value="${v}" ${(r.session_type2||'')==v?'selected':''}>${v}</option>`).join('')}
           </select>
-        </td>
-        <td style="padding:4px 6px">
-          ${r._isMatch?'<span style="color:var(--text3);font-size:11px">—</span>':`<select onchange="updateGpsRowPlan(${i},this.value)" style="width:145px;padding:3px 5px;border-radius:5px;border:1px solid #6366f1;background:var(--surface2);color:var(--text);font-size:10px">${gpsPlanOptionsHtml(r.session_date,r.track||'ALL',r._periodPlanKey,false)}</select>`}
         </td>
         <td style="padding:4px 6px">
           <input type="text" value="${r.session_topic||''}"
@@ -17328,10 +17316,6 @@ function renderGpsPreviewTable(){
 function updateGpsRow(idx, field, val){
   const row=_gpsParseData[idx]; if(!row) return;
   row[field]=val;
-  if(field==='session_type2'){
-    applyGpsPlanForType(row);
-    renderGpsPreviewTable();
-  }
 }
 
 function applyGpsBatchMeta(){
@@ -17347,25 +17331,18 @@ function applyGpsBatchMeta(){
   const result   = document.getElementById('meta-result')?.value||null;
   const ha       = document.getElementById('meta-ha')?.value||null;
   const compet   = document.getElementById('meta-competition')?.value||null;
-  const planKey  = document.getElementById('meta-period-plan')?.value||null;
-  const plan     = getGpsBatchPlan(planKey);
-  const planType = plan?((plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'')):'';
-  const trainingRows=_gpsParseData.filter(r=>!r._isMatch);
-  const isInitialAssignment=!!plan&&!trainingRows.some(r=>(r.session_type2||'').trim());
-  // 첫 공통 설정은 아직 모든 선수의 타입이 비어 있으므로 선택 계획의 유형으로 전체를 초기화한다.
-  // 이후에는 이미 M/S로 나눈 선수 중 선택 계획과 같은 유형에만 적용한다.
-  const targets=plan
-    ?(isInitialAssignment?trainingRows:trainingRows.filter(r=>!planType||(r.session_type2||'').toUpperCase()===planType))
-    :_gpsParseData;
-
-  if(planKey) _gpsPlanTopicDrafts[planKey]=topic||'';
+  const targets=_gpsParseData;
 
   targets.forEach(r=>{
-    if(plan) applyGpsPlan(r,planKey);
-    if(plan&&isInitialAssignment&&planType) r.session_type2=planType;
+    if(!r._isMatch){
+      const base=gpsPlansFor(r.session_date,r.track||'ALL').find(p=>String(p._planKey||'').startsWith('base:'));
+      if(base){
+        _gpsPlanMetaDrafts[base._planKey]={type,topic,track:track||r.track||'ALL',cycle,period,opponent,robin,competition:compet};
+        applyGpsPlan(r,base._planKey);
+      }
+    }
     if(label){ r.session_label=label; r._isMatch=(label==='Match'); }
-    // 선택 계획의 유형은 필터 기준이다. 계획이 없을 때만 전체 타입을 일괄 지정한다.
-    if(type&&!plan){ r._isMatch?(r.time_type=type||null):(r.session_type2=type||null); }
+    if(type){ r._isMatch?(r.time_type=type||null):(r.session_type2=type||null); }
     if(track && !r._isMatch) r.track=track; // 훈련만 트랙 태깅 (A팀=ALL / B팀=B)
     if(topic!==null)    r.session_topic=topic;
     if(cycle!==null)    r.cycle=cycle;
@@ -17376,7 +17353,6 @@ function applyGpsBatchMeta(){
     if(result!==null)   r.result=result;
     if(ha!==null)       r.home_away=ha;
     if(compet!==null)   r.competition=compet;
-    if(type&&!plan&&!r._isMatch) applyGpsPlanForType(r);
   });
 
   renderGpsPreviewTable();
@@ -17395,8 +17371,7 @@ function applyGpsBatchMeta(){
     if(track) parts.push(`팀: ${track==='B'?'B팀':'A팀'}`);
     if(topic) parts.push(`훈련주제: ${topic}`);
     msg.style.cssText='font-size:12px;margin-top:8px;padding:8px 12px;border-radius:7px;background:rgba(34,197,94,0.12);border:1px solid #166534;color:#4ade80';
-    const scope=plan?`${planType||'선택'} 유형`:'전체';
-    msg.textContent=`✅ ${scope} 적용 완료 (${targets.length}명) — ${parts.join(' · ')||'변경 없음'}`;
+    msg.textContent=`✅ 기본 계획 전체 적용 완료 (${targets.length}명) — ${parts.join(' · ')||'변경 없음'}`;
   }
 }
 
