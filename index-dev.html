@@ -17015,7 +17015,8 @@ function applyGpsPlan(row,key){
   if(!plan) return;
   row._periodPlanKey=key;
   row.cycle=plan.day_label||row.cycle||null;
-  row.periodization=plan.plan_name==='기본 계획'?(row.periodization||null):plan.plan_name;
+  // 적용 계획 이름은 별도 _periodPlanKey/적용 계획 열에서 표시한다.
+  // periodization은 2R-5DAY 같은 주간 구조이므로 계획을 바꿔도 유지한다.
   if(plan.session_type2) row.session_type2=plan.session_type2;
   // 주기화 계획 이름과 GPS 훈련 주제는 서로 다른 정보다.
   // 훈련 주제는 계획의 AM/PM 세션에서 가져오지 않고 코치가 직접 입력한다.
@@ -17079,7 +17080,6 @@ function previewGpsBatchPlan(key){
   setValue('meta-type',targetType);
   // 훈련 주제는 계획과 독립된 코치 입력값이므로 자동으로 채우거나 지우지 않는다.
   setValue('meta-cycle',plan.day_label||'');
-  if(String(plan._planKey||'').startsWith('variant:')) setValue('meta-period',plan.plan_name||'');
   setValue('meta-opponent',plan.opponent||'');
   setValue('meta-competition',plan.competition||'');
   if(btn) btn.textContent=`⚡ ${targetType||'선택'} 유형 적용`;
