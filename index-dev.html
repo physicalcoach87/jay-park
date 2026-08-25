@@ -9219,6 +9219,7 @@ function doImportPreset(){
 // ═══════════════════════════════════════════
 let _gpsParseData = [];   // 파싱된 GPS 데이터 임시 저장
 let _gpsPeriodPlans = {}; // GPS 업로드 날짜별 선택 가능한 주기화 계획
+let _gpsPlanTopicDrafts = {}; // 적용 계획별 공통 훈련 주제 임시값
 let _matchParseData = []; // 파싱된 경기 데이터 임시 저장
 let _minuteParseData = null; // 파싱된 1분 롤링 데이터 (rows + meta)
 let _trainMinuteParseData = null; // 파싱된 훈련 1분 롤링 데이터 (rows + meta)
@@ -16861,6 +16862,7 @@ async function parseGpsFiles(files){
 
     // 결과 합치기
     _gpsParseData=results.flatMap(r=>r.rows);
+    _gpsPlanTopicDrafts={};
     await loadGpsPeriodPlans();
     const allUnknown=new Set(results.flatMap(r=>[...r.unknown]));
 
@@ -16915,7 +16917,7 @@ async function parseGpsFiles(files){
               <option value="SS">SS</option><option value="X">X</option>
             </select></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">훈련 주제 <span style="font-size:9px;color:#a5b4fc">(선택 유형 공통)</span></div>
-            <input id="meta-topic" type="text" value="" placeholder="예: 볼 소유, Tactical" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+            <input id="meta-topic" type="text" value="" oninput="setGpsPlanTopicDraft(this.value)" placeholder="예: 볼 소유, Tactical" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">팀</div>
             <select id="meta-track" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
               <option value="">—</option>
@@ -17019,7 +17021,10 @@ function applyGpsPlan(row,key){
   // periodization은 2R-5DAY 같은 주간 구조이므로 계획을 바꿔도 유지한다.
   if(plan.session_type2) row.session_type2=plan.session_type2;
   // 주기화 계획 이름과 GPS 훈련 주제는 서로 다른 정보다.
-  // 훈련 주제는 계획의 AM/PM 세션에서 가져오지 않고 코치가 직접 입력한다.
+  // 훈련 주제는 계획의 AM/PM 세션이 아니라 공통정보에서 계획별로 미리 입력한 값을 쓴다.
+  if(Object.prototype.hasOwnProperty.call(_gpsPlanTopicDrafts,key)){
+    row.session_topic=_gpsPlanTopicDrafts[key]||null;
+  }
   row.opponent=plan.opponent||row.opponent||null;
   row.competition=plan.competition||row.competition||null;
 }
@@ -17066,19 +17071,36 @@ function getGpsBatchPlan(key){
   return null;
 }
 
+function setGpsPlanTopicDraft(value){
+  const key=document.getElementById('meta-period-plan')?.value||'';
+  if(key) _gpsPlanTopicDrafts[key]=(value||'').trim();
+}
+
 // 계획을 선택하는 단계에서는 선수 행을 건드리지 않고 공통 입력칸만 채운다.
 // 코치가 값을 확인·수정한 뒤 적용 버튼을 눌러야 실제 행에 반영된다.
 function previewGpsBatchPlan(key){
+  const topicEl=document.getElementById('meta-topic');
+  const previousKey=topicEl?.dataset.planKey||'';
+  if(previousKey&&previousKey!==key) _gpsPlanTopicDrafts[previousKey]=(topicEl.value||'').trim();
   const plan=getGpsBatchPlan(key);
   const btn=document.getElementById('gps-batch-apply-btn');
   if(!plan){
+    if(topicEl) topicEl.dataset.planKey='';
     if(btn) btn.textContent='⚡ 전체 적용';
     return;
   }
   const targetType=(plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'');
   const setValue=(id,value)=>{const el=document.getElementById(id);if(el&&value!=null)el.value=value;};
   setValue('meta-type',targetType);
-  // 훈련 주제는 계획과 독립된 코치 입력값이므로 자동으로 채우거나 지우지 않는다.
+  // 계획을 바꾸면 그 계획에 미리 적어둔 주제를 보여준다. 처음 선택한 계획은 현재 입력값을 이어받는다.
+  if(topicEl){
+    if(!previousKey&&!Object.prototype.hasOwnProperty.call(_gpsPlanTopicDrafts,key)){
+      _gpsPlanTopicDrafts[key]=(topicEl.value||'').trim();
+    }
+    if(!Object.prototype.hasOwnProperty.call(_gpsPlanTopicDrafts,key)) _gpsPlanTopicDrafts[key]='';
+    topicEl.value=_gpsPlanTopicDrafts[key];
+    topicEl.dataset.planKey=key;
+  }
   setValue('meta-cycle',plan.day_label||'');
   setValue('meta-opponent',plan.opponent||'');
   setValue('meta-competition',plan.competition||'');
@@ -17335,6 +17357,8 @@ function applyGpsBatchMeta(){
   const targets=plan
     ?(isInitialAssignment?trainingRows:trainingRows.filter(r=>!planType||(r.session_type2||'').toUpperCase()===planType))
     :_gpsParseData;
+
+  if(planKey) _gpsPlanTopicDrafts[planKey]=topic||'';
 
   targets.forEach(r=>{
     if(plan) applyGpsPlan(r,planKey);
