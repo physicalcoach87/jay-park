@@ -2435,7 +2435,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
         <div id="dm-plan-tabs" style="display:flex;gap:5px;flex-wrap:wrap"></div>
         <div id="dm-plan-meta" style="display:none;grid-template-columns:repeat(auto-fit,minmax(105px,1fr));gap:7px;margin-top:10px">
           <div id="dm-plan-name-wrap"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">계획 이름</div><input id="dm-plan-name" type="text" placeholder="예: 리그 준비" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
-          <div id="dm-plan-type-wrap"><div style="font-size:9px;color:var(--text3);margin-bottom:3px">적용 유형</div><select id="dm-plan-session-type" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">공통</option><option value="M">M · 주전</option><option value="S">S · 서브</option><option value="SS">SS</option><option value="X">X · 비출전</option></select></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">기준 경기일</div><input id="dm-target-match-date" type="date" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 상대</div><input id="dm-plan-opponent" type="text" placeholder="상대팀" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="dm-plan-competition" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">—</option><option>리그</option><option>컵대회</option><option>연습경기</option><option>기타</option></select></div>
@@ -10255,7 +10254,9 @@ const MD_LOAD_TARGETS = {
 const WEEK_DAYS = ['일','월','화','수','목','금','토'];
 
 let _briefTrack = 'ALL'; // 데일리브리핑 트랙: 'ALL'=A팀(기본), 'B'=B팀
-function setBriefTrack(t){ _briefTrack = t; loadMorningReport(); }
+let _briefPlanKey = 'base';
+function setBriefTrack(t){ _briefTrack = t; _briefPlanKey='base'; loadMorningReport(); }
+function setBriefPlan(key){ _briefPlanKey=key||'base'; loadMorningReport(); }
 
 async function loadMorningReport(){
   const out = document.getElementById('morning-report-output');
@@ -10306,6 +10307,7 @@ async function loadMorningReport(){
     {data:weekSched},
     {data:weekMatchRaw},
     {data:weekBlockDays},
+    {data:weekPlanVariants},
   ] = await Promise.all([
     supa.from('gps_records')
       .select('session_date,player_id,td,running_high,sprint,accel,rhie,max_speed,duration,session_type2,session_topic,opponent,session_label')
@@ -10343,6 +10345,11 @@ async function loadMorningReport(){
       .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,ref_basis')
       .in('track', isB?['ALL','B']:['ALL'])
       .gte('plan_date', weekStartStr < yesterdayStr ? weekStartStr : yesterdayStr).lte('plan_date', weekEndStr),
+    supa.from('periodization_plan_variants')
+      .select('id,plan_date,track,plan_name,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,opponent,competition')
+      .eq('club_id',currentClubId)
+      .in('track',isB?['ALL','B']:['ALL'])
+      .eq('plan_date',today),
   ]);
 
   // ── 경기 팀 평균: (합계) / (출전시간 합) × max(출전시간) ──────
@@ -10805,7 +10812,7 @@ async function loadMorningReport(){
 
   // ── 오늘 권장 부하 ─────────────────────────────────────────────
   const todayTopic = (weekGps||[]).find(r=>r.session_date===today)?.session_topic || '';
-  const todayOpp = (weekGps||[]).find(r=>r.session_date===today)?.opponent||null;
+  const gpsTodayOpp = (weekGps||[]).find(r=>r.session_date===today)?.opponent||null;
 
   // block_days 맵 (날짜별). B팀 뷰: B행 우선, 없으면 A팀(ALL) 목표로 대체
   const blockDayMap = {};
@@ -10819,9 +10826,20 @@ async function loadMorningReport(){
     }
   });
 
-  // 오늘 / 어제 block_days
-  const todayBlockDay = blockDayMap[today] || null;
+  // 오늘 기본/추가 계획. 버튼으로 선택한 계획을 오늘 권장 부하에 표시한다.
+  const baseTodayBlockDay = blockDayMap[today] || null;
+  const todayPlanChoices=[
+    ...(baseTodayBlockDay?[{key:'base',name:'기본 계획',row:baseTodayBlockDay}]:[]),
+    ...(weekPlanVariants||[]).map(v=>({key:`variant:${v.id}`,name:v.plan_name||'추가 계획',row:v}))
+  ];
+  if(!todayPlanChoices.some(p=>p.key===_briefPlanKey)) _briefPlanKey=todayPlanChoices[0]?.key||'base';
+  const activeBriefPlan=todayPlanChoices.find(p=>p.key===_briefPlanKey)||todayPlanChoices[0]||null;
+  const todayBlockDay=activeBriefPlan?.row||null;
   const yesterdayBlockDay = blockDayMap[yesterdayStr] || null;
+  const todayOpp=todayBlockDay?.opponent||todayBlockDay?.ref_basis?.opponent||gpsTodayOpp;
+  const briefPlanTabsHtml=todayPlanChoices.length>1
+    ?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">${todayPlanChoices.map(p=>`<button onclick="setBriefPlan('${p.key}')" style="padding:4px 10px;border-radius:6px;border:1px solid ${_briefPlanKey===p.key?'#6366f1':'var(--border2)'};background:${_briefPlanKey===p.key?'rgba(99,102,241,.2)':'transparent'};color:${_briefPlanKey===p.key?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer;font-family:inherit">${periodPlanEsc(p.name)}</button>`).join('')}</div>`
+    :'';
 
   // ── PM RPE 미입력 선수: 오늘 block_days에 pm_session 있고, session_records가 1개(AM만)인 선수 ──
   const todayHasPmSession = !!(todayBlockDay?.pm_session);
@@ -11292,7 +11310,7 @@ async function loadMorningReport(){
   if(timeEl) timeEl.textContent = nowStr;
 
   const todayMD = (weekGps||[]).find(r=>r.session_date===today)?.session_topic||'—';
-  const todayOpp2 = (weekGps||[]).find(r=>r.session_date===today)?.opponent||null;
+  const todayOpp2 = todayOpp;
 
     // ── 팀 스케줄 compact strip ──────────────────────────────────────
   const _wsByDate = {};
@@ -11372,6 +11390,7 @@ async function loadMorningReport(){
     <!-- 섹션2: 오늘 권장 부하 + 경기 기준 + 이번 주 누적/어제 결과 -->
     <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:11px;font-weight:500;color:var(--text3);margin-bottom:10px;letter-spacing:.05em">🎯 오늘 권장 부하</div>
+      ${briefPlanTabsHtml}
       ${loadHtml}
 
       ${ref3Info.length ? `
@@ -17011,7 +17030,7 @@ async function loadGpsPeriodPlans(){
       competition:p.ref_basis?.competition||PLAN_MATCH_COMPETITION[p.ref_basis?.match_type]||null});
   });
   (variants||[]).forEach(p=>{
-    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,session_type2:p.ref_basis?.load_group||null,_planKey:`variant:${p.id}`});
+    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:`variant:${p.id}`});
   });
 }
 
@@ -17074,7 +17093,7 @@ function previewGpsAdditionalMeta(key){
   if(!plan) return;
   const saved=_gpsPlanMetaDrafts[key]||{};
   const value=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v||'';};
-  value('alt-type',saved.type||plan.session_type2||'');
+  value('alt-type',saved.type||'');
   value('alt-topic',saved.topic||'');
   value('alt-track',saved.track||plan.track||'ALL');
   value('alt-cycle',saved.cycle||plan.day_label||document.getElementById('meta-cycle')?.value||'');
@@ -30249,17 +30268,15 @@ function renderDayPlanTabs(){
   const el=document.getElementById('dm-plan-tabs'); if(!el) return;
   const activeBase=!_dmEditingVariant;
   el.innerHTML=`<button type="button" onclick="selectBaseDayPlan()" style="padding:5px 9px;border-radius:6px;border:1px solid ${activeBase?'#6366f1':'var(--border2)'};background:${activeBase?'rgba(99,102,241,.2)':'transparent'};color:${activeBase?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">기본 계획</button>`+
-    variantsForOpenDay().map(v=>{const loadGroup=v.session_type2||v.ref_basis?.load_group||'';return `<button type="button" onclick="selectDayPlanVariant('${v.id}')" style="padding:5px 9px;border-radius:6px;border:1px solid ${_dmEditingVariant&&_dmEditId===v.id?'#6366f1':'var(--border2)'};background:${_dmEditingVariant&&_dmEditId===v.id?'rgba(99,102,241,.2)':'transparent'};color:${_dmEditingVariant&&_dmEditId===v.id?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">${periodPlanEsc(v.plan_name||'추가 계획')}${loadGroup?' · '+periodPlanEsc(loadGroup):''} · ${periodPlanEsc(v.day_label||'—')}</button>`;}).join('');
+    variantsForOpenDay().map(v=>`<button type="button" onclick="selectDayPlanVariant('${v.id}')" style="padding:5px 9px;border-radius:6px;border:1px solid ${_dmEditingVariant&&_dmEditId===v.id?'#6366f1':'var(--border2)'};background:${_dmEditingVariant&&_dmEditId===v.id?'rgba(99,102,241,.2)':'transparent'};color:${_dmEditingVariant&&_dmEditId===v.id?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">${periodPlanEsc(v.plan_name||'추가 계획')} · ${periodPlanEsc(v.day_label||'—')}</button>`).join('');
 }
 
 function renderDayPlanMeta(row,isVariant){
   const meta=document.getElementById('dm-plan-meta');
   meta.style.display='grid';
   document.getElementById('dm-plan-name-wrap').style.display=isVariant?'block':'none';
-  document.getElementById('dm-plan-type-wrap').style.display=isVariant?'block':'none';
   if(isVariant){
     document.getElementById('dm-plan-name').value=row.plan_name||'';
-    document.getElementById('dm-plan-session-type').value=row.session_type2||row.ref_basis?.load_group||'';
   }
   document.getElementById('dm-target-match-date').value=row.target_match_date||row.ref_basis?.target_match_date||'';
   document.getElementById('dm-plan-opponent').value=row.opponent||row.ref_basis?.opponent||'';
@@ -30301,7 +30318,7 @@ function selectDayPlanVariant(id){
 function newDayPlanVariant(){
   _dmEditingVariant=true; _dmEditId=null; _dmEditRefBasis=null;
   const base=(_daysByTrack[_dmEditDate]&&_daysByTrack[_dmEditDate][_dmEditTrack])||{};
-  fillDayPlanEditor({...base,id:null,plan_name:'추가 계획',session_type2:null,target_match_date:null,opponent:null,competition:null},true);
+  fillDayPlanEditor({...base,id:null,plan_name:'추가 계획',target_match_date:null,opponent:null,competition:null},true);
   renderDayPlanTabs();
   setTimeout(()=>document.getElementById('dm-plan-name')?.select(),0);
 }
@@ -30383,7 +30400,6 @@ async function saveDayPlan(){
       opponent:document.getElementById('dm-plan-opponent').value.trim()||null,
       competition:document.getElementById('dm-plan-competition').value||null,
       updated_at:new Date().toISOString()};
-    variantRow.ref_basis={...(variantRow.ref_basis||{}),load_group:document.getElementById('dm-plan-session-type').value||null};
     delete variantRow.session_type2;
     delete variantRow.block_id;
     if(_dmEditId)({error}=await supa.from('periodization_plan_variants').update(variantRow).eq('id',_dmEditId));
