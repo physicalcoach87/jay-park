@@ -17328,14 +17328,17 @@ function applyGpsBatchMeta(){
   const planKey  = document.getElementById('meta-period-plan')?.value||null;
   const plan     = getGpsBatchPlan(planKey);
   const planType = plan?((plan.session_type2||'').toUpperCase()||(String(plan._planKey||'').startsWith('base:')?'M':'')):'';
-  // 계획이 선택된 경우에는 이미 그 유형으로 분류된 선수만 대상으로 삼는다.
-  // 계획 미선택 상태의 최초 공통 입력은 기존처럼 전체 행에 적용한다.
+  const trainingRows=_gpsParseData.filter(r=>!r._isMatch);
+  const isInitialAssignment=!!plan&&!trainingRows.some(r=>(r.session_type2||'').trim());
+  // 첫 공통 설정은 아직 모든 선수의 타입이 비어 있으므로 선택 계획의 유형으로 전체를 초기화한다.
+  // 이후에는 이미 M/S로 나눈 선수 중 선택 계획과 같은 유형에만 적용한다.
   const targets=plan
-    ?_gpsParseData.filter(r=>!r._isMatch&&(!planType||(r.session_type2||'').toUpperCase()===planType))
+    ?(isInitialAssignment?trainingRows:trainingRows.filter(r=>!planType||(r.session_type2||'').toUpperCase()===planType))
     :_gpsParseData;
 
   targets.forEach(r=>{
     if(plan) applyGpsPlan(r,planKey);
+    if(plan&&isInitialAssignment&&planType) r.session_type2=planType;
     if(label){ r.session_label=label; r._isMatch=(label==='Match'); }
     // 선택 계획의 유형은 필터 기준이다. 계획이 없을 때만 전체 타입을 일괄 지정한다.
     if(type&&!plan){ r._isMatch?(r.time_type=type||null):(r.session_type2=type||null); }
