@@ -2423,23 +2423,6 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
     <!-- 훈련 영역 (REST 시 숨김) -->
     <div id="dm-training-area">
-      <!-- 같은 A팀 안의 복수 주기화 계획. 계획 단계에는 선수를 배정하지 않는다. -->
-      <div style="margin-bottom:14px;padding:10px 12px;border:1px solid rgba(99,102,241,.35);background:rgba(99,102,241,.08);border-radius:9px">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
-          <div>
-            <div style="font-size:11px;font-weight:700;color:#a5b4fc">주기화 계획안</div>
-            <div style="font-size:9px;color:var(--text3);margin-top:2px">선수는 정하지 않고 계획만 만듭니다. 실제 선수 구분은 GPS 업로드에서 확정합니다.</div>
-          </div>
-          <button type="button" onclick="newDayPlanVariant()" style="padding:5px 9px;border-radius:6px;border:1px solid #6366f1;background:transparent;color:#a5b4fc;font-size:10px;cursor:pointer;white-space:nowrap">＋ 계획 추가</button>
-        </div>
-        <div id="dm-plan-tabs" style="display:flex;gap:5px;flex-wrap:wrap"></div>
-        <div id="dm-plan-meta" style="display:none;grid-template-columns:1.2fr 1fr 1fr 1fr;gap:7px;margin-top:10px">
-          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">계획 이름</div><input id="dm-plan-name" type="text" placeholder="예: 리그 준비" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
-          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">기준 경기일</div><input id="dm-target-match-date" type="date" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
-          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 상대</div><input id="dm-plan-opponent" type="text" placeholder="상대팀" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px;box-sizing:border-box"></div>
-          <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="dm-plan-competition" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">—</option><option>리그</option><option>컵대회</option><option>연습경기</option><option>기타</option></select></div>
-        </div>
-      </div>
       <!-- MD 라벨 -->
       <div style="margin-bottom:14px">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨</div>
@@ -9217,7 +9200,6 @@ function doImportPreset(){
 // 선수 통합 관리 시스템
 // ═══════════════════════════════════════════
 let _gpsParseData = [];   // 파싱된 GPS 데이터 임시 저장
-let _gpsPeriodPlans = {}; // GPS 업로드 날짜별 선택 가능한 주기화 계획
 let _matchParseData = []; // 파싱된 경기 데이터 임시 저장
 let _minuteParseData = null; // 파싱된 1분 롤링 데이터 (rows + meta)
 let _trainMinuteParseData = null; // 파싱된 훈련 1분 롤링 데이터 (rows + meta)
@@ -16860,7 +16842,6 @@ async function parseGpsFiles(files){
 
     // 결과 합치기
     _gpsParseData=results.flatMap(r=>r.rows);
-    await loadGpsPeriodPlans();
     const allUnknown=new Set(results.flatMap(r=>[...r.unknown]));
 
     const trainCount=_gpsParseData.filter(r=>!r._isMatch).length;
@@ -16920,10 +16901,6 @@ async function parseGpsFiles(files){
               <option value="">—</option>
               <option value="ALL">A팀</option><option value="B">B팀</option>
             </select></div>`:''}
-          ${!hasMatch?`<div><div style="font-size:10px;color:#a5b4fc;margin-bottom:3px">주기화 계획</div>
-            <select id="meta-period-plan" onchange="applyGpsPlanToAll(this.value)" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid #6366f1;background:var(--surface);color:var(--text);font-size:12px">
-              ${gpsPlanOptionsHtml(firstRow.session_date,firstRow.track||'ALL',null,true)}
-            </select></div>`:''}
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기 <span style="font-size:9px">(경기기준일)</span></div>
             <input id="meta-cycle" type="text" value="" placeholder="MD-1, MD-2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">주기화 <span style="font-size:9px">(구조)</span></div>
@@ -16932,10 +16909,6 @@ async function parseGpsFiles(files){
             <input id="meta-opponent" type="text" value="" placeholder="전북현대 / Rest Week..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">로빈</div>
             <input id="meta-robin" type="text" value="" placeholder="R1, R2..." style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
-          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">${hasMatch?'대회':'준비 대회'}</div>
-            <select id="meta-competition" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
-              <option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}">${c}</option>`).join('')}
-            </select></div>
           ${hasMatch?`<div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">스코어</div>
             <input id="meta-score" type="text" value="" placeholder="2-1" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
           <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">결과</div>
@@ -16946,7 +16919,10 @@ async function parseGpsFiles(files){
             <select id="meta-ha" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
               <option value="">—</option><option value="H">H (홈)</option><option value="A">A (어웨이)</option>
             </select></div>
-          `:''}
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:3px">대회</div>
+            <select id="meta-competition" style="width:100%;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px">
+              <option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}">${c}</option>`).join('')}
+            </select></div>`:''}
         </div>
         <button onclick="applyGpsBatchMeta()" class="btn-exp" style="font-size:12px;padding:7px 16px">⚡ 전체 적용</button>
       </div>
@@ -16981,54 +16957,6 @@ async function parseGpsFiles(files){
 // 최근 3경기 기준선에 어떤 대회를 포함할지. 기본은 리그만.
 // 컵대회는 로테이션 스쿼드·상대 수준 차이로 리그 요구도를 대표하지 못한다.
 const COMPETITIONS = ['리그','컵대회','연습경기','기타'];
-const PLAN_MATCH_COMPETITION={LEAGUE:'리그',CUP:'컵대회',FRIENDLY:'연습경기'};
-
-async function loadGpsPeriodPlans(){
-  _gpsPeriodPlans={};
-  const dates=[...new Set(_gpsParseData.filter(r=>!r._isMatch&&r.session_date).map(r=>r.session_date))];
-  if(!dates.length) return;
-  const [{data:base},{data:variants}]=await Promise.all([
-    supa.from('block_days').select('*').in('plan_date',dates),
-    supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).in('plan_date',dates)
-  ]);
-  (base||[]).forEach(p=>{
-    const key=`base:${p.id}`;
-    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',competition:PLAN_MATCH_COMPETITION[p.ref_basis?.match_type]||null});
-  });
-  (variants||[]).forEach(p=>{
-    (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:`variant:${p.id}`});
-  });
-}
-
-function gpsPlansFor(date,track='ALL'){
-  return (_gpsPeriodPlans[date]||[]).filter(p=>(p.track||'ALL')===(track||'ALL'));
-}
-
-function gpsPlanOptionsHtml(date,track,selected,includePrompt=false){
-  const plans=gpsPlansFor(date,track);
-  return `${includePrompt?'<option value="">계획 선택</option>':'<option value="">—</option>'}`+plans.map(p=>`<option value="${p._planKey}" ${selected===p._planKey?'selected':''}>${p.plan_name||'계획'} · ${p.day_label||'—'}${p.opponent?' · '+p.opponent:''}</option>`).join('');
-}
-
-function applyGpsPlan(row,key){
-  const plan=gpsPlansFor(row.session_date,row.track||'ALL').find(p=>p._planKey===key);
-  if(!plan) return;
-  row._periodPlanKey=key;
-  row.cycle=plan.day_label||row.cycle||null;
-  row.periodization=plan.plan_name==='기본 계획'?(row.periodization||null):plan.plan_name;
-  row.opponent=plan.opponent||row.opponent||null;
-  row.competition=plan.competition||row.competition||null;
-}
-
-function applyGpsPlanToAll(key){
-  if(!key) return;
-  _gpsParseData.filter(r=>!r._isMatch).forEach(r=>applyGpsPlan(r,key));
-  renderGpsPreviewTable();
-}
-
-function updateGpsRowPlan(idx,key){
-  const row=_gpsParseData[idx]; if(!row) return;
-  applyGpsPlan(row,key); renderGpsPreviewTable();
-}
 function getBaselineComps(){
   try{ const v=JSON.parse(localStorage.getItem('baselineComps')||'null');
        if(Array.isArray(v)&&v.length) return v; }catch(e){}
@@ -17146,13 +17074,11 @@ function renderGpsPreviewTable(){
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">세션</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">팀</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">타입</th>
-      <th style="padding:6px 8px;color:#a5b4fc;white-space:nowrap">적용 계획</th>
       <th style="padding:6px 8px;color:var(--accent2);white-space:nowrap">훈련주제</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">준비대상</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">로빈</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">주기</th>
       <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">주기화</th>
-      <th style="padding:6px 8px;color:#fb923c;white-space:nowrap">준비 대회</th>
       ${_isCoachRpe?'<th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">RPE</th><th style="padding:6px 8px;color:#a78bfa;white-space:nowrap">체중(kg)</th>':''}
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">TD(m)</th>
       <th style="padding:6px 8px;color:var(--text3);white-space:nowrap">HSR(m)</th>
@@ -17184,9 +17110,6 @@ function renderGpsPreviewTable(){
           </select>
         </td>
         <td style="padding:4px 6px">
-          ${r._isMatch?'<span style="color:var(--text3);font-size:11px">—</span>':`<select onchange="updateGpsRowPlan(${i},this.value)" style="width:145px;padding:3px 5px;border-radius:5px;border:1px solid #6366f1;background:var(--surface2);color:var(--text);font-size:10px">${gpsPlanOptionsHtml(r.session_date,r.track||'ALL',r._periodPlanKey,false)}</select>`}
-        </td>
-        <td style="padding:4px 6px">
           <input type="text" value="${r.session_topic||''}"
             onchange="updateGpsRow(${i},'session_topic',this.value||null)"
             placeholder="주제"
@@ -17215,11 +17138,6 @@ function renderGpsPreviewTable(){
             onchange="updateGpsRow(${i},'periodization',this.value.trim()||null)"
             placeholder="1R-5DAY"
             style="width:82px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:#fb923c;font-size:11px">
-        </td>
-        <td style="padding:4px 6px">
-          <select onchange="updateGpsRow(${i},'competition',this.value||null)" style="width:82px;padding:3px 5px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:#fb923c;font-size:10px">
-            <option value="">—</option>${COMPETITIONS.map(c=>`<option value="${c}" ${r.competition===c?'selected':''}>${c}</option>`).join('')}
-          </select>
         </td>
         ${_isCoachRpe?`
           <td style="padding:4px 6px"><input type="number" min="1" max="10" step="0.5" value="${r._rpe??''}"
@@ -17301,7 +17219,7 @@ async function saveGpsData(){
   // _isMatch 플래그로 훈련/경기 분리 (_srcFile 등 내부 필드 제거)
   const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
-  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, _periodPlanKey, ...r})=>r);
+  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, ...r})=>r);
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, _estimated, time_type, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
@@ -29026,13 +28944,11 @@ let _blocksData  = []; // blocks — 현재 선택 트랙(_periodTrack)의 블�
 let _blocksAll   = []; // blocks — 전 트랙 (메모리 보관, 트랙 전환 시 재필터용)
 let _daysData    = {}; // { 'YYYY-MM-DD': block_days row }  ← 현재 선택 트랙의 행만
 let _daysByTrack = {}; // { 'YYYY-MM-DD': { ALL/A/B: row } }  ← 전 트랙
-let _periodVariants = []; // 기본 block_days 외 같은 날짜의 추가 주기화 계획
 let _periodTrack = 'ALL'; // 주기화 달력 트랙: 'ALL'=A팀(기본/기존데이터), 'B'=B팀
 let _dmEditTrack = 'ALL'; // 날짜 모달에서 편집중인 트랙
 let _bmEditId    = null; // 편집중인 block id
 let _dmEditDate  = null; // 편집중인 날짜
 let _dmEditId    = null; // 편집중인 block_days id
-let _dmEditingVariant = false; // true면 periodization_plan_variants 편집
 let _dmEditRefBasis = null; // 편집중인 날의 기존 기준 스냅샷 (지난 날 고정용)
 let _dmBasisAvg = {td:0,hsr:0,sprint:0,accel:0,rhie:0}; // 모달 내 %↔절대값 변환 기준(지난 날은 고정 기준)
 let _periodForecastActual = {}; // 날짜별 실제 팀 GPS/경기 평균
@@ -29081,14 +28997,12 @@ async function loadPeriodTab() {
   const last=lastD.toISOString().split('T')[0];
   const histD=new Date(first+'T00:00:00'); histD.setDate(histD.getDate()-60);
   const hist=histD.toISOString().split('T')[0];
-  const [{data:blocks},{data:days},{data:gpsRows},{data:matchRows},{data:variants}] = await Promise.all([
+  const [{data:blocks},{data:days},{data:gpsRows},{data:matchRows}] = await Promise.all([
     supa.from('blocks').select('*').order('start_date'),
     supa.from('block_days').select('*').gte('plan_date',hist).lte('plan_date',last),
     supa.from('gps_records').select('session_date,td,running_high,sprint,accel,rhie,duration,session_type2,track').gte('session_date',hist).lte('session_date',last),
-    supa.from('match_records').select('match_date,td,band4_td,band5_td,accel,rhie,duration,time_type').eq('time_type','FT').gte('match_date',hist).lte('match_date',last),
-    supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).gte('plan_date',hist).lte('plan_date',last)
+    supa.from('match_records').select('match_date,td,band4_td,band5_td,accel,rhie,duration,time_type').eq('time_type','FT').gte('match_date',hist).lte('match_date',last)
   ]);
-  _periodVariants=variants||[];
   _periodForecastFirst=hist;
   _periodForecastActual=buildPeriodActualLoads(gpsRows||[],matchRows||[],_periodTrack);
   _periodForecastKnown=buildPeriodKnownDates(gpsRows||[],matchRows||[],_periodTrack);
@@ -29661,8 +29575,7 @@ function renderPeriodCalendar() {
 
         const bg=isOverflow?'var(--bg)':(block?block.color+'15':(isToday?'rgba(99,102,241,0.07)':'var(--surface)'));
         const hover=isOverflow?'var(--surface)':(block?block.color+'28':'var(--surface2)');
-        const variantCount=_periodVariants.filter(v=>v.plan_date===ds&&(v.track||'ALL')===_periodTrack).length;
-        const mssBadgeHtml=variantCount?`<div style="margin-top:5px;padding:2px 5px;border-radius:4px;background:rgba(99,102,241,.16);color:#a5b4fc;font-size:8px;font-weight:700;text-align:center">＋ 추가 계획 ${variantCount}개</div>`:'';
+        const mssBadgeHtml='';
         html+=`<td onclick="openDayModal('${ds}')"
           style="position:relative;padding:6px;border:1px solid var(--border);vertical-align:top;cursor:pointer;background:${bg};transition:background .15s;height:140px;${isOverflow?'opacity:0.45':''}"
           onmouseover="this.style.background='${hover}'"
@@ -30088,7 +30001,6 @@ function openDayModal(dateStr){
   const block=getBlockForDate(dateStr);
   const dayRow=(_daysByTrack[dateStr]&&_daysByTrack[dateStr][_dmEditTrack])||{};
   _dmEditId=dayRow.id||null;
-  _dmEditingVariant=false;
   _dmEditRefBasis=dayRow.ref_basis||null;
 
   const trkLbl=_dmEditTrack==='B'?' · B팀':' · A팀';
@@ -30137,76 +30049,11 @@ function openDayModal(dateStr){
   renderDmMetrics(dayRow);
   renderPeriodForecastPreview();
 
-  renderDayPlanTabs();
-  document.getElementById('dm-plan-meta').style.display='none';
-
   document.getElementById('dm-delete-btn').style.display=dayRow.id?'block':'none';
   document.getElementById('day-modal').style.display='flex';
 }
 
-function variantsForOpenDay(){
-  return (_periodVariants||[]).filter(v=>v.plan_date===_dmEditDate&&(v.track||'ALL')===_dmEditTrack);
-}
-
-function periodPlanEsc(value){
-  return String(value??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-}
-
-function renderDayPlanTabs(){
-  const el=document.getElementById('dm-plan-tabs'); if(!el) return;
-  const activeBase=!_dmEditingVariant;
-  el.innerHTML=`<button type="button" onclick="selectBaseDayPlan()" style="padding:5px 9px;border-radius:6px;border:1px solid ${activeBase?'#6366f1':'var(--border2)'};background:${activeBase?'rgba(99,102,241,.2)':'transparent'};color:${activeBase?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">기본 계획</button>`+
-    variantsForOpenDay().map(v=>`<button type="button" onclick="selectDayPlanVariant('${v.id}')" style="padding:5px 9px;border-radius:6px;border:1px solid ${_dmEditingVariant&&_dmEditId===v.id?'#6366f1':'var(--border2)'};background:${_dmEditingVariant&&_dmEditId===v.id?'rgba(99,102,241,.2)':'transparent'};color:${_dmEditingVariant&&_dmEditId===v.id?'#c7d2fe':'var(--text2)'};font-size:10px;cursor:pointer">${periodPlanEsc(v.plan_name||'추가 계획')} · ${periodPlanEsc(v.day_label||'—')}</button>`).join('');
-}
-
-function fillDayPlanEditor(row,isVariant){
-  const isRest=(row.day_label||'').trim().toUpperCase()==='REST';
-  document.getElementById('dm-rest').checked=isRest;
-  toggleDmRest(isRest);
-  document.getElementById('dm-day-label').value=row.day_label||'';
-  const matchTypeEl=document.getElementById('dm-match-type');
-  if(matchTypeEl) matchTypeEl.value=getPlanMatchType(row)||'LEAGUE';
-  onDmLabelChange(row.day_label||'');
-  document.getElementById('dm-am').value=row.am_session||'';
-  document.getElementById('dm-pm').value=row.pm_session||'';
-  _dmEditRefBasis=row.ref_basis||null;
-  const avg=(row.ref_basis?.avg&&_dmEditDate<getKSTDateStr())?row.ref_basis.avg:_periodMatchAvg;
-  _dmBasisAvg=avg;
-  ['td','hsr','sprint','accel','rhie'].forEach(k=>{const el=document.getElementById('dm-avg-'+k);if(el)el.textContent=avg[k]?avg[k].toLocaleString():'—';});
-  renderDmMetrics(row);
-  renderPeriodForecastPreview();
-  const meta=document.getElementById('dm-plan-meta');
-  meta.style.display=isVariant?'grid':'none';
-  if(isVariant){
-    document.getElementById('dm-plan-name').value=row.plan_name||'';
-    document.getElementById('dm-target-match-date').value=row.target_match_date||'';
-    document.getElementById('dm-plan-opponent').value=row.opponent||'';
-    document.getElementById('dm-plan-competition').value=row.competition||'';
-  }
-  document.getElementById('dm-delete-btn').style.display=row.id?'block':'none';
-}
-
-function selectBaseDayPlan(){
-  const row=(_daysByTrack[_dmEditDate]&&_daysByTrack[_dmEditDate][_dmEditTrack])||{};
-  _dmEditingVariant=false; _dmEditId=row.id||null;
-  fillDayPlanEditor(row,false); renderDayPlanTabs();
-}
-
-function selectDayPlanVariant(id){
-  const row=variantsForOpenDay().find(v=>v.id===id); if(!row) return;
-  _dmEditingVariant=true; _dmEditId=row.id;
-  fillDayPlanEditor(row,true); renderDayPlanTabs();
-}
-
-function newDayPlanVariant(){
-  _dmEditingVariant=true; _dmEditId=null; _dmEditRefBasis=null;
-  const base=(_daysByTrack[_dmEditDate]&&_daysByTrack[_dmEditDate][_dmEditTrack])||{};
-  fillDayPlanEditor({...base,id:null,plan_name:'추가 계획',target_match_date:null,opponent:null,competition:null},true);
-  renderDayPlanTabs();
-  setTimeout(()=>document.getElementById('dm-plan-name')?.select(),0);
-}
-
-function closeDayModal(){ document.getElementById('day-modal').style.display='none'; _dmEditDate=null; _dmEditId=null; _dmEditingVariant=false; }
+function closeDayModal(){ document.getElementById('day-modal').style.display='none'; _dmEditDate=null; _dmEditId=null; }
 
 async function saveDayPlan(){
   if(!_dmEditDate) return;
@@ -30269,18 +30116,7 @@ async function saveDayPlan(){
     },
   };
   let error;
-  if(_dmEditingVariant){
-    const planName=document.getElementById('dm-plan-name').value.trim();
-    if(!planName){alert('추가 계획의 이름을 입력하세요.');return;}
-    const variantRow={...row,club_id:currentClubId,plan_name:planName,
-      target_match_date:document.getElementById('dm-target-match-date').value||null,
-      opponent:document.getElementById('dm-plan-opponent').value.trim()||null,
-      competition:document.getElementById('dm-plan-competition').value||null,
-      updated_at:new Date().toISOString()};
-    delete variantRow.block_id;
-    if(_dmEditId)({error}=await supa.from('periodization_plan_variants').update(variantRow).eq('id',_dmEditId));
-    else({error}=await supa.from('periodization_plan_variants').insert(variantRow));
-  } else if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
+  if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
   else{({error}=await supa.from('block_days').upsert(row,{onConflict:'plan_date,track'}));}
   if(error){alert('저장 실패: '+error.message);return;}
   closeDayModal();
@@ -30289,7 +30125,7 @@ async function saveDayPlan(){
 
 async function deleteDayPlan(){
   if(!_dmEditId||!confirm('이 날의 세션 계획을 삭제할까요?')) return;
-  await supa.from(_dmEditingVariant?'periodization_plan_variants':'block_days').delete().eq('id',_dmEditId);
+  await supa.from('block_days').delete().eq('id',_dmEditId);
   closeDayModal();
   await loadPeriodTab();
 }
