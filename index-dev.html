@@ -2917,6 +2917,9 @@ let _lastGpsData = []; // 코치 RPE 입력 모달에서 GPS duration 참조용
 let _lastSessData = [];
 const isGymType  = st => { const s=(st||'').toUpperCase(); return s==='GYM'||s==='AM_GYM'||s==='PM_GYM'; };
 const gymTiming  = st => { const s=(st||'').toUpperCase(); return s==='PM_GYM'?'PM':'AM'; };
+const isFieldNoGpsType = st => { const s=(st||'').toUpperCase(); return s==='AM_FIELD'||s==='PM_FIELD'; };
+const sessionTiming = st => { const s=(st||'AM').toUpperCase(); return s==='PM'||s==='PM_GYM'||s==='PM_FIELD'?'PM':'AM'; };
+const sessionPlaceLabel = st => isGymType(st)?'GYM':isFieldNoGpsType(st)?'FIELD':'';
 let currentClubPermissions = {}; // 슈퍼어드민이 설정한 팀 허용 탭
 
 // ── 역할 레이블 ───────────────────────────────
@@ -12789,7 +12792,7 @@ async function loadWellnessRpeView(){
   ]);
   if(error){out.innerHTML=`<div style="padding:1rem;color:#f87171">조회 오류: ${error.message}</div>`;return;}
   const records=data||[];_lastSessData=records.map(r=>({...r,record_date:date}));
-  const grouped={};records.forEach(r=>{if(!grouped[r.player_id])grouped[r.player_id]={am:[],pm:[]};const s=(r.session_type||'AM').toUpperCase(),timing=s==='PM'||gymTiming(s)==='PM'?'pm':'am';grouped[r.player_id][timing].push(r);});
+  const grouped={};records.forEach(r=>{if(!grouped[r.player_id])grouped[r.player_id]={am:[],pm:[]};const timing=sessionTiming(r.session_type).toLowerCase();grouped[r.player_id][timing].push(r);});
   const gpsTypeMap={};
   (gpsTypes||[]).forEach(r=>{
     const timing=(r.session_label||'AM').toUpperCase()==='PM'?'pm':'am';
@@ -12798,7 +12801,7 @@ async function loadWellnessRpeView(){
   });
   const hasRpe=p=>(grouped[p.id]?.am||[]).concat(grouped[p.id]?.pm||[]).some(r=>(parseFloat(r.rpe)||0)>0);
   const missing=_players.filter(p=>!hasRpe(p));window._wellnessRpeMissingPlayers=missing.map(p=>({id:p.id,name:p.name}));
-  const block=recs=>{if(!recs?.length)return '<span style="color:var(--text3)">—</span>';return recs.map(r=>{const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0,s=(r.session_type||'').toUpperCase();return `<span style="display:inline-block;margin:1px 3px;padding:2px 5px;border-radius:5px;background:var(--surface2);color:${rv>=8?'#f87171':rv>=6?'#fb923c':rv>=4?'#facc15':'#4ade80'}">${isGymType(s)?'GYM ':''}${rv||'—'}${du?` · ${du}분`:''}</span>`;}).join('');};
+  const block=recs=>{if(!recs?.length)return '<span style="color:var(--text3)">—</span>';return recs.map(r=>{const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0,label=sessionPlaceLabel(r.session_type);return `<span style="display:inline-block;margin:1px 3px;padding:2px 5px;border-radius:5px;background:var(--surface2);color:${rv>=8?'#f87171':rv>=6?'#fb923c':rv>=4?'#facc15':'#4ade80'}">${label?label+' ':''}${rv||'—'}${du?` · ${du}분`:''}</span>`;}).join('');};
   const typeSelect=(p,timing,recs)=>{
     const override=(recs||[]).map(r=>(r.participant_type||'').toUpperCase()).find(v=>['M','S','SS','X'].includes(v));
     const gps=gpsTypeMap[p.id+'|'+timing];
@@ -12815,7 +12818,7 @@ async function saveRpeParticipantType(date,playerId,timing,value,selectEl){
   let q=supa.from('session_records').update({participant_type:wanted||null,coach_edited:true}).eq('record_date',date).eq('player_id',playerId);
   const {data:rows,error:readErr}=await supa.from('session_records').select('id,session_type').eq('record_date',date).eq('player_id',playerId);
   if(readErr){alert('유형 조회 실패: '+readErr.message);return;}
-  const ids=(rows||[]).filter(r=>{const s=(r.session_type||'AM').toUpperCase();return (s==='PM'||gymTiming(s)==='PM'?'PM':'AM')===gymSide;}).map(r=>r.id);
+  const ids=(rows||[]).filter(r=>sessionTiming(r.session_type)===gymSide).map(r=>r.id);
   if(!ids.length){alert(`${gymSide} RPE 기록이 없어 유형을 저장할 수 없습니다.`);loadWellnessRpeView();return;}
   const {error}=await q.in('id',ids);
   if(error){alert('유형 저장 실패: '+error.message);loadWellnessRpeView();return;}
@@ -12831,8 +12834,8 @@ async function toggleRpeHistory(playerId){
   const to=document.getElementById('rpe-view-date')?.value||getKSTDateStr(),days=parseInt(document.getElementById('rpe-history-days')?.value)||14,from=responseDateShift(to,-(days-1));
   const {data,error}=await supa.from('session_records').select('record_date,rpe,duration,session_type,coach_edited').eq('player_id',playerId).gte('record_date',from).lte('record_date',to).order('record_date',{ascending:false});
   if(error){box.innerHTML=`<div style="color:#f87171">조회 오류: ${error.message}</div>`;return;}
-  const byDate={};(data||[]).forEach(r=>{if(!byDate[r.record_date])byDate[r.record_date]={am:[],pm:[]};const s=(r.session_type||'AM').toUpperCase(),timing=s==='PM'||gymTiming(s)==='PM'?'pm':'am';byDate[r.record_date][timing].push(r);});
-  const show=recs=>recs.length?recs.map(r=>`${isGymType((r.session_type||'').toUpperCase())?'GYM ':''}${r.rpe??'—'}${r.duration?` · ${r.duration}분`:''}`).join(' / '):'—';
+  const byDate={};(data||[]).forEach(r=>{if(!byDate[r.record_date])byDate[r.record_date]={am:[],pm:[]};byDate[r.record_date][sessionTiming(r.session_type).toLowerCase()].push(r);});
+  const show=recs=>recs.length?recs.map(r=>`${sessionPlaceLabel(r.session_type)?sessionPlaceLabel(r.session_type)+' ':''}${r.rpe??'—'}${r.duration?` · ${r.duration}분`:''}`).join(' / '):'—';
   const exportRows=[];
   const rows=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,v])=>{const all=[...v.am,...v.pm],srpe=Math.round(all.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0))||null,edited=all.some(r=>r.coach_edited);exportRows.push({'날짜':d,'오전':show(v.am),'오후':show(v.pm),'총 sRPE':srpe,'수정 여부':edited?'코치 수정':''});return `<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${d}</td><td style="text-align:center">${show(v.am)}</td><td style="text-align:center">${show(v.pm)}</td><td style="text-align:right;color:#c084fc;font-weight:700">${srpe?.toLocaleString()||'—'}</td><td style="text-align:center;color:#60a5fa">${edited?'코치 수정':'—'}</td></tr>`;}).join('');
   const p=_players.find(x=>x.id===playerId),exportKey=`rpe-${playerId}`;
@@ -23662,7 +23665,7 @@ async function generateMatchReport(){
       const _avgDur=_durArr.length?_durArr.reduce((a,b)=>a+b)/_durArr.length:0;
       const plan=_planMap[d]||{};
       const topic=(rows.find(r=>(r.session_topic||'').trim())?.session_topic||plan.pm_session||plan.am_session||'').trim();
-      const actual=[...new Set(dayRpe.map(r=>isGymType((r.session_type||'').toUpperCase())?'GYM':(r.session_type||'')).filter(Boolean))].join(' + ');
+      const actual=[...new Set(dayRpe.map(r=>sessionPlaceLabel(r.session_type)||(r.session_type||'')).filter(Boolean))].join(' + ');
       const typeCounts={};dayRpe.forEach(r=>{const t=finalType(r)||'미지정';(typeCounts[t]=typeCounts[t]||new Set()).add(r.player_id);});
       const groupLabel=['M','S','SS','X','미지정'].filter(t=>typeCounts[t]?.size).map(t=>`${t} ${typeCounts[t].size}명`).join(' · ');
       return { date:d, mdStage, topic, actual, groupLabel, gpsMissing:!rows.length, cnt:rows.length||new Set(dayRpe.map(r=>r.player_id)).size, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:rows.length?_av(rows,'duration'):(_avgDur||null), srpe:(_avgRpe&&_avgDur)?Math.round(_avgRpe*_avgDur):null };
@@ -28708,19 +28711,20 @@ function openCoachRpeModal(date, playerId, playerName){
           sessionType: st||'AM',
           rpe: s.rpe||'',
           dur: s.duration || gpsDur,
+          gpsLinked: !!gpsDur,
           origRpe: s.rpe||null,
           origDur: s.duration||null,
           origTime: _toKSTHHMM(s.created_at),
         };
       })
-    : [{ id:null, order:1, sessionType:'AM', rpe:'', dur:playerGps[0]?.duration||'', origRpe:null, origDur:null, origTime:null }];
+    : [{ id:null, order:1, sessionType:playerGps[0]?'AM':'AM_FIELD', rpe:'', dur:playerGps[0]?.duration||'', gpsLinked:!!playerGps[0], origRpe:null, origDur:null, origTime:null }];
   // 남은 GPS 세션(선수 미입력) 추가 — GPS는 필드 세션에만 매핑 (GYM 제외)
   const fieldSessCount = sessions.filter(s=>!isGymType(s.sessionType||'')).length;
   playerGps.forEach((g, i)=>{
     if(i >= fieldSessCount){
       const nextOrder = Math.max(0, ...sessions.map(s=>s.order||0)) + 1;
       const sessType = fieldSessCount === 0 && i === 0 ? 'AM' : 'PM';
-      sessions.push({ id:null, order:nextOrder, sessionType:sessType, rpe:'', dur:g.duration||'', origRpe:null, origDur:null, origTime:null });
+      sessions.push({ id:null, order:nextOrder, sessionType:sessType, rpe:'', dur:g.duration||'', gpsLinked:true, origRpe:null, origDur:null, origTime:null });
     }
   });
   sessions.sort((a,b)=>a.order-b.order);
@@ -28737,15 +28741,18 @@ function _crpeRender(){
 
   const rows = metas.map((s,i)=>{
     const isGym = isGymType(s.sessionType||'');
+    const isFieldNoGps = isFieldNoGpsType(s.sessionType||'');
     const st = (s.sessionType||'AM').toUpperCase();
-    const isAM  = !isGym && st !== 'PM';
+    const isAM  = sessionTiming(st)==='AM';
     const selColor = isGym ? '#60a5fa' : (isAM ? '#4ade80' : '#f97316');
-    const sessBadge = (totalSess > 1 || s.origRpe!=null || isGym) ? `
+    const sessBadge = (totalSess > 1 || s.origRpe!=null || isGym || isFieldNoGps) ? `
       <select class="crpe-ampm-sel" data-idx="${i}"
         onchange="crpeChangeAmPm(${i},this.value)"
         style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:${selColor};font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">
-        <option value="AM"     ${st==='AM'?'selected':''}>⚽ AM</option>
-        <option value="PM"     ${st==='PM'?'selected':''}>⚽ PM</option>
+        <option value="AM"     ${st==='AM'?'selected':''}>⚽ AM (GPS)</option>
+        <option value="PM"     ${st==='PM'?'selected':''}>⚽ PM (GPS)</option>
+        <option value="AM_FIELD" ${st==='AM_FIELD'?'selected':''}>⚽ 필드(오전) · GPS 없음</option>
+        <option value="PM_FIELD" ${st==='PM_FIELD'?'selected':''}>⚽ 필드(오후) · GPS 없음</option>
         <option value="AM_GYM" ${st==='AM_GYM'||st==='GYM'?'selected':''}>🏋️ GYM(오전)</option>
         <option value="PM_GYM" ${st==='PM_GYM'?'selected':''}>🏋️ GYM(오후)</option>
       </select>` : `<span style="font-size:11px;color:var(--text3);font-weight:600">단일 세션</span>`;
@@ -28769,7 +28776,7 @@ function _crpeRender(){
             style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:#fbbf24;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;font-family:inherit">
         </div>
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">시간 (분)${isGym?' <span style="color:#60a5fa;font-size:9px">직접입력</span>':' <span style="color:#4ade80;font-size:9px">GPS자동</span>'}</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">시간 (분)${isGym||isFieldNoGps||!s.gpsLinked?' <span style="color:#60a5fa;font-size:9px">직접입력</span>':' <span style="color:#4ade80;font-size:9px">GPS자동</span>'}</div>
           <input class="crpe-dur-inp" data-idx="${i}" type="number" min="0" value="${s.dur||''}" placeholder="예: 90"
             style="width:100%;padding:8px;border-radius:6px;border:1px solid ${isGym?'rgba(96,165,250,0.4)':'var(--border2)'};background:var(--surface);color:var(--text);font-size:15px;text-align:center;box-sizing:border-box;font-family:inherit">
         </div>
@@ -28952,6 +28959,10 @@ async function openCoachRpeBatchModal(date){
               <select class="brpe-sess" style="padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">
                 <option value="AM" ${(ex.session_type||'AM')==='AM'?'selected':''}>AM</option>
                 <option value="PM" ${ex.session_type==='PM'?'selected':''}>PM</option>
+                <option value="AM_FIELD" ${ex.session_type==='AM_FIELD'?'selected':''}>필드(오전) · GPS 없음</option>
+                <option value="PM_FIELD" ${ex.session_type==='PM_FIELD'?'selected':''}>필드(오후) · GPS 없음</option>
+                <option value="AM_GYM" ${ex.session_type==='AM_GYM'||ex.session_type==='GYM'?'selected':''}>GYM(오전)</option>
+                <option value="PM_GYM" ${ex.session_type==='PM_GYM'?'selected':''}>GYM(오후)</option>
                 <option value="개인" ${ex.session_type==='개인'?'selected':''}>개인</option>
               </select>
             </td>
