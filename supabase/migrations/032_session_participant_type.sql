@@ -9,7 +9,7 @@ ALTER TABLE session_records
 
 ALTER TABLE session_records
   ADD CONSTRAINT session_records_participant_type_check
-  CHECK (participant_type IS NULL OR participant_type IN ('M', 'S'));
+  CHECK (participant_type IS NULL OR participant_type IN ('M', 'S', 'SS', 'X'));
 
 COMMENT ON COLUMN session_records.participant_type IS
-  'Coach-selected final M/S grouping for this RPE session; NULL falls back to GPS type.';
+  'Coach-selected final M/S/SS/X grouping for this RPE session; NULL falls back to GPS type and remains unassigned when GPS is absent.';
