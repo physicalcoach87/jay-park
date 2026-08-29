@@ -2917,6 +2917,9 @@ let _lastGpsData = []; // 코치 RPE 입력 모달에서 GPS duration 참조용
 let _lastSessData = [];
 const isGymType  = st => { const s=(st||'').toUpperCase(); return s==='GYM'||s==='AM_GYM'||s==='PM_GYM'; };
 const gymTiming  = st => { const s=(st||'').toUpperCase(); return s==='PM_GYM'?'PM':'AM'; };
+const isFieldNoGpsType = st => { const s=(st||'').toUpperCase(); return s==='AM_FIELD'||s==='PM_FIELD'; };
+const sessionTiming = st => { const s=(st||'AM').toUpperCase(); return s==='PM'||s==='PM_GYM'||s==='PM_FIELD'?'PM':'AM'; };
+const sessionPlaceLabel = st => isGymType(st)?'GYM':isFieldNoGpsType(st)?'FIELD':'';
 let currentClubPermissions = {}; // 슈퍼어드민이 설정한 팀 허용 탭
 
 // ── 역할 레이블 ───────────────────────────────
@@ -12783,15 +12786,45 @@ async function loadWellnessRpeView(){
   if(!out||!date)return;
   out.innerHTML='<div style="text-align:center;padding:2rem;color:var(--text3)">RPE 현황을 불러오는 중...</div>';
   await syncRpeDurationsForDate(date);
-  const {data,error}=await supa.from('session_records').select('id,player_id,rpe,duration,session_type,session_order,created_at,coach_edited').eq('record_date',date).order('session_order');
+  const [{data,error},{data:gpsTypes}] = await Promise.all([
+    supa.from('session_records').select('id,player_id,rpe,duration,session_type,session_order,created_at,coach_edited,participant_type').eq('record_date',date).order('session_order'),
+    supa.from('gps_records').select('player_id,session_label,session_type2').eq('session_date',date)
+  ]);
   if(error){out.innerHTML=`<div style="padding:1rem;color:#f87171">조회 오류: ${error.message}</div>`;return;}
   const records=data||[];_lastSessData=records.map(r=>({...r,record_date:date}));
-  const grouped={};records.forEach(r=>{if(!grouped[r.player_id])grouped[r.player_id]={am:[],pm:[]};const s=(r.session_type||'AM').toUpperCase(),timing=s==='PM'||gymTiming(s)==='PM'?'pm':'am';grouped[r.player_id][timing].push(r);});
+  const grouped={};records.forEach(r=>{if(!grouped[r.player_id])grouped[r.player_id]={am:[],pm:[]};const timing=sessionTiming(r.session_type).toLowerCase();grouped[r.player_id][timing].push(r);});
+  const gpsTypeMap={};
+  (gpsTypes||[]).forEach(r=>{
+    const timing=(r.session_label||'AM').toUpperCase()==='PM'?'pm':'am';
+    const type=(r.session_type2||'').trim().toUpperCase();
+    if(['M','S','SS','X'].includes(type)) gpsTypeMap[r.player_id+'|'+timing]=type;
+  });
   const hasRpe=p=>(grouped[p.id]?.am||[]).concat(grouped[p.id]?.pm||[]).some(r=>(parseFloat(r.rpe)||0)>0);
   const missing=_players.filter(p=>!hasRpe(p));window._wellnessRpeMissingPlayers=missing.map(p=>({id:p.id,name:p.name}));
-  const block=recs=>{if(!recs?.length)return '<span style="color:var(--text3)">—</span>';return recs.map(r=>{const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0,s=(r.session_type||'').toUpperCase();return `<span style="display:inline-block;margin:1px 3px;padding:2px 5px;border-radius:5px;background:var(--surface2);color:${rv>=8?'#f87171':rv>=6?'#fb923c':rv>=4?'#facc15':'#4ade80'}">${isGymType(s)?'GYM ':''}${rv||'—'}${du?` · ${du}분`:''}</span>`;}).join('');};
-  const rows=sortByPos(_players).map(p=>{const d=grouped[p.id]||{am:[],pm:[]},all=[...d.am,...d.pm],entered=all.some(r=>(parseFloat(r.rpe)||0)>0),edited=all.some(r=>r.coach_edited),name=(p.name||'').replace(/'/g,"\\'");return `<tr data-rpe-player="${p.id}" onclick="toggleRpeHistory('${p.id}')" style="border-top:1px solid var(--border);cursor:pointer"><td style="padding:8px"><b>${p.name}</b><small style="display:block;color:var(--text3)">${p.position||''}</small></td><td style="padding:8px;text-align:center">${block(d.am)}</td><td style="padding:8px;text-align:center">${block(d.pm)}</td><td style="padding:8px;text-align:center;white-space:nowrap"><button onclick="event.stopPropagation();openCoachRpeModal('${date}','${p.id}','${name}')" style="font-size:10px;padding:4px 8px;border-radius:5px;border:1px solid rgba(251,191,36,.45);background:transparent;color:#fbbf24;cursor:pointer">${entered?'수정':'입력'}</button>${entered?'':`<button onclick="event.stopPropagation();sendRpeReminder('${p.id}','${name}',this)" style="font-size:10px;padding:4px 8px;margin-left:4px;border-radius:5px;border:1px solid rgba(167,139,250,.4);background:transparent;color:#a78bfa;cursor:pointer">🔔 요청</button>`}${edited?'<small style="display:block;color:#60a5fa;margin-top:3px">코치 수정</small>':''}</td></tr><tr data-rpe-detail="${p.id}" style="display:none;background:var(--surface2)"><td colspan="4" style="padding:12px 14px;border-left:3px solid #c084fc"><div id="rpe-inline-${p.id}"></div></td></tr>`;}).join('');
-  out.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><div><div style="font-size:14px;font-weight:700">${date} RPE · ${_players.length-missing.length}/${_players.length}명 입력</div><div style="font-size:10px;color:var(--text3);margin-top:2px">오전·오후 세션 · 선수 행 클릭 시 기간별 기록</div></div>${missing.length?`<button onclick="sendRpeReminderAll(window._wellnessRpeMissingPlayers,this)" style="font-size:11px;padding:6px 12px;border-radius:7px;border:1px solid #7c3aed;background:rgba(124,58,237,.12);color:#c4b5fd;cursor:pointer">📨 미입력 ${missing.length}명 전원 요청</button>`:'<span style="color:#4ade80;font-size:11px">✅ 전원 입력 완료</span>'}</div><div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:9px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:700px"><thead><tr style="background:var(--surface2);color:var(--text3)"><th style="padding:8px;text-align:left">선수</th><th style="padding:8px">오전</th><th style="padding:8px">오후</th><th style="padding:8px">입력·수정·알림</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  const block=recs=>{if(!recs?.length)return '<span style="color:var(--text3)">—</span>';return recs.map(r=>{const rv=parseFloat(r.rpe)||0,du=parseFloat(r.duration)||0,label=sessionPlaceLabel(r.session_type);return `<span style="display:inline-block;margin:1px 3px;padding:2px 5px;border-radius:5px;background:var(--surface2);color:${rv>=8?'#f87171':rv>=6?'#fb923c':rv>=4?'#facc15':'#4ade80'}">${label?label+' ':''}${rv||'—'}${du?` · ${du}분`:''}</span>`;}).join('');};
+  const typeSelect=(p,timing,recs)=>{
+    const override=(recs||[]).map(r=>(r.participant_type||'').toUpperCase()).find(v=>['M','S','SS','X'].includes(v));
+    const gps=gpsTypeMap[p.id+'|'+timing];
+    const value=override||gps||'', source=override?'코치':gps?'GPS':'';
+    const typeColor={M:'#93c5fd',S:'#c4b5fd',SS:'#f9a8d4',X:'#94a3b8'}[value]||'var(--text3)';
+    return `<div style="display:flex;align-items:center;justify-content:center;gap:4px"><select onclick="event.stopPropagation()" onchange="event.stopPropagation();saveRpeParticipantType('${date}','${p.id}','${timing}',this.value,this)" style="padding:4px 7px;border-radius:6px;border:1px solid ${value?typeColor:'var(--border2)'};background:var(--surface2);color:${typeColor};font-weight:700;font-size:11px"><option value="" ${!value?'selected':''}>—</option><option value="M" ${value==='M'?'selected':''}>M</option><option value="S" ${value==='S'?'selected':''}>S</option><option value="SS" ${value==='SS'?'selected':''}>SS</option><option value="X" ${value==='X'?'selected':''}>X</option></select><span style="font-size:8px;color:var(--text3)">${source}</span></div>`;
+  };
+  const rows=sortByPos(_players).map(p=>{const d=grouped[p.id]||{am:[],pm:[]},all=[...d.am,...d.pm],entered=all.some(r=>(parseFloat(r.rpe)||0)>0),edited=all.some(r=>r.coach_edited),name=(p.name||'').replace(/'/g,"\\'");return `<tr data-rpe-player="${p.id}" onclick="toggleRpeHistory('${p.id}')" style="border-top:1px solid var(--border);cursor:pointer"><td style="padding:8px"><b>${p.name}</b><small style="display:block;color:var(--text3)">${p.position||''}</small></td><td style="padding:8px;text-align:center">${block(d.am)}</td><td style="padding:8px;text-align:center">${typeSelect(p,'am',d.am)}</td><td style="padding:8px;text-align:center">${block(d.pm)}</td><td style="padding:8px;text-align:center">${typeSelect(p,'pm',d.pm)}</td><td style="padding:8px;text-align:center;white-space:nowrap"><button onclick="event.stopPropagation();openCoachRpeModal('${date}','${p.id}','${name}')" style="font-size:10px;padding:4px 8px;border-radius:5px;border:1px solid rgba(251,191,36,.45);background:transparent;color:#fbbf24;cursor:pointer">${entered?'수정':'입력'}</button>${entered?'':`<button onclick="event.stopPropagation();sendRpeReminder('${p.id}','${name}',this)" style="font-size:10px;padding:4px 8px;margin-left:4px;border-radius:5px;border:1px solid rgba(167,139,250,.4);background:transparent;color:#a78bfa;cursor:pointer">🔔 요청</button>`}${edited?'<small style="display:block;color:#60a5fa;margin-top:3px">코치 수정</small>':''}</td></tr><tr data-rpe-detail="${p.id}" style="display:none;background:var(--surface2)"><td colspan="6" style="padding:12px 14px;border-left:3px solid #c084fc"><div id="rpe-inline-${p.id}"></div></td></tr>`;}).join('');
+  out.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><div><div style="font-size:14px;font-weight:700">${date} RPE · ${_players.length-missing.length}/${_players.length}명 입력</div><div style="font-size:10px;color:var(--text3);margin-top:2px">유형: 코치 수정값 → GPS값 · 둘 다 없으면 미지정</div></div>${missing.length?`<button onclick="sendRpeReminderAll(window._wellnessRpeMissingPlayers,this)" style="font-size:11px;padding:6px 12px;border-radius:7px;border:1px solid #7c3aed;background:rgba(124,58,237,.12);color:#c4b5fd;cursor:pointer">📨 미입력 ${missing.length}명 전원 요청</button>`:'<span style="color:#4ade80;font-size:11px">✅ 전원 RPE 입력 완료</span>'}</div><div style="overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:9px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:820px"><thead><tr style="background:var(--surface2);color:var(--text3)"><th style="padding:8px;text-align:left">선수</th><th style="padding:8px">오전 RPE</th><th style="padding:8px">유형</th><th style="padding:8px">오후 RPE</th><th style="padding:8px">유형</th><th style="padding:8px">입력·수정·알림</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+async function saveRpeParticipantType(date,playerId,timing,value,selectEl){
+  const wanted=(value||'').toUpperCase(), gymSide=timing==='pm'?'PM':'AM';
+  let q=supa.from('session_records').update({participant_type:wanted||null,coach_edited:true}).eq('record_date',date).eq('player_id',playerId);
+  const {data:rows,error:readErr}=await supa.from('session_records').select('id,session_type').eq('record_date',date).eq('player_id',playerId);
+  if(readErr){alert('유형 조회 실패: '+readErr.message);return;}
+  const ids=(rows||[]).filter(r=>sessionTiming(r.session_type)===gymSide).map(r=>r.id);
+  if(!ids.length){alert(`${gymSide} RPE 기록이 없어 유형을 저장할 수 없습니다.`);loadWellnessRpeView();return;}
+  const {error}=await q.in('id',ids);
+  if(error){alert('유형 저장 실패: '+error.message);loadWellnessRpeView();return;}
+  const typeColor={M:'#93c5fd',S:'#c4b5fd',SS:'#f9a8d4',X:'#94a3b8'}[wanted]||'var(--border2)';
+  selectEl.style.borderColor=typeColor;selectEl.style.color=wanted?typeColor:'var(--text3)';
+  const source=selectEl.nextElementSibling;if(source) source.textContent='코치';
 }
 
 async function toggleRpeHistory(playerId){
@@ -12801,8 +12834,8 @@ async function toggleRpeHistory(playerId){
   const to=document.getElementById('rpe-view-date')?.value||getKSTDateStr(),days=parseInt(document.getElementById('rpe-history-days')?.value)||14,from=responseDateShift(to,-(days-1));
   const {data,error}=await supa.from('session_records').select('record_date,rpe,duration,session_type,coach_edited').eq('player_id',playerId).gte('record_date',from).lte('record_date',to).order('record_date',{ascending:false});
   if(error){box.innerHTML=`<div style="color:#f87171">조회 오류: ${error.message}</div>`;return;}
-  const byDate={};(data||[]).forEach(r=>{if(!byDate[r.record_date])byDate[r.record_date]={am:[],pm:[]};const s=(r.session_type||'AM').toUpperCase(),timing=s==='PM'||gymTiming(s)==='PM'?'pm':'am';byDate[r.record_date][timing].push(r);});
-  const show=recs=>recs.length?recs.map(r=>`${isGymType((r.session_type||'').toUpperCase())?'GYM ':''}${r.rpe??'—'}${r.duration?` · ${r.duration}분`:''}`).join(' / '):'—';
+  const byDate={};(data||[]).forEach(r=>{if(!byDate[r.record_date])byDate[r.record_date]={am:[],pm:[]};byDate[r.record_date][sessionTiming(r.session_type).toLowerCase()].push(r);});
+  const show=recs=>recs.length?recs.map(r=>`${sessionPlaceLabel(r.session_type)?sessionPlaceLabel(r.session_type)+' ':''}${r.rpe??'—'}${r.duration?` · ${r.duration}분`:''}`).join(' / '):'—';
   const exportRows=[];
   const rows=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([d,v])=>{const all=[...v.am,...v.pm],srpe=Math.round(all.reduce((a,r)=>a+(parseFloat(r.rpe)||0)*(parseFloat(r.duration)||0),0))||null,edited=all.some(r=>r.coach_edited);exportRows.push({'날짜':d,'오전':show(v.am),'오후':show(v.pm),'총 sRPE':srpe,'수정 여부':edited?'코치 수정':''});return `<tr style="border-top:1px solid var(--border)"><td style="padding:6px 8px">${d}</td><td style="text-align:center">${show(v.am)}</td><td style="text-align:center">${show(v.pm)}</td><td style="text-align:right;color:#c084fc;font-weight:700">${srpe?.toLocaleString()||'—'}</td><td style="text-align:center;color:#60a5fa">${edited?'코치 수정':'—'}</td></tr>`;}).join('');
   const p=_players.find(x=>x.id===playerId),exportKey=`rpe-${playerId}`;
@@ -23069,17 +23102,23 @@ async function generateMatchReport(){
   const _preFrom = new Date(date);
   _preFrom.setDate(_preFrom.getDate() - 14); // MD-5까지 커버 (최대 14일)
   const _preFromStr = _preFrom.toISOString().split('T')[0];
-  const [{data:preGPS},{data:preRPE}] = await Promise.all([
+  const [{data:preGPS},{data:preRPE},{data:prePlans}] = await Promise.all([
     supa.from('gps_records')
       .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
       .gte('session_date',_preFromStr)
       .lt('session_date',date)
       .order('session_date',{ascending:true}),
     supa.from('session_records')
-      .select('player_id,record_date,rpe,duration')
+      .select('player_id,record_date,rpe,duration,session_type,participant_type')
       .gte('record_date',_preFromStr)
       .lt('record_date',date)
-      .order('record_date',{ascending:true})
+      .order('record_date',{ascending:true}),
+    supa.from('block_days')
+      .select('plan_date,day_label,am_session,pm_session,track,ref_basis')
+      .gte('plan_date',_preFromStr)
+      .lt('plan_date',date)
+      .in('track',['ALL','A'])
+      .order('plan_date',{ascending:true})
   ]);
 
   // 1분 롤링 mpm (§ 7용 — 없으면 § 7 카드 비활성화)
@@ -23580,14 +23619,21 @@ async function generateMatchReport(){
       const hasMD = /(MD-?[1-5])/i.test(r.periodization||r.cycle||'');
       return hasOpp || hasMD;
     });
-    // _mGPS에 포함된 날짜만 RPE 참조
+    // GPS가 없는 GYM/실내 전환일도 계획+RPE가 있으면 준비 흐름에 포함한다.
+    const _planMap={};
+    (prePlans||[]).forEach(p=>{_planMap[p.plan_date]=p;});
     const _validDates = new Set(_mGPS.map(r=>r.session_date));
+    (preRPE||[]).forEach(r=>{
+      const p=_planMap[r.record_date];
+      if(p && /(MD-?[1-5])/i.test(p.day_label||'')) _validDates.add(r.record_date);
+    });
     const _rpeMap = {};
     (preRPE||[]).filter(r=>_validDates.has(r.record_date)).forEach(r=>{ _rpeMap[r.record_date+'|'+r.player_id]=r; });
 
     // 날짜별 그룹
     const _dg = {};
     _mGPS.forEach(r=>{ if(!_dg[r.session_date]) _dg[r.session_date]=[]; _dg[r.session_date].push(r); });
+    _validDates.forEach(d=>{if(!_dg[d]) _dg[d]=[];});
 
     const _matchD = new Date(date);
     const _getMD = (d,rows) => {
@@ -23597,6 +23643,8 @@ async function generateMatchReport(){
           if(raw.includes(md)||raw.includes(md.replace('-',''))) return md;
         }
       }
+      const planLabel=(_planMap[d]?.day_label||'').toUpperCase();
+      for(const md of ['MD-5','MD-4','MD-3','MD-2','MD-1']) if(planLabel.includes(md)||planLabel.includes(md.replace('-',''))) return md;
       const diff=Math.round((_matchD-new Date(d))/86400000);
       return diff>=1&&diff<=6 ? 'MD-'+diff : '—';
     };
@@ -23604,12 +23652,23 @@ async function generateMatchReport(){
 
     const _trainingDays = Object.entries(_dg).sort((a,b)=>a[0].localeCompare(b[0])).map(([d,rows])=>{
       const mdStage=_getMD(d,rows);
-      const _rpeArr=rows.map(r=>{const rr=_rpeMap[d+'|'+r.player_id];return parseFloat(rr?.rpe)||0;}).filter(v=>v>0);
-      const _durArr=rows.map(r=>parseFloat(r.duration)||0).filter(v=>v>0);
+      const dayRpe=(preRPE||[]).filter(r=>r.record_date===d);
+      const gpsTypeByPlayer={};
+      (preGPS||[]).filter(r=>r.session_date===d).forEach(r=>{const t=(r.session_type2||'').trim().toUpperCase();if(t==='M'||t==='S')gpsTypeByPlayer[r.player_id]=t;});
+      const finalType=r=>{const over=(r.participant_type||'').toUpperCase();return ['M','S','SS','X'].includes(over)?over:(gpsTypeByPlayer[r.player_id]||'');};
+      const mRpe=dayRpe.filter(r=>finalType(r)==='M');
+      const sRpe=dayRpe.filter(r=>finalType(r)==='S');
+      const loadRpe=rows.length?rows.map(r=>_rpeMap[d+'|'+r.player_id]).filter(Boolean):dayRpe;
+      const _rpeArr=loadRpe.map(r=>parseFloat(r.rpe)||0).filter(v=>v>0);
+      const _durArr=(rows.length?rows:dayRpe).map(r=>parseFloat(r.duration)||0).filter(v=>v>0);
       const _avgRpe=_rpeArr.length?_rpeArr.reduce((a,b)=>a+b)/_rpeArr.length:0;
       const _avgDur=_durArr.length?_durArr.reduce((a,b)=>a+b)/_durArr.length:0;
-      const topic=(rows.find(r=>(r.session_topic||'').trim())?.session_topic||'').trim();
-      return { date:d, mdStage, topic, cnt:rows.length, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:_av(rows,'duration'), srpe:(_avgRpe&&_avgDur)?Math.round(_avgRpe*_avgDur):null };
+      const plan=_planMap[d]||{};
+      const topic=(rows.find(r=>(r.session_topic||'').trim())?.session_topic||plan.pm_session||plan.am_session||'').trim();
+      const actual=[...new Set(dayRpe.map(r=>sessionPlaceLabel(r.session_type)||(r.session_type||'')).filter(Boolean))].join(' + ');
+      const typeCounts={};dayRpe.forEach(r=>{const t=finalType(r)||'미지정';(typeCounts[t]=typeCounts[t]||new Set()).add(r.player_id);});
+      const groupLabel=['M','S','SS','X','미지정'].filter(t=>typeCounts[t]?.size).map(t=>`${t} ${typeCounts[t].size}명`).join(' · ');
+      return { date:d, mdStage, topic, actual, groupLabel, gpsMissing:!rows.length, cnt:rows.length||new Set(dayRpe.map(r=>r.player_id)).size, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:rows.length?_av(rows,'duration'):(_avgDur||null), srpe:(_avgRpe&&_avgDur)?Math.round(_avgRpe*_avgDur):null };
     });
 
     const _mdColor=md=>({'MD-5':'#60a5fa','MD-4':'#60a5fa','MD-3':'#ef4444','MD-2':'#fbbf24','MD-1':'#4ade80','MD+1':'#94a3b8'})[md]||'#94a3b8';
@@ -23655,9 +23714,10 @@ async function generateMatchReport(){
           <div style="margin-bottom:4px">
             <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:${_mdBg(t.mdStage)};color:${_mdColor(t.mdStage)};border:1px solid ${_mdColor(t.mdStage)}50">${t.mdStage}</span>
           </div>
-          <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.topic||'—'}</div>
-          <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${t.cnt}명 · ${t.dur?Math.round(t.dur)+"'":'—'}</div>
+          <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.topic||'—'}${t.actual?`<br><span style="color:#60a5fa">실제 ${t.actual}</span>`:''}</div>
+          <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${t.groupLabel||t.cnt+'명'} · ${t.dur?Math.round(t.dur)+"'":'—'}</div>
           <div style="border-top:1px solid var(--border);margin:4px 0"></div>
+          ${t.gpsMissing?`<div style="height:18px;font-size:10px;color:#fbbf24;font-weight:700">GPS 미측정 · RPE 기준</div>`:''}
           ${_statRow('TD',t.td?Math.round(t.td).toLocaleString():null,_refTD,'#60a5fa','m')}
           ${_statRow('HSR',t.hsr?Math.round(t.hsr).toLocaleString():null,_refHSR,'#f59e0b','m')}
           ${_statRow('Spr',t.sprint?Math.round(t.sprint):null,_refSpr,'#ef4444','m')}
@@ -28651,19 +28711,20 @@ function openCoachRpeModal(date, playerId, playerName){
           sessionType: st||'AM',
           rpe: s.rpe||'',
           dur: s.duration || gpsDur,
+          gpsLinked: !!gpsDur,
           origRpe: s.rpe||null,
           origDur: s.duration||null,
           origTime: _toKSTHHMM(s.created_at),
         };
       })
-    : [{ id:null, order:1, sessionType:'AM', rpe:'', dur:playerGps[0]?.duration||'', origRpe:null, origDur:null, origTime:null }];
+    : [{ id:null, order:1, sessionType:playerGps[0]?'AM':'AM_FIELD', rpe:'', dur:playerGps[0]?.duration||'', gpsLinked:!!playerGps[0], origRpe:null, origDur:null, origTime:null }];
   // 남은 GPS 세션(선수 미입력) 추가 — GPS는 필드 세션에만 매핑 (GYM 제외)
   const fieldSessCount = sessions.filter(s=>!isGymType(s.sessionType||'')).length;
   playerGps.forEach((g, i)=>{
     if(i >= fieldSessCount){
       const nextOrder = Math.max(0, ...sessions.map(s=>s.order||0)) + 1;
       const sessType = fieldSessCount === 0 && i === 0 ? 'AM' : 'PM';
-      sessions.push({ id:null, order:nextOrder, sessionType:sessType, rpe:'', dur:g.duration||'', origRpe:null, origDur:null, origTime:null });
+      sessions.push({ id:null, order:nextOrder, sessionType:sessType, rpe:'', dur:g.duration||'', gpsLinked:true, origRpe:null, origDur:null, origTime:null });
     }
   });
   sessions.sort((a,b)=>a.order-b.order);
@@ -28680,15 +28741,18 @@ function _crpeRender(){
 
   const rows = metas.map((s,i)=>{
     const isGym = isGymType(s.sessionType||'');
+    const isFieldNoGps = isFieldNoGpsType(s.sessionType||'');
     const st = (s.sessionType||'AM').toUpperCase();
-    const isAM  = !isGym && st !== 'PM';
+    const isAM  = sessionTiming(st)==='AM';
     const selColor = isGym ? '#60a5fa' : (isAM ? '#4ade80' : '#f97316');
-    const sessBadge = (totalSess > 1 || s.origRpe!=null || isGym) ? `
+    const sessBadge = (totalSess > 1 || s.origRpe!=null || isGym || isFieldNoGps) ? `
       <select class="crpe-ampm-sel" data-idx="${i}"
         onchange="crpeChangeAmPm(${i},this.value)"
         style="padding:3px 6px;border-radius:5px;border:1px solid var(--border2);background:var(--surface);color:${selColor};font-size:11px;font-weight:700;font-family:inherit;cursor:pointer">
-        <option value="AM"     ${st==='AM'?'selected':''}>⚽ AM</option>
-        <option value="PM"     ${st==='PM'?'selected':''}>⚽ PM</option>
+        <option value="AM"     ${st==='AM'?'selected':''}>⚽ AM (GPS)</option>
+        <option value="PM"     ${st==='PM'?'selected':''}>⚽ PM (GPS)</option>
+        <option value="AM_FIELD" ${st==='AM_FIELD'?'selected':''}>⚽ 필드(오전) · GPS 없음</option>
+        <option value="PM_FIELD" ${st==='PM_FIELD'?'selected':''}>⚽ 필드(오후) · GPS 없음</option>
         <option value="AM_GYM" ${st==='AM_GYM'||st==='GYM'?'selected':''}>🏋️ GYM(오전)</option>
         <option value="PM_GYM" ${st==='PM_GYM'?'selected':''}>🏋️ GYM(오후)</option>
       </select>` : `<span style="font-size:11px;color:var(--text3);font-weight:600">단일 세션</span>`;
@@ -28712,7 +28776,7 @@ function _crpeRender(){
             style="width:100%;padding:8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:#fbbf24;font-size:15px;font-weight:700;text-align:center;box-sizing:border-box;font-family:inherit">
         </div>
         <div>
-          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">시간 (분)${isGym?' <span style="color:#60a5fa;font-size:9px">직접입력</span>':' <span style="color:#4ade80;font-size:9px">GPS자동</span>'}</div>
+          <div style="font-size:10px;color:var(--text3);margin-bottom:4px">시간 (분)${isGym||isFieldNoGps||!s.gpsLinked?' <span style="color:#60a5fa;font-size:9px">직접입력</span>':' <span style="color:#4ade80;font-size:9px">GPS자동</span>'}</div>
           <input class="crpe-dur-inp" data-idx="${i}" type="number" min="0" value="${s.dur||''}" placeholder="예: 90"
             style="width:100%;padding:8px;border-radius:6px;border:1px solid ${isGym?'rgba(96,165,250,0.4)':'var(--border2)'};background:var(--surface);color:var(--text);font-size:15px;text-align:center;box-sizing:border-box;font-family:inherit">
         </div>
@@ -28895,6 +28959,10 @@ async function openCoachRpeBatchModal(date){
               <select class="brpe-sess" style="padding:5px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit">
                 <option value="AM" ${(ex.session_type||'AM')==='AM'?'selected':''}>AM</option>
                 <option value="PM" ${ex.session_type==='PM'?'selected':''}>PM</option>
+                <option value="AM_FIELD" ${ex.session_type==='AM_FIELD'?'selected':''}>필드(오전) · GPS 없음</option>
+                <option value="PM_FIELD" ${ex.session_type==='PM_FIELD'?'selected':''}>필드(오후) · GPS 없음</option>
+                <option value="AM_GYM" ${ex.session_type==='AM_GYM'||ex.session_type==='GYM'?'selected':''}>GYM(오전)</option>
+                <option value="PM_GYM" ${ex.session_type==='PM_GYM'?'selected':''}>GYM(오후)</option>
                 <option value="개인" ${ex.session_type==='개인'?'selected':''}>개인</option>
               </select>
             </td>
