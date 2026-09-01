@@ -23098,10 +23098,20 @@ async function generateMatchReport(){
     .order('match_date',{ascending:false})
     .limit(300);
 
-  // 경기 준비 훈련 흐름 — 주기(MD 레이블) + 경기상대 기반
-  const _preFrom = new Date(date);
-  _preFrom.setDate(_preFrom.getDate() - 14); // MD-5까지 커버 (최대 14일)
-  const _preFromStr = _preFrom.toISOString().split('T')[0];
+  // 경기 준비 훈련 흐름 — 직전 경기 다음 날부터 이번 경기 전날까지.
+  // 단순 최근 14일을 쓰면 이전 경기의 MD-5~MD-1까지 함께 잡히므로
+  // 실제 경기 경계로 마이크로사이클을 분리한다.
+  const {data:_prevMatchRows}=await supa.from('match_records')
+    .select('match_date')
+    .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false)
+    .lt('match_date',date)
+    .order('match_date',{ascending:false}).limit(1);
+  const _prevMatchDate=_prevMatchRows?.[0]?.match_date||null;
+  const _preFallback = new Date(date);
+  _preFallback.setDate(_preFallback.getDate() - 14);
+  const _preFromStr = _prevMatchDate
+    ? responseDateShift(_prevMatchDate,1)
+    : _preFallback.toISOString().split('T')[0];
   const [{data:preGPS},{data:preRPE},{data:prePlans}] = await Promise.all([
     supa.from('gps_records')
       .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
