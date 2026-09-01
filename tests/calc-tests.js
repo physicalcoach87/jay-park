@@ -212,6 +212,19 @@ const TODAY = '2026-07-08';
   check('세 경기 원자료를 한 번에 합친 값은 사용하지 않음', !approx(baseline.td,pooled), `${baseline.td} / ${pooled}`);
 })();
 
+// ── 경기 준비 흐름 대표 세션 ──────────────────────────────
+(function () {
+  const make=(type,count,start=0,duration=60)=>Array.from({length:count},(_,i)=>({player_id:'p'+(start+i),session_type:type,duration}));
+  check('대표 세션: PM 25명 + GYM 1명은 PM만 표시',
+    summarizeRepresentativeSessions([...make('PM',25),...make('PM_GYM',1,25)])==='PM');
+  check('대표 세션: AM 21명 + GYM 6명은 AM + GYM 표시',
+    summarizeRepresentativeSessions([...make('AM',21),...make('PM_GYM',6,21)])==='AM + GYM');
+  check('대표 세션: AM 22명 + PM 2명 + GYM 1명은 AM만 표시',
+    summarizeRepresentativeSessions([...make('AM',22),...make('PM',2,22),...make('AM_GYM',1,24)])==='AM');
+  check('대표 세션: 시간이 없는 개별 기록은 제외',
+    summarizeRepresentativeSessions([...make('AM_GYM',20),...make('AM',1,20,0)])==='GYM');
+})();
+
 // ── 결과 ────────────────────────────────────────────────────
 (function () {
   const row = (peak, rolling, monotony) => ({ enough:true, peak, rolling, monotony });

@@ -9,7 +9,13 @@ TMP=$(mktemp /tmp/jaypark-tests.XXXXXX.js)
 python3 - "$DIR/index-dev.html" "$TMP" << 'PYEOF'
 import re, sys
 html = open(sys.argv[1]).read()
-funcs = ['calcACWR', 'calcMVExposure', 'calcWellnessRisk', 'calcRiskLevel', 'calcSuitability', 'calcGpsForecastMetrics', 'getPeriodForecastStatus', 'periodForecastFlag', 'buildPeriodKnownDates', 'combineIndividualMatchLoads', 'matchTeamNormalizedValue', 'matchRecordKey', 'recentMatchKeys', 'matchBaselineForKeys', 'recentMatchBaseline']
+required_types = "const PLAYER_TRAINING_TYPES=['M','S','SS','X','G','R'];"
+if required_types not in html:
+    sys.exit('선수 훈련 유형 M/S/SS/X/G/R 정의가 올바르지 않음')
+for label in ['주전','서브','스페셜 훈련','미엔트리','그룹/개별훈련','재활훈련']:
+    if label not in html:
+        sys.exit(f'선수 훈련 유형 표시 누락: {label}')
+funcs = ['calcACWR', 'calcMVExposure', 'calcWellnessRisk', 'calcRiskLevel', 'calcSuitability', 'calcGpsForecastMetrics', 'getPeriodForecastStatus', 'periodForecastFlag', 'buildPeriodKnownDates', 'combineIndividualMatchLoads', 'matchTeamNormalizedValue', 'matchRecordKey', 'recentMatchKeys', 'matchBaselineForKeys', 'recentMatchBaseline', 'summarizeRepresentativeSessions']
 out = []
 for name in funcs:
     m = re.search(r'function ' + name + r'\([^)]*\)\{', html)
@@ -26,6 +32,8 @@ for name in funcs:
     out.append(html[m.start():j+1])
 open(sys.argv[2], 'w').write('\n'.join(out) + '\n')
 PYEOF
+
+grep -q "IN ('M', 'S', 'SS', 'X', 'G', 'R')" "$DIR/supabase/migrations/033_expand_player_training_types.sql"
 
 cat "$DIR/tests/calc-tests.js" >> "$TMP"
 "$JSC" "$TMP"
