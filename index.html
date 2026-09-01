@@ -23098,10 +23098,19 @@ async function generateMatchReport(){
     .order('match_date',{ascending:false})
     .limit(300);
 
-  // 경기 준비 훈련 흐름 — 주기(MD 레이블) + 경기상대 기반
-  const _preFrom = new Date(date);
-  _preFrom.setDate(_preFrom.getDate() - 14); // MD-5까지 커버 (최대 14일)
-  const _preFromStr = _preFrom.toISOString().split('T')[0];
+  // 경기 준비 훈련 흐름 — 선택 경기가 포함된 주기화 블록 시작일부터 경기 전날까지.
+  // 경기 사이에 REST가 있어도 그 휴식일을 이전 경기 사이클로 잘못 포함하지 않는다.
+  const {data:_reportBlocks}=await supa.from('blocks')
+    .select('start_date,end_date,track')
+    .in('track',['ALL','A'])
+    .lte('start_date',date).gte('end_date',date)
+    .order('start_date',{ascending:false}).limit(1);
+  const _reportBlock=_reportBlocks?.[0]||null;
+  const _preFallback = new Date(date);
+  _preFallback.setDate(_preFallback.getDate() - 14);
+  const _preFromStr = _reportBlock?.start_date
+    ? _reportBlock.start_date
+    : _preFallback.toISOString().split('T')[0];
   const [{data:preGPS},{data:preRPE},{data:prePlans}] = await Promise.all([
     supa.from('gps_records')
       .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
@@ -23607,7 +23616,8 @@ async function generateMatchReport(){
 
   ${(()=>{
     // ── 경기 준비 훈련 흐름 카드 (MD-5 → Match) ───────────────────
-    // 필터 기준: M 세션 중 ① 경기상대 일치 OR ② MD 주기 레이블 포함
+    // 필터 기준: 선택 경기의 주기화 블록 안에서 준비 상대가 일치하는 M 세션만.
+    // MD 표시는 단계 확인용이며, 상대가 다른 훈련을 통과시키는 대체 조건이 아니다.
     const _oppNorm = s => (s||'').trim().toLowerCase().replace(/[^가-힣a-z0-9]/g,'').replace(/^\d+r/,'').replace(/^vs/,'');
     const _tgtOpp  = _oppNorm(opponent);
     const _mGPS = (preGPS||[]).filter(r=>{
@@ -23615,9 +23625,9 @@ async function generateMatchReport(){
       // ① 경기상대 일치 (fuzzy)
       const rOpp = _oppNorm(r.opponent||'');
       const hasOpp = _tgtOpp && rOpp && (rOpp===_tgtOpp || rOpp.includes(_tgtOpp) || _tgtOpp.includes(rOpp));
-      // ② MD 주기 레이블 포함 (MD-1 ~ MD-5)
-      const hasMD = /(MD-?[1-5])/i.test(r.periodization||r.cycle||'');
-      return hasOpp || hasMD;
+      // MD 주기 레이블 확인 (MD-1 ~ MD-5)
+      const hasMD = /(MD-?[1-5])/i.test(`${r.periodization||''} ${r.cycle||''}`);
+      return hasOpp && hasMD;
     });
     // GPS가 없는 GYM/실내 전환일도 계획+RPE가 있으면 준비 흐름에 포함한다.
     const _planMap={};
