@@ -10368,15 +10368,7 @@ async function loadMorningReport(){
   const _allMKeys = [...new Set((weekMatchRaw||[]).map(r => r.match_date+'__'+r.opponent))]
     .sort((a,b) => b.localeCompare(a));
   const _ref3Keys = _allMKeys.slice(0,3);
-  const _ref3Rows = (weekMatchRaw||[]).filter(r => _ref3Keys.includes(r.match_date+'__'+r.opponent));
-  const ref3Avg = field => matchAvg(_ref3Rows, field);
-  const matchRef3 = {
-    td:     ref3Avg('td'),
-    hsr:    ref3Avg('band4_td'),
-    sprint: ref3Avg('band5_td'),
-    accel:  ref3Avg('accel'),
-    rhie:   ref3Avg('rhie'),
-  };
+  const matchRef3 = matchBaselineForKeys(weekMatchRaw||[],_ref3Keys);
   // 최근 3경기 정보
   const ref3Info = _ref3Keys.map(k => {
     const [mDate, mOpp] = k.split('__');
@@ -13433,7 +13425,7 @@ async function loadTwoWeekCal(baseDate){
       .limit(300),
   ]);
 
-  // 최근 3경기 기준선 — (합계)/(출전시간 합)×max(출전시간) [경기 팀 평균 공식]
+  // 경기 1회 팀 평균 계산용. 최근 3경기 기준선은 아래 공통 함수에서 경기별 결과를 평균한다.
   const _mAvg = (arr, field) => {
     const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
     if(!vrs.length) return null;
@@ -13442,16 +13434,7 @@ async function loadTwoWeekCal(baseDate){
   };
   const _mKeys3 = [...new Set((matchFT||[]).map(r=>r.match_date+'__'+r.opponent))]
     .sort((a,b)=>b.localeCompare(a)).slice(0,3);
-  const _mRows3 = (matchFT||[]).filter(r=>_mKeys3.includes(r.match_date+'__'+r.opponent));
-  window._matchRef3 = {
-    td:     _mAvg(_mRows3,'td'),
-    hsr:    _mAvg(_mRows3,'band4_td'),
-    sprint: _mAvg(_mRows3,'band5_td'),
-    accel:  _mAvg(_mRows3,'accel'),
-    rhie:   _mAvg(_mRows3,'rhie'),
-    games:  _mKeys3.length,
-    keys:   _mKeys3,
-  };
+  window._matchRef3 = {...matchBaselineForKeys(matchFT||[],_mKeys3),games:_mKeys3.length,keys:_mKeys3};
   window.__twoWeekMatchFT = matchFT || [];
   // 날짜별 경기 데이터 맵 (이번 2주 범위 내)
   const _matchByDate = {};
@@ -14709,8 +14692,7 @@ async function buildWeeklyLoadHtml(forDate){
 
   const _mAvg=(arr,field)=>{const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);if(!vrs.length)return null;const mx=Math.max(...vrs.map(r=>parseFloat(r.duration)));const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);return sd>0?sv/sd*mx:null;};
   const _allMKeys=[...new Set((matchRaw||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
-  const _ref3Rows=(matchRaw||[]).filter(r=>_allMKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
-  const mRef3={td:_mAvg(_ref3Rows,'td'),hsr:_mAvg(_ref3Rows,'band4_td'),sprint:_mAvg(_ref3Rows,'band5_td')};
+  const mRef3=matchBaselineForKeys(matchRaw||[],_allMKeys.slice(0,3));
 
   const wkMatchByDate={};
   (matchRaw||[]).forEach(r=>{if(r.match_date>=weekStartStr&&r.match_date<=weekEndStr){if(!wkMatchByDate[r.match_date])wkMatchByDate[r.match_date]=[];wkMatchByDate[r.match_date].push(r);}});
@@ -14812,24 +14794,9 @@ async function buildWeeklyLoadHtml(forDate){
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
     const DOW = ['일','월','화','수','목','금','토'];
 
-    // 팀 경기 평균 (accel, rhie 추가)
-    const _fullMAvg = (arr,field) => {
-      const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
-      if(!vrs.length) return null;
-      const mx=Math.max(...vrs.map(r=>parseFloat(r.duration)));
-      const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-      const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
-      return sd>0?sv/sd*mx:null;
-    };
+    // 팀 경기 평균 (accel, rhie 포함)
     const _allKeys=[...new Set((matchRaw||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
-    const _ref3=(matchRaw||[]).filter(r=>_allKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
-    const tMA = {
-      td:    _fullMAvg(_ref3,'td'),
-      hsr:   _fullMAvg(_ref3,'band4_td'),
-      sprint:_fullMAvg(_ref3,'band5_td'),
-      accel: _fullMAvg(_ref3,'accel'),
-      rhie:  _fullMAvg(_ref3,'rhie'),
-    };
+    const tMA=matchBaselineForKeys(matchRaw||[],_allKeys.slice(0,3));
 
     // % 배지 헬퍼
     // MD 단계별 핵심 지표 (빨간색 강조)
@@ -15378,23 +15345,8 @@ async function loadTeamSummary(forceDate, quiet=false){
   };
 
   // ── 주기화 periodPct 계산 (훈련 데이터 모드) ──
-  const _mAvgTs = (arr, field) => {
-    const vrs = arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
-    if(!vrs.length) return null;
-    const mx = Math.max(...vrs.map(r=>parseFloat(r.duration)));
-    const sv = vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sd = vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
-    return sd>0 ? sv/sd*mx : null;
-  };
   const allMKeys = [...new Set((matchRef||[]).map(r=>r.match_date+'__'+r.opponent))].sort((a,b)=>b.localeCompare(a));
-  const ref3RowsTs = (matchRef||[]).filter(r=>allMKeys.slice(0,3).includes(r.match_date+'__'+r.opponent));
-  const teamMAvg = {
-    td:    _mAvgTs(ref3RowsTs,'td'),
-    hsr:   _mAvgTs(ref3RowsTs,'band4_td'),
-    sprint:_mAvgTs(ref3RowsTs,'band5_td'),
-    accel: _mAvgTs(ref3RowsTs,'accel'),
-    rhie:  _mAvgTs(ref3RowsTs,'rhie'),
-  };
+  const teamMAvg=matchBaselineForKeys(matchRef||[],allMKeys.slice(0,3));
   // 선수 개인 경기 기준선 — 훈련 적합성(buildPersonalPlanTarget)과 같은 규칙을 쓴다.
   // 최근 풀타임(80분↑) 3경기가 모두 있을 때만 개인 기준, 부족하면 팀 목표로 대체한다.
   // pl(P.Load)은 주기화 목표가 없어 목표 달성률을 만들 수 없다. 경기 평균 자체를 기준으로 쓴다.
@@ -17047,6 +16999,33 @@ async function parseGpsFiles(files){
 const COMPETITIONS = ['리그','컵대회','연습경기','기타'];
 const PLAN_MATCH_COMPETITION={LEAGUE:'리그',CUP:'컵대회',FRIENDLY:'연습경기'};
 
+// 최근 경기 팀 기준선 공통 계산
+// 1) 각 경기를 독립적으로 출전시간 보정하고 2) 경기별 결과를 동일 비중으로 평균한다.
+function matchTeamNormalizedValue(rows, field){
+  const valid=(rows||[]).filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
+  if(!valid.length) return null;
+  const maxDuration=Math.max(...valid.map(r=>parseFloat(r.duration)));
+  const valueSum=valid.reduce((sum,r)=>sum+(parseFloat(r[field])||0),0);
+  const durationSum=valid.reduce((sum,r)=>sum+(parseFloat(r.duration)||0),0);
+  return durationSum>0 ? valueSum/durationSum*maxDuration : null;
+}
+function matchRecordKey(row){ return `${row.match_date}__${row.opponent||''}`; }
+function recentMatchKeys(rows, limit=3){
+  return [...new Set((rows||[]).map(matchRecordKey))].sort((a,b)=>b.localeCompare(a)).slice(0,limit);
+}
+function matchBaselineForKeys(rows, keys){
+  const games=(keys||[]).map(key=>(rows||[]).filter(r=>matchRecordKey(r)===key));
+  const avgField=field=>{
+    const values=games.map(game=>matchTeamNormalizedValue(game,field)).filter(Number.isFinite);
+    return values.length ? values.reduce((sum,value)=>sum+value,0)/values.length : null;
+  };
+  return {td:avgField('td'),hsr:avgField('band4_td'),sprint:avgField('band5_td'),accel:avgField('accel'),rhie:avgField('rhie')};
+}
+function recentMatchBaseline(rows, limit=3){
+  const keys=recentMatchKeys(rows,limit);
+  return {...matchBaselineForKeys(rows,keys),games:keys.length,keys};
+}
+
 async function loadGpsPeriodPlans(){
   _gpsPeriodPlans={};
   const dates=[...new Set(_gpsParseData.filter(r=>!r._isMatch&&r.session_date).map(r=>r.session_date))];
@@ -18284,17 +18263,7 @@ async function loadTrainingSuitability(){
   // 최근 3경기 FT의 팀 평균을 경기 기준선으로 사용한다. 출전시간 차이는 해당 경기 최장시간으로 보정한다.
   const _blComps=getBaselineComps();
   const ftRows=(matchAll||[]).filter(r=>(r.time_type||'').toUpperCase()==='FT'&&!r.is_estimated&&!r.baseline_excluded&&_blComps.includes(r.competition||'리그')&&(parseFloat(r.duration)||0)>0);
-  const recentMatchDates=[...new Set(ftRows.map(r=>r.match_date))].sort((a,b)=>b.localeCompare(a)).slice(0,3);
-  const refRows=ftRows.filter(r=>recentMatchDates.includes(r.match_date));
-  const matchAvg=field=>{
-    const valid=refRows.filter(r=>Number.isFinite(parseFloat(r[field])));
-    if(!valid.length) return null;
-    const maxDur=Math.max(...valid.map(r=>parseFloat(r.duration)||0));
-    const sumVal=valid.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sumDur=valid.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
-    return sumDur>0?sumVal/sumDur*maxDur:null;
-  };
-  const matchBase={td:matchAvg('td'),hsr:matchAvg('band4_td'),sprint:matchAvg('band5_td'),accel:matchAvg('accel'),rhie:matchAvg('rhie')};
+  const matchBase=matchBaselineForKeys(ftRows,recentMatchKeys(ftRows,3));
   const demandInfo=deriveDemand(plan,mdKey,matchBase);
   const { demand, basis }=demandInfo;
   const officialMatch=isOfficialMatchPlan(plan);
@@ -29633,7 +29602,7 @@ function renderPeriodForecastPreview(){
 }
 
 async function loadPeriodMatchAvg() {
-  // 기존 앱과 동일한 로직: 출전시간 보정 팀 평균 (최근 3경기 FT)
+  // 각 경기 출전시간 보정값을 먼저 구한 뒤 최근 3경기를 동일 비중으로 평균한다.
   const {data}=await supa.from('match_records')
     .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
     .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false});
@@ -29641,25 +29610,8 @@ async function loadPeriodMatchAvg() {
 
   // 최근 3경기 날짜+상대 키
   const keys=[...new Set(data.map(r=>r.match_date+'__'+r.opponent))].slice(0,3);
-  const rows=data.filter(r=>keys.includes(r.match_date+'__'+r.opponent));
-
-  // 출전시간 보정 팀 평균 함수 (기존 matchAvg 동일 로직)
-  const mAvg=(arr,field)=>{
-    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
-    if(!vrs.length) return 0;
-    const maxDur=Math.max(...vrs.map(r=>parseFloat(r.duration)));
-    const sumVal=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sumDur=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
-    return sumDur>0?sumVal/sumDur*maxDur:0;
-  };
-
-  _periodMatchAvg={
-    td:    Math.round(mAvg(rows,'td')),
-    hsr:   Math.round(mAvg(rows,'band4_td')),
-    sprint:Math.round(mAvg(rows,'band5_td')),
-    accel: Math.round(mAvg(rows,'accel')),
-    rhie:  Math.round(mAvg(rows,'rhie')),
-  };
+  const baseline=matchBaselineForKeys(data,keys);
+  _periodMatchAvg=Object.fromEntries(Object.entries(baseline).map(([key,value])=>[key,Number.isFinite(value)?Math.round(value):0]));
   // 현재 기준 3경기 (저장 시 스냅샷으로 남김)
   _periodMatchKeys = keys.map(k=>{ const [date,opp]=k.split('__'); return {date, opp}; });
 }
@@ -29986,22 +29938,14 @@ async function backfillBlockBasis(apply){
   const {data:matches} = await supa.from('match_records')
     .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration')
     .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false});
-  const mAvg=(arr,field)=>{
-    const vrs=arr.filter(r=>parseFloat(r[field])>0&&parseFloat(r.duration)>0);
-    if(!vrs.length) return 0;
-    const mx=Math.max(...vrs.map(r=>parseFloat(r.duration)));
-    const sv=vrs.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
-    const sd=vrs.reduce((a,r)=>a+(parseFloat(r.duration)||0),0);
-    return sd>0?Math.round(sv/sd*mx):0;
-  };
   // 경기 직전 3경기(날짜+상대 키) → {avg, matches}
   const refBefore=(matchDate)=>{
     const rows=(matches||[]).filter(r=>r.match_date < matchDate);
     const keys=[...new Set(rows.map(r=>r.match_date+'__'+r.opponent))].slice(0,3);
     if(!keys.length) return null;
-    const sel=rows.filter(r=>keys.includes(r.match_date+'__'+r.opponent));
+    const avg=matchBaselineForKeys(rows,keys);
     return {
-      avg:{ td:mAvg(sel,'td'), hsr:mAvg(sel,'band4_td'), sprint:mAvg(sel,'band5_td'), accel:mAvg(sel,'accel'), rhie:mAvg(sel,'rhie') },
+      avg:Object.fromEntries(Object.entries(avg).map(([key,value])=>[key,Number.isFinite(value)?Math.round(value):0])),
       matches: keys.map(k=>{ const [date,opp]=k.split('__'); return {date,opp}; }),
     };
   };
