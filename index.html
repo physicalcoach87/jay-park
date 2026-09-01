@@ -23664,13 +23664,16 @@ async function generateMatchReport(){
       const mdStage=_getMD(d,rows);
       const dayRpe=(preRPE||[]).filter(r=>r.record_date===d);
       const gpsTypeByPlayer={};
-      (preGPS||[]).filter(r=>r.session_date===d).forEach(r=>{const t=(r.session_type2||'').trim().toUpperCase();if(t==='M'||t==='S')gpsTypeByPlayer[r.player_id]=t;});
+      (preGPS||[]).filter(r=>r.session_date===d).forEach(r=>{const t=(r.session_type2||'').trim().toUpperCase();if(['M','S','SS','X'].includes(t))gpsTypeByPlayer[r.player_id]=t;});
       const finalType=r=>{const over=(r.participant_type||'').toUpperCase();return ['M','S','SS','X'].includes(over)?over:(gpsTypeByPlayer[r.player_id]||'');};
       const mRpe=dayRpe.filter(r=>finalType(r)==='M');
       const sRpe=dayRpe.filter(r=>finalType(r)==='S');
-      const loadRpe=rows.length?rows.map(r=>_rpeMap[d+'|'+r.player_id]).filter(Boolean):dayRpe;
+      const hasAssignedType=dayRpe.some(r=>!!finalType(r));
+      // GPS일은 M GPS 선수, GPS 미측정일은 유형 미지정 시 전체 / 지정 시 M만 사용.
+      const noGpsBasis=hasAssignedType?mRpe:dayRpe;
+      const loadRpe=rows.length?rows.map(r=>_rpeMap[d+'|'+r.player_id]).filter(Boolean):noGpsBasis;
       const _rpeArr=loadRpe.map(r=>parseFloat(r.rpe)||0).filter(v=>v>0);
-      const _durArr=(rows.length?rows:dayRpe).map(r=>parseFloat(r.duration)||0).filter(v=>v>0);
+      const _durArr=(rows.length?rows:noGpsBasis).map(r=>parseFloat(r.duration)||0).filter(v=>v>0);
       const _avgRpe=_rpeArr.length?_rpeArr.reduce((a,b)=>a+b)/_rpeArr.length:0;
       const _avgDur=_durArr.length?_durArr.reduce((a,b)=>a+b)/_durArr.length:0;
       const plan=_planMap[d]||{};
@@ -23678,7 +23681,8 @@ async function generateMatchReport(){
       const actual=[...new Set(dayRpe.map(r=>sessionPlaceLabel(r.session_type)||(r.session_type||'')).filter(Boolean))].join(' + ');
       const typeCounts={};dayRpe.forEach(r=>{const t=finalType(r)||'미지정';(typeCounts[t]=typeCounts[t]||new Set()).add(r.player_id);});
       const groupLabel=['M','S','SS','X','미지정'].filter(t=>typeCounts[t]?.size).map(t=>`${t} ${typeCounts[t].size}명`).join(' · ');
-      return { date:d, mdStage, topic, actual, groupLabel, gpsMissing:!rows.length, cnt:rows.length||new Set(dayRpe.map(r=>r.player_id)).size, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:rows.length?_av(rows,'duration'):(_avgDur||null), srpe:(_avgRpe&&_avgDur)?Math.round(_avgRpe*_avgDur):null };
+      const rpeBasisLabel=rows.length?'M 기준':(hasAssignedType?`M 기준 ${new Set(mRpe.map(r=>r.player_id)).size}명`:`전체 기준 ${new Set(dayRpe.map(r=>r.player_id)).size}명`);
+      return { date:d, mdStage, topic, actual, groupLabel, rpeBasisLabel, gpsMissing:!rows.length, cnt:rows.length||new Set(dayRpe.map(r=>r.player_id)).size, td:_av(rows,'td'), hsr:_av(rows,'running_high'), sprint:_av(rows,'sprint'), accel:_av(rows,'accel'), rhie:_av(rows,'rhie'), dur:rows.length?_av(rows,'duration'):(_avgDur||null), srpe:(_avgRpe&&_avgDur)?Math.round(_avgRpe*_avgDur):null };
     });
 
     const _mdColor=md=>({'MD-5':'#60a5fa','MD-4':'#60a5fa','MD-3':'#ef4444','MD-2':'#fbbf24','MD-1':'#4ade80','MD+1':'#94a3b8'})[md]||'#94a3b8';
@@ -23727,7 +23731,7 @@ async function generateMatchReport(){
           <div style="height:30px;font-size:10px;font-weight:600;color:var(--text);line-height:1.4;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">${t.topic||'—'}${t.actual?`<br><span style="color:#60a5fa">실제 ${t.actual}</span>`:''}</div>
           <div style="height:18px;font-size:10px;color:var(--text3);margin-bottom:4px">${t.groupLabel||t.cnt+'명'} · ${t.dur?Math.round(t.dur)+"'":'—'}</div>
           <div style="border-top:1px solid var(--border);margin:4px 0"></div>
-          ${t.gpsMissing?`<div style="height:18px;font-size:10px;color:#fbbf24;font-weight:700">GPS 미측정 · RPE 기준</div>`:''}
+          ${t.gpsMissing?`<div style="height:18px;font-size:10px;color:#fbbf24;font-weight:700">GPS 미측정 · RPE ${t.rpeBasisLabel}</div>`:''}
           ${_statRow('TD',t.td?Math.round(t.td).toLocaleString():null,_refTD,'#60a5fa','m')}
           ${_statRow('HSR',t.hsr?Math.round(t.hsr).toLocaleString():null,_refHSR,'#f59e0b','m')}
           ${_statRow('Spr',t.sprint?Math.round(t.sprint):null,_refSpr,'#ef4444','m')}
