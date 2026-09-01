@@ -9,7 +9,7 @@ TMP=$(mktemp /tmp/jaypark-tests.XXXXXX.js)
 python3 - "$DIR/index-dev.html" "$TMP" << 'PYEOF'
 import re, sys
 html = open(sys.argv[1]).read()
-funcs = ['calcACWR', 'calcMVExposure', 'calcWellnessRisk', 'calcRiskLevel', 'calcSuitability', 'calcGpsForecastMetrics', 'getPeriodForecastStatus', 'periodForecastFlag', 'buildPeriodKnownDates', 'combineIndividualMatchLoads']
+funcs = ['calcACWR', 'calcMVExposure', 'calcWellnessRisk', 'calcRiskLevel', 'calcSuitability', 'calcGpsForecastMetrics', 'getPeriodForecastStatus', 'periodForecastFlag', 'buildPeriodKnownDates', 'combineIndividualMatchLoads', 'matchTeamNormalizedValue', 'matchRecordKey', 'recentMatchKeys', 'matchBaselineForKeys', 'recentMatchBaseline']
 out = []
 for name in funcs:
     m = re.search(r'function ' + name + r'\([^)]*\)\{', html)

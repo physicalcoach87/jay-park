@@ -189,6 +189,29 @@ const TODAY = '2026-07-08';
   check('개인 경기일 최고속도는 최댓값', approx(r.max_speed,30.1), r.max_speed);
 })();
 
+// ── 최근 3경기 팀 기준선: 경기별 보정 후 동일 비중 평균 ────
+(function () {
+  const rows=[
+    {match_date:'2026-08-30',opponent:'수원FC',duration:104,td:10000,band4_td:500,band5_td:100,accel:20,rhie:30},
+    {match_date:'2026-08-30',opponent:'수원FC',duration:52, td:4000, band4_td:100,band5_td:50, accel:10,rhie:10},
+    {match_date:'2026-08-22',opponent:'대구FC',duration:108,td:12000,band4_td:600,band5_td:200,accel:30,rhie:50},
+    {match_date:'2026-08-22',opponent:'대구FC',duration:54, td:3000, band4_td:150,band5_td:50, accel:10,rhie:10},
+    {match_date:'2026-08-15',opponent:'화성FC',duration:100,td:9000, band4_td:400,band5_td:120,accel:25,rhie:40},
+    {match_date:'2026-08-15',opponent:'화성FC',duration:50, td:3000, band4_td:100,band5_td:30, accel:5, rhie:5},
+  ];
+  const gameValues=[
+    (14000/156*104),
+    (15000/162*108),
+    (12000/150*100),
+  ];
+  const expected=gameValues.reduce((a,b)=>a+b,0)/3;
+  const baseline=recentMatchBaseline(rows,3);
+  check('최근 3경기는 날짜+상대 기준 최신순', baseline.keys.join(',')==='2026-08-30__수원FC,2026-08-22__대구FC,2026-08-15__화성FC', baseline.keys.join(','));
+  check('팀 기준선은 경기별 보정값 3개의 동일 비중 평균', approx(baseline.td,expected), baseline.td);
+  const pooled=rows.reduce((a,r)=>a+r.td,0)/rows.reduce((a,r)=>a+r.duration,0)*108;
+  check('세 경기 원자료를 한 번에 합친 값은 사용하지 않음', !approx(baseline.td,pooled), `${baseline.td} / ${pooled}`);
+})();
+
 // ── 결과 ────────────────────────────────────────────────────
 (function () {
   const row = (peak, rolling, monotony) => ({ enough:true, peak, rolling, monotony });
