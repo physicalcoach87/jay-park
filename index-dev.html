@@ -23616,7 +23616,8 @@ async function generateMatchReport(){
 
   ${(()=>{
     // ── 경기 준비 훈련 흐름 카드 (MD-5 → Match) ───────────────────
-    // 필터 기준: M 세션 중 ① 경기상대 일치 OR ② MD 주기 레이블 포함
+    // 필터 기준: 선택 경기의 주기화 블록 안에서 준비 상대가 일치하는 M 세션만.
+    // MD 표시는 단계 확인용이며, 상대가 다른 훈련을 통과시키는 대체 조건이 아니다.
     const _oppNorm = s => (s||'').trim().toLowerCase().replace(/[^가-힣a-z0-9]/g,'').replace(/^\d+r/,'').replace(/^vs/,'');
     const _tgtOpp  = _oppNorm(opponent);
     const _mGPS = (preGPS||[]).filter(r=>{
@@ -23624,9 +23625,9 @@ async function generateMatchReport(){
       // ① 경기상대 일치 (fuzzy)
       const rOpp = _oppNorm(r.opponent||'');
       const hasOpp = _tgtOpp && rOpp && (rOpp===_tgtOpp || rOpp.includes(_tgtOpp) || _tgtOpp.includes(rOpp));
-      // ② MD 주기 레이블 포함 (MD-1 ~ MD-5)
-      const hasMD = /(MD-?[1-5])/i.test(r.periodization||r.cycle||'');
-      return hasOpp || hasMD;
+      // MD 주기 레이블 확인 (MD-1 ~ MD-5)
+      const hasMD = /(MD-?[1-5])/i.test(`${r.periodization||''} ${r.cycle||''}`);
+      return hasOpp && hasMD;
     });
     // GPS가 없는 GYM/실내 전환일도 계획+RPE가 있으면 준비 흐름에 포함한다.
     const _planMap={};
