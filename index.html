@@ -2311,22 +2311,43 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div style="display:flex;gap:10px;margin-bottom:14px">
       <div style="flex:1">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">시작일</div>
-        <input id="bm-start" type="date" onchange="renderBlockModalForecast()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <input id="bm-start" type="date" onchange="onBlockDraftChange()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
       </div>
       <div style="flex:1">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">종료일</div>
-        <input id="bm-end" type="date" onchange="renderBlockModalForecast()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+        <input id="bm-end" type="date" onchange="onBlockDraftChange()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
       </div>
+    </div>
+    <!-- 경기 일정 (선택) -->
+    <div style="margin-bottom:14px;padding:11px 12px;border-radius:9px;background:var(--bg);border:1px solid var(--border2)">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px">
+        <input id="bm-has-match" type="checkbox" checked onchange="toggleBmMatchFields();onBlockDraftChange()" style="width:16px;height:16px;accent-color:var(--accent)">
+        이 블록에 경기가 있습니다
+      </label>
+      <div id="bm-match-fields" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:5px">경기일</div><input id="bm-match-date" type="date" onchange="onBlockDraftChange()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px;box-sizing:border-box"></div>
+        <div><div style="font-size:11px;color:var(--text3);margin-bottom:5px">경기 형태</div><select id="bm-match-type" onchange="onBlockDraftChange()" style="width:100%;padding:7px 8px;border-radius:7px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-size:12px"><option value="LEAGUE">리그</option><option value="CUP">컵대회</option><option value="FRIENDLY">연습경기</option><option value="OTHER">기타</option></select></div>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:7px">경기가 없는 주 또는 프리시즌은 체크를 해제하세요.</div>
+    </div>
+    <!-- 추천 계획 -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">기본 추천 계획</div>
+      <select id="bm-period-plan" onchange="onBlockDraftChange()" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px">
+        <option value="AUTO">준비기간에 맞춰 자동 선택</option><option value="6D">6D 추천</option><option value="5D">5D 추천</option><option value="4D">4D 추천</option><option value="COACH">코치 선택</option>
+      </select>
+      <div id="bm-period-plan-hint" style="font-size:10px;color:var(--text3);margin-top:5px">경기일과 첫 훈련일을 기준으로 6D·5D·4D를 판단합니다.</div>
     </div>
     <!-- 상위 맥락 -->
     <div style="margin-bottom:12px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">상위 맥락 <span style="font-size:10px">(예: 충남아산 R1, 1차 전지훈련 1 Week)</span></div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">경기 상대 또는 블록명 <span style="font-size:10px">(예: 충남아산 R2, 1차 전지훈련)</span></div>
       <input id="bm-context" type="text" placeholder="예) 충남아산 R1" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
     </div>
     <!-- 주기화 라벨 -->
     <div style="margin-bottom:14px">
-      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">주기화 라벨 <span style="font-size:10px">(예: 1R-4DAY, Rest Week 1)</span></div>
-      <input id="bm-label" type="text" placeholder="예) 1R-4DAY" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box">
+      <div style="font-size:11px;color:var(--text3);margin-bottom:5px">주기화 라벨 <span style="font-size:10px">(날짜별 계획을 기준으로 자동 생성)</span></div>
+      <input id="bm-label" type="text" readonly placeholder="일정을 설정하면 자동 생성됩니다" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--accent2);font-size:12px;font-weight:700;box-sizing:border-box">
+      <div id="bm-label-hint" style="font-size:10px;color:var(--text3);margin-top:5px">D=훈련·동적 회복·동적 휴식 · R=완전 휴식 · M=경기</div>
     </div>
     <!-- 색상 -->
     <div style="margin-bottom:20px">
@@ -2411,9 +2432,9 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
       <button onclick="closeDayModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
     </div>
     <!-- REST 토글 -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:8px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg)">
-      <span style="font-size:12px;font-weight:600;color:var(--text)">😴 REST (휴식일)</span>
-      <label style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer">
+    <div id="dm-rest-wrap" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:8px 12px;border-radius:8px;border:1px solid var(--border2);background:var(--bg)">
+      <span id="dm-rest-label" style="font-size:12px;font-weight:600;color:var(--text)">😴 REST (휴식일)</span>
+      <label id="dm-rest-control" style="position:relative;display:inline-block;width:40px;height:22px;cursor:pointer">
         <input type="checkbox" id="dm-rest" onchange="toggleDmRest(this.checked)" style="opacity:0;width:0;height:0">
         <span id="dm-rest-slider" style="position:absolute;inset:0;background:var(--border2);border-radius:11px;transition:.3s">
           <span style="position:absolute;left:2px;top:2px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.3s"></span>
@@ -2440,11 +2461,21 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <div><div style="font-size:9px;color:var(--text3);margin-bottom:3px">준비 대회</div><select id="dm-plan-competition" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="">—</option><option>리그</option><option>컵대회</option><option>연습경기</option><option>기타</option></select></div>
         </div>
       </div>
+      <!-- 준비기간별 피지컬 타깃 추천 -->
+      <div id="dm-target-recommendation" style="margin-bottom:14px;padding:11px 12px;border:1px solid rgba(34,197,94,.35);background:rgba(34,197,94,.06);border-radius:9px">
+        <div style="display:grid;grid-template-columns:145px 1fr;gap:9px;margin-bottom:9px">
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:4px">추천 계획</div><select id="dm-period-plan" onchange="renderDmTargetOptions()" style="width:100%;padding:6px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:11px"><option value="6D">6D 추천</option><option value="5D">5D 추천</option><option value="4D">4D 추천</option><option value="COACH">코치 선택</option></select></div>
+          <div><div style="font-size:10px;color:var(--text3);margin-bottom:4px">현재 날짜</div><div id="dm-auto-md" style="padding:7px 9px;border-radius:6px;background:var(--bg);border:1px solid var(--border2);font-size:11px;font-weight:700;color:#a5b4fc">경기일을 설정하면 자동 계산됩니다.</div></div>
+        </div>
+        <div style="font-size:10px;color:var(--text3);margin-bottom:5px">피지컬 타깃 유형</div>
+        <div id="dm-target-options" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+        <div id="dm-target-detail" style="display:none;margin-top:9px;padding:9px 10px;border-radius:7px;background:var(--bg);border:1px solid var(--border2)"></div>
+      </div>
       <!-- MD 라벨 -->
       <div style="margin-bottom:14px">
         <div style="font-size:11px;color:var(--text3);margin-bottom:5px">날짜 라벨</div>
         <input id="dm-day-label" type="text" placeholder="예) MD-4, D-1, W1..." oninput="onDmLabelChange(this.value)" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid var(--border2);background:var(--bg);color:var(--text);font-size:12px;box-sizing:border-box;margin-bottom:6px">
-        <div style="display:flex;flex-wrap:wrap;gap:5px">
+        <div id="dm-label-quick" style="display:flex;flex-wrap:wrap;gap:5px">
           <button type="button" onclick="document.getElementById('dm-day-label').value='MD-5';onDmLabelChange('MD-5')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-5</button>
           <button type="button" onclick="document.getElementById('dm-day-label').value='MD-4';onDmLabelChange('MD-4')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-4</button>
           <button type="button" onclick="document.getElementById('dm-day-label').value='MD-3';onDmLabelChange('MD-3')" style="font-size:10px;padding:3px 8px;border-radius:5px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">MD-3</button>
@@ -18147,7 +18178,7 @@ function normalizePlanMdKey(label){
   return Object.keys(MD_DEMAND).filter(k=>k!=='MD'&&k!=='MATCH').find(k=>raw.includes(k))||null;
 }
 
-const MATCH_TYPE_LABEL={LEAGUE:'리그 경기',CUP:'컵대회',FRIENDLY:'연습경기'};
+const MATCH_TYPE_LABEL={LEAGUE:'리그 경기',CUP:'컵대회',FRIENDLY:'연습경기',OTHER:'기타 경기'};
 function getPlanMatchType(plan){
   if(normalizePlanMdKey(plan?.day_label)!=='MATCH')return null;
   const saved=(plan?.ref_basis?.match_type||'').toUpperCase();
@@ -29326,6 +29357,111 @@ function frozenPctByAvgKey(row, avgKey){
 }
 let _bmColor     = '#818cf8';
 const DOW_KR = ['일','월','화','수','목','금','토'];
+let _dmTargetType = null;
+
+// 주기화 v2 테스트: 12개 피지컬 타깃의 경기 대비 기본 권장 범위.
+// %MSS는 개인 최고속도 기준이며, 나머지 항목은 팀 최근 3경기 평균을 100%로 본다.
+const PERIOD_TARGET_TYPES={
+  recovery:{name:'동적 회복',load:'저볼륨 · 저강도',when:'경기 피로가 남아 움직임 회복이 필요할 때',core:'피로를 추가하지 않고 움직임 회복에 집중한다.',r:{td:[20,30],hsr:[0,8],spr:[0,3],mss:[0,75],acc:[10,20],dec:[10,25],rhie:[0,5],pl:[20,30]}},
+  aerobic:{name:'유산소 자극',load:'중~고볼륨 · 저~중강도',when:'정상적인 훈련량과 유산소 기반을 확보할 때',core:'충분한 운동량을 확보하되 불필요한 고강도 반복은 제한한다.',r:{td:[45,60],hsr:[15,30],spr:[5,15],mss:[75,85],acc:[25,40],dec:[25,45],rhie:[15,30],pl:[40,60]}},
+  strength:{name:'근력·파워·근신경 자극',load:'저~중볼륨 · 중~고강도',when:'힘, 파워, 가속·감속 능력을 자극할 때',core:'반복 횟수보다 움직임의 질과 폭발성을 우선한다.',r:{td:[30,45],hsr:[10,25],spr:[5,15],mss:[80,90],acc:[65,85],dec:[65,85],rhie:[30,50],pl:[50,70]}},
+  football_hi:{name:'축구 특이적 고강도 자극',load:'중볼륨 · 고강도',when:'축구 훈련에서 높은 강도를 확보하되 최대 운동량은 필요하지 않을 때',core:'높은 강도를 확보하지만 최대부하 세션으로 확대하지 않는다.',r:{td:[40,55],hsr:[35,50],spr:[25,40],mss:[85,92],acc:[60,80],dec:[60,80],rhie:[50,70],pl:[50,70]}},
+  max_load:{name:'축구 특이적 최대부하',load:'고볼륨 · 고강도',when:'주간 최대 훈련부하를 적용할 때',core:'높은 강도뿐만 아니라 충분한 운동량까지 확보한다.',r:{td:[55,70],hsr:[40,60],spr:[30,50],mss:[88,95],acc:[65,90],dec:[65,90],rhie:[60,85],pl:[60,80]}},
+  highspeed:{name:'고속주행·반복 고강도 자극',load:'중볼륨 · 고강도',when:'HSR, Sprint, RHIE 노출을 집중적으로 확보할 때',core:'고속 노출은 확보하되 반복으로 인한 피로를 관리한다.',r:{td:[35,50],hsr:[45,65],spr:[40,60],mss:[90,95],acc:[40,60],dec:[35,55],rhie:[55,80],pl:[40,60]}},
+  endurance:{name:'경기지구력·전술 통합 자극',load:'중~고볼륨 · 중~고강도',when:'전술훈련과 경기 체력을 함께 훈련할 때',core:'전술적 목적 안에서 충분한 연속 활동량을 확보한다.',r:{td:[45,60],hsr:[25,40],spr:[15,30],mss:[80,90],acc:[40,60],dec:[40,60],rhie:[30,50],pl:[45,65]}},
+  speed_activation:{name:'스피드·근신경 활성화',load:'저볼륨 · 고강도',when:'최대속도와 폭발적인 움직임을 짧게 자극할 때',core:'높은 속도는 노출하되 피로를 만드는 반복은 제한한다.',r:{td:[15,30],hsr:[15,30],spr:[15,30],mss:[90,95],acc:[30,50],dec:[20,40],rhie:[10,25],pl:[20,35]}},
+  tactical:{name:'전술 통합·부하 조절',load:'저~중볼륨 · 저~중강도',when:'경기 전술을 완성하면서 전체 부하를 낮출 때',core:'전술훈련이 고강도 체력훈련으로 변하지 않게 한다.',r:{td:[30,45],hsr:[10,25],spr:[5,15],mss:[75,85],acc:[30,45],dec:[30,50],rhie:[15,30],pl:[30,50]}},
+  readiness:{name:'경기 준비 활성화',load:'저볼륨 · 저~중강도',when:'경기 전 움직임과 반응을 깨울 때',core:'피로를 만들 정도의 반복은 제한한다.',r:{td:[20,30],hsr:[5,15],spr:[0,10],mss:[75,85],acc:[20,35],dec:[20,40],rhie:[5,20],pl:[20,35]}},
+  active_rest:{name:'동적 휴식',load:'저볼륨 · 저강도',when:'세트피스와 전술 위치만 가볍게 확인할 때',core:'빠른 움직임과 강한 가속·감속의 반복을 제한한다.',r:{td:[15,25],hsr:[0,5],spr:[0,0],mss:[0,70],acc:[10,15],dec:[10,20],rhie:[0,5],pl:[15,25]}},
+  full_rest:{name:'완전 휴식',load:'운동 없음',when:'계획된 휴식 또는 누적 피로 회복이 필요할 때',core:'훈련 자극보다 완전한 회복을 우선한다.',r:{td:[0,0],hsr:[0,0],spr:[0,0],mss:null,acc:[0,0],dec:[0,0],rhie:[0,0],pl:[0,0]}}
+};
+
+// 경기는 12개 훈련 타깃과 구분한다. 팀 최근 3경기 평균을 경기 목표 100%로 사용한다.
+const PERIOD_MATCH_TARGET={
+  name:'경기 수행',load:'경기 기준부하',when:'리그·컵대회·연습경기·기타 경기일',
+  core:'팀 최근 3경기 평균을 경기 수행의 기본 목표로 사용하고 실제 출전 선수는 개인 기준으로 보완한다.',
+  r:{td:[100,100],hsr:[100,100],spr:[100,100],mss:null,acc:[100,100],dec:[100,100],rhie:[100,100],pl:[100,100]}
+};
+
+const PERIOD_PLAN_TARGETS={
+  '6D':{
+    'MD-6':['recovery','aerobic','strength'],
+    'MD-5':['aerobic','strength'],
+    'MD-4':['aerobic','strength','football_hi','max_load','highspeed','endurance','active_rest','full_rest'],
+    'MD-3':['aerobic','strength','football_hi','max_load','highspeed','endurance','active_rest','full_rest'],
+    'MD-2':['speed_activation','tactical','active_rest','full_rest'],
+    'MD-1':['readiness','active_rest','full_rest']
+  },
+  '5D':{
+    'MD-5':['recovery','aerobic','strength'],
+    'MD-4':['aerobic','strength','football_hi'],
+    'MD-3':['max_load','highspeed','endurance','active_rest','full_rest'],
+    'MD-2':['speed_activation','tactical','active_rest','full_rest'],
+    'MD-1':['readiness','active_rest','full_rest']
+  },
+  '4D':{
+    'MD-4':['recovery','aerobic','strength','football_hi'],
+    'MD-3':['max_load','highspeed','endurance','active_rest','full_rest'],
+    'MD-2':['speed_activation','tactical','active_rest','full_rest'],
+    'MD-1':['readiness','active_rest','full_rest']
+  }
+};
+
+// 준비기간과 MD에 따라 기본 타깃 범위를 좁히는 운영값.
+const PERIOD_TARGET_OVERRIDES={
+  '4D|MD-3|max_load':{td:[55,65],hsr:[35,50],spr:[25,40],acc:[60,80],dec:[60,80],rhie:[55,75],pl:[55,75]},
+  '4D|MD-3|highspeed':{td:[35,50],hsr:[45,60],spr:[40,55],acc:[35,55],dec:[35,55],rhie:[50,75]},
+  '4D|MD-2|speed_activation':{td:[15,25],hsr:[15,25],spr:[10,25],acc:[25,45]},
+  '5D|MD-4|aerobic':{td:[50,65],hsr:[20,35],spr:[5,20],acc:[30,45],dec:[30,50],rhie:[20,35],pl:[45,65]},
+  '6D|MD-6|aerobic':{td:[40,55],hsr:[10,25],spr:[5,15],acc:[20,35],dec:[20,40],rhie:[10,25],pl:[35,55]},
+  '6D|MD-6|strength':{td:[25,40],hsr:[10,20],spr:[5,15],acc:[60,80],dec:[60,80],rhie:[25,45],pl:[45,65]},
+  '6D|MD-4|aerobic':{td:[50,65],hsr:[20,35],spr:[5,20],acc:[30,45],dec:[30,50],rhie:[20,35],pl:[45,65]},
+  '6D|MD-4|football_hi':{td:[45,60],hsr:[40,55],spr:[30,45],rhie:[50,75]},
+  '6D|MD-4|max_load':{td:[60,75],hsr:[45,65],spr:[35,55],acc:[70,90],dec:[70,90],rhie:[65,85]},
+  '6D|MD-4|highspeed':{hsr:[50,70],spr:[45,65],rhie:[60,85]},
+  '6D|MD-4|endurance':{td:[50,65],hsr:[30,45],spr:[20,35],acc:[45,65],dec:[45,65],rhie:[35,55],pl:[50,70]},
+  '6D|MD-3|strength':{td:[25,40],hsr:[10,20],acc:[60,80],dec:[60,80],rhie:[25,45],pl:[45,65]}
+};
+
+function periodRangeFor(plan,md,targetId){
+  const base=PERIOD_TARGET_TYPES[targetId]; if(!base)return null;
+  return {...base,r:{...base.r,...(PERIOD_TARGET_OVERRIDES[`${plan}|${md}|${targetId}`]||{})}};
+}
+function periodMid(range){return range?Math.round((range[0]+range[1])/2):null;}
+function periodRangeText(range,key){
+  if(!range)return '해당 없음';
+  if(key==='mss'&&range[0]===0)return `${range[1]}% 미만`;
+  return range[0]===range[1]?`${range[0]}%`:`${range[0]}~${range[1]}%`;
+}
+function periodDateDiff(from,to){return Math.round((new Date(to+'T12:00:00')-new Date(from+'T12:00:00'))/86400000);}
+function periodShiftDate(date,amount){
+  const d=new Date(date+'T12:00:00');
+  d.setDate(d.getDate()+amount);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function getBlockMatchRow(block){
+  if(!block)return null;
+  return periodDateRange(block.start_date,block.end_date).map(ds=>_daysData[ds]).find(r=>normalizePlanMdKey(r?.day_label)==='MATCH')||null;
+}
+function getBlockMatchDate(block){return getBlockMatchRow(block)?.plan_date||null;}
+function getBlockPlanSetting(block){return getBlockMatchRow(block)?.ref_basis?.period_plan||'AUTO';}
+function getAutoMdForDate(date,block){
+  const matchDate=getBlockMatchDate(block); if(!matchDate)return '';
+  const diff=periodDateDiff(date,matchDate);
+  return diff>0?`MD-${diff}`:diff===0?'MD':`MD+${Math.abs(diff)}`;
+}
+function inferBlockPeriodPlan(block,dateForFallback=null){
+  const fixed=getBlockPlanSetting(block);
+  if(fixed&&fixed!=='AUTO')return fixed;
+  const matchDate=getBlockMatchDate(block); if(!matchDate)return 'COACH';
+  const firstTraining=periodDateRange(block.start_date,matchDate).find(ds=>{
+    const row=_daysData[ds];
+    return row&&normalizePlanMdKey(row.day_label)!=='MATCH'&&(row.day_label||'').toUpperCase()!=='REST';
+  });
+  const start=firstTraining||dateForFallback;
+  const span=start&&start<matchDate?periodDateDiff(start,matchDate):0;
+  return span>=4&&span<=6?`${span}D`:'COACH';
+}
 
 // ── 데이터 로드 ──
 async function loadPeriodTab() {
@@ -29373,6 +29509,12 @@ function _rebuildDaysDataForTrack(){
   Object.keys(_daysByTrack).forEach(date=>{
     const row=_daysByTrack[date][_periodTrack];
     if(row) _daysData[date]=row;
+  });
+  // DB에 저장된 예전 라벨도 화면에서는 현재 일정 전체를 기준으로 즉시 다시 계산한다.
+  (_blocksData||[]).forEach(block=>{
+    const match=getBlockMatchRow(block);
+    const result=buildBlockScheduleLabel(block.start_date,block.end_date,match?.plan_date||null,_daysData);
+    if(result.label)block.label=result.label;
   });
 }
 
@@ -29666,6 +29808,91 @@ function renderBlockModalForecast(){
   </div>`;
 }
 
+function toggleBmMatchFields(){
+  const has=document.getElementById('bm-has-match')?.checked;
+  const fields=document.getElementById('bm-match-fields');
+  if(fields)fields.style.display=has?'grid':'none';
+  const plan=document.getElementById('bm-period-plan');
+  if(plan&&!has&&plan.value==='AUTO')plan.value='COACH';
+}
+
+function compressPeriodSchedule(tokens){
+  if(!tokens.length)return '';
+  const groups=[];
+  tokens.forEach(token=>{
+    const last=groups[groups.length-1];
+    if(last&&last.type===token)last.count++;
+    else groups.push({type:token,count:1});
+  });
+  return groups.map(g=>`${g.count}${g.type}`).join('-');
+}
+
+function buildBlockScheduleLabel(start,end,matchDate,dayMap){
+  if(!start||!end||start>end)return {label:'',unknown:0,tokens:[]};
+  const dates=periodDateRange(start,end),tokens=[];
+  // 직전 경기(M) 이후부터 이번 블록 시작 전까지의 REST를 이전 블록에서 가져온다.
+  // 단순히 시작일 전날만 보는 것이 아니라 '이전 경기 이후 휴식'이라는 의미를 보존한다.
+  const previousMatch=Object.keys(dayMap||{})
+    .filter(ds=>ds<start&&normalizePlanMdKey(dayMap[ds]?.day_label)==='MATCH')
+    .sort().pop()||null;
+  let previousRest=0;
+  if(previousMatch){
+    periodDateRange(periodShiftDate(previousMatch,1),periodShiftDate(start,-1)).forEach(ds=>{
+      if((dayMap?.[ds]?.day_label||'').trim().toUpperCase()==='REST')previousRest++;
+    });
+  }
+  for(let i=0;i<previousRest;i++)tokens.push('R');
+  let unknown=0;
+  dates.forEach(ds=>{
+    if(matchDate&&ds===matchDate){tokens.push('M');return;}
+    const row=dayMap?.[ds];
+    if(!row){unknown++;return;}
+    const label=(row.day_label||'').trim().toUpperCase();
+    if(normalizePlanMdKey(label)==='MATCH')tokens.push('M');
+    else if(label==='REST')tokens.push('R');
+    else tokens.push('D');
+  });
+  return {label:unknown?`일정 설정 중 (${unknown}일 미설정)`:compressPeriodSchedule(tokens),unknown,tokens};
+}
+
+function onBlockDraftChange(){
+  const start=document.getElementById('bm-start')?.value;
+  const end=document.getElementById('bm-end')?.value;
+  const hasMatch=document.getElementById('bm-has-match')?.checked;
+  const matchDate=hasMatch?document.getElementById('bm-match-date')?.value:null;
+  const result=buildBlockScheduleLabel(start,end,matchDate,_daysData);
+  const label=document.getElementById('bm-label');
+  if(label)label.value=result.label;
+  const hint=document.getElementById('bm-label-hint');
+  if(hint){
+    const matchInside=!matchDate||(start&&end&&matchDate>=start&&matchDate<=end);
+    hint.innerHTML=!matchInside
+      ?'<span style="color:#f87171">경기일은 블록 시작일과 종료일 사이여야 합니다.</span>'
+      :`D=훈련·동적 회복·동적 휴식 · R=완전 휴식 · M=경기${result.unknown?` · <span style="color:#fbbf24">날짜별 계획 ${result.unknown}일 미설정</span>`:''}`;
+  }
+  const planSel=document.getElementById('bm-period-plan');
+  const planHint=document.getElementById('bm-period-plan-hint');
+  if(planSel&&planHint){
+    if(!hasMatch)planHint.textContent='경기가 없는 블록은 코치 선택을 기본으로 사용합니다.';
+    else if(!matchDate)planHint.textContent='경기일을 선택하면 각 날짜의 MD가 자동 계산됩니다.';
+    else planHint.textContent=planSel.value==='AUTO'?'첫 훈련일부터 경기 전날까지의 달력상 기간으로 6D·5D·4D를 판단합니다.':`${planSel.options[planSel.selectedIndex].text}을 블록 기본 추천으로 사용합니다.`;
+  }
+  renderBlockModalForecast();
+}
+
+async function refreshBlockAutoLabel(blockId){
+  if(!blockId)return;
+  const block=(_blocksAll||[]).find(b=>b.id===blockId)||(_blocksData||[]).find(b=>b.id===blockId);
+  if(!block)return;
+  const scanStart=periodShiftDate(block.start_date,-60);
+  const {data:rows}=await supa.from('block_days').select('*').eq('track',block.track||_periodTrack).gte('plan_date',scanStart).lte('plan_date',block.end_date);
+  const map={};(rows||[]).forEach(r=>map[r.plan_date]=r);
+  const match=(rows||[]).find(r=>normalizePlanMdKey(r.day_label)==='MATCH');
+  const result=buildBlockScheduleLabel(block.start_date,block.end_date,match?.plan_date||null,map);
+  const label=result.unknown?result.label:result.label||null;
+  await supa.from('blocks').update({label}).eq('id',blockId);
+}
+
 function renderPeriodForecastPreview(){
   const el=document.getElementById('dm-forecast');
   if(!el||!_dmEditDate) return;
@@ -29933,6 +30160,10 @@ function openBlockModal(blockId){
   document.getElementById('bm-end').value='';
   document.getElementById('bm-context').value='';
   document.getElementById('bm-label').value='';
+  document.getElementById('bm-has-match').checked=true;
+  document.getElementById('bm-match-date').value='';
+  document.getElementById('bm-match-type').value='LEAGUE';
+  document.getElementById('bm-period-plan').value='AUTO';
   document.getElementById('bm-show-totals').checked=true;
   document.querySelectorAll('.bm-color').forEach(s=>s.style.border='3px solid transparent');
   const def=document.querySelector('.bm-color[data-v="#818cf8"]');
@@ -29948,13 +30179,20 @@ function openBlockModal(blockId){
       document.getElementById('bm-end').value=b.end_date||'';
       document.getElementById('bm-context').value=b.context||'';
       document.getElementById('bm-label').value=b.label||'';
+      const matchRow=getBlockMatchRow(b);
+      const hasMatch=!!matchRow;
+      document.getElementById('bm-has-match').checked=hasMatch;
+      document.getElementById('bm-match-date').value=matchRow?.plan_date||'';
+      document.getElementById('bm-match-type').value=getPlanMatchType(matchRow)||'LEAGUE';
+      document.getElementById('bm-period-plan').value=matchRow?.ref_basis?.period_plan||'AUTO';
       document.getElementById('bm-show-totals').checked=b.show_totals!==false;
       document.querySelectorAll('.bm-color').forEach(s=>s.style.border=s.dataset.v===b.color?'3px solid white':'3px solid transparent');
       document.getElementById('bm-delete-btn').style.display='block';
       document.getElementById('block-modal-title').textContent='📅 블록 편집';
     }
   }
-  renderBlockModalForecast();
+  toggleBmMatchFields();
+  onBlockDraftChange();
   document.getElementById('block-modal').style.display='flex';
 }
 
@@ -29965,7 +30203,14 @@ async function saveBlock(){
   const end=document.getElementById('bm-end').value;
   if(!start||!end){alert('시작일과 종료일을 입력해주세요.');return;}
   if(start>end){alert('종료일은 시작일보다 빠를 수 없습니다.');return;}
-  const row={start_date:start,end_date:end,context:document.getElementById('bm-context').value.trim()||null,label:document.getElementById('bm-label').value.trim()||null,color:_bmColor,show_totals:document.getElementById('bm-show-totals').checked};
+  const hasMatch=document.getElementById('bm-has-match').checked;
+  const matchDate=hasMatch?document.getElementById('bm-match-date').value:null;
+  const matchType=document.getElementById('bm-match-type').value||'LEAGUE';
+  const periodPlan=document.getElementById('bm-period-plan').value||'AUTO';
+  if(hasMatch&&!matchDate){alert('경기일을 선택하거나 경기 없음으로 설정해주세요.');return;}
+  if(matchDate&&(matchDate<start||matchDate>end)){alert('경기일은 블록 시작일과 종료일 사이여야 합니다.');return;}
+  const initialLabel=buildBlockScheduleLabel(start,end,matchDate,_daysData).label||null;
+  const row={start_date:start,end_date:end,context:document.getElementById('bm-context').value.trim()||null,label:initialLabel,color:_bmColor,show_totals:document.getElementById('bm-show-totals').checked};
   if(!_bmEditId) row.track=_periodTrack; // 새 블록은 현재 트랙에 소속 (A팀=ALL / B팀=B)
   // 같은 상대 경기의 인접/중복 기간이 다른 이름으로 쪼개지는 실수를 저장 전에 확인한다.
   if(row.context&&row.label){
@@ -29982,10 +30227,33 @@ async function saveBlock(){
       if(!proceed)return;
     }
   }
-  let error;
-  if(_bmEditId){({error}=await supa.from('blocks').update(row).eq('id',_bmEditId));}
-  else{({error}=await supa.from('blocks').insert(row));}
+  const oldBlock=_bmEditId?_blocksData.find(b=>b.id===_bmEditId):null;
+  const oldMatch=getBlockMatchRow(oldBlock);
+  let error,savedBlock;
+  if(_bmEditId){
+    ({data:savedBlock,error}=await supa.from('blocks').update(row).eq('id',_bmEditId).select().single());
+  } else {
+    ({data:savedBlock,error}=await supa.from('blocks').insert(row).select().single());
+  }
   if(error){alert('저장 실패: '+error.message);return;}
+  const blockId=savedBlock?.id||_bmEditId;
+  if(hasMatch){
+    const matchPct={td:100,hsr:100,spr:100,acc:100,dec:100,rhie:100,pl:100,mss:null};
+    const matchAvg={td:_periodMatchAvg.td,hsr:_periodMatchAvg.hsr,sprint:_periodMatchAvg.sprint,accel:_periodMatchAvg.accel,rhie:_periodMatchAvg.rhie};
+    const matchBasis={...(oldMatch?.ref_basis||{}),pct:oldMatch?.ref_basis?.pct||matchPct,avg:oldMatch?.ref_basis?.avg||matchAvg,matches:oldMatch?.ref_basis?.matches||_periodMatchKeys.slice(),saved_at:oldMatch?.ref_basis?.saved_at||new Date().toISOString(),match_type:matchType,period_plan:periodPlan,target_type:'match_performance',auto_md:'MD',target_match_date:matchDate,opponent:row.context||null,competition:MATCH_TYPE_LABEL[matchType]||matchType};
+    const matchRow={plan_date:matchDate,track:_periodTrack,block_id:blockId,day_label:'MD',am_session:oldMatch?.am_session||null,pm_session:oldMatch?.pm_session||null,td_target:oldMatch?.td_target??(_periodMatchAvg.td||null),hsr_target:oldMatch?.hsr_target??(_periodMatchAvg.hsr||null),spr_target:oldMatch?.spr_target??(_periodMatchAvg.sprint||null),acc_target:oldMatch?.acc_target??(_periodMatchAvg.accel||null),rhie_target:oldMatch?.rhie_target??(_periodMatchAvg.rhie||null),ref_basis:matchBasis};
+    if(oldMatch?.id&&oldMatch.plan_date!==matchDate){
+      ({error}=await supa.from('block_days').update(matchRow).eq('id',oldMatch.id));
+    }else{
+      ({error}=await supa.from('block_days').upsert(matchRow,{onConflict:'plan_date,track'}));
+    }
+    if(error){alert('블록은 저장됐지만 경기 일정 저장에 실패했습니다: '+error.message);return;}
+  }else if(oldMatch?.id){
+    ({error}=await supa.from('block_days').delete().eq('id',oldMatch.id));
+    if(error){alert('블록은 저장됐지만 기존 경기 일정 해제에 실패했습니다: '+error.message);return;}
+  }
+  await loadPeriodTab();
+  await refreshBlockAutoLabel(blockId);
   closeBlockModal();
   await loadPeriodTab();
 }
@@ -30115,6 +30383,7 @@ async function deleteBlockFromList(blockId){
 // 실측 %의 크기는 유지하되 피크 배치는 코치 모델대로: MD-4 볼륨피크 / MD-3 볼륨+강도 / MD-2 속도피크
 const MD_LOAD_DEFAULTS = {
   'MD+1': { td:20,  hsr:12, spr:8,  acc:20, rhie:15 }, // 회복
+  'MD':   { td:100, hsr:100,spr:100,acc:100,rhie:100}, // 경기: 최근 3경기 평균
   'MD-4': { td:60,  hsr:40, spr:38, acc:60, rhie:48 }, // 볼륨 피크 (TD 최고)
   'MD-3': { td:57,  hsr:50, spr:42, acc:70, rhie:55 }, // 볼륨+강도 (HSR·ACC·RHIE 최고)
   'MD-2': { td:42,  hsr:45, spr:48, acc:62, rhie:50 }, // 속도 피크 (SPR 최고)
@@ -30201,6 +30470,82 @@ function onDmLabelChange(val) {
     badge.style.display = 'none';
   }
   renderPeriodForecastPreview();
+}
+
+function currentDmMd(){
+  const block=getBlockForDate(_dmEditDate);
+  return getAutoMdForDate(_dmEditDate,block)||document.getElementById('dm-day-label')?.value?.trim().toUpperCase()||'';
+}
+
+function renderDmTargetOptions(){
+  const wrap=document.getElementById('dm-target-options');
+  const mdEl=document.getElementById('dm-auto-md');
+  const detail=document.getElementById('dm-target-detail');
+  if(!wrap||!mdEl||!detail)return;
+  const block=getBlockForDate(_dmEditDate);
+  const md=currentDmMd();
+  const select=document.getElementById('dm-period-plan');
+  let plan=select?.value||inferBlockPeriodPlan(block,_dmEditDate);
+  if(plan==='AUTO')plan=inferBlockPeriodPlan(block,_dmEditDate);
+  mdEl.textContent=md?`${md}${getBlockMatchDate(block)?' · 경기일 기준 자동 계산':''}`:'경기 없는 블록 · 날짜 라벨을 직접 설정';
+  mdEl.style.color=md?'#a5b4fc':'var(--text3)';
+  if(md==='MD'){
+    if(select)select.disabled=true;
+    _dmTargetType='match_performance';
+    wrap.innerHTML='<button type="button" style="padding:5px 8px;border-radius:6px;border:1px solid #ef4444;background:rgba(239,68,68,.15);color:#fca5a5;font-size:10px;font-weight:700">⚽ 경기 수행</button>';
+    renderDmTargetDetail();
+    const noTarget=DM_METRICS.every(m=>document.getElementById('dm-pct-'+m.id)?.value==='');
+    if(noTarget)setTimeout(()=>applyDmTargetRecommendation(),0);
+    return;
+  }
+  if(select)select.disabled=false;
+  const ids=plan==='COACH'?Object.keys(PERIOD_TARGET_TYPES):(PERIOD_PLAN_TARGETS[plan]?.[md]||[]);
+  if(!ids.length){
+    wrap.innerHTML='<span style="font-size:10px;color:#fbbf24">이 날짜에 맞는 기본 추천이 없습니다. 코치 선택을 이용하세요.</span>';
+    detail.style.display='none';
+    _dmTargetType=null;
+    return;
+  }
+  if(!_dmTargetType||!ids.includes(_dmTargetType))_dmTargetType=null;
+  wrap.innerHTML=ids.map(id=>`<button type="button" onclick="selectDmTarget('${id}')" style="padding:5px 8px;border-radius:6px;border:1px solid ${_dmTargetType===id?'#22c55e':'var(--border2)'};background:${_dmTargetType===id?'rgba(34,197,94,.16)':'var(--surface2)'};color:${_dmTargetType===id?'#86efac':'var(--text2)'};font-size:10px;font-weight:600;cursor:pointer">${periodPlanEsc(PERIOD_TARGET_TYPES[id].name)}</button>`).join('');
+  renderDmTargetDetail();
+}
+
+function selectDmTarget(id){
+  _dmTargetType=id;
+  if(id==='full_rest'){
+    const rest=document.getElementById('dm-rest');
+    if(rest){rest.checked=true;toggleDmRest(true);}
+    return;
+  }
+  renderDmTargetOptions();
+}
+
+function renderDmTargetDetail(){
+  const detail=document.getElementById('dm-target-detail'); if(!detail)return;
+  if(!_dmTargetType){detail.style.display='none';return;}
+  const md=currentDmMd();
+  const plan=document.getElementById('dm-period-plan')?.value||'COACH';
+  const isMatch=_dmTargetType==='match_performance';
+  const target=isMatch?PERIOD_MATCH_TARGET:(periodRangeFor(plan,md,_dmTargetType)||PERIOD_TARGET_TYPES[_dmTargetType]);
+  const labels={td:'총이동거리',hsr:'HSR',spr:'Sprint',mss:'%MSS',acc:'가속',dec:'감속',rhie:'RHIE',pl:'PlayerLoad'};
+  detail.style.display='block';
+  detail.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b style="font-size:12px;color:${isMatch?'#fca5a5':'#86efac'}">${periodPlanEsc(target.name)}</b><span style="font-size:10px;color:var(--text3);margin-left:6px">${periodPlanEsc(target.load)}</span></div>${isMatch?'<span style="padding:4px 8px;border-radius:5px;border:1px solid #ef444466;background:rgba(239,68,68,.1);color:#fca5a5;font-size:9px;font-weight:700;white-space:nowrap">최근 3경기 평균 100% 자동 적용</span>':'<button type="button" onclick="applyDmTargetRecommendation()" style="padding:4px 8px;border-radius:5px;border:1px solid #22c55e;background:rgba(34,197,94,.12);color:#86efac;font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap">추천 대표값 적용</button>'}</div>
+    <div style="font-size:10px;color:var(--text2);line-height:1.55;margin-top:6px"><b>적용 상황</b> · ${periodPlanEsc(target.when)}<br><b>핵심 원칙</b> · ${periodPlanEsc(target.core)}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">${Object.entries(labels).map(([key,label])=>`<span style="font-size:9px;padding:3px 6px;border-radius:4px;background:var(--surface2);color:var(--text3)">${label} <b style="color:var(--text2)">${isMatch&&key==='mss'?'개인 최근 3경기 평균':periodRangeText(target.r[key],key)}</b></span>`).join('')}</div>${isMatch?'<div style="font-size:9px;color:var(--text3);margin-top:6px">총이동거리·HSR·Sprint·가속·감속·RHIE·PlayerLoad는 경기 평균 100% · 최고속도는 선수 개인 최근 3경기 경기값을 기준으로 합니다.</div>':''}`;
+}
+
+function applyDmTargetRecommendation(){
+  if(!_dmTargetType)return;
+  const md=currentDmMd();
+  const plan=document.getElementById('dm-period-plan')?.value||'COACH';
+  const target=_dmTargetType==='match_performance'?PERIOD_MATCH_TARGET:(periodRangeFor(plan,md,_dmTargetType)||PERIOD_TARGET_TYPES[_dmTargetType]);
+  [['td','td'],['hsr','hsr'],['spr','spr'],['acc','acc'],['rhie','rhie']].forEach(([metric,key])=>{
+    const mid=periodMid(target.r[key]);
+    if(mid!=null)onDmPct(metric,mid);
+  });
+  const hint=document.getElementById('dm-load-hint');
+  if(hint){hint.innerHTML=`✨ <b>${periodPlanEsc(target.name)}</b> 권장범위의 대표값을 적용했습니다.<br><span style="color:var(--text3)">코치가 각 GPS 목표를 최종 수정할 수 있습니다.</span>`;hint.style.display='block';}
 }
 
 const DM_METRICS = [
@@ -30311,7 +30656,24 @@ function toggleDmRest(isRest){
   }
   document.getElementById('dm-training-area').style.display = isRest?'none':'block';
   document.getElementById('dm-gauge-area').style.display    = isRest?'none':'block';
+  const labelInput=document.getElementById('dm-day-label');
+  if(labelInput&&_dmEditDate){
+    const autoMd=getAutoMdForDate(_dmEditDate,getBlockForDate(_dmEditDate));
+    if(isRest)labelInput.value='REST';
+    else if(autoMd)labelInput.value=autoMd;
+  }
+  if(!isRest)renderDmTargetOptions();
   renderPeriodForecastPreview();
+}
+
+function isPeriodRestDay(dayRow,isMatchDate=false){
+  if(isMatchDate)return false;
+  const label=(dayRow?.day_label||'').trim().toUpperCase();
+  // 경기일은 세션·목표값이 비어 있어도 휴식일로 판단하면 안 된다.
+  if(normalizePlanMdKey(label)==='MATCH')return false;
+  if(label==='REST')return true;
+  // 과거 데이터 호환: 라벨과 훈련 내용 없이 저장된 기존 행만 휴식으로 본다.
+  return !!(dayRow?.id&&!dayRow.am_session&&!dayRow.pm_session&&dayRow.td_target==null);
 }
 
 function openDayModal(dateStr){
@@ -30328,16 +30690,34 @@ function openDayModal(dateStr){
   document.getElementById('day-modal-title').textContent=`${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일 (${DOW_KR[d.getDay()]})${trkLbl}`;
   document.getElementById('day-modal-block').textContent=block?`${block.context||''} · ${block.label||''}`:'';
 
-  // REST 여부
-  const isRest = dayRow.day_label?.trim().toUpperCase()==='REST'
-    || (!dayRow.am_session && !dayRow.pm_session && dayRow.td_target==null && dayRow.id);
-  document.getElementById('dm-rest').checked = isRest;
+  // 경기일은 달력/블록/행 중 어느 한쪽에서 확인돼도 REST보다 우선한다.
+  const autoMd=getAutoMdForDate(dateStr,block);
+  const calendarRow=_daysData[dateStr]||{};
+  const isMatchDate=autoMd==='MD'
+    ||normalizePlanMdKey(dayRow.day_label)==='MATCH'
+    ||normalizePlanMdKey(calendarRow.day_label)==='MATCH';
+  const isRest=isPeriodRestDay(dayRow,isMatchDate);
+  const restInput=document.getElementById('dm-rest');
+  restInput.checked=isRest;
+  restInput.disabled=isMatchDate;
+  const restLabel=document.getElementById('dm-rest-label');
+  const restControl=document.getElementById('dm-rest-control');
+  const restWrap=document.getElementById('dm-rest-wrap');
+  if(restLabel)restLabel.textContent=isMatchDate?'⚽ MD (경기일) · 최근 3경기 평균 100% 자동 적용':'😴 REST (휴식일)';
+  if(restLabel)restLabel.style.color=isMatchDate?'#fca5a5':'var(--text)';
+  if(restControl)restControl.style.display=isMatchDate?'none':'inline-block';
+  if(restWrap)restWrap.style.borderColor=isMatchDate?'#ef444466':'var(--border2)';
   toggleDmRest(isRest);
 
-  document.getElementById('dm-day-label').value = dayRow.day_label||'';
+  const labelInput=document.getElementById('dm-day-label');
+  labelInput.value = isRest?'REST':(autoMd||dayRow.day_label||'');
+  labelInput.readOnly=!!getBlockMatchDate(block);
+  labelInput.style.background=labelInput.readOnly?'var(--surface2)':'var(--bg)';
+  const labelQuick=document.getElementById('dm-label-quick');
+  if(labelQuick)labelQuick.style.display=labelInput.readOnly?'none':'flex';
   const matchTypeEl=document.getElementById('dm-match-type');
   if(matchTypeEl)matchTypeEl.value=getPlanMatchType(dayRow)||'LEAGUE';
-  onDmLabelChange(dayRow.day_label||'');
+  onDmLabelChange(isRest?'REST':(autoMd||dayRow.day_label||''));
   document.getElementById('dm-am').value = dayRow.am_session||'';
   document.getElementById('dm-pm').value = dayRow.pm_session||'';
 
@@ -30369,6 +30749,11 @@ function openDayModal(dateStr){
   // 항목별 슬라이더+절대값 렌더링
   renderDmMetrics(dayRow);
   renderPeriodForecastPreview();
+
+  _dmTargetType=dayRow.ref_basis?.target_type||null;
+  const planSelect=document.getElementById('dm-period-plan');
+  if(planSelect)planSelect.value=dayRow.ref_basis?.period_plan||inferBlockPeriodPlan(block,dateStr);
+  renderDmTargetOptions();
 
   renderDayPlanTabs();
   renderDayPlanMeta(dayRow,false);
@@ -30408,10 +30793,17 @@ function fillDayPlanEditor(row,isVariant){
   const isRest=(row.day_label||'').trim().toUpperCase()==='REST';
   document.getElementById('dm-rest').checked=isRest;
   toggleDmRest(isRest);
-  document.getElementById('dm-day-label').value=row.day_label||'';
+  const block=getBlockForDate(_dmEditDate);
+  const autoMd=getAutoMdForDate(_dmEditDate,block);
+  const labelInput=document.getElementById('dm-day-label');
+  labelInput.value=isRest?'REST':(autoMd||row.day_label||'');
+  labelInput.readOnly=!!getBlockMatchDate(block);
+  labelInput.style.background=labelInput.readOnly?'var(--surface2)':'var(--bg)';
+  const labelQuick=document.getElementById('dm-label-quick');
+  if(labelQuick)labelQuick.style.display=labelInput.readOnly?'none':'flex';
   const matchTypeEl=document.getElementById('dm-match-type');
   if(matchTypeEl) matchTypeEl.value=getPlanMatchType(row)||'LEAGUE';
-  onDmLabelChange(row.day_label||'');
+  onDmLabelChange(isRest?'REST':(autoMd||row.day_label||''));
   document.getElementById('dm-am').value=row.am_session||'';
   document.getElementById('dm-pm').value=row.pm_session||'';
   _dmEditRefBasis=row.ref_basis||null;
@@ -30420,6 +30812,10 @@ function fillDayPlanEditor(row,isVariant){
   ['td','hsr','sprint','accel','rhie'].forEach(k=>{const el=document.getElementById('dm-avg-'+k);if(el)el.textContent=avg[k]?avg[k].toLocaleString():'—';});
   renderDmMetrics(row);
   renderPeriodForecastPreview();
+  _dmTargetType=row.ref_basis?.target_type||null;
+  const planSelect=document.getElementById('dm-period-plan');
+  if(planSelect)planSelect.value=row.ref_basis?.period_plan||inferBlockPeriodPlan(block,_dmEditDate);
+  renderDmTargetOptions();
   renderDayPlanMeta(row,isVariant);
   document.getElementById('dm-delete-btn').style.display=row.id?'block':'none';
 }
@@ -30486,11 +30882,17 @@ async function saveDayPlan(){
     rhie:isRest?null:getAbs('rhie'),
   };
   const hasAnyTarget = Object.values(targets).some(v=>v!=null);
+  const autoMd=getAutoMdForDate(_dmEditDate,block);
+  const chosenPlan=document.getElementById('dm-period-plan')?.value||inferBlockPeriodPlan(block,_dmEditDate);
+  const effectiveLabel=isRest?'REST':(autoMd||document.getElementById('dm-day-label').value.trim()||null);
+  if(normalizePlanMdKey(effectiveLabel)==='MATCH'){
+    pctOut.dec=100; pctOut.pl=100; pctOut.mss=null;
+  }
   const row={
     plan_date:_dmEditDate,
     track:_dmEditTrack,
     block_id:block?.id||null,
-    day_label:isRest?'REST':(document.getElementById('dm-day-label').value.trim()||null),
+    day_label:effectiveLabel,
     am_session:isRest?null:(document.getElementById('dm-am').value.trim()||null),
     pm_session:isRest?null:(document.getElementById('dm-pm').value.trim()||null),
     td_target:   targets.td,
@@ -30499,9 +30901,10 @@ async function saveDayPlan(){
     acc_target:  targets.acc,
     rhie_target: targets.rhie,
     // 이 계획이 어떤 경기 기준으로 짜였는지 스냅샷 (지난 날 고정 + 기록용)
-    ref_basis: (isRest||(!hasAnyTarget&&normalizePlanMdKey(document.getElementById('dm-day-label').value)!=='MATCH')) ? null : {
+    ref_basis: (isRest||(!hasAnyTarget&&normalizePlanMdKey(effectiveLabel)!=='MATCH')) ? null : {
       pct: pctOut, avg: basisAvg, matches: basisMatches, saved_at: new Date().toISOString(),
-      match_type: normalizePlanMdKey(document.getElementById('dm-day-label').value)==='MATCH'
+      period_plan:chosenPlan,target_type:_dmTargetType,auto_md:autoMd||null,
+      match_type: normalizePlanMdKey(effectiveLabel)==='MATCH'
         ?(document.getElementById('dm-match-type')?.value||'LEAGUE')
         :null
     },
@@ -30528,15 +30931,21 @@ async function saveDayPlan(){
   } else if(_dmEditId){({error}=await supa.from('block_days').update(row).eq('id',_dmEditId));}
   else{({error}=await supa.from('block_days').upsert(row,{onConflict:'plan_date,track'}));}
   if(error){alert('저장 실패: '+error.message);return;}
+  const blockId=block?.id||null;
   closeDayModal();
+  await loadPeriodTab();
+  await refreshBlockAutoLabel(blockId);
   await loadPeriodTab();
 }
 
 async function deleteDayPlan(){
   if(!_dmEditId||!confirm('이 날의 세션 계획을 삭제할까요?')) return;
+  const blockId=getBlockForDate(_dmEditDate)?.id||null;
+  const wasVariant=_dmEditingVariant;
   await supa.from(_dmEditingVariant?'periodization_plan_variants':'block_days').delete().eq('id',_dmEditId);
   closeDayModal();
   await loadPeriodTab();
+  if(!wasVariant){await refreshBlockAutoLabel(blockId);await loadPeriodTab();}
 }
 
 // ── 주간 상세 뷰 ──

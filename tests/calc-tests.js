@@ -4,6 +4,7 @@
 // 대상: calcACWR / calcMVExposure / calcWellnessRisk / calcRiskLevel
 // ============================================================
 let _pass = 0, _fail = 0;
+const MD_DEMAND = {'MD-6':'mid','MD-5':'mid','MD-4':'mid','MD-3':'high','MD-2':'mid','MD-1':'low','MD+1':'low','MD+2':'low','MD':'high','MATCH':'high'};
 function check(name, cond, detail) {
   if (cond) { _pass++; }
   else { _fail++; print('  ❌ FAIL: ' + name + (detail ? ' — ' + detail : '')); }
@@ -234,6 +235,50 @@ const TODAY = '2026-07-08';
   check('EWMA 주의 경계 1.30', periodForecastFlag(1.3, 'ratio').level === 1);
   check('모노토니 주의 경계 1.50', periodForecastFlag(1.5, 'monotony').level === 1);
   check('과거 부하 근거 부족 시 판정 보류', getPeriodForecastStatus([row(1.5, 1.5, 1.6)],[{reliable:false}]).label === '판정 보류');
+})();
+
+// ── 주기화 v2 자동 라벨 ────────────────────────────────────
+(function () {
+  check('중간 휴식 포함 일정 압축',
+    compressPeriodSchedule(['R','D','D','D','R','D','D','M','R'])==='1R-3D-1R-2D-1M-1R');
+
+  const start='2026-09-01', end='2026-09-09', match='2026-09-08';
+  const dates=periodDateRange(start,end);
+  const statuses=['REST','MD-6','MD-5','MD-4','REST','MD-2','MD-1','MD','REST'];
+  const map={}; dates.forEach((date,i)=>map[date]={plan_date:date,day_label:statuses[i]});
+  const result=buildBlockScheduleLabel(start,end,match,map);
+  check('6D 중간휴식 블록 라벨',result.label==='1R-3D-1R-2D-1M-1R',result.label);
+  check('6D 준비기간은 첫 훈련일부터 경기까지 6일',periodDateDiff('2026-09-02',match)===6);
+
+  const fiveDayStart='2026-09-07', fiveDayEnd='2026-09-14', fiveDayMatch='2026-09-13';
+  const fiveDayMap={
+    '2026-09-05':{day_label:'MD'},
+    '2026-09-06':{day_label:'REST'}
+  };
+  ['REST','MD-5','MD-4','MD-3','MD-2','MD-1','MD','REST'].forEach((label,i)=>{
+    fiveDayMap[periodShiftDate(fiveDayStart,i)]={day_label:label};
+  });
+  const withPreviousRest=buildBlockScheduleLabel(fiveDayStart,fiveDayEnd,fiveDayMatch,fiveDayMap);
+  check('직전 경기 이후의 이전·현재 블록 휴식 2일을 함께 포함',
+    withPreviousRest.label==='2R-5D-1M-1R',withPreviousRest.label);
+
+  const noPreviousMatch={...fiveDayMap}; delete noPreviousMatch['2026-09-05'];
+  const withoutMatchBoundary=buildBlockScheduleLabel(fiveDayStart,fiveDayEnd,fiveDayMatch,noPreviousMatch);
+  check('직전 경기 근거가 없으면 이전 블록 휴식을 임의로 추가하지 않음',
+    withoutMatchBoundary.label==='1R-5D-1M-1R',withoutMatchBoundary.label);
+
+  delete map['2026-09-04'];
+  const incomplete=buildBlockScheduleLabel(start,end,match,map);
+  check('미설정 날짜가 있으면 라벨 확정 보류',incomplete.unknown===1&&incomplete.label.includes('1일 미설정'),incomplete.label);
+
+  check('목표값이 없는 경기일 MD도 휴식으로 판정하지 않음',
+    isPeriodRestDay({id:1,day_label:'MD',am_session:null,pm_session:null,td_target:null})===false);
+  check('달력과 모달 데이터가 달라도 블록 경기일이면 휴식보다 우선',
+    isPeriodRestDay({id:4,day_label:'REST',td_target:null},true)===false);
+  check('명시된 REST는 휴식으로 판정',
+    isPeriodRestDay({id:2,day_label:'REST',td_target:null})===true);
+  check('과거의 빈 저장 행은 휴식으로 호환 판정',
+    isPeriodRestDay({id:3,day_label:'',am_session:null,pm_session:null,td_target:null})===true);
 })();
 
 // ── 결과 ────────────────────────────────────────────────────

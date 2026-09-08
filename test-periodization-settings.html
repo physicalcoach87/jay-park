@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>주기화 기본형 설정 — 테스트</title>
+<style>
+:root{--bg:#0e0e10;--surface:#17171b;--surface2:#202027;--border:#303038;--border2:#454550;--text:#f4f4f5;--text2:#c4c4cc;--text3:#898995;--accent:#22c55e;--accent2:#4ade80;--blue:#60a5fa;--orange:#fb923c;--purple:#c084fc;--yellow:#fbbf24;--red:#f87171}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;font-size:14px}.app{max-width:1180px;margin:0 auto;padding:22px}.top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}.top h1{font-size:21px;margin:0 0 6px}.top p{margin:0;color:var(--text3);line-height:1.55}.test-badge{white-space:nowrap;padding:6px 10px;border:1px solid #854d0e;background:#422006;color:#fde68a;border-radius:999px;font-size:12px;font-weight:800}.tabs,.seg{display:flex;gap:7px;flex-wrap:wrap}.tabs{border-bottom:1px solid var(--border);margin-bottom:16px}.tab{border:0;background:transparent;color:var(--text3);padding:10px 14px 11px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent}.tab.active{color:var(--accent2);border-color:var(--accent)}.panel{display:none}.panel.active{display:block}.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}.section-title{font-size:14px;font-weight:800;margin-bottom:5px}.help{font-size:12px;color:var(--text3);line-height:1.55}.btn{border:1px solid var(--border2);background:var(--surface2);color:var(--text2);border-radius:8px;padding:8px 12px;font-weight:700;cursor:pointer}.btn.active,.btn.primary{border-color:var(--accent);background:rgba(34,197,94,.13);color:var(--accent2)}.btn.primary{background:var(--accent);color:#07140b}.btn.small{font-size:11px;padding:5px 8px}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.template-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:13px}label{display:block;font-size:11px;color:var(--text3);margin-bottom:5px}input,select{width:100%;border:1px solid var(--border2);background:var(--bg);color:var(--text);border-radius:7px;padding:8px;font:inherit}table{width:100%;border-collapse:collapse;min-width:960px}th,td{padding:9px 7px;border-bottom:1px solid var(--border);text-align:center;vertical-align:middle}th{font-size:11px;color:var(--text3);font-weight:700;background:var(--surface2)}td:first-child,th:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:1}th:first-child{background:var(--surface2)}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:9px}.day{font-weight:800;color:var(--blue);white-space:nowrap}.choice{min-width:96px}.range{font-size:11px;color:var(--text3);line-height:1.45;white-space:nowrap}.range strong{color:var(--text2)}.metric-input{width:64px;text-align:right;padding:6px}.recommended{border-color:#166534;color:var(--accent2)}.rest-row{opacity:.58}.notice{border-left:3px solid var(--yellow);background:#2b230f;padding:10px 12px;border-radius:7px;color:#fde68a;font-size:12px;line-height:1.6}.success{display:none;margin-top:10px;color:var(--accent2);font-size:12px}.preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:9px;margin-top:12px}.preview-day{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:12px}.preview-day h3{margin:0 0 8px;font-size:13px;color:var(--blue)}.chips{display:flex;gap:5px;flex-wrap:wrap}.chip{font-size:10px;border-radius:999px;padding:3px 7px;background:var(--bg);color:var(--text2)}.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-top:10px}.metric{text-align:center;padding:6px 3px;background:var(--bg);border-radius:6px}.metric span{display:block;font-size:9px;color:var(--text3)}.metric b{font-size:12px}.ref{padding:13px 0;border-bottom:1px solid var(--border)}.ref:last-child{border:0}.ref a{color:#93c5fd;font-weight:700;text-decoration:none}.ref p{margin:6px 0 0;color:var(--text3);font-size:12px;line-height:1.65}.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text3)}.legend b{color:var(--text2)}
+.md-editors{display:grid;gap:10px}.md-editor{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:13px}.md-editor.rest{opacity:.72}.md-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:11px}.md-head strong{font-size:15px;color:var(--blue)}.editor-grid{display:grid;grid-template-columns:120px 1fr 1fr;gap:12px}.pick-group{display:flex;gap:5px;flex-wrap:wrap}.pick{border:1px solid var(--border2);background:var(--bg);color:var(--text3);border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;cursor:pointer}.pick.on{border-color:var(--accent);background:rgba(34,197,94,.13);color:var(--accent2)}.recommend-box{margin-top:11px;padding:10px;background:var(--bg);border-radius:8px}.recommend-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.final-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}.final-grid label{margin:0}.final-grid input{padding:7px;text-align:right;border-color:#166534}.evidence-line{font-size:11px;color:var(--text3);line-height:1.55;margin-top:7px}
+@media(max-width:700px){.app{padding:14px}.top{display:block}.test-badge{display:inline-block;margin-top:10px}.template-meta{grid-template-columns:1fr!important}.card{padding:13px}.tabs{overflow:auto;flex-wrap:nowrap}.tab{white-space:nowrap}.metrics{grid-template-columns:repeat(3,1fr)}.editor-grid{grid-template-columns:1fr}.final-grid{grid-template-columns:repeat(3,1fr)}}
+</style>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <div><h1>📅 주기화 기본형 설정</h1><p>A/B팀의 6D·5D·4D 선호 기준을 만들고, 최근 3경기 평균 대비 GPS 목표 추천을 검토합니다.</p></div>
+    <span class="test-badge">TEST · 메인 미적용</span>
+  </header>
+
+  <nav class="tabs" aria-label="테스트 화면 탭">
+    <button class="tab active" data-panel="settings" onclick="showPanel(this)">⚙️ 기본형 설정</button>
+    <button class="tab" data-panel="preview" onclick="showPanel(this)">📊 추천 미리보기</button>
+    <button class="tab" data-panel="evidence" onclick="showPanel(this)">📚 추천 근거</button>
+  </nav>
+
+  <section id="panel-settings" class="panel active">
+    <div class="card">
+      <div class="toolbar">
+        <div><div class="section-title">1. Track과 준비기간 선택</div><div class="help">D는 훈련일 수가 아니라 MD까지의 준비기간입니다.</div></div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <div><label>Track</label><div class="seg" id="track-buttons"><button class="btn active" data-value="A" onclick="selectTrack(this)">A팀</button><button class="btn" data-value="B" onclick="selectTrack(this)">B팀</button></div></div>
+          <div><label>준비기간</label><div class="seg" id="length-buttons"><button class="btn" data-value="6" onclick="selectLength(this)">6D</button><button class="btn active" data-value="5" onclick="selectLength(this)">5D</button><button class="btn" data-value="4" onclick="selectLength(this)">4D</button></div></div>
+        </div>
+      </div>
+      <div class="template-meta">
+        <div><label>기본형 이름</label><input id="template-name" value="A팀 5D 기본형" oninput="updateName()"></div>
+        <div><label>설명</label><input id="template-note" value="팀의 표준 5D 경기 준비 컨셉" placeholder="이 기본형의 목적을 입력하세요"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">2. MD별 선호 컨셉 입력</div>
+      <div class="help" style="margin-bottom:12px">훈련/휴식과 고·중·저를 선택하면 연구 관찰값을 바탕으로 범위를 추천합니다. 추천은 강제가 아니며 최종 %는 직접 수정할 수 있습니다.</div>
+      <div class="md-editors" id="plan-body"></div>
+      <div class="legend" style="margin-top:10px"><span><b>볼륨</b> → TD 목표</span><span><b>강도</b> → HSR·Sprint·ACC·RHIE 목표</span><span>* RHIE는 직접 근거가 제한적이어서 고강도 행동 지표로 추론한 범위</span></div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;flex-wrap:wrap"><button class="btn" onclick="resetTemplate()">초기값 복원</button><button class="btn primary" onclick="saveTemplate()">이 기본형 저장</button></div>
+      <div class="success" id="save-msg">✓ 테스트 브라우저에 기본형을 저장했습니다.</div>
+    </div>
+
+    <div class="notice"><b>연구 해석 원칙</b><br>논문은 실제 프로팀의 관찰 패턴을 보여주지만 모든 팀에 적용되는 단일 최적값을 제시하지는 않습니다. 따라서 앱은 범위와 근거를 제안하고 코치가 대표값 또는 직접 입력값을 최종 선택하도록 설계합니다.</div>
+  </section>
+
+  <section id="panel-preview" class="panel">
+    <div class="card"><div class="toolbar"><div><div class="section-title" id="preview-title">A팀 5D 기본형</div><div class="help">최근 3경기 팀 대표값에 선택한 %를 적용한 예시입니다.</div></div><button class="btn small" onclick="showSettings()">설정 수정</button></div>
+      <div class="template-meta" style="grid-template-columns:repeat(5,1fr)">
+        <div><label>최근 3경기 TD</label><input type="number" id="base-td" value="10000" oninput="renderPreview()"></div>
+        <div><label>최근 3경기 HSR</label><input type="number" id="base-hsr" value="700" oninput="renderPreview()"></div>
+        <div><label>최근 3경기 Sprint</label><input type="number" id="base-spr" value="200" oninput="renderPreview()"></div>
+        <div><label>최근 3경기 ACC</label><input type="number" id="base-acc" value="30" oninput="renderPreview()"></div>
+        <div><label>최근 3경기 RHIE</label><input type="number" id="base-rhie" value="8" oninput="renderPreview()"></div>
+      </div>
+      <div class="preview-grid" id="preview-grid"></div>
+    </div>
+  </section>
+
+  <section id="panel-evidence" class="panel">
+    <div class="card"><div class="section-title">추천 범위를 만든 근거</div><div class="help">현재 테스트 버전은 아래 연구들의 프로축구 마이크로사이클 관찰값과 경기 전 감량 패턴을 함께 사용합니다.</div>
+      <div class="ref"><a href="https://doi.org/10.1519/JSC.0000000000002816" target="_blank" rel="noreferrer">Martín-García et al. (2018)</a><p>프로팀에서 MD-3 TD가 경기의 약 57%, MD-4의 HSR과 Sprint가 각각 약 43%, 45%로 관찰되었습니다. ACC·DEC는 MD-4 약 71–72%, MD-3 약 62–69%였습니다.</p></div>
+      <div class="ref"><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC8919886/" target="_blank" rel="noreferrer">Oliva-Lozano et al. (2022)</a><p>프로팀 한 시즌 분석에서 마이크로사이클 길이에 따라 일별 부하가 달랐고, MD-4·MD-3에서 높은 부하, MD-2·MD-1에서 감량되는 패턴이 확인되었습니다.</p></div>
+      <div class="ref"><a href="https://doi.org/10.3389/fspor.2023.1151828" target="_blank" rel="noreferrer">Ammann & Altmann (2023)</a><p>훈련-경기 비율은 선수 개인 기준과 포지션 기준에 따라 크게 달라질 수 있으며, HSR·Sprint·가속 지표의 변동성이 특히 컸습니다. 목표 설정 시 기준값과 목적을 명확히 선택해야 한다고 강조합니다.</p></div>
+      <div class="ref"><a href="https://pubmed.ncbi.nlm.nih.gov/30199452/" target="_blank" rel="noreferrer">PubMed 연구 요약</a><p>같은 MD라도 포지션별 외부부하 차이가 확인되므로 팀 기본형은 시작점으로 사용하고, 이후 선수별 조정이 필요합니다.</p></div>
+    </div>
+  </section>
+</main>
+
+<script>
+const VOLUME_RANGES={low:{label:'저볼륨',td:[30,42]},medium:{label:'중볼륨',td:[43,54]},high:{label:'고볼륨',td:[55,65]}};
+const INTENSITY_RANGES={
+  low:{label:'저강도',hsr:[10,22],spr:[5,15],acc:[25,40],rhie:[15,30]},
+  medium:{label:'중강도',hsr:[23,34],spr:[16,29],acc:[41,55],rhie:[31,45]},
+  high:{label:'고강도',hsr:[35,45],spr:[30,45],acc:[56,72],rhie:[46,65]}
+};
+const DEFAULTS={
+  6:[['training','medium','low'],['training','high','medium'],['training','high','high'],['training','medium','high'],['training','low','medium'],['training','low','low']],
+  5:[['training','high','low'],['training','high','high'],['training','low','high'],['rest','low','low'],['training','low','low']],
+  4:[['training','high','medium'],['training','high','high'],['training','low','medium'],['training','low','low']]
+};
+const state={track:'A',length:5,rows:[]};
+const mid=a=>Math.round((a[0]+a[1])/2);
+const clone=v=>JSON.parse(JSON.stringify(v));
+
+function storageKey(){return `period-basic-test-${state.track}-${state.length}D`}
+function buildRows(){
+  const saved=localStorage.getItem(storageKey());
+  if(saved){try{const parsed=JSON.parse(saved);state.rows=parsed.rows||[];document.getElementById('template-name').value=parsed.name||`${state.track}팀 ${state.length}D 기본형`;document.getElementById('template-note').value=parsed.note||'';return}catch(e){}}
+  state.rows=DEFAULTS[state.length].map((x,i)=>({md:`MD-${state.length-i}`,mode:x[0],volume:x[1],intensity:x[2],values:null}));
+  document.getElementById('template-name').value=`${state.track}팀 ${state.length}D 기본형`;
+  document.getElementById('template-note').value='팀의 표준 경기 준비 컨셉';
+}
+function recommended(row){
+  if(row.mode==='rest')return{td:0,hsr:0,spr:0,acc:0,rhie:0};
+  const v=VOLUME_RANGES[row.volume],i=INTENSITY_RANGES[row.intensity];
+  return{td:mid(v.td),hsr:mid(i.hsr),spr:mid(i.spr),acc:mid(i.acc),rhie:mid(i.rhie)};
+}
+function rangeText(a){return `<strong>${a[0]}–${a[1]}%</strong>`}
+function pickButtons(idx,key,map,current,disabled=false){return Object.entries(map).map(([value,item])=>`<button type="button" class="pick ${value===current?'on':''}" ${disabled?'disabled':''} onclick="setRowChoice(${idx},'${key}','${value}')">${item.label}</button>`).join('')}
+function renderTable(){
+  document.getElementById('plan-body').innerHTML=state.rows.map((r,idx)=>{
+    const rest=r.mode==='rest',v=VOLUME_RANGES[r.volume],i=INTENSITY_RANGES[r.intensity],rec=recommended(r),vals=r.values||rec;
+    return `<article class="md-editor ${rest?'rest':''}">
+      <div class="md-head"><strong>${r.md}</strong><div class="pick-group"><button type="button" class="pick ${!rest?'on':''}" onclick="setRowChoice(${idx},'mode','training')">훈련</button><button type="button" class="pick ${rest?'on':''}" onclick="setRowChoice(${idx},'mode','rest')">휴식</button></div></div>
+      ${rest?'<div class="help">휴식일로 설정되었습니다. 모든 GPS 목표는 0%로 적용됩니다.</div>':`
+      <div class="editor-grid">
+        <div><label>코치 선호 볼륨</label><div class="pick-group">${pickButtons(idx,'volume',VOLUME_RANGES,r.volume)}</div></div>
+        <div><label>코치 선호 강도</label><div class="pick-group">${pickButtons(idx,'intensity',INTENSITY_RANGES,r.intensity)}</div></div>
+        <div><label>현재 선택</label><div style="font-weight:800;color:var(--text2);padding-top:7px">${v.label} / ${i.label}</div></div>
+      </div>
+      <div class="recommend-box">
+        <div class="recommend-head"><div><b>연구 기반 추천 범위</b><div class="evidence-line">TD ${rangeText(v.td)} · HSR ${rangeText(i.hsr)} · Sprint ${rangeText(i.spr)} · ACC ${rangeText(i.acc)} · RHIE ${rangeText(i.rhie)}</div></div><button type="button" class="btn small" onclick="applyRecommended(${idx})">추천 대표값 적용</button></div>
+        <div class="final-grid">${[['TD','td'],['HSR','hsr'],['Sprint','spr'],['ACC','acc'],['RHIE','rhie']].map(([label,key])=>`<label>${label} 최종 %<input aria-label="${r.md} ${label} 최종 퍼센트" type="number" min="0" max="150" value="${vals[key]}" onchange="setValue(${idx},'${key}',this.value)"></label>`).join('')}</div>
+      </div>`}
+    </article>`;
+  }).join('');
+  renderPreview();
+}
+function setRowChoice(idx,key,value){state.rows[idx][key]=value;state.rows[idx].values=null;renderTable()}
+function setValue(idx,key,value){const rec=recommended(state.rows[idx]);state.rows[idx].values={...(state.rows[idx].values||rec),[key]:Math.max(0,Number(value)||0)};renderPreview()}
+function applyRecommended(idx){state.rows[idx].values=null;renderTable()}
+function selectTrack(btn){document.querySelectorAll('#track-buttons .btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.track=btn.dataset.value;buildRows();renderTable()}
+function selectLength(btn){document.querySelectorAll('#length-buttons .btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');state.length=Number(btn.dataset.value);buildRows();renderTable()}
+function updateName(){document.getElementById('preview-title').textContent=document.getElementById('template-name').value||`${state.track}팀 ${state.length}D 기본형`}
+function resetTemplate(){localStorage.removeItem(storageKey());buildRows();renderTable()}
+function saveTemplate(){localStorage.setItem(storageKey(),JSON.stringify({track:state.track,length:state.length,name:document.getElementById('template-name').value,note:document.getElementById('template-note').value,rows:state.rows}));const m=document.getElementById('save-msg');m.style.display='block';setTimeout(()=>m.style.display='none',2500)}
+function base(id){return Math.max(0,Number(document.getElementById(id)?.value)||0)}
+function renderPreview(){
+  updateName();const bases={td:base('base-td'),hsr:base('base-hsr'),spr:base('base-spr'),acc:base('base-acc'),rhie:base('base-rhie')};
+  document.getElementById('preview-grid').innerHTML=state.rows.map(r=>{const vals=r.values||recommended(r),rest=r.mode==='rest';return `<article class="preview-day"><h3>${r.md}</h3><div class="chips"><span class="chip">${rest?'휴식':'훈련'}</span>${rest?'':`<span class="chip">${VOLUME_RANGES[r.volume].label}</span><span class="chip">${INTENSITY_RANGES[r.intensity].label}</span>`}</div><div class="metrics">${[['TD','td'],['HSR','hsr'],['SPR','spr'],['ACC','acc'],['RHIE','rhie']].map(([l,k])=>`<div class="metric"><span>${l} · ${vals[k]}%</span><b>${Math.round(bases[k]*vals[k]/100).toLocaleString()}</b></div>`).join('')}</div></article>`}).join('')
+}
+function showPanel(btn){document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));btn.classList.add('active');document.getElementById('panel-'+btn.dataset.panel).classList.add('active');if(btn.dataset.panel==='preview')renderPreview()}
+function showSettings(){showPanel(document.querySelector('[data-panel="settings"]'))}
+buildRows();renderTable();
+</script>
+</body>
+</html>
