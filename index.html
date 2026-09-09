@@ -2409,13 +2409,26 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
 
 <!-- ===== 블록 목록 모달 ===== -->
 <div id="block-list-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeBlockListModal()">
-  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(480px,92vw);max-height:85vh;overflow-y:auto;border:1px solid var(--border2)">
+  <div style="background:var(--surface);border-radius:14px;padding:24px;width:min(560px,94vw);max-height:85vh;overflow-y:auto;border:1px solid var(--border2)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h4 style="margin:0;font-size:15px">📋 블록 목록</h4>
       <div style="display:flex;gap:8px;align-items:center">
         <button id="block-backfill-btn" onclick="runBlockBasisBackfill()" style="display:none;padding:5px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-size:11px" title="과거 블록의 %기준을 각 경기 직전 3경기로 소급 기록">🔧 과거 블록 기준 백필</button>
         <button onclick="closeBlockListModal()" style="background:none;border:none;color:var(--text2);cursor:pointer;font-size:18px">✕</button>
       </div>
+    </div>
+    <!-- 경기 준비일수별 부하 비교 -->
+    <div style="margin-bottom:14px;padding:10px 12px;border:1px solid var(--border);border-radius:9px;background:var(--bg)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:700;color:var(--text2);white-space:nowrap">📊 준비일수별 부하</span>
+        <select id="prep-compare-sel" onchange="renderPrepCompare()" style="flex:1;min-width:150px;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:11px">
+          <option value="">선택하세요</option>
+          <option value="4">4D 준비 경기</option>
+          <option value="5">5D 준비 경기</option>
+          <option value="6">6D 준비 경기</option>
+        </select>
+      </div>
+      <div id="prep-compare-out" style="font-size:10px;color:var(--text3);margin-top:8px">같은 준비기간이었던 과거 경기들의 날짜별 팀 부하 평균입니다. 리그·컵대회만 집계합니다.</div>
     </div>
     <div id="block-list-body"></div>
   </div>
@@ -30292,6 +30305,8 @@ async function deleteBlock(){
   await loadPeriodTab();
 }
 
+let _prepCompare=null;   // 경기 준비일수별 부하 비교 집계 (모달 열 때마다 초기화)
+
 // 목록에 뜨는 블록 전 구간의 날짜별 계획을 따로 불러온다.
 // _daysData에는 달력이 보고 있는 3개월치만 들어 있어서, 그것만으로 옛 블록 라벨을
 // 다시 만들면 '일정 설정 중'이 떠버린다. 라벨 앞에 붙는 '직전 경기 이후 휴식'을
@@ -30301,7 +30316,7 @@ async function _loadBlockListDayMap(blocks){
   let from=blocks[0].start_date, to=blocks[0].end_date;
   blocks.forEach(b=>{ if(b.start_date<from)from=b.start_date; if(b.end_date>to)to=b.end_date; });
   const {data}=await supa.from('block_days')
-    .select('plan_date,day_label,track,ref_basis')
+    .select('plan_date,day_label,track,ref_basis,td_target,hsr_target,spr_target,acc_target,rhie_target')
     .gte('plan_date',periodShiftDate(from,-30)).lte('plan_date',to);
   const map={};
   (data||[]).forEach(r=>{ if((r.track||'ALL')===_periodTrack) map[r.plan_date]=r; });
@@ -30356,11 +30371,182 @@ async function openBlockListModal(){
     </div>`;}).join('')
     :'<div style="color:var(--text3);font-size:13px;text-align:center;padding:20px">등록된 블록이 없어요</div>';
   document.getElementById('block-list-body').innerHTML=html;
+  // 열 때마다 준비일수 비교는 초기화 — 트랙이나 블록이 바뀌었을 수 있다
+  _prepCompare=null;
+  const pcSel=document.getElementById('prep-compare-sel');
+  if(pcSel) pcSel.value='';
+  renderPrepCompare();
   const bfBtn=document.getElementById('block-backfill-btn');
   if(bfBtn) bfBtn.style.display=(isTeamAdmin||isSuperAdmin)?'inline-block':'none';
   document.getElementById('block-list-modal').style.display='flex';
 }
 function closeBlockListModal(){ document.getElementById('block-list-modal').style.display='none'; }
+
+// ── 경기 준비일수(4D·5D·6D)별 부하 비교 ──────────────────────────
+// 같은 준비기간을 가졌던 과거 경기들을 모아 MD단계별 팀 부하 평균을 낸다.
+// 리그·컵대회만 — 연습경기는 준비 강도가 달라 평균을 흐린다(기준선이 리그만 쓰는 것과 같은 이유).
+// 준비일수 = 첫 훈련일 ~ 경기일 간격. inferBlockPeriodPlan과 같은 기준이다.
+async function buildPrepCompare(){
+  const blocks=(_blocksData||[]).filter(b=>b.start_date&&b.end_date);
+  if(!blocks.length) return {};
+  let from=blocks[0].start_date, to=blocks[0].end_date;
+  blocks.forEach(b=>{ if(b.start_date<from)from=b.start_date; if(b.end_date>to)to=b.end_date; });
+  const dayMap=await _loadBlockListDayMap(blocks);
+  const [{data:gps},{data:mts}]=await Promise.all([
+    supa.from('gps_records')
+      .select('session_date,td,running_high,sprint,accel,rhie,duration,session_type2,track')
+      .gte('session_date',from).lte('session_date',to),
+    supa.from('match_records')
+      .select('match_date,td,band4_td,band5_td,accel,rhie,duration,time_type')
+      .eq('time_type','FT').gte('match_date',from).lte('match_date',to),
+  ]);
+  const loads=buildPeriodActualLoads(gps||[],mts||[],_periodTrack);
+
+  const out={}; // {4:{matches:[], md:{4:{td:[...]}}}, 5:…, 6:…}
+  blocks.forEach(b=>{
+    const range=periodDateRange(b.start_date,b.end_date);
+    const matchRow=range.map(ds=>dayMap[ds]).find(r=>normalizePlanMdKey(r?.day_label)==='MATCH');
+    if(!matchRow||!isOfficialMatchPlan(matchRow)) return;      // 리그·컵대회만
+    const matchDate=matchRow.plan_date;
+    const firstTraining=periodDateRange(b.start_date,matchDate).find(ds=>{
+      const r=dayMap[ds];
+      return r&&normalizePlanMdKey(r.day_label)!=='MATCH'&&(r.day_label||'').trim().toUpperCase()!=='REST';
+    });
+    if(!firstTraining) return;
+    const span=periodDateDiff(firstTraining,matchDate);
+    if(span<4||span>6) return;
+    const g=out[span]=out[span]||{matches:[],md:{}};
+    const m={date:matchDate,name:b.context||'',type:getPlanMatchType(matchRow),blockId:b.id,days:{}};
+    g.matches.push(m);
+    periodDateRange(firstTraining,matchDate).forEach(ds=>{
+      const row=dayMap[ds]||{};
+      const md=periodDateDiff(ds,matchDate);                   // 0 = 경기당일
+      const v=loads[ds]||null;
+      // 목표는 계획에, 실제는 GPS·경기 기록에 있다. 목표만 있고 실제가 없는 날도 보여준다.
+      m.days[md]={
+        label:row.day_label||'',
+        target:Object.fromEntries(PERIOD_METRICS.map(x=>[x.pctId,parseFloat(row[x.targetCol])||null])),
+        actual:v,
+      };
+      if(!v) return;                                           // 평균에는 실제값 있는 날만 넣는다
+      const slot=g.md[md]=g.md[md]||{td:[],hsr:[],spr:[],acc:[],rhie:[]};
+      ['td','hsr','spr','acc','rhie'].forEach(k=>{ if(v[k]>0) slot[k].push(v[k]); });
+    });
+  });
+  return out;
+}
+
+// 주기화 일일 목표 대비 달성률 색 — CLAUDE.md 기준 ②
+// 90~109% 🟢 / 70~89% 🟡 / <70% 🔴 · 초과부하 110~130% 🟠 / >130% 🔴
+function prepPctColor(p){
+  if(p==null) return 'var(--text3)';
+  if(p>130) return '#ef4444';
+  if(p>=110) return '#fb923c';
+  if(p>=90)  return '#4ade80';
+  if(p>=70)  return '#fbbf24';
+  return '#f87171';
+}
+
+// 경기 하나를 펼쳐 MD단계별 목표 vs 실제를 보여준다
+function togglePrepMatch(span,idx){
+  const el=document.getElementById(`prep-m-${span}-${idx}`);
+  const arrow=document.getElementById(`prep-a-${span}-${idx}`);
+  if(!el) return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(arrow) arrow.textContent=open?'▸':'▾';
+  if(open||el.dataset.filled) return;
+  const m=_prepCompare?.[span]?.matches?.[idx]; if(!m) return;
+  const mds=[]; for(let d=span;d>=0;d--) mds.push(d);
+  const rows=[
+    {k:'td',  l:'TD',    f:v=>Math.round(v).toLocaleString()},
+    {k:'hsr', l:'HSR',   f:v=>Math.round(v).toLocaleString()},
+    {k:'spr', l:'SPR',   f:v=>Math.round(v)},
+    {k:'acc', l:'ACC',   f:v=>Math.round(v)},
+    {k:'rhie',l:'RHIE',  f:v=>Math.round(v)},
+  ];
+  const head=mds.map(d=>`<th style="padding:3px 5px;text-align:right;color:${d===0?'#f87171':'var(--text3)'};white-space:nowrap">${d===0?'경기':'MD-'+d}</th>`).join('');
+  const body=rows.map(r=>{
+    const cells=mds.map(d=>{
+      const day=m.days[d]; const t=day?.target?.[r.k]; const a=day?.actual?.[r.k];
+      if(!t&&!a) return `<td style="padding:3px 5px;text-align:right;color:var(--text3)">—</td>`;
+      const p=(t&&a)?Math.round(a/t*100):null;
+      return `<td style="padding:3px 5px;text-align:right;line-height:1.5">
+        <div style="color:var(--text3)">${t?r.f(t):'—'}</div>
+        <div style="color:var(--text);font-weight:600">${a?r.f(a):'—'}</div>
+        <div style="color:${prepPctColor(p)};font-weight:700">${p!=null?p+'%':''}</div></td>`;
+    }).join('');
+    return `<tr style="border-top:1px solid var(--border)"><td style="padding:3px 5px;color:var(--text2);white-space:nowrap">${r.l}</td>${cells}</tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div style="margin:4px 0 5px;color:var(--text3)">위 = 목표 · 가운데 = 실제 · 아래 = 달성률</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:9px">
+        <thead><tr><th style="padding:3px 5px;text-align:left;color:var(--text3)">지표</th>${head}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:5px">
+      <button onclick="event.stopPropagation();closeBlockListModal();openWeekDetail('${m.blockId}')"
+        style="padding:3px 9px;border-radius:5px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:9px">📊 블록 상세 보기</button>
+    </div>`;
+  el.dataset.filled='1';
+}
+
+async function renderPrepCompare(){
+  const sel=document.getElementById('prep-compare-sel');
+  const box=document.getElementById('prep-compare-out');
+  if(!sel||!box) return;
+  const span=parseInt(sel.value,10);
+  if(!span){ box.innerHTML='같은 준비기간이었던 과거 경기들의 날짜별 팀 부하 평균입니다. 리그·컵대회만 집계합니다.'; return; }
+  box.innerHTML='<span style="color:var(--text3)">⏳ 집계 중…</span>';
+  if(!_prepCompare) _prepCompare=await buildPrepCompare();
+  const g=_prepCompare[span];
+  if(!g||!g.matches.length){
+    box.innerHTML=`<span style="color:#fbbf24">${span}일 준비한 리그·컵대회 경기가 아직 없습니다.</span>`;
+    return;
+  }
+  const mds=[]; for(let d=span;d>=0;d--) mds.push(d);
+  const avg=(a)=>a&&a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+  const rows=[
+    {k:'td',  l:'TD (m)',    f:v=>Math.round(v).toLocaleString()},
+    {k:'hsr', l:'HSR (m)',   f:v=>Math.round(v).toLocaleString()},
+    {k:'spr', l:'Sprint (m)',f:v=>Math.round(v)},
+    {k:'acc', l:'가속 (회)', f:v=>Math.round(v)},
+    {k:'rhie',l:'RHIE (회)', f:v=>Math.round(v)},
+  ];
+  const head=mds.map(d=>`<th style="padding:4px 6px;text-align:right;color:${d===0?'#f87171':'var(--text3)'};font-weight:${d===0?700:600};white-space:nowrap">${d===0?'경기':'MD-'+d}</th>`).join('');
+  const body=rows.map(r=>`
+    <tr style="border-top:1px solid var(--border)">
+      <td style="padding:4px 6px;color:var(--text2);white-space:nowrap">${r.l}</td>
+      ${mds.map(d=>{
+        const v=avg(g.md[d]?.[r.k]);
+        return `<td style="padding:4px 6px;text-align:right;color:${d===0?'var(--text)':'var(--text2)'};font-weight:${d===0?700:400}">${v!=null?r.f(v):'—'}</td>`;
+      }).join('')}
+    </tr>`).join('');
+  g.matches.sort((a,b)=>b.date.localeCompare(a.date));
+  const list=g.matches.map((m,i)=>`
+    <div style="border-top:1px solid var(--border)">
+      <div onclick="togglePrepMatch(${span},${i})" style="display:flex;align-items:center;gap:6px;padding:5px 2px;cursor:pointer" title="클릭하면 MD단계별 목표 vs 실제를 봅니다">
+        <span id="prep-a-${span}-${i}" style="color:var(--text3);font-size:9px">▸</span>
+        <span style="color:var(--text2);font-weight:600">${m.date.slice(5)}</span>
+        <span style="color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}</span>
+        <span style="font-size:9px;color:#fca5a5;border:1px solid #ef444455;background:#ef444418;border-radius:3px;padding:0 4px;white-space:nowrap">${MATCH_TYPE_LABEL[m.type]||'경기'}</span>
+      </div>
+      <div id="prep-m-${span}-${i}" style="display:none;padding:0 2px 6px"></div>
+    </div>`).join('');
+  box.innerHTML=`
+    <div style="color:var(--text2);margin-bottom:6px">대상 <strong style="color:var(--accent2)">${g.matches.length}경기</strong> 평균 · 리그·컵대회만</div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:10px">
+        <thead><tr><th style="padding:4px 6px;text-align:left;color:var(--text3)">지표</th>${head}</tr></thead>
+        <tbody>${body}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:8px;color:var(--text3);font-weight:700">집계된 경기 <span style="font-weight:400">— 클릭하면 목표 vs 실제</span></div>
+    ${list}
+    <div style="margin-top:6px;color:var(--text3);border-top:1px solid var(--border);padding-top:5px">훈련일은 M 세션 팀 평균, 경기일은 FT 기준입니다. 데이터가 없는 날은 —.</div>`;
+}
 
 // ── 과거 블록 기준 백필 ─────────────────────────────────────
 // 각 블록이 준비한 경기(블록 내 MD일)의 "직전 3경기"를 기준으로,
