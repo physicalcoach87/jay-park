@@ -23374,6 +23374,22 @@ async function generateMatchReport(){
     const vals = last3.map(m=>m.avg[k]).filter(v=>v!=null);
     avg3[k] = vals.length ? vals.reduce((a,b)=>a+b,0)/vals.length : null;
   });
+  // ── 현재 경기가 기준선에서 빠진 경우 (추정 포함 → baseline_excluded 자동 true / 대회 제외) ──
+  // avg3·last3(3경기 평균 기준선)에는 절대 넣지 않는다 — 기준선은 추정 무오염이 생명.
+  // 비교 표에만 추정 포함 합계로 별도 열을 만들어 맨 앞에 붙인다.
+  // '명' 단위이므로 행이 아니라 선수 기준으로 센다. 추정값은 그 선수 본인의
+  // 최근 실측 분당비율에서 나오므로 누구인지 보여야 값의 타당성을 판단할 수 있다.
+  const _estMap   = new Map(ftRows.filter(r=>r.is_estimated).map(r=>[r.player_id, r.player_profiles?.name||'—']));
+  const _estCnt   = _estMap.size;
+  const _estNames = [..._estMap.values()];
+  const _estBadge = _estCnt<=2 ? _estNames.join(' · ') : `${_estNames[0]} 외 ${_estCnt-1}명`;  // 배지는 좁아 3명부터 접는다
+  const curCol = last3.some(m=>m.isTarget) ? null : {
+    label:`${date.slice(5)} vs ${opponent}`, isTarget:true, estCnt:_estCnt, estBadge:_estBadge,
+    stats:teamSum(ftRows), avg:teamAvg(ftRows),   // ftRows = 현재 경기 전 행(추정 포함)
+  };
+  // 표시 전용 열 — 기준선 계산(avg3)에는 쓰지 않는다
+  const cmpCols = curCol ? [curCol,...last3].slice(0,3) : last3;
+
   const sec2Fields = [
     {k:'td',    l:'TD (m)',      fmt:v=>Math.round(v).toLocaleString()},
     {k:'hir',   l:'HIR+Sprint', fmt:v=>Math.round(v).toLocaleString()},
@@ -23853,30 +23869,39 @@ async function generateMatchReport(){
   ${pageBreakCard(`
     ${secHead('📊','팀 합계 종합 분석','최근 3경기 비교 + 전·후반')}
 
-    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ 최근 3경기 비교 (FT 출전 전원 합산)</div>
-    ${last3.length>=2?`
-    <div style="overflow-x:auto;margin-bottom:20px">
+    <div style="font-size:11px;font-weight:600;color:var(--text3);margin-bottom:8px">▸ ${curCol?'이번 경기 vs 기준선 경기':'최근 3경기 비교'} (FT 출전 전원 합산)</div>
+    ${cmpCols.length>=2?`
+    <div style="overflow-x:auto;margin-bottom:${curCol?'10px':'20px'}">
       <table style="width:100%;border-collapse:collapse;font-size:11px;min-width:560px">
         <thead>
           <tr style="background:var(--surface2)">
             <th style="padding:7px 8px;text-align:left;color:var(--text3);font-weight:600">지표</th>
-            ${last3.map((m,i)=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}</th>`).join('')}
-            ${last3.length>=2?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 직전</th>`:''}
-            ${last3.length>=3?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 2경기전</th>`:''}
+            ${cmpCols.map((m,i)=>`<th style="padding:7px 8px;text-align:right;color:${m.isTarget?'var(--accent2)':'var(--text3)'};font-weight:${m.isTarget?700:400}">${m.label}${m.isTarget?' 🆕':''}${m.estCnt?`<br><span style="display:inline-block;margin-top:2px;padding:1px 5px;border-radius:3px;background:#42200660;border:1px solid #fbbf2470;color:#fbbf24;font-size:9px;font-weight:700">${m.estBadge} 추정 포함</span>`:''}</th>`).join('')}
+            ${cmpCols.length>=2?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 직전</th>`:''}
+            ${cmpCols.length>=3?`<th style="padding:7px 8px;text-align:right;color:var(--text3)">vs 2경기전</th>`:''}
           </tr>
         </thead>
         <tbody>
           ${sec2Fields.map(f=>`
           <tr style="border-bottom:1px solid var(--border)">
             <td style="padding:6px 8px;color:var(--text2);font-weight:500">${f.l}</td>
-            ${last3.map((m,i)=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.stats[f.k])}</td>`).join('')}
-            ${last3.length>=2?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[1].stats[f.k])}</td>`:''}
-            ${last3.length>=3?`<td style="padding:6px 8px;text-align:right">${deltaStr(last3[0].stats[f.k],last3[2].stats[f.k])}</td>`:''}
+            ${cmpCols.map((m,i)=>`<td style="padding:6px 8px;text-align:right;color:${m.isTarget?'var(--text)':'var(--text3)'};font-weight:${m.isTarget?600:400}">${f.fmt(m.stats[f.k])}</td>`).join('')}
+            ${cmpCols.length>=2?`<td style="padding:6px 8px;text-align:right">${deltaStr(cmpCols[0].stats[f.k],cmpCols[1].stats[f.k])}</td>`:''}
+            ${cmpCols.length>=3?`<td style="padding:6px 8px;text-align:right">${deltaStr(cmpCols[0].stats[f.k],cmpCols[2].stats[f.k])}</td>`:''}
           </tr>`).join('')}
         </tbody>
       </table>
     </div>
-    `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${last3.length}경기)</div>`}
+    ${curCol?`
+    <div style="margin-bottom:20px;padding:8px 10px;background:#42200630;border:1px solid #fbbf2440;border-radius:6px;font-size:10px;color:var(--text3);line-height:1.7">
+      <strong style="color:#fbbf24">⚠ 이번 경기는 기준선에서 제외된 경기입니다.</strong>
+      ${_estCnt?`GPS 미착용 <strong style="color:var(--text2)">${_estNames.join(' · ')}</strong> ${_estCnt}명의 추정값이 섞여 있어 `:'대회 구분 또는 수동 설정으로 '}
+      최근 3경기 평균·Match Max 산정에는 들어가지 않습니다.
+      위 표의 이번 경기 값은 <strong style="color:var(--text2)">추정 포함 합계</strong>이고,
+      비교 대상 ${cmpCols.length-1}경기는 <strong style="color:var(--text2)">추정 없는 실측 경기</strong>입니다.
+      ${_estCnt?`추정 행은 <code>mpm</code>·<code>max_speed</code>가 비어 있어 <strong style="color:var(--text2)">평균 m/min·평균 Vmax</strong> 두 줄에서는 해당 ${_estCnt}명이 자동 제외됩니다.`:''}
+    </div>`:''}
+    `:`<div style="color:var(--text3);font-size:12px;margin-bottom:20px">비교 데이터 부족 (${cmpCols.length}경기)</div>`}
 
     ${hasHalf?`
     <div style="border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
