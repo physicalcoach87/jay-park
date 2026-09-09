@@ -30311,13 +30311,27 @@ let _prepCompare=null;   // 경기 준비일수별 부하 비교 집계 (모달 
 // _daysData에는 달력이 보고 있는 3개월치만 들어 있어서, 그것만으로 옛 블록 라벨을
 // 다시 만들면 '일정 설정 중'이 떠버린다. 라벨 앞에 붙는 '직전 경기 이후 휴식'을
 // 세려면 첫 블록보다 조금 앞선 날짜까지 필요해서 30일 여유를 둔다.
+// supabase 1000행 제한 대응 — 블록 목록은 전체 기간(수개월)을 한 번에 훑는다.
+// 잘리면 행 수가 많은 쪽(훈련 GPS)만 통째로 빠져 목표만 있고 실제가 빈 칸으로 보인다.
+async function _pageAllRows(build){
+  const out=[], SZ=1000;
+  for(let i=0;;i+=SZ){
+    const {data,error}=await build().range(i,i+SZ-1);
+    if(error) throw new Error(error.message);
+    out.push(...(data||[]));
+    if(!data||data.length<SZ) break;
+  }
+  return out;
+}
+
 async function _loadBlockListDayMap(blocks){
   if(!blocks.length) return {};
   let from=blocks[0].start_date, to=blocks[0].end_date;
   blocks.forEach(b=>{ if(b.start_date<from)from=b.start_date; if(b.end_date>to)to=b.end_date; });
-  const {data}=await supa.from('block_days')
+  const data=await _pageAllRows(()=>supa.from('block_days')
     .select('plan_date,day_label,track,ref_basis,td_target,hsr_target,spr_target,acc_target,rhie_target')
-    .gte('plan_date',periodShiftDate(from,-30)).lte('plan_date',to);
+    .gte('plan_date',periodShiftDate(from,-30)).lte('plan_date',to)
+    .order('plan_date',{ascending:true}));
   const map={};
   (data||[]).forEach(r=>{ if((r.track||'ALL')===_periodTrack) map[r.plan_date]=r; });
   return map;
@@ -30392,15 +30406,21 @@ async function buildPrepCompare(){
   let from=blocks[0].start_date, to=blocks[0].end_date;
   blocks.forEach(b=>{ if(b.start_date<from)from=b.start_date; if(b.end_date>to)to=b.end_date; });
   const dayMap=await _loadBlockListDayMap(blocks);
-  const [{data:gps},{data:mts}]=await Promise.all([
-    supa.from('gps_records')
+  const [gps,mts]=await Promise.all([
+    _pageAllRows(()=>supa.from('gps_records')
       .select('session_date,td,running_high,sprint,accel,rhie,duration,session_type2,track')
-      .gte('session_date',from).lte('session_date',to),
-    supa.from('match_records')
-      .select('match_date,td,band4_td,band5_td,accel,rhie,duration,time_type')
-      .eq('time_type','FT').gte('match_date',from).lte('match_date',to),
+      .gte('session_date',from).lte('session_date',to).order('session_date',{ascending:true})),
+    _pageAllRows(()=>supa.from('match_records')
+      .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration,time_type')
+      .eq('time_type','FT').gte('match_date',from).lte('match_date',to).order('match_date',{ascending:true})),
   ]);
-  const loads=buildPeriodActualLoads(gps||[],mts||[],_periodTrack);
+  // 훈련과 경기를 따로 만든다. 합친 값(buildPeriodActualLoads 기본 동작)은 같은 날 경기가 있으면
+  // 경기 부하가 훈련을 덮어써, 주중 경기가 낀 날의 훈련 달성률이 사라진다.
+  // 부하 예측 쪽은 합산이 맞으므로 그쪽 호출은 그대로 둔다.
+  const trainLoads=buildPeriodActualLoads(gps||[],[],_periodTrack);
+  const matchLoads=buildPeriodActualLoads([],mts||[],_periodTrack);
+  const matchOpp={};
+  (mts||[]).forEach(r=>{ if(r.match_date&&!matchOpp[r.match_date]) matchOpp[r.match_date]=r.opponent||''; });
 
   const out={}; // {4:{matches:[], md:{4:{td:[...]}}}, 5:…, 6:…}
   blocks.forEach(b=>{
@@ -30421,12 +30441,18 @@ async function buildPrepCompare(){
     periodDateRange(firstTraining,matchDate).forEach(ds=>{
       const row=dayMap[ds]||{};
       const md=periodDateDiff(ds,matchDate);                   // 0 = 경기당일
-      const v=loads[ds]||null;
+      // 대상 경기일은 경기 부하, 그 밖의 날은 훈련 부하를 쓴다.
+      // 주중에 다른 경기(컵대회 등)가 있던 날은 경기를 뛰지 않은 선수들이 훈련한 값이 실제이고,
+      // 그 훈련에도 목표가 있으므로 달성률이 의미를 가진다. 경기가 있었다는 사실은 따로 표시한다.
+      const v=(md===0?matchLoads[ds]:trainLoads[ds])||null;
+      const midMatch=md!==0&&!!matchLoads[ds];
       // 목표는 계획에, 실제는 GPS·경기 기록에 있다. 목표만 있고 실제가 없는 날도 보여준다.
       m.days[md]={
         label:row.day_label||'',
         target:Object.fromEntries(PERIOD_METRICS.map(x=>[x.pctId,parseFloat(row[x.targetCol])||null])),
         actual:v,
+        midMatch,
+        midOpp:midMatch?(matchOpp[ds]||''):'',
       };
       if(!v) return;                                           // 평균에는 실제값 있는 날만 넣는다
       const slot=g.md[md]=g.md[md]||{td:[],hsr:[],spr:[],acc:[],rhie:[]};
@@ -30465,7 +30491,13 @@ function togglePrepMatch(span,idx){
     {k:'acc', l:'ACC',   f:v=>Math.round(v)},
     {k:'rhie',l:'RHIE',  f:v=>Math.round(v)},
   ];
-  const head=mds.map(d=>`<th style="padding:3px 5px;text-align:right;color:${d===0?'#f87171':'var(--text3)'};white-space:nowrap">${d===0?'경기':'MD-'+d}</th>`).join('');
+  const head=mds.map(d=>{
+    const mm=m.days[d]?.midMatch;
+    const opp=m.days[d]?.midOpp;
+    // 주중 경기가 있던 날 — 숫자는 훈련값이므로 경기가 있었다는 사실을 열 머리에 표시한다
+    const tag=mm?`<div style="font-size:8px;font-weight:700;color:#f87171" title="이날 경기가 있었습니다${opp?' (vs '+opp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련값입니다">경기일</div>`:'';
+    return `<th style="padding:3px 5px;text-align:right;color:${d===0?'#f87171':'var(--text3)'};white-space:nowrap">${d===0?'경기':'MD-'+d}${tag}</th>`;
+  }).join('');
   const body=rows.map(r=>{
     const cells=mds.map(d=>{
       const day=m.days[d]; const t=day?.target?.[r.k]; const a=day?.actual?.[r.k];
