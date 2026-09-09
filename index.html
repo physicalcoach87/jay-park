@@ -556,13 +556,13 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
   <div class="vm-bar">
     <h3>📊 선수 통합 관리</h3>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📊 팀 부하 관리</button>
-      <button class="btn-exp" onclick="setPlayerView('suitability')" id="pvbtn-suitability">🧬 훈련 적합성 판정</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('period')" id="pvbtn-period">📅 주기화</button>
-      <button class="btn-exp admin-only" onclick="setGpsDataView('daily')" id="pvbtn-training">📡 GPS 데이터</button>
+      <button class="btn-exp" onclick="setPlayerView('suitability')" id="pvbtn-suitability">🧬 훈련 적합성 판정</button>
+      <button class="btn-exp" onclick="setPlayerView('team')" id="pvbtn-team" style="border-color:var(--accent);background:var(--accent-bg);color:var(--accent2)">📊 팀 부하 관리</button>
       <button class="btn-exp" onclick="setPlayerView('wellness')" id="pvbtn-wellness">💚 컨디션 모니터링</button>
-      <button class="btn-exp admin-only" onclick="setPlayerView('exercise')" id="pvbtn-exercise">🏋️ 운동 처방</button>
       <button class="btn-exp admin-only" onclick="setPlayerView('dashboard')" id="pvbtn-dashboard">👤 선수 개인데이터</button>
+      <button class="btn-exp admin-only" onclick="setPlayerView('exercise')" id="pvbtn-exercise">🏋️ 운동 처방</button>
+      <button class="btn-exp admin-only" onclick="setGpsDataView('daily')" id="pvbtn-training">📡 GPS 데이터</button>
     </div>
   </div>
 
