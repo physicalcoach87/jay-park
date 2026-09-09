@@ -2426,6 +2426,7 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
           <option value="4">4D 준비 경기</option>
           <option value="5">5D 준비 경기</option>
           <option value="6">6D 준비 경기</option>
+          <option value="2G">주간 2경기</option>
         </select>
       </div>
       <div id="prep-compare-out" style="font-size:10px;color:var(--text3);margin-top:8px">같은 준비기간이었던 과거 경기들의 날짜별 팀 부하 평균입니다. 리그·컵대회만 집계합니다.</div>
@@ -30306,6 +30307,7 @@ async function deleteBlock(){
 }
 
 let _prepCompare=null;   // 경기 준비일수별 부하 비교 집계 (모달 열 때마다 초기화)
+let _prepWeeks=[];       // 주간 2경기 목록 (펼치기에서 참조)
 
 // 목록에 뜨는 블록 전 구간의 날짜별 계획을 따로 불러온다.
 // _daysData에는 달력이 보고 있는 3개월치만 들어 있어서, 그것만으로 옛 블록 라벨을
@@ -30422,11 +30424,46 @@ async function buildPrepCompare(){
   const matchOpp={};
   (mts||[]).forEach(r=>{ if(r.match_date&&!matchOpp[r.match_date]) matchOpp[r.match_date]=r.opponent||''; });
 
-  const out={}; // {4:{matches:[], md:{4:{td:[...]}}}, 5:…, 6:…}
+  const out={}; // {4:{matches:[], md:{4:{td:[...]}}}, 5:…, 6:…, '2G':{weeks:[]}}
   blocks.forEach(b=>{
     const range=periodDateRange(b.start_date,b.end_date);
-    const matchRow=range.map(ds=>dayMap[ds]).find(r=>normalizePlanMdKey(r?.day_label)==='MATCH');
-    if(!matchRow||!isOfficialMatchPlan(matchRow)) return;      // 리그·컵대회만
+    // 기본 계획이 경기인 날 = 팀 전체가 뛴 경기.
+    // 추가 계획에만 있는 경기(일부 스쿼드만 뛴 컵대회 등)는 팀 경기로 세지 않는다.
+    const matchRows=range.map(ds=>dayMap[ds])
+      .filter(r=>r&&normalizePlanMdKey(r.day_label)==='MATCH'&&isOfficialMatchPlan(r));
+    if(!matchRows.length) return;                              // 리그·컵대회만
+
+    if(matchRows.length>=2){
+      // 주간 2경기 — 1경기 준비와 구조가 다르므로 준비일수(4·5·6D)에 섞지 않는다.
+      // 경기 사이에 완전휴식을 두느냐 동적휴식을 두느냐는 코칭스텝의 방법 선택이라
+      // 따로 분류하지 않고 한데 모아 주간끼리 비교한다.
+      // 방법이 매번 다르니 평균은 내지 않는다 — 어느 주간에도 없던 값이 나온다.
+      const g2=out['2G']=out['2G']||{weeks:[]};
+      const days=range.map(ds=>{
+        const row=dayMap[ds]||{};
+        const isMatch=normalizePlanMdKey(row.day_label)==='MATCH';
+        return {
+          date:ds,
+          label:row.day_label||'',
+          isMatch,
+          target:Object.fromEntries(PERIOD_METRICS.map(x=>[x.pctId,parseFloat(row[x.targetCol])||null])),
+          actual:(isMatch?matchLoads[ds]:trainLoads[ds])||null,
+          midMatch:!isMatch&&!!matchLoads[ds],
+          midOpp:(!isMatch&&matchLoads[ds])?(matchOpp[ds]||''):'',
+        };
+      });
+      const total={};
+      ['td','hsr','spr','acc','rhie'].forEach(k=>{
+        const s=days.reduce((a,d)=>a+(d.actual?.[k]||0),0); total[k]=s>0?s:null;
+      });
+      g2.weeks.push({
+        name:b.context||'', start:b.start_date, end:b.end_date,
+        matchCount:matchRows.length, days, total,
+      });
+      return;
+    }
+
+    const matchRow=matchRows[0];
     const matchDate=matchRow.plan_date;
     const firstTraining=periodDateRange(b.start_date,matchDate).find(ds=>{
       const r=dayMap[ds];
@@ -30525,14 +30562,99 @@ function togglePrepMatch(span,idx){
   el.dataset.filled='1';
 }
 
+// ── 주간 2경기 ────────────────────────────────────────────────
+// 평균을 내지 않는다. 경기 사이에 완전휴식을 두느냐 동적휴식을 두느냐는
+// 코칭스텝의 방법 선택이라, 평균을 내면 어느 주간에도 없던 값이 나온다.
+// (완전휴식 0과 동적휴식 1,500의 평균 750으로 훈련한 주간은 없다)
+// 대신 주간을 나란히 놓고 그때 어떻게 했는지를 비교한다. 합계는 실제 값이라 비교에 쓴다.
+function renderPrepTwoGame(box){
+  const g=_prepCompare&&_prepCompare['2G'];
+  if(!g||!g.weeks.length){
+    box.innerHTML='<span style="color:#fbbf24">한 주에 2경기를 치른 블록이 아직 없습니다.</span>';
+    return;
+  }
+  _prepWeeks=[...g.weeks].sort((a,b)=>String(b.start).localeCompare(String(a.start)));
+  const tot=t=>[
+    t.td!=null ?`TD <strong style="color:var(--accent2)">${Math.round(t.td).toLocaleString()}m</strong>`:'',
+    t.hsr!=null?`HSR <strong style="color:#f59e0b">${Math.round(t.hsr).toLocaleString()}m</strong>`:'',
+    t.spr!=null?`SPR <strong style="color:#ef4444">${Math.round(t.spr)}m</strong>`:'',
+    t.acc!=null?`가속 <strong style="color:#fb923c">${Math.round(t.acc)}회</strong>`:'',
+    t.rhie!=null?`RHIE <strong style="color:#34d399">${Math.round(t.rhie)}회</strong>`:'',
+  ].filter(Boolean).join(' · ')||'—';
+  const list=_prepWeeks.map((w,i)=>`
+    <div style="border-top:1px solid var(--border)">
+      <div onclick="togglePrepWeek(${i})" style="display:flex;align-items:center;gap:6px;padding:5px 2px;cursor:pointer" title="클릭하면 날짜별 목표 vs 실제를 봅니다">
+        <span id="prepw-a-${i}" style="color:var(--text3);font-size:9px">▸</span>
+        <span style="color:var(--text2);font-weight:600;white-space:nowrap">${w.start.slice(5)}~${w.end.slice(5)}</span>
+        <span style="color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${w.name}</span>
+        <span style="font-size:9px;color:#fca5a5;border:1px solid #ef444455;background:#ef444418;border-radius:3px;padding:0 4px;white-space:nowrap">${w.matchCount}경기</span>
+      </div>
+      <div style="padding:0 2px 5px 16px;color:var(--text3)">주간 합계 · ${tot(w.total)}</div>
+      <div id="prepw-m-${i}" style="display:none;padding:0 2px 6px"></div>
+    </div>`).join('');
+  box.innerHTML=`
+    <div style="color:var(--text2);margin-bottom:6px">한 주 2경기 주간 <strong style="color:var(--accent2)">${_prepWeeks.length}개</strong> · 리그·컵대회만</div>
+    ${list}
+    <div style="margin-top:6px;color:var(--text3);border-top:1px solid var(--border);padding-top:5px">
+      경기 사이 휴식 방법은 주간마다 달라 평균 대신 주간별로 비교합니다 · 훈련일은 M 세션 팀 평균, 경기일은 FT 기준
+    </div>`;
+}
+
+// 주간 하나를 펼쳐 날짜별 목표 vs 실제를 보여준다.
+// 완전휴식이면 그 칸이 비고, 동적휴식이면 낮은 실제값이 찍혀 방법 차이가 그대로 드러난다.
+function togglePrepWeek(i){
+  const el=document.getElementById(`prepw-m-${i}`);
+  const arrow=document.getElementById(`prepw-a-${i}`);
+  if(!el) return;
+  const open=el.style.display!=='none';
+  el.style.display=open?'none':'block';
+  if(arrow) arrow.textContent=open?'▸':'▾';
+  if(open||el.dataset.filled) return;
+  const w=_prepWeeks[i]; if(!w) return;
+  const rows=[
+    {k:'td',  l:'TD',   f:v=>Math.round(v).toLocaleString()},
+    {k:'hsr', l:'HSR',  f:v=>Math.round(v).toLocaleString()},
+    {k:'spr', l:'SPR',  f:v=>Math.round(v)},
+    {k:'acc', l:'ACC',  f:v=>Math.round(v)},
+    {k:'rhie',l:'RHIE', f:v=>Math.round(v)},
+  ];
+  const head=w.days.map(d=>{
+    const lbl=d.label||'—';
+    const tag=d.midMatch?`<div style="font-size:8px;font-weight:700;color:#f87171" title="이날 경기가 있었습니다${d.midOpp?' (vs '+d.midOpp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련값입니다">경기일</div>`:'';
+    return `<th style="padding:3px 5px;text-align:right;white-space:nowrap;color:${d.isMatch?'#f87171':'var(--text3)'};font-weight:${d.isMatch?700:600}">
+      ${d.isMatch?'경기':lbl}<div style="font-size:8px;font-weight:400;color:var(--text3)">${d.date.slice(5)}</div>${tag}</th>`;
+  }).join('');
+  const body=rows.map(r=>{
+    const cells=w.days.map(d=>{
+      const t=d.target?.[r.k], a=d.actual?.[r.k];
+      if(!t&&!a) return `<td style="padding:3px 5px;text-align:right;color:var(--text3)">—</td>`;
+      const p=(t&&a)?Math.round(a/t*100):null;
+      return `<td style="padding:3px 5px;text-align:right;line-height:1.5">
+        <div style="color:var(--text3)">${t?r.f(t):'—'}</div>
+        <div style="color:var(--text);font-weight:600">${a?r.f(a):'—'}</div>
+        <div style="color:${prepPctColor(p)};font-weight:700">${p!=null?p+'%':''}</div></td>`;
+    }).join('');
+    return `<tr style="border-top:1px solid var(--border)"><td style="padding:3px 5px;color:var(--text2);white-space:nowrap">${r.l}</td>${cells}</tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div style="margin:4px 0 5px;color:var(--text3)">위 = 목표 · 가운데 = 실제 · 아래 = 달성률</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:10px">
+      <thead><tr><th style="padding:3px 5px;text-align:left;color:var(--text3)">지표</th>${head}</tr></thead>
+      <tbody>${body}</tbody>
+    </table></div>`;
+  el.dataset.filled='1';
+}
+
 async function renderPrepCompare(){
   const sel=document.getElementById('prep-compare-sel');
   const box=document.getElementById('prep-compare-out');
   if(!sel||!box) return;
-  const span=parseInt(sel.value,10);
-  if(!span){ box.innerHTML='같은 준비기간이었던 과거 경기들의 날짜별 팀 부하 평균입니다. 리그·컵대회만 집계합니다.'; return; }
+  const val=sel.value;
+  if(!val){ box.innerHTML='같은 준비기간이었던 과거 경기들의 날짜별 팀 부하 평균입니다. 리그·컵대회만 집계합니다.'; return; }
   box.innerHTML='<span style="color:var(--text3)">⏳ 집계 중…</span>';
   if(!_prepCompare) _prepCompare=await buildPrepCompare();
+  if(val==='2G'){ renderPrepTwoGame(box); return; }
+  const span=parseInt(val,10);
   const g=_prepCompare[span];
   if(!g||!g.matches.length){
     box.innerHTML=`<span style="color:#fbbf24">${span}일 준비한 리그·컵대회 경기가 아직 없습니다.</span>`;
