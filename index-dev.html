@@ -15521,10 +15521,17 @@ async function loadTeamSummary(forceDate, quiet=false){
     const tNum = Math.abs(target)>=100 ? Math.round(target).toLocaleString()
                                        : (Math.round(target*10)/10).toString();
     const tLabel = usedTarget ? (teamBasis?'팀목표':'목표') : (matchAvgBasis?'경기평균':'경기Max');
-    return `<div title="${tip}" style="font-size:10px;font-weight:500;margin-top:2px;color:var(--text3);white-space:nowrap">${tLabel} ${tNum} · <span style="color:${color};font-weight:600">${pct}%</span></div>`;
+    return `<div title="${tip}" class="dg-goal" style="font-size:10px;font-weight:500;margin-top:2px;color:var(--text3);white-space:nowrap">${tLabel} ${tNum} · <span style="color:${color};font-weight:600">${pct}%</span></div>`;
   };
 
-  const renderTable = (arr) => arr.map((r,idx)=>{
+  const renderTable = (arr) => {
+  // 인쇄 페이지 분할 — A4 가로 한 장에 들어가는 건 20명까지(실측).
+  // 넘으면 남는 인원을 뒷장에 몰지 않고 균등하게 나눈다 (24명 → 20+4가 아니라 12+12).
+  const _PRINT_MAX = 20;
+  const _pages = Math.max(1, Math.ceil(arr.length/_PRINT_MAX));
+  const _perPage = Math.ceil(arr.length/_pages);
+  return arr.map((r,idx)=>{
+    const _pgBreak = (idx+1)%_perPage===0 && idx+1<arr.length ? ' pg-break' : '';
     const rt2 = (r.session_type2||'').trim().toUpperCase();
     const rtBadge = rt2 === 'SS'
       ? '<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#2a1a00;color:#fbbf24;font-weight:700;margin-left:4px">SS</span>'
@@ -15559,7 +15566,7 @@ async function loadTeamSummary(forceDate, quiet=false){
     const hsrVal = parseFloat(r.running_high)||0;
     const sprVal = parseFloat(r.sprint)||0;
     return `
-    <tr style="border-bottom:1px solid var(--border);cursor:pointer;background:${idx%2?'var(--surface2)':'transparent'}" onclick="selectDashboardPlayer('${r.player_id}')">
+    <tr class="${_pgBreak}" style="border-bottom:1px solid var(--border);cursor:pointer;background:${idx%2?'var(--surface2)':'transparent'}" onclick="selectDashboardPlayer('${r.player_id}')">
       <td style="padding:7px 8px">
         <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}${rtBadge}</div>
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
@@ -15582,6 +15589,7 @@ async function loadTeamSummary(forceDate, quiet=false){
         ${rpeDisp?'<span style="font-size:10px;color:#4ade80">✓</span>':`<button onclick="sendRpeReminder('${r.player_id}','${r.player_profiles?.name||'선수'}',this)" title="RPE 입력 요청" style="font-size:10px;padding:3px 7px;border-radius:5px;border:1px solid rgba(167,139,250,.35);background:transparent;color:#a78bfa;cursor:pointer;font-family:inherit">🔔 요청</button>`}
       </td>`:''}
     </tr>`;}).join('');
+  };
 
   const tableHeader = `
     <thead style="display:table-header-group">
@@ -15630,13 +15638,13 @@ async function loadTeamSummary(forceDate, quiet=false){
       currentUseRpe?`RPE <strong style="color:#fbbf24">${calcAvgRpe(arr)}</strong>`:'',
       currentUseRpe?`sRPE <strong style="color:#c084fc">${calcAvgSrpe(arr)}</strong>`:''
     ].filter(Boolean);
-    return `<div style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.9">팀 평균 · ${parts.join(' · ')}</div>`;
+    return `<div class="dg-chips" style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.9">팀 평균 · ${parts.join(' · ')}</div>`;
   };
 
   // % 기준 안내 — 훈련 데이터 모드에서만 개인 목표 달성률이 된다
   const _hasPeriodTarget = ['td','hsr','sprint','accel','rhie'].some(k=>periodPct[k]!=null);
   const _pctLegend = (isTrainingMode && _hasPeriodTarget)
-    ? `<div style="font-size:10px;color:var(--text3);margin-bottom:8px;padding:6px 9px;background:var(--surface2);border-radius:6px;line-height:1.6">
+    ? `<div class="dg-legend" style="font-size:10px;color:var(--text3);margin-bottom:8px;padding:6px 9px;background:var(--surface2);border-radius:6px;line-height:1.6">
          ※ 큰 숫자 = 실제 · 작은 숫자 = <strong style="color:var(--text2)">그 선수의 오늘 목표 · 달성률%</strong>
          <br>· <strong style="color:var(--text2)">목표</strong> = 그 선수의 최근 풀타임(80분↑) 3경기 평균 × 주기화 목표% ${['td','hsr','sprint','accel','rhie'].filter(k=>periodPct[k]!=null).map(k=>`${({td:'TD',hsr:'HSR',sprint:'SPR',accel:'ACC',rhie:'RHIE'})[k]} ${Math.round(periodPct[k])}%`).join(' · ')}
          <br>· <strong style="color:var(--text2)">팀목표</strong> = 풀타임 3경기가 없어 개인 기준을 못 만드는 선수 (팀 전체 목표를 그대로 사용)
@@ -15737,23 +15745,25 @@ async function loadTeamSummary(forceDate, quiet=false){
   out.innerHTML = _dailyRpeBar + `
     <!-- ③ GPS 선수 테이블 (M그룹) -->
     ${hasGps ? `
-    <div class="print-page-start" style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="print-page-start dg-card" style="background:var(--surface);border:1px solid var(--accent);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px;letter-spacing:.4px">
-        M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
+        📊 M 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(주전/엔트리 · ${fullGps.length}명)</span>
       </div>
       ${groupStatChips(fullGps, true)}
       ${_pctLegend}
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
-          ${tableHeader}
-          ${renderTable(sortRecordsByPos(fullGps))}
-        </table>
+      <div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+            ${tableHeader}
+            ${renderTable(sortRecordsByPos(fullGps))}
+          </table>
+        </div>
       </div>
     </div>
 
     <!-- ④ 혼합 그룹 (오전/오후 그룹 상이) — 항상 새 페이지 시작 -->
     ${mixedGps.length ? `
-    <div class="print-page-start" style="background:var(--surface);border:1px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="print-page-start dg-card" style="background:var(--surface);border:1px solid #fbbf24;border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#fbbf24;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
         ⚠️ 혼합 그룹 <span style="font-size:10px;font-weight:400;color:var(--text3)">(오전/오후 그룹 상이 · ${mixedGps.length}명 — 팀 평균 미반영)</span>
       </div>
@@ -15762,30 +15772,34 @@ async function loadTeamSummary(forceDate, quiet=false){
       </div>
       ${groupStatChips(mixedGps)}
       ${_pctLegend}
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
-          ${tableHeader}
-          ${renderTable(sortRecordsByPos(mixedGps))}
-        </table>
+      <div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+            ${tableHeader}
+            ${renderTable(sortRecordsByPos(mixedGps))}
+          </table>
+        </div>
       </div>
     </div>` : ''}
 
     <!-- ⑤ 서브/미엔트리 그룹 — 혼합 없으면 새 페이지, 있으면 혼합과 같은 페이지 -->
     ${indGps.length ? `
-    <div class="${mixedGps.length?'':'print-page-start'}" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
+    <div class="${mixedGps.length?'':'print-page-start'} dg-card" style="background:var(--surface);border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:600;color:#a78bfa;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px">
-        서브 평균 (${indGps.length}명)
+        📋 서브 평균 (${indGps.length}명)
       </div>
       <div style="font-size:11px;color:var(--text3);margin-bottom:10px">
         서브(S) ${indGps.length - ssGps.length - xGps.length - gGps.length - rGps.length}명${ssGps.length > 0 ? ' · <span style="color:#fbbf24;font-weight:600">스페셜 훈련(SS) '+ssGps.length+'명</span>' : ''}${xGps.length > 0 ? ' · <span style="color:#f87171;font-weight:600">미엔트리(X) '+xGps.length+'명</span>' : ''}${gGps.length > 0 ? ' · <span style="color:#67e8f9;font-weight:600">그룹/개별훈련(G) '+gGps.length+'명</span>' : ''}${rGps.length > 0 ? ' · <span style="color:#fca5a5;font-weight:600">재활훈련(R) '+rGps.length+'명</span>' : ''} · 모두 M 팀 평균 미반영
       </div>
       ${groupStatChips(indGps)}
       ${_pctLegend}
-      <div style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
-          ${tableHeader}
-          ${renderTable(sortRecordsByPos(indGps))}
-        </table>
+      <div style="background:var(--surface2);border:0.5px solid var(--border);border-radius:10px;overflow:hidden">
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:900px">
+            ${tableHeader}
+            ${renderTable(sortRecordsByPos(indGps))}
+          </table>
+        </div>
       </div>
     </div>` : ''}` : ''}`;
 
@@ -25350,7 +25364,25 @@ function printTrainingReport(){
     box-shadow:0 4px 20px rgba(22,163,74,.35);
     z-index:9999;
   }
-  @page{ size:A4 portrait; margin:0 8mm; }
+  /* 가로 방향 — 컬럼 11개 × 선수별 2줄(실제/목표)이라 세로로는 글자를 줄여야만
+     들어가고, 그러면 현장에서 읽을 수 없다. 가로면 한 그룹이 읽을 수 있는 크기로 한 장에 들어간다. */
+  /* 위아래 여백이 0이면 2쪽부터는 카드 윗변이 종이 끝에 붙어 잘린 것처럼 보인다 */
+  @page{ size:A4 landscape; margin:8mm; }
+  /* 선수 표 — 주기화 주간 표(11px / 패딩 3~4px)와 같은 크기로 맞춘다.
+     그 표가 인쇄에서 읽히는 크기이므로 기준으로 삼는다. */
+  .dg-card div[style*="overflow-x"]{ overflow:visible !important; }
+  .dg-card table{ min-width:0 !important; font-size:11px !important; }
+  .dg-card th{ padding:4px 6px !important; font-size:10px !important; }
+  .dg-card td{ padding:1px 6px !important; line-height:1.25 !important; }
+  /* 카드가 몇 mm 넘쳐 아래 테두리만 다음 장으로 넘어가면 빈 조각이 생긴다 */
+  .dg-card{ break-inside:avoid; page-break-inside:avoid; }
+  .dg-goal{ font-size:9px !important; margin-top:0 !important; line-height:1.2 !important; }
+  .dg-chips{ font-size:10px !important; line-height:1.6 !important; margin-bottom:4px !important; }
+  .dg-legend{ font-size:9px !important; line-height:1.45 !important; margin-bottom:4px !important; padding:4px 8px !important; }
+  /* 글자는 줄이지 않고 카드 여백만 줄여 한 장에 맞춘다 */
+  .dg-card{ padding:8px !important; margin-bottom:6px !important; }
+  /* 페이지를 넘겨야 할 때만 균등 분할 지점에서 끊는다 */
+  tr.pg-break{ break-after:page; page-break-after:always; }
   @media print{
     body{ -webkit-print-color-adjust:exact; print-color-adjust:exact; }
     .report-header{ background:#0a2540 !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
@@ -25360,14 +25392,11 @@ function printTrainingReport(){
     tr{ break-inside:avoid; }
     thead{ display:table-header-group; }
     .screen-print-btn{ display:none !important }
-    /* @page margin이 인쇄 대화상자에서 무시되는 경우가 많아,
-       page-break 카드 위에 흰 top border로 여백을 직접 확보(margin과 달리 page-break에서 collapse 안 됨) */
-    .print-page-start{ border-top:8mm solid #fff !important; margin-top:0 !important; }
-    /* report-body 첫 카드도 위 여백 확보 */
-    .report-body{ padding-top:8mm !important; }
-    /* 긴 표가 다음 페이지로 넘어갈 때, 반복되는 헤더 위에 여백 확보
-       (thead는 매 페이지 반복되므로 th의 top border가 연속 페이지 상단 여백 역할) */
-    .print-thead th{ border-top:8mm solid #fff !important; }
+    /* 위 여백은 @page margin이 담당한다.
+       예전엔 흰 top border(8mm)로 여백을 만들었는데, 그러면 카드의 윗 테두리가
+       흰색으로 덮여 좌·우·아래만 테두리가 보이고 위쪽이 잘린 것처럼 보였다. */
+    .print-page-start{ margin-top:0 !important; }
+    /* 연속 페이지 상단 여백도 @page margin이 담당한다 (예전 8mm 흰 border는 이중 여백이 됨) */
   }
 </style>
 </head>
