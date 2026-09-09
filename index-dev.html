@@ -26982,7 +26982,9 @@ function switchTab(tab,el){
     const el2 = document.getElementById('tab-'+id);
     if(el2) el2.style.display=id===tab?'block':'none';
   });
-  if(tab==='players'){ loadPlayerManagement(); setPlayerView('team'); }
+  // 기본 진입 뷰: 주기화(첫 번째 서브탭). 단 주기화 버튼은 admin-only인데
+  // tab-period div 자체에는 권한 게이트가 없어, 비관리자는 팀 부하 관리로 보낸다.
+  if(tab==='players'){ loadPlayerManagement(); setPlayerView(isAdmin?'period':'team'); }
   if(tab==='notify') loadNotifyTab();
   if(tab==='report'){ loadMorningReport(); loadScheduleCalendar(); }
   if(tab==='superadmin') loadSuperAdmin();
