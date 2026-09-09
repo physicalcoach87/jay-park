@@ -764,7 +764,14 @@ body{background:var(--bg);color:var(--text);font-family:'Pretendard','Apple SD G
     <div class="vm-bar" style="margin-bottom:12px">
       <h3>🧬 훈련 적합성 판정</h3>
       <div style="display:flex;align-items:center;gap:8px">
-        <input type="date" id="suit-date" class="inp" style="width:auto;font-size:12px;padding:5px 8px" onchange="loadTrainingSuitability()">
+        <input type="date" id="suit-date" class="inp" style="width:auto;font-size:12px;padding:5px 8px" onchange="onSuitDateChange()">
+        <div style="display:flex;gap:4px">
+          <button id="sutrk-ALL" onclick="setSuitTrack('ALL')" style="padding:5px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-family:inherit">A팀</button>
+          <button id="sutrk-B" onclick="setSuitTrack('B')" style="padding:5px 12px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-size:12px;font-family:inherit">B팀</button>
+        </div>
+        <select id="suit-plan" onchange="loadTrainingSuitability()" title="그날 계획이 여러 개면 어느 계획 기준으로 판정할지 고릅니다" style="font-size:12px;padding:5px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:inherit;max-width:190px">
+          <option value="">기본 계획</option>
+        </select>
         <button onclick="loadTrainingSuitability()" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--border2);background:var(--surface2);color:var(--text2);cursor:pointer;font-family:inherit">🔄 다시 계산</button>
         <button onclick="printTrainingSuitability(this)" style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid #60a5fa;background:rgba(59,130,246,.1);color:#93c5fd;cursor:pointer;font-family:inherit">📄 PDF 저장·인쇄</button>
       </div>
@@ -18332,6 +18339,43 @@ function suitabilityAdvice(risk, demand, verdict){
   return out.join(' · ');
 }
 
+let _suitTrack = 'ALL';   // 훈련 적합성 판정 팀: 'ALL'=A팀 / 'B'=B팀
+let _suitPlans = [];      // 그날 계획 목록 (기본 + 추가)
+
+function setSuitTrack(t){
+  _suitTrack = t;
+  ['ALL','B'].forEach(k=>{
+    const btn=document.getElementById('sutrk-'+k);
+    if(btn){ const on=k===t;
+      btn.style.background=on?'var(--accent)':'transparent';
+      btn.style.color=on?'#fff':'var(--text2)';
+      btn.style.borderColor=on?'var(--accent)':'var(--border2)';
+    }
+  });
+  onSuitDateChange();
+}
+
+function onSuitDateChange(){
+  // 날짜·팀이 바뀌면 계획 목록부터 다시 만든다 (선택은 초기화)
+  const sel=document.getElementById('suit-plan');
+  if(sel) sel.value='';
+  loadTrainingSuitability();
+}
+
+// 그날 계획 목록을 채운다. 훈련 적합성은 훈련 '전에' 보는 화면이라
+// 오늘 GPS가 아직 없어 선수별로 어느 계획을 따를지 알 수 없다.
+// 그래서 코치가 판정 기준 계획을 고르게 한다.
+function fillSuitPlanOptions(plans, keep){
+  const sel=document.getElementById('suit-plan');
+  if(!sel) return;
+  _suitPlans=plans;
+  sel.innerHTML=plans.map(p=>`<option value="${p._key}">${p._name}</option>`).join('')
+    || '<option value="">계획 없음</option>';
+  if(keep && plans.some(p=>p._key===keep)) sel.value=keep;
+  // 계획이 하나뿐이면 고를 필요가 없다
+  sel.style.display=plans.length>1?'':'none';
+}
+
 async function loadTrainingSuitability(){
   const out = document.getElementById('suit-output');
   if(!out) return;
@@ -18346,12 +18390,14 @@ async function loadTrainingSuitability(){
     _players = data || [];
   }
 
-  const [{data:planRows},{data:gpsAll},{data:matchAll},{data:rpeAll},{data:wellAll},{data:injRows}] = await Promise.all([
+  const [{data:planRows},{data:planVariants},{data:gpsAll},{data:matchAll},{data:rpeAll},{data:wellAll},{data:injRows}] = await Promise.all([
     supa.from('block_days')
       .select('plan_date,track,day_label,am_session,pm_session,td_target,hsr_target,spr_target,acc_target,rhie_target,ref_basis')
-      .eq('plan_date', day).in('track',['ALL']),
+      .eq('plan_date', day).eq('track', _suitTrack),
+    supa.from('periodization_plan_variants').select('*')
+      .eq('club_id', currentClubId).eq('plan_date', day).eq('track', _suitTrack),
     supa.from('gps_records')
-      .select('player_id,session_date,max_speed,duration,session_label,player_load,running_high,sprint,decel')
+      .select('player_id,session_date,max_speed,duration,session_label,player_load,running_high,sprint,decel,track')
       .gte('session_date', s28).lte('session_date', day),
     // 경기는 120일 — 최근 부하(회복 지수)와 개인 경기 기준선을 함께 뽑는다.
     // calcACWR·calcMVExposure는 내부에서 28·21일로 자르므로 더 넣어도 안전하다.
@@ -18370,8 +18416,16 @@ async function loadTrainingSuitability(){
       .in('status',['치료중','재활중','부분 참여']),
   ]);
 
-  // 오늘 계획 → 요구 강도
-  const plan = (planRows && planRows[0]) || null;
+  // 오늘 계획 → 요구 강도.
+  // 기본 계획 + 추가 계획을 모두 목록에 올리고, 코치가 고른 계획으로 판정한다.
+  const _plans=[
+    ...(planRows||[]).map(p=>({...p,_key:`base:${p.plan_date}`,_name:'기본 계획'})),
+    ...(planVariants||[]).map(p=>({...p,_key:`variant:${p.id}`,
+      _name:`${p.plan_name||'추가 계획'}${p.competition?' · '+p.competition:''}${p.opponent?' · '+p.opponent:''}`})),
+  ];
+  const _selKey=document.getElementById('suit-plan')?.value||'';
+  fillSuitPlanOptions(_plans,_selKey);
+  const plan = _plans.find(p=>p._key===_selKey) || _plans[0] || null;
   const label = (plan?.day_label || '').toUpperCase();
   const mdKey = normalizePlanMdKey(label);
   // 최근 3경기 FT의 팀 평균을 경기 기준선으로 사용한다. 출전시간 차이는 해당 경기 최장시간으로 보정한다.
@@ -18386,9 +18440,21 @@ async function loadTrainingSuitability(){
   const injMap = {};
   (injRows||[]).forEach(r => { if(!injMap[r.player_id]) injMap[r.player_id] = r; });
 
+  // 선수의 소속 팀은 GPS 업로드 때 찍힌 track으로 판별한다 (선수 정보에는 팀 칸이 없다).
+  // 최근 세션 기준 — 팀을 옮긴 선수는 최근 것을 따른다.
+  // 최근 28일 기록이 없어 팀을 알 수 없는 선수는 숨기지 않고 어느 팀에서 보든 표시한다
+  // (부상자처럼 훈련 기록이 없는 선수가 사라지면 안 된다).
+  const playerTrack={};
+  (gpsAll||[]).forEach(r=>{
+    const cur=playerTrack[r.player_id];
+    if(!cur||r.session_date>cur.date) playerTrack[r.player_id]={date:r.session_date,track:(r.track||'ALL').toUpperCase()==='B'?'B':'ALL'};
+  });
+
   const rows = [];
   for(const p of _players){
     const pid = p.id;
+    const ptrk = playerTrack[pid]?.track || null;   // null = 팀 미확인
+    if(ptrk && ptrk !== _suitTrack) continue;       // 다른 팀 선수는 제외
     // 치료중·재활중은 판정 대상이 아니라 '훈련 불가'로 먼저 드러내야 한다
     if(injMap[pid]){
       rows.push({ p, verdict:'out', risk:{level:'red',flags:[]},
