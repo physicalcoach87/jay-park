@@ -45,13 +45,22 @@ anon key:     eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...HMn3UIXqV2YJA5f067VpjNmgNU-
 ### 파일 구조
 ```
 jay-park/
-├── index.html            ← 코치 웹앱 (단일 파일, ~17,000줄)
+├── index.html            ← 코치 웹앱 · 배포본 (단일 파일, ~31,000줄)
+├── index-dev.html        ← 위와 동일 내용의 작업본
+├── supabase/migrations/  ← DB 스키마 변경 이력
+├── tests/run-tests.sh    ← 계산 함수 테스트 (69개)
 └── coach-mobile/
-    └── index.html        ← 코치 모바일앱 (단일 파일, ~1,750줄)
+    └── index.html        ← 코치 모바일앱 (단일 파일, ~2,500줄)
 ```
 - 모든 CSS/JS 인라인 — 단일 HTML 파일
 - Supabase JS CDN 사용
 - GitHub Pages로 자동 배포
+
+### index.html ↔ index-dev.html
+**두 파일은 항상 바이트 단위로 같아야 한다.** 한쪽만 고치고 커밋하면 배포본과 작업본이
+갈라진다. 수정 후 반드시 `shasum index.html index-dev.html`로 일치를 확인할 것.
+커밋은 `feat:`/`fix:` (작업본) → `Publish ...` (배포본)로 나눌 수도, 두 파일을 한 커밋에
+담을 수도 있다 — 최근 이력은 둘 다 쓴다.
 
 ### 코치 모바일앱 탭 구조 (coach-mobile/index.html)
 ```
@@ -190,18 +199,44 @@ await supa.from('notifications').insert({
 
 ---
 
-## 6. 탭 구조 (현재)
+## 6. 탭 구조 (2026-09-09 기준)
+
+메인 탭은 5개. 주기화·운동처방·GPS데이터는 **독립 탭이 아니라 스포츠 사이언스의 하위 탭**이다.
 
 ```
-📋 Morning Report     (관리자 전용, 로그인 첫 화면)
-📊 선수 통합관리      팀요약 / 선수개인데이터 / 웰니스 / 선수명단 / GPS업로드
-근력 운동
-Pre-activation
-유산소 운동
-📅 주기화             주기화 플랜 입력 / 라벨 관리 (cycle, periodization 컬럼 연동)
-📋 프로그램 관리
+📋 데일리 브리핑      (admin-only, 관리자 로그인 첫 화면)
+📊 스포츠 사이언스     ← 하위 탭 7개, 아래 참조
 🔔 알림/메시지        부상위험 / 공지 / 1:1메시지
-🏟️ 경기 데이터       경기목록 / 선수별분석 / Match Max
+⚙️ 설정               선수 명단 / 권한 설정 / 데이터 내보내기
+🏢 팀 관리            기본 display:none (슈퍼관리자만 노출)
+```
+
+### 스포츠 사이언스 (`tab-players`) 하위 탭 — 화면 표시 순서
+
+| 순서 | 버튼 | id | admin-only |
+|---|---|---|---|
+| 1 | 📅 주기화 | `pvbtn-period` | ✔ |
+| 2 | 🧬 훈련 적합성 판정 | `pvbtn-suitability` | |
+| 3 | 📊 팀 부하 관리 | `pvbtn-team` | |
+| 4 | 💚 컨디션 모니터링 | `pvbtn-wellness` | |
+| 5 | 👤 선수 개인데이터 | `pvbtn-dashboard` | ✔ |
+| 6 | 🏋️ 운동 처방 | `pvbtn-exercise` | ✔ |
+| 7 | 📡 GPS 데이터 | `pvbtn-training` | ✔ |
+
+- **기본 진입 뷰**: 관리자 `period` / 비관리자 `team` (`switchTab` 내부).
+  `tab-period` div에는 권한 게이트가 없고 **버튼에만** `admin-only`가 붙어 있어서,
+  무조건 `period`를 열면 비관리자에게 주기화 화면이 노출된다. 반드시 `isAdmin`으로 가른다.
+- 버튼 순서는 자유롭게 바꿔도 된다 — `setPlayerView`·권한 맵·권한 편집기가 모두 **id로만**
+  참조하고 DOM 순서에 의존하지 않는다.
+- `period`·`exercise`는 `pv-*` div가 아니라 **별도 `tab-period`/`tab-exercise` div를 토글**한다
+  (`setPlayerView`의 `_isExternal` 분기).
+- 권한 제어 이원화: `pvbtn-period`·`pvbtn-exercise`는 `admin-only` 클래스로만,
+  나머지 5개는 `userPermissions[id]`로 제어된다.
+
+```
+📡 GPS 데이터 하위      일일 데이터 / 경기 데이터 / GPS 업로드   (setGpsDataView)
+🏋️ 운동 처방 하위       근력 운동 / Pre-activation / 유산소 /
+                        체력 테스트* / 휴식기 플랜* / 프로그램 관리*   (*=admin-only)
 ```
 
 ---
@@ -219,17 +254,23 @@ cd ~/jay-park && git pull
 ## 8. 작업 순서 체크리스트
 
 ```
-□ 현재 코드 view/grep으로 정확한 위치 파악
-□ str_replace로 정확한 타겟만 수정
-□ node --check JS 문법 검증
-□ 핵심 키워드 존재 확인
-□ cp outputs + present_files
-□ GitHub 업로드 안내
+□ git pull — 최신 코드부터
+□ grep/read로 정확한 위치 파악 (index.html은 3만 줄, 추측 금지)
+□ 순서·인덱스 의존 코드가 있는지 확인 후 수정
+□ JS 문법 검증 — <script> 블록 추출 후 node --check
+□ 계산 함수 건드렸으면 bash tests/run-tests.sh (69개 전체 통과)
+□ cp index.html index-dev.html → shasum으로 일치 확인
+□ 커밋 · 푸시 (사용자 승인 후)
 ```
+
+### 설명 방식
+사용자는 **코딩 비전문가**다. 대화에서는 코드 조각·변수명·줄번호·전문용어를 빼고,
+**화면에서 무엇이 어떻게 달라지는지**를 먼저 말한다. 기술적 상세는 커밋 메시지와
+코드 주석에 남긴다. 단, 판단이 필요한 선택지는 계속 물어볼 것.
 
 ---
 
-## 8. 다음 예정 작업
+## 9. 다음 예정 작업
 
 ### 선수 앱 수정 (우선순위 1)
 - GitHub: `physicalcoach87/ipark-player`
