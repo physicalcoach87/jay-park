@@ -5784,7 +5784,7 @@ async function onGymPlayerSelect(){
     reasons.push(gpsMetric.ewma==null?'GPS EWMA 데이터 부족':`GPS EWMA ${gpsMetric.ewma.toFixed(2)}`);
     reasons.push(!Number.isFinite(srpeMetric.monotony)?'모노토니 데이터 부족':`모노토니 ${srpeMetric.monotony.toFixed(2)}`);
     reasons.push(!Number.isFinite(srpeMetric.strain)?'스트레인 데이터 부족':`스트레인 ${Math.round(srpeMetric.strain).toLocaleString()}`);
-    if(exposure?.hasData)reasons.push(`MSS 90% 노출 ${exposure.daysSinceExposed===0?'오늘':exposure.daysSinceExposed+'일 전'}`);
+    if(exposure?.hasData)reasons.push(`MSS 90% 노출 ${mvAgoText(exposure.daysSinceExposed)}`);
     const mdText=document.getElementById('gym-md')?.selectedOptions?.[0]?.textContent||'MD 미설정';
     const metricBadge=(label,value,badgeColor)=>`<span style="font-size:10px;padding:3px 7px;border-radius:5px;background:${badgeColor}15;color:${badgeColor};border:1px solid ${badgeColor}35">${label} ${value}</span>`;
     statusEl.innerHTML=`<div style="border:1px solid ${color};background:${color}0d;border-radius:9px;padding:11px 12px">
@@ -16098,7 +16098,7 @@ async function loadPlayerDashboardRoster(btn){
       else {state='🟢 정상';color='#4ade80';bg='transparent';reasons.push(latest?`최근 웰니스 ${total}/20`:'부상 기록 없음');}
       if(gm.ewma!=null&&gm.ewma>=1.3)reasons.push(`EWMA ${gm.ewma.toFixed(2)}`);
       if(Number.isFinite(im.monotony)&&im.monotony>=1.5)reasons.push(`모노토니 ${im.monotony.toFixed(2)}`);
-      if(mv?.hasData&&mv.daysSinceExposed>=14)reasons.push(`MSS 90% ${mv.daysSinceExposed}일 미노출`);
+      if(mv?.hasData&&mv.daysSinceExposed>=14)reasons.push(`MSS 90% ${mvDaysText(mv.daysSinceExposed)} 미노출`);
       if(total!=null&&total<16&&!reasons.some(x=>x.includes('웰니스')))reasons.push(`최근 웰니스 ${total}/20`);
       if(!inj&&latest?.record_date!==today) reasons.push(`오늘 웰니스 ${latest?'미입력':'기록 없음'}`);
       const summary=`훈련 ${pg.length}세션 · 경기 ${ftDates.size}경기 · 웰니스 ${pwSelected.length}회`;
@@ -16373,7 +16373,7 @@ async function loadPlayerDashboard(){
   if(Number.isFinite(internalLoadMetric.monotony)&&internalLoadMetric.monotony>=2){if(!hasInjury)detailState={label:'🔴 주의',color:'#f87171',bg:'rgba(239,68,68,.08)'};decisionReasons.push(`모노토니 ${internalLoadMetric.monotony.toFixed(2)} · 반복 부하 높음`);}
   else if(Number.isFinite(internalLoadMetric.monotony)&&internalLoadMetric.monotony>=1.5){if(detailState.label.includes('정상'))detailState={label:'🟠 관찰',color:'#fb923c',bg:'rgba(249,115,22,.08)'};decisionReasons.push(`모노토니 ${internalLoadMetric.monotony.toFixed(2)} · 반복 부하 주의`);}
   if(latestWellTotal!=null&&latestWellTotal<12){if(!hasInjury)detailState={label:'🔴 주의',color:'#f87171',bg:'rgba(239,68,68,.08)'};decisionReasons.push(`최근 웰니스 ${latestWellTotal}/20`);}
-  if(mvExposure?.hasData&&mvExposure.daysSinceExposed>=14){if(detailState.label.includes('정상'))detailState={label:'🟠 관찰',color:'#fb923c',bg:'rgba(249,115,22,.08)'};decisionReasons.push(`MSS 90% 이상 ${mvExposure.daysSinceExposed}일 미노출`);}
+  if(mvExposure?.hasData&&mvExposure.daysSinceExposed>=14){if(detailState.label.includes('정상'))detailState={label:'🟠 관찰',color:'#fb923c',bg:'rgba(249,115,22,.08)'};decisionReasons.push(`MSS 90% 이상 ${mvDaysText(mvExposure.daysSinceExposed)} 미노출`);}
   if(!decisionReasons.length)decisionReasons.push('최근 부하·웰니스·부상 기록에서 뚜렷한 주의 신호 없음');
   const managementPoint=hasInjury?'의무팀 판단을 우선하고 개별 재활 범위 확인':detailState.label.includes('주의')?'오늘 계획 대비 볼륨·강도를 확인하고 훈련 전 상태 재확인':detailState.label.includes('관찰')?'계획은 유지하되 표시된 신호를 세션 전후로 재확인':'오늘 계획 범위에서 진행';
   const avgFmpRM = avgF(sessions,'fmp_run_medium',1);
@@ -16581,7 +16581,7 @@ async function loadPlayerDashboard(){
           ['GPS EWMA ACWR',gpsLoadMetric.ewma==null?'—':gpsLoadMetric.ewma.toFixed(2),days<28?'최근 28일 선택 시 계산':gpsLoadMetric.ewma==null?'데이터 부족':gpsLoadMetric.ewma>=1.5?'높음':gpsLoadMetric.ewma>=1.3?'주의':'안정','#60a5fa'],
           ['sRPE 모노토니',!Number.isFinite(internalLoadMetric.monotony)?'—':internalLoadMetric.monotony.toFixed(2),!Number.isFinite(internalLoadMetric.monotony)?'데이터 부족':internalLoadMetric.monotony>=2?'높음':internalLoadMetric.monotony>=1.5?'주의':'안정','#c084fc'],
           ['sRPE 스트레인',!Number.isFinite(internalLoadMetric.strain)?'—':Math.round(internalLoadMetric.strain).toLocaleString(),'7일 총부하 × 모노토니','#f472b6'],
-          ['MSS 90% 노출',mvExposure?.hasData?(mvExposure.daysSinceExposed===0?'오늘':mvExposure.daysSinceExposed+'일 전'):'—',mvExposure?.hasData?`최근 7일 최고 ${mvExposure.pctMSS.toFixed(0)}% MSS`:'데이터 부족','#34d399'],
+          ['MSS 90% 노출',mvExposure?.hasData?mvAgoText(mvExposure.daysSinceExposed):'—',mvExposure?.hasData?`최근 7일 최고 ${mvExposure.pctMSS.toFixed(0)}% MSS`:'데이터 부족','#34d399'],
           ['최근 웰니스',latestWellTotal==null?'—':latestWellTotal+'/20',latestWell?.record_date||'기록 없음','#4ade80'],
           ['데이터 완성도',sessions.length>=7?'충분':sessions.length?'확인 필요':'부족',`선택 기간 ${sessions.length}개 부하 기록`,'#94a3b8']
         ].map(c=>`<div style="padding:10px;background:var(--surface2);border-radius:8px"><div style="font-size:9px;color:var(--text3);margin-bottom:4px">${c[0]}</div><div style="font-size:17px;font-weight:800;color:${c[3]}">${c[1]}</div><div style="font-size:9px;color:var(--text3);margin-top:3px">${c[2]}</div></div>`).join('')}
@@ -18184,6 +18184,11 @@ function calcACWR(sessions, today){
 }
 
 // MV 노출 계산: Zone5(≥90% MSS) 주간 노출비율
+// daysSinceExposed의 99는 '최근 21일 안에 노출이 없었다'는 표시값이지 실제 일수가 아니다.
+// 그대로 화면에 쓰면 '99일 노출 안됨'처럼 존재하지 않는 기간이 나온다 (조회 구간이 21일이다).
+function mvDaysText(d){ return d>=99 ? '21일 이상' : `${d}일`; }
+function mvAgoText(d){ return d===0 ? '오늘' : (d>=99 ? '21일 이상 전' : `${d}일 전`); }
+
 function calcMVExposure(sessions, mss, today){
   if(!mss || mss <= 0) return null;
   const zone5Threshold = mss * 0.9;
@@ -18251,8 +18256,8 @@ function calcRiskLevel(acwr, mvExp, wellnessRisk, recov){
 
   // MV 노출 모듈 (햄스트링)
   if(mvExp !== null && mvExp.hasData !== false){
-    if(mvExp.daysSinceExposed >= 14)     { score += 3; flags.push({ type:'MV', level:'red',   msg:`최고속도 90% 이상 ${mvExp.daysSinceExposed}일 노출 안됨 — 햄스트링 고위험` }); }
-    else if(mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type:'MV', level:'amber', msg:`최고속도 90% 이상 ${mvExp.daysSinceExposed}일 노출 안됨 — 햄스트링 주의` }); }
+    if(mvExp.daysSinceExposed >= 14)     { score += 3; flags.push({ type:'MV', level:'red',   msg:`최고속도 90% 이상 ${mvDaysText(mvExp.daysSinceExposed)} 노출 안됨 — 햄스트링 고위험` }); }
+    else if(mvExp.daysSinceExposed >= 7) { score += 2; flags.push({ type:'MV', level:'amber', msg:`최고속도 90% 이상 ${mvDaysText(mvExp.daysSinceExposed)} 노출 안됨 — 햄스트링 주의` }); }
     else if(mvExp.pctMSS < 80)           { score += 1; flags.push({ type:'MV', level:'yellow',msg:`최고속도 MSS ${mvExp.pctMSS.toFixed(0)}% — 속도 노출 부족` }); }
   }
 
@@ -19114,7 +19119,7 @@ function renderRiskResults(results, today){
           <div style="font-size:10px;color:var(--text3);margin-bottom:3px">🏃 최고속도 90% 이상 달성 현황</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <div style="font-size:11px">기준속도 (MSS 90%) <span style="font-weight:600;color:${col}">${mvExpData.zone5Threshold.toFixed(1)} km/h</span></div>
-            <div style="font-size:11px">마지막 달성 <span style="font-weight:600;color:${col}">${mvExpData.daysSinceExposed >= 99 ? '21일 이상 노출 안됨' : mvExpData.daysSinceExposed+'일 전'}</span></div>
+            <div style="font-size:11px">마지막 달성 <span style="font-weight:600;color:${col}">${mvExpData.daysSinceExposed >= 99 ? '21일 이상 노출 안됨' : mvAgoText(mvExpData.daysSinceExposed)}</span></div>
             <div style="font-size:11px">이번주 최고속도 <span style="font-weight:600;color:var(--text)">${mvExpData.maxSpeedWeek.toFixed(1)} km/h (MSS ${mvExpData.pctMSS.toFixed(0)}%)</span></div>
           </div>
         </div>`;

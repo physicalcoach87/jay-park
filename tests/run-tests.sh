@@ -15,7 +15,7 @@ if required_types not in html:
 for label in ['주전','서브','스페셜 훈련','미엔트리','그룹/개별훈련','재활훈련']:
     if label not in html:
         sys.exit(f'선수 훈련 유형 표시 누락: {label}')
-funcs = ['calcACWR', 'calcMVExposure', 'calcWellnessRisk', 'calcRiskLevel', 'calcSuitability', 'calcGpsForecastMetrics', 'getPeriodForecastStatus', 'periodForecastFlag', 'buildPeriodKnownDates', 'combineIndividualMatchLoads', 'matchTeamNormalizedValue', 'matchRecordKey', 'recentMatchKeys', 'matchBaselineForKeys', 'recentMatchBaseline', 'summarizeRepresentativeSessions', 'periodDateRange', 'normalizePlanMdKey', 'compressPeriodSchedule', 'periodShiftDate', 'buildBlockScheduleLabel', 'periodDateDiff', 'isPeriodRestDay']
+funcs = ['mvDaysText', 'mvAgoText', 'calcACWR', 'calcMVExposure', 'calcWellnessRisk', 'calcRiskLevel', 'calcSuitability', 'calcGpsForecastMetrics', 'getPeriodForecastStatus', 'periodForecastFlag', 'buildPeriodKnownDates', 'combineIndividualMatchLoads', 'matchTeamNormalizedValue', 'matchRecordKey', 'recentMatchKeys', 'matchBaselineForKeys', 'recentMatchBaseline', 'summarizeRepresentativeSessions', 'periodDateRange', 'normalizePlanMdKey', 'compressPeriodSchedule', 'periodShiftDate', 'buildBlockScheduleLabel', 'periodDateDiff', 'isPeriodRestDay']
 out = []
 for name in funcs:
     m = re.search(r'function ' + name + r'\([^)]*\)\{', html)
