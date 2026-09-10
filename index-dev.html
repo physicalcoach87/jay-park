@@ -17307,12 +17307,25 @@ async function loadGpsPeriodPlans(){
   const [{data:base},{data:variants},{data:blks}]=await Promise.all([
     supa.from('block_days').select('*').in('plan_date',dates),
     supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).in('plan_date',dates),
-    supa.from('blocks').select('start_date,end_date,label,track').lte('start_date',_maxD).gte('end_date',_minD)
+    supa.from('blocks').select('id,start_date,end_date,label,track').lte('start_date',_maxD).gte('end_date',_minD)
   ]);
-  dates.forEach(d=>{
-    const b=(blks||[]).find(x=>x.start_date<=d&&x.end_date>=d&&x.label);
-    if(b) _gpsBlockPeriod[d]=b.label;
-  });
+  // 구조 라벨은 blocks.label(저장값)이 아니라 주기화 화면과 같은 방식으로 다시 계산한다.
+  // 저장값에는 이전 경기 이후의 휴식(앞의 2R 등)이 빠져 있어 화면과 어긋난다.
+  if((blks||[]).length){
+    const _bMin=(blks||[]).map(b=>b.start_date).sort()[0];
+    const _bMax=(blks||[]).map(b=>b.end_date).sort().slice(-1)[0];
+    const {data:_bdAll}=await supa.from('block_days')
+      .select('plan_date,day_label,track,ref_basis')
+      .gte('plan_date',periodShiftDate(_bMin,-30)).lte('plan_date',_bMax);
+    (blks||[]).forEach(b=>{
+      const bt=(b.track||'ALL');
+      const dayMap={};
+      (_bdAll||[]).forEach(r=>{ if((r.track||'ALL')===bt) dayMap[r.plan_date]=r; });
+      const lb=_blockListLabel(b,dayMap).label||b.label||'';
+      if(!lb) return;
+      dates.forEach(d=>{ if(b.start_date<=d&&b.end_date>=d) _gpsBlockPeriod[d]=lb; });
+    });
+  }
   (base||[]).forEach(p=>{
     const key=`base:${p.id}`;
     (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',
