@@ -14229,20 +14229,25 @@ async function loadTeamOverview(){
   (ovVariants||[]).forEach(v=>{ (_ovVarByDate[v.plan_date]=_ovVarByDate[v.plan_date]||[]).push(v); });
   const _ovBaseComp=d=>{ const b=bdMap[d]; if(!b) return null;
     return b.ref_basis?.competition || PLAN_MATCH_COMPETITION[b.ref_basis?.match_type] || null; };
+  // 판별 규칙은 주간 표와 동일 — 애매하면 기본 계획으로 둔다
   const _ovIsBase=r=>{
     const vs=_ovVarByDate[r.session_date]; if(!vs||!vs.length) return true;
     const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
-    if(!comp&&!opp) return true;                       // 구분이 없는 옛 데이터는 기본으로 본다
+    if(!comp&&!opp) return true;
     const bc=(_ovBaseComp(r.session_date)||'').trim(), bo=(bdMap[r.session_date]?.ref_basis?.opponent||'').trim();
-    if(comp&&bc&&comp===bc&&(!opp||!bo||opp===bo)) return true;
+    if(!bc&&!bo) return true;                          // 기본 계획에 비교할 정보가 없으면 가릴 수 없다
+    if((comp&&bc&&comp===bc)||(opp&&bo&&opp===bo)) return true;
     return !vs.some(v=>{
       const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
-      return (comp&&vc&&comp===vc&&(!opp||!vo||opp===vo)) || (opp&&vo&&opp===vo);
+      const distinct=(vc&&vc!==bc)||(vo&&vo!==bo);
+      return distinct && ((vo&&opp&&opp===vo)||(vc&&comp&&comp===vc&&!vo));
     });
   };
+  // 서브(S)는 원래 팀 평균에서 빠지므로 표시 인원에서 제외한다
   const _ovOtherPlan=d=>{
     const vs=_ovVarByDate[d]; if(!vs||!vs.length) return null;
-    const n=(gpsRaw||[]).filter(r=>r.session_date===d&&!_ovIsBase(r))
+    const n=(gpsRaw||[]).filter(r=>r.session_date===d
+        &&(r.session_type2||'').trim().toUpperCase()==='M'&&!_ovIsBase(r))
       .reduce((s,r)=>s.add(r.player_id), new Set()).size;
     return n?{name:vs[0].plan_name||'추가 계획', n}:null;
   };
@@ -14941,20 +14946,27 @@ async function buildWeeklyLoadHtml(forDate){
     };
     const _baseOpp = d => bdMap[d]?.ref_basis?.opponent || null;
     // 그 행이 기본 계획을 따랐는지 — 추가 계획과 대회구분·상대가 맞으면 아니다
+    // 추가 계획으로 넘기는 조건은 좁게 잡는다. 애매하면 기본 계획으로 둔다 —
+    // 잘못 넘기면 그 선수가 목표·실제에서 통째로 빠져 훈련일이 0일이 되어버린다.
     const _isBasePlanRow = r => {
       const vs=_varByDate[r.session_date]; if(!vs||!vs.length) return true;
       const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
-      if(!comp&&!opp) return true;                       // 구분이 없는 옛 데이터는 기본으로 본다
+      if(!comp&&!opp) return true;                       // 구분이 없으면 기본
       const bc=(_baseComp(r.session_date)||'').trim(), bo=(_baseOpp(r.session_date)||'').trim();
-      if(comp&&bc&&comp===bc&&(!opp||!bo||opp===bo)) return true;
+      if(!bc&&!bo) return true;                          // 기본 계획에 비교할 정보가 없으면 가릴 수 없다
+      if((comp&&bc&&comp===bc)||(opp&&bo&&opp===bo)) return true;
       return !vs.some(v=>{
         const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
-        return (comp&&vc&&comp===vc&&(!opp||!vo||opp===vo)) || (opp&&vo&&opp===vo);
+        const distinct=(vc&&vc!==bc)||(vo&&vo!==bo);
+        return distinct && ((vo&&opp&&opp===vo)||(vc&&comp&&comp===vc&&!vo));
       });
     };
+    // 표시 인원은 팀 훈련(M) 중 다른 계획을 따른 선수만 센다.
+    // 서브(S)는 원래부터 팀 평균에서 빠지므로 여기 넣으면 이중으로 세는 셈이다.
     const _otherPlanInfo = d => {
       const vs=_varByDate[d]; if(!vs||!vs.length) return null;
-      const n=(wkGps||[]).filter(r=>r.session_date===d&&!_isBasePlanRow(r))
+      const n=(wkGps||[]).filter(r=>r.session_date===d
+          &&(r.session_type2||'').trim().toUpperCase()==='M'&&!_isBasePlanRow(r))
         .reduce((s,r)=>s.add(r.player_id), new Set()).size;
       return n ? {name:vs[0].plan_name||'추가 계획', n} : null;
     };
