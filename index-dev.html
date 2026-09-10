@@ -17249,6 +17249,13 @@ async function parseGpsFiles(files){
         <div style="font-size:10px;color:var(--text3);margin-top:8px">추정 행은 <strong style="color:var(--text2)">Match Max와 최근 3경기 기준선에서 제외</strong>되고, 개인 부하·ACWR·부상위험에는 반영됩니다.</div>
       </div>`:''}`;
 
+    // 주기화 구조는 블록에 이미 설정돼 있으므로 전체 적용 칸에 미리 채워둔다.
+    // 코치가 직접 고친 값은 덮지 않는다 (비어 있을 때만).
+    const _pEl=document.getElementById('meta-period');
+    if(_pEl && !_pEl.value){
+      const _labels=[...new Set(Object.values(_gpsBlockPeriod).filter(Boolean))];
+      if(_labels.length===1) _pEl.value=_labels[0];
+    }
     renderGpsPreviewTable();
   }catch(err){
     if(msg){msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)';}
@@ -17288,14 +17295,24 @@ function recentMatchBaseline(rows, limit=3){
   return {...matchBaselineForKeys(rows,keys),games:keys.length,keys};
 }
 
+// 그 날짜가 속한 블록의 주기화 구조 (예: 2R-5DAY) — 업로드에서 다시 입력하지 않도록 불러온다
+let _gpsBlockPeriod={};   // 날짜 → 구조 라벨
+
 async function loadGpsPeriodPlans(){
   _gpsPeriodPlans={};
+  _gpsBlockPeriod={};
   const dates=[...new Set(_gpsParseData.filter(r=>!r._isMatch&&r.session_date).map(r=>r.session_date))];
   if(!dates.length) return;
-  const [{data:base},{data:variants}]=await Promise.all([
+  const _minD=dates.slice().sort()[0], _maxD=dates.slice().sort().slice(-1)[0];
+  const [{data:base},{data:variants},{data:blks}]=await Promise.all([
     supa.from('block_days').select('*').in('plan_date',dates),
-    supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).in('plan_date',dates)
+    supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).in('plan_date',dates),
+    supa.from('blocks').select('start_date,end_date,label,track').lte('start_date',_maxD).gte('end_date',_minD)
   ]);
+  dates.forEach(d=>{
+    const b=(blks||[]).find(x=>x.start_date<=d&&x.end_date>=d&&x.label);
+    if(b) _gpsBlockPeriod[d]=b.label;
+  });
   (base||[]).forEach(p=>{
     const key=`base:${p.id}`;
     (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',
@@ -17339,6 +17356,8 @@ function applyGpsPlan(row,key){
   if(plan.session_type2) row.session_type2=plan.session_type2;
   row.opponent=plan.opponent||row.opponent||null;
   row.competition=plan.competition||row.competition||null;
+  // 주기화 구조는 블록에 이미 있으므로 비어 있을 때 채워준다
+  row.periodization=row.periodization||_gpsBlockPeriod[row.session_date]||null;
   const meta=_gpsPlanMetaDrafts[key];
   if(meta){
     row.session_type2=meta.type||row.session_type2||null;
