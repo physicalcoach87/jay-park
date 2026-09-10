@@ -14147,13 +14147,16 @@ async function loadTeamOverview(){
   const selectedBlock=_overviewBlocks.find(b=>b.id==selectedBlockId)||null;
 
   // ── 데이터 조회 ──
-  const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
+  const [{data:blockDays},{data:ovVariants},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .eq('track',_overviewTrack)
       .gte('plan_date',fromVal).lte('plan_date',toVal),
+    supa.from('periodization_plan_variants').select('*')
+      .eq('club_id',currentClubId).eq('track',_overviewTrack)
+      .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,player_profiles(name,position)')
+      .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,competition,player_profiles(name,position)')
       .eq('track',_overviewTrack)
       .gte('session_date',fromVal).lte('session_date',toVal),
     supa.from('match_records')
@@ -14219,12 +14222,37 @@ async function loadTeamOverview(){
   const isV1=currentGpsPlan==='V1';
 
   const bdMap={};(blockDays||[]).forEach(r=>{bdMap[r.plan_date]=r;});
+
+  // 조가 갈린 날 — 목표는 기본 계획 것이므로 실제(M 평균)도 기본 계획을 따른 선수만 센다.
+  // 주간 표와 같은 규칙. 갈라진 조는 일일 데이터에서 계획별로 본다.
+  const _ovVarByDate={};
+  (ovVariants||[]).forEach(v=>{ (_ovVarByDate[v.plan_date]=_ovVarByDate[v.plan_date]||[]).push(v); });
+  const _ovBaseComp=d=>{ const b=bdMap[d]; if(!b) return null;
+    return b.ref_basis?.competition || PLAN_MATCH_COMPETITION[b.ref_basis?.match_type] || null; };
+  const _ovIsBase=r=>{
+    const vs=_ovVarByDate[r.session_date]; if(!vs||!vs.length) return true;
+    const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
+    if(!comp&&!opp) return true;                       // 구분이 없는 옛 데이터는 기본으로 본다
+    const bc=(_ovBaseComp(r.session_date)||'').trim(), bo=(bdMap[r.session_date]?.ref_basis?.opponent||'').trim();
+    if(comp&&bc&&comp===bc&&(!opp||!bo||opp===bo)) return true;
+    return !vs.some(v=>{
+      const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
+      return (comp&&vc&&comp===vc&&(!opp||!vo||opp===vo)) || (opp&&vo&&opp===vo);
+    });
+  };
+  const _ovOtherPlan=d=>{
+    const vs=_ovVarByDate[d]; if(!vs||!vs.length) return null;
+    const n=(gpsRaw||[]).filter(r=>r.session_date===d&&!_ovIsBase(r))
+      .reduce((s,r)=>s.add(r.player_id), new Set()).size;
+    return n?{name:vs[0].plan_name||'추가 계획', n}:null;
+  };
+
   const gpsDateMap={};
   (gpsRaw||[]).forEach(r=>{
     if(!gpsDateMap[r.session_date]) gpsDateMap[r.session_date]={all:[],M:[],S:[]};
     gpsDateMap[r.session_date].all.push(r);
     const t2=(r.session_type2||'').trim().toUpperCase();
-    if(t2==='M') gpsDateMap[r.session_date].M.push(r);
+    if(t2==='M'){ if(_ovIsBase(r)) gpsDateMap[r.session_date].M.push(r); }
     else gpsDateMap[r.session_date].S.push(r);
   });
   const matchDateMap={};
@@ -14356,7 +14384,10 @@ async function loadTeamOverview(){
       const readyBadge=readyLabel?`<span style="font-size:10px;color:var(--text2)">${readyLabel}</span>`:'<span style="color:var(--text3)">—</span>';
       const mdLbl=bd?.day_label||'';
       const mdKey=Object.keys(mdStyleMap).find(k=>mdLbl.toUpperCase().includes(k));
-      const mdBadge=mdLbl?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdKey?mdStyleMap[mdKey]:'background:var(--surface2);color:var(--text3)'}">${mdLbl}</span>`:'<span style="color:var(--text3)">—</span>';
+      // 조가 갈린 날 — 아래 숫자가 기본 계획 선수 기준임을 밝힌다
+      const _ovOther=_ovOtherPlan(date);
+      const _ovTag=_ovOther?`<div style="font-size:8px;font-weight:600;color:#fbbf24;margin-top:2px" title="이날은 조가 갈렸습니다. 목표·실제는 기본 계획을 따른 선수 기준이며, ${_ovOther.name} ${_ovOther.n}명은 일일 데이터에서 따로 봅니다">+${_ovOther.name} ${_ovOther.n}명</div>`:'';
+      const mdBadge=mdLbl?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdKey?mdStyleMap[mdKey]:'background:var(--surface2);color:var(--text3)'}">${mdLbl}</span>${_ovTag}`:'<span style="color:var(--text3)">—</span>';
       const sessText=[bd?.am_session,bd?.pm_session].filter(Boolean).join(' / ')||'';
       const isToday=date===today;
       const trainBg=hasGps?'':'rgba(255,255,255,0.02)';
