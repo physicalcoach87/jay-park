@@ -14147,13 +14147,16 @@ async function loadTeamOverview(){
   const selectedBlock=_overviewBlocks.find(b=>b.id==selectedBlockId)||null;
 
   // ── 데이터 조회 ──
-  const [{data:blockDays},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
+  const [{data:blockDays},{data:ovVariants},{data:gpsRaw},{data:matchRaw}] = await Promise.all([
     supa.from('block_days')
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .eq('track',_overviewTrack)
       .gte('plan_date',fromVal).lte('plan_date',toVal),
+    supa.from('periodization_plan_variants').select('*')
+      .eq('club_id',currentClubId).eq('track',_overviewTrack)
+      .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,player_profiles(name,position)')
+      .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,competition,plan_key,player_profiles(name,position)')
       .eq('track',_overviewTrack)
       .gte('session_date',fromVal).lte('session_date',toVal),
     supa.from('match_records')
@@ -14219,12 +14222,44 @@ async function loadTeamOverview(){
   const isV1=currentGpsPlan==='V1';
 
   const bdMap={};(blockDays||[]).forEach(r=>{bdMap[r.plan_date]=r;});
+
+  // 조가 갈린 날 — 목표는 기본 계획 것이므로 실제(M 평균)도 기본 계획을 따른 선수만 센다.
+  // 주간 표와 같은 규칙. 갈라진 조는 일일 데이터에서 계획별로 본다.
+  const _ovVarByDate={};
+  (ovVariants||[]).forEach(v=>{ (_ovVarByDate[v.plan_date]=_ovVarByDate[v.plan_date]||[]).push(v); });
+  const _ovBaseComp=d=>{ const b=bdMap[d]; if(!b) return null;
+    return b.ref_basis?.competition || PLAN_MATCH_COMPETITION[b.ref_basis?.match_type] || null; };
+  // 판별 규칙은 주간 표와 동일 — 애매하면 기본 계획으로 둔다
+  const _ovIsBase=r=>{
+    const vs=_ovVarByDate[r.session_date]; if(!vs||!vs.length) return true;
+    const pk=(r.plan_key||'').trim();
+    if(pk) return pk==='base' || !vs.some(v=>String(v.id)===pk);     // 기록된 계획이 우선
+    const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
+    if(!comp&&!opp) return true;
+    const bc=(_ovBaseComp(r.session_date)||'').trim(), bo=(bdMap[r.session_date]?.ref_basis?.opponent||'').trim();
+    if(!bc&&!bo) return true;                          // 기본 계획에 비교할 정보가 없으면 가릴 수 없다
+    if((comp&&bc&&comp===bc)||(opp&&bo&&opp===bo)) return true;
+    return !vs.some(v=>{
+      const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
+      const distinct=(vc&&vc!==bc)||(vo&&vo!==bo);
+      return distinct && ((vo&&opp&&opp===vo)||(vc&&comp&&comp===vc&&!vo));
+    });
+  };
+  // 서브(S)는 원래 팀 평균에서 빠지므로 표시 인원에서 제외한다
+  const _ovOtherPlan=d=>{
+    const vs=_ovVarByDate[d]; if(!vs||!vs.length) return null;
+    const n=(gpsRaw||[]).filter(r=>r.session_date===d
+        &&(r.session_type2||'').trim().toUpperCase()==='M'&&!_ovIsBase(r))
+      .reduce((s,r)=>s.add(r.player_id), new Set()).size;
+    return n?{name:vs[0].plan_name||'추가 계획', n}:null;
+  };
+
   const gpsDateMap={};
   (gpsRaw||[]).forEach(r=>{
     if(!gpsDateMap[r.session_date]) gpsDateMap[r.session_date]={all:[],M:[],S:[]};
     gpsDateMap[r.session_date].all.push(r);
     const t2=(r.session_type2||'').trim().toUpperCase();
-    if(t2==='M') gpsDateMap[r.session_date].M.push(r);
+    if(t2==='M'){ if(_ovIsBase(r)) gpsDateMap[r.session_date].M.push(r); }
     else gpsDateMap[r.session_date].S.push(r);
   });
   const matchDateMap={};
@@ -14356,7 +14391,10 @@ async function loadTeamOverview(){
       const readyBadge=readyLabel?`<span style="font-size:10px;color:var(--text2)">${readyLabel}</span>`:'<span style="color:var(--text3)">—</span>';
       const mdLbl=bd?.day_label||'';
       const mdKey=Object.keys(mdStyleMap).find(k=>mdLbl.toUpperCase().includes(k));
-      const mdBadge=mdLbl?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdKey?mdStyleMap[mdKey]:'background:var(--surface2);color:var(--text3)'}">${mdLbl}</span>`:'<span style="color:var(--text3)">—</span>';
+      // 조가 갈린 날 — 아래 숫자가 기본 계획 선수 기준임을 밝힌다
+      const _ovOther=_ovOtherPlan(date);
+      const _ovTag=_ovOther?`<div style="font-size:8px;font-weight:600;color:#fbbf24;margin-top:2px" title="이날은 조가 갈렸습니다. 목표·실제는 기본 계획을 따른 선수 기준이며, ${_ovOther.name} ${_ovOther.n}명은 일일 데이터에서 따로 봅니다">+${_ovOther.name} ${_ovOther.n}명</div>`:'';
+      const mdBadge=mdLbl?`<span style="font-size:10px;padding:1px 6px;border-radius:4px;font-weight:600;${mdKey?mdStyleMap[mdKey]:'background:var(--surface2);color:var(--text3)'}">${mdLbl}</span>${_ovTag}`:'<span style="color:var(--text3)">—</span>';
       const sessText=[bd?.am_session,bd?.pm_session].filter(Boolean).join(' / ')||'';
       const isToday=date===today;
       const trainBg=hasGps?'':'rgba(255,255,255,0.02)';
@@ -14736,7 +14774,7 @@ async function buildWeeklyLoadHtml(forDate){
 
   const [{data:wkGps},{data:rpe28w},{data:matchRaw},{data:weekSched}]=await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label,competition')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label,competition,plan_key')
       .gte('session_date',weekStartStr).lte('session_date',forDate)
       .eq('track', window._trainingMode ? _summaryTrack : 'ALL')
       .order('session_date',{ascending:true}).order('session_label',{ascending:true}),
@@ -14910,20 +14948,29 @@ async function buildWeeklyLoadHtml(forDate){
     };
     const _baseOpp = d => bdMap[d]?.ref_basis?.opponent || null;
     // 그 행이 기본 계획을 따랐는지 — 추가 계획과 대회구분·상대가 맞으면 아니다
+    // 추가 계획으로 넘기는 조건은 좁게 잡는다. 애매하면 기본 계획으로 둔다 —
+    // 잘못 넘기면 그 선수가 목표·실제에서 통째로 빠져 훈련일이 0일이 되어버린다.
     const _isBasePlanRow = r => {
       const vs=_varByDate[r.session_date]; if(!vs||!vs.length) return true;
+      const pk=(r.plan_key||'').trim();
+      if(pk) return pk==='base' || !vs.some(v=>String(v.id)===pk);   // 기록된 계획이 우선
       const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
-      if(!comp&&!opp) return true;                       // 구분이 없는 옛 데이터는 기본으로 본다
+      if(!comp&&!opp) return true;                       // 구분이 없으면 기본
       const bc=(_baseComp(r.session_date)||'').trim(), bo=(_baseOpp(r.session_date)||'').trim();
-      if(comp&&bc&&comp===bc&&(!opp||!bo||opp===bo)) return true;
+      if(!bc&&!bo) return true;                          // 기본 계획에 비교할 정보가 없으면 가릴 수 없다
+      if((comp&&bc&&comp===bc)||(opp&&bo&&opp===bo)) return true;
       return !vs.some(v=>{
         const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
-        return (comp&&vc&&comp===vc&&(!opp||!vo||opp===vo)) || (opp&&vo&&opp===vo);
+        const distinct=(vc&&vc!==bc)||(vo&&vo!==bo);
+        return distinct && ((vo&&opp&&opp===vo)||(vc&&comp&&comp===vc&&!vo));
       });
     };
+    // 표시 인원은 팀 훈련(M) 중 다른 계획을 따른 선수만 센다.
+    // 서브(S)는 원래부터 팀 평균에서 빠지므로 여기 넣으면 이중으로 세는 셈이다.
     const _otherPlanInfo = d => {
       const vs=_varByDate[d]; if(!vs||!vs.length) return null;
-      const n=(wkGps||[]).filter(r=>r.session_date===d&&!_isBasePlanRow(r))
+      const n=(wkGps||[]).filter(r=>r.session_date===d
+          &&(r.session_type2||'').trim().toUpperCase()==='M'&&!_isBasePlanRow(r))
         .reduce((s,r)=>s.add(r.player_id), new Set()).size;
       return n ? {name:vs[0].plan_name||'추가 계획', n} : null;
     };
@@ -15540,6 +15587,13 @@ async function loadTeamSummary(forceDate, quiet=false){
 
   const _planOf = r => {
     if(planList.length<2) return planList[0]||null;
+    // 업로드에서 고른 계획이 기록돼 있으면 그걸 그대로 쓴다 (가장 정확).
+    // 없으면(기존 데이터) 대회 구분·상대로 짐작한다.
+    const pk=(r.plan_key||'').trim();
+    if(pk){
+      const hit = pk==='base' ? bd : planList.find(p=>p._key===`variant:${pk}`);
+      if(hit) return hit;
+    }
     const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
     return planList.find(p=>comp&&opp&&(p.competition||'')===comp&&(p.opponent||'')===opp)
         || planList.find(p=>comp&&(p.competition||'')===comp)
@@ -17195,6 +17249,13 @@ async function parseGpsFiles(files){
         <div style="font-size:10px;color:var(--text3);margin-top:8px">추정 행은 <strong style="color:var(--text2)">Match Max와 최근 3경기 기준선에서 제외</strong>되고, 개인 부하·ACWR·부상위험에는 반영됩니다.</div>
       </div>`:''}`;
 
+    // 주기화 구조는 블록에 이미 설정돼 있으므로 전체 적용 칸에 미리 채워둔다.
+    // 코치가 직접 고친 값은 덮지 않는다 (비어 있을 때만).
+    const _pEl=document.getElementById('meta-period');
+    if(_pEl && !_pEl.value){
+      const _labels=[...new Set(Object.values(_gpsBlockPeriod).filter(Boolean))];
+      if(_labels.length===1) _pEl.value=_labels[0];
+    }
     renderGpsPreviewTable();
   }catch(err){
     if(msg){msg.textContent='파싱 오류: '+err.message; msg.style.color='var(--red)';}
@@ -17234,14 +17295,37 @@ function recentMatchBaseline(rows, limit=3){
   return {...matchBaselineForKeys(rows,keys),games:keys.length,keys};
 }
 
+// 그 날짜가 속한 블록의 주기화 구조 (예: 2R-5DAY) — 업로드에서 다시 입력하지 않도록 불러온다
+let _gpsBlockPeriod={};   // 날짜 → 구조 라벨
+
 async function loadGpsPeriodPlans(){
   _gpsPeriodPlans={};
+  _gpsBlockPeriod={};
   const dates=[...new Set(_gpsParseData.filter(r=>!r._isMatch&&r.session_date).map(r=>r.session_date))];
   if(!dates.length) return;
-  const [{data:base},{data:variants}]=await Promise.all([
+  const _minD=dates.slice().sort()[0], _maxD=dates.slice().sort().slice(-1)[0];
+  const [{data:base},{data:variants},{data:blks}]=await Promise.all([
     supa.from('block_days').select('*').in('plan_date',dates),
-    supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).in('plan_date',dates)
+    supa.from('periodization_plan_variants').select('*').eq('club_id',currentClubId).in('plan_date',dates),
+    supa.from('blocks').select('id,start_date,end_date,label,track').lte('start_date',_maxD).gte('end_date',_minD)
   ]);
+  // 구조 라벨은 blocks.label(저장값)이 아니라 주기화 화면과 같은 방식으로 다시 계산한다.
+  // 저장값에는 이전 경기 이후의 휴식(앞의 2R 등)이 빠져 있어 화면과 어긋난다.
+  if((blks||[]).length){
+    const _bMin=(blks||[]).map(b=>b.start_date).sort()[0];
+    const _bMax=(blks||[]).map(b=>b.end_date).sort().slice(-1)[0];
+    const {data:_bdAll}=await supa.from('block_days')
+      .select('plan_date,day_label,track,ref_basis')
+      .gte('plan_date',periodShiftDate(_bMin,-30)).lte('plan_date',_bMax);
+    (blks||[]).forEach(b=>{
+      const bt=(b.track||'ALL');
+      const dayMap={};
+      (_bdAll||[]).forEach(r=>{ if((r.track||'ALL')===bt) dayMap[r.plan_date]=r; });
+      const lb=_blockListLabel(b,dayMap).label||b.label||'';
+      if(!lb) return;
+      dates.forEach(d=>{ if(b.start_date<=d&&b.end_date>=d) _gpsBlockPeriod[d]=lb; });
+    });
+  }
   (base||[]).forEach(p=>{
     const key=`base:${p.id}`;
     (_gpsPeriodPlans[p.plan_date]=_gpsPeriodPlans[p.plan_date]||[]).push({...p,_planKey:key,plan_name:'기본 계획',
@@ -17285,6 +17369,8 @@ function applyGpsPlan(row,key){
   if(plan.session_type2) row.session_type2=plan.session_type2;
   row.opponent=plan.opponent||row.opponent||null;
   row.competition=plan.competition||row.competition||null;
+  // 주기화 구조는 블록에 이미 있으므로 비어 있을 때 채워준다
+  row.periodization=row.periodization||_gpsBlockPeriod[row.session_date]||null;
   const meta=_gpsPlanMetaDrafts[key];
   if(meta){
     row.session_type2=meta.type||row.session_type2||null;
@@ -17632,7 +17718,15 @@ async function saveGpsData(){
   // _isMatch 플래그로 훈련/경기 분리 (_srcFile 등 내부 필드 제거)
   const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
-  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, _periodPlanKey, ...r})=>r);
+  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, _periodPlanKey, ...r})=>({
+    ...r,
+    // 업로드에서 고른 계획을 그대로 남긴다.
+    // 계획의 속성(대회·상대·MD단계)만으로는 같은 경기를 준비하는 두 계획을 가릴 수 없다
+    // (MD-5에 주전은 회복, 리저브는 유산소 자극처럼 목적만 다른 경우).
+    plan_key: _periodPlanKey
+      ? (String(_periodPlanKey).startsWith('base:') ? 'base' : String(_periodPlanKey).replace(/^variant:/,''))
+      : null,
+  }));
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, _estimated, time_type, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
