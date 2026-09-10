@@ -14736,7 +14736,7 @@ async function buildWeeklyLoadHtml(forDate){
 
   const [{data:wkGps},{data:rpe28w},{data:matchRaw},{data:weekSched}]=await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label,competition')
       .gte('session_date',weekStartStr).lte('session_date',forDate)
       .eq('track', window._trainingMode ? _summaryTrack : 'ALL')
       .order('session_date',{ascending:true}).order('session_label',{ascending:true}),
@@ -14887,12 +14887,46 @@ async function buildWeeklyLoadHtml(forDate){
   // 훈련 데이터 모드일 때 주기화 헤더 추가
   let periodHeader = '';
   if(window._trainingMode) {
-    const {data: bdWeek} = await supa.from('block_days')
-      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
-      .eq('track', _summaryTrack)
-      .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
+    const [{data: bdWeek},{data: bdVariants}] = await Promise.all([
+      supa.from('block_days')
+        .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
+        .eq('track', _summaryTrack)
+        .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr),
+      supa.from('periodization_plan_variants').select('*')
+        .eq('club_id', currentClubId).eq('track', _summaryTrack)
+        .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr),
+    ]);
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
+
+    // 조가 갈린 날 — 목표는 기본 계획 것이므로 실제도 기본 계획을 따른 선수만으로 낸다.
+    // 두 조를 섞어 평균 내면 목표와 성격이 달라 달성률이 어긋난다.
+    // 갈라진 조는 일일 데이터에서 계획별로 본다.
+    const _varByDate = {};
+    (bdVariants||[]).forEach(v=>{ (_varByDate[v.plan_date]=_varByDate[v.plan_date]||[]).push(v); });
+    const _baseComp = d => {
+      const b=bdMap[d]; if(!b) return null;
+      return b.ref_basis?.competition || PLAN_MATCH_COMPETITION[b.ref_basis?.match_type] || null;
+    };
+    const _baseOpp = d => bdMap[d]?.ref_basis?.opponent || null;
+    // 그 행이 기본 계획을 따랐는지 — 추가 계획과 대회구분·상대가 맞으면 아니다
+    const _isBasePlanRow = r => {
+      const vs=_varByDate[r.session_date]; if(!vs||!vs.length) return true;
+      const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
+      if(!comp&&!opp) return true;                       // 구분이 없는 옛 데이터는 기본으로 본다
+      const bc=(_baseComp(r.session_date)||'').trim(), bo=(_baseOpp(r.session_date)||'').trim();
+      if(comp&&bc&&comp===bc&&(!opp||!bo||opp===bo)) return true;
+      return !vs.some(v=>{
+        const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
+        return (comp&&vc&&comp===vc&&(!opp||!vo||opp===vo)) || (opp&&vo&&opp===vo);
+      });
+    };
+    const _otherPlanInfo = d => {
+      const vs=_varByDate[d]; if(!vs||!vs.length) return null;
+      const n=(wkGps||[]).filter(r=>r.session_date===d&&!_isBasePlanRow(r))
+        .reduce((s,r)=>s.add(r.player_id), new Set()).size;
+      return n ? {name:vs[0].plan_name||'추가 계획', n} : null;
+    };
     const DOW = ['일','월','화','수','목','금','토'];
 
     // 팀 경기 평균 (accel, rhie 포함)
@@ -14939,8 +14973,9 @@ async function buildWeeklyLoadHtml(forDate){
     // 이번 주 실제 누적:
     // - 오늘(forDate): 선택한 세션 필터 적용 (AM/PM/통합)
     // - 이전 날짜: 항상 전체 세션(통합) — 완료된 하루 전체를 반영
-    const wkAllMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
-    const wkMGps = _wkGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    // 목표가 기본 계획 것이므로 실제도 기본 계획을 따른 선수만 센다
+    const wkAllMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M'&&_isBasePlanRow(r));
+    const wkMGps = _wkGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M'&&_isBasePlanRow(r));
     const wkAllDates = [...new Set(wkAllMGps.map(r=>r.session_date))];
     const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
     wkAllDates.forEach(dd=>{
@@ -14998,7 +15033,11 @@ async function buildWeeklyLoadHtml(forDate){
       const sessionLbl = [bd.am_session,bd.pm_session].filter(Boolean).join(' / ');
       return '<tr style="'+rowStyle+'">'
         +'<td style="padding:5px 8px;line-height:1.3;white-space:nowrap;width:1%">'+DOW[dObj.getDay()]+' '+(dObj.getMonth()+1)+'/'+(dObj.getDate())+(sessionLbl?'<br><span style="font-size:9px;color:var(--text3);font-weight:400">'+sessionLbl+'</span>':'')+'</td>'
-        +'<td style="padding:5px 8px;text-align:center;font-weight:600;color:#a5b4fc;white-space:nowrap;width:1%">'+mdLbl+'</td>'
+        +'<td style="padding:5px 8px;text-align:center;font-weight:600;color:#a5b4fc;white-space:nowrap;width:1%">'+mdLbl
+          +(()=>{ // 조가 갈린 날 — 아래 숫자는 기본 계획을 따른 선수들만의 값임을 밝힌다
+            const o=_otherPlanInfo(dd); if(!o) return '';
+            return '<div style="font-size:8px;font-weight:600;color:#fbbf24;margin-top:2px" title="이날은 조가 갈렸습니다. 목표·실제는 기본 계획을 따른 선수 기준이며, '+o.name+' '+o.n+'명은 일일 데이터에서 따로 봅니다">+'+o.name+' '+o.n+'명</div>';
+          })()+'</td>'
         +'<td style="padding:5px 8px;text-align:center">'+(isRest?'—':_targetActualCell(bd.td_target,bd,'td',actual?.td,'m'))+'</td>'
         +'<td style="padding:5px 8px;text-align:center">'+(isRest?'—':_targetActualCell(bd.hsr_target,bd,'hsr',actual?.hsr,'m'))+'</td>'
         +'<td style="padding:5px 8px;text-align:center">'+(isRest?'—':_targetActualCell(bd.spr_target,bd,'sprint',actual?.spr,'m'))+'</td>'
