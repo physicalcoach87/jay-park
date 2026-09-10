@@ -14156,7 +14156,7 @@ async function loadTeamOverview(){
       .eq('club_id',currentClubId).eq('track',_overviewTrack)
       .gte('plan_date',fromVal).lte('plan_date',toVal),
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,competition,player_profiles(name,position)')
+      .select('session_date,player_id,td,running_high,sprint,accel,decel,rhie,duration,session_type2,opponent,competition,plan_key,player_profiles(name,position)')
       .eq('track',_overviewTrack)
       .gte('session_date',fromVal).lte('session_date',toVal),
     supa.from('match_records')
@@ -14232,6 +14232,8 @@ async function loadTeamOverview(){
   // 판별 규칙은 주간 표와 동일 — 애매하면 기본 계획으로 둔다
   const _ovIsBase=r=>{
     const vs=_ovVarByDate[r.session_date]; if(!vs||!vs.length) return true;
+    const pk=(r.plan_key||'').trim();
+    if(pk) return pk==='base' || !vs.some(v=>String(v.id)===pk);     // 기록된 계획이 우선
     const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
     if(!comp&&!opp) return true;
     const bc=(_ovBaseComp(r.session_date)||'').trim(), bo=(bdMap[r.session_date]?.ref_basis?.opponent||'').trim();
@@ -14772,7 +14774,7 @@ async function buildWeeklyLoadHtml(forDate){
 
   const [{data:wkGps},{data:rpe28w},{data:matchRaw},{data:weekSched}]=await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label,competition')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label,competition,plan_key')
       .gte('session_date',weekStartStr).lte('session_date',forDate)
       .eq('track', window._trainingMode ? _summaryTrack : 'ALL')
       .order('session_date',{ascending:true}).order('session_label',{ascending:true}),
@@ -14950,6 +14952,8 @@ async function buildWeeklyLoadHtml(forDate){
     // 잘못 넘기면 그 선수가 목표·실제에서 통째로 빠져 훈련일이 0일이 되어버린다.
     const _isBasePlanRow = r => {
       const vs=_varByDate[r.session_date]; if(!vs||!vs.length) return true;
+      const pk=(r.plan_key||'').trim();
+      if(pk) return pk==='base' || !vs.some(v=>String(v.id)===pk);   // 기록된 계획이 우선
       const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
       if(!comp&&!opp) return true;                       // 구분이 없으면 기본
       const bc=(_baseComp(r.session_date)||'').trim(), bo=(_baseOpp(r.session_date)||'').trim();
@@ -15583,6 +15587,13 @@ async function loadTeamSummary(forceDate, quiet=false){
 
   const _planOf = r => {
     if(planList.length<2) return planList[0]||null;
+    // 업로드에서 고른 계획이 기록돼 있으면 그걸 그대로 쓴다 (가장 정확).
+    // 없으면(기존 데이터) 대회 구분·상대로 짐작한다.
+    const pk=(r.plan_key||'').trim();
+    if(pk){
+      const hit = pk==='base' ? bd : planList.find(p=>p._key===`variant:${pk}`);
+      if(hit) return hit;
+    }
     const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
     return planList.find(p=>comp&&opp&&(p.competition||'')===comp&&(p.opponent||'')===opp)
         || planList.find(p=>comp&&(p.competition||'')===comp)
@@ -17675,7 +17686,15 @@ async function saveGpsData(){
   // _isMatch 플래그로 훈련/경기 분리 (_srcFile 등 내부 필드 제거)
   const allRecords = _gpsParseData.map(({player_name, _isMatch, _srcFile, time_type, ...rest})=>({...rest, _isMatch, time_type}));
   // _rpe, _weight 는 session_records/wellness_records에 별도 저장 → gps_records에서 제외
-  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, _periodPlanKey, ...r})=>r);
+  const trainRecords = allRecords.filter(r=>!r._isMatch).map(({_isMatch, time_type, robin, _rpe, _weight, _periodPlanKey, ...r})=>({
+    ...r,
+    // 업로드에서 고른 계획을 그대로 남긴다.
+    // 계획의 속성(대회·상대·MD단계)만으로는 같은 경기를 준비하는 두 계획을 가릴 수 없다
+    // (MD-5에 주전은 회복, 리저브는 유산소 자극처럼 목적만 다른 경우).
+    plan_key: _periodPlanKey
+      ? (String(_periodPlanKey).startsWith('base:') ? 'base' : String(_periodPlanKey).replace(/^variant:/,''))
+      : null,
+  }));
   const matchRecords = allRecords.filter(r=>r._isMatch).map(({_isMatch, _estimated, time_type, session_label, session_type2, training_form,
     td_per_min, hsr_total, running_medium, running_high, sprint, running_high_n, sprint_n,
     fmp_run_medium, fmp_run_high, fmp_dyn_medium, fmp_dyn_high,
