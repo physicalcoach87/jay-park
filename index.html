@@ -14736,7 +14736,7 @@ async function buildWeeklyLoadHtml(forDate){
 
   const [{data:wkGps},{data:rpe28w},{data:matchRaw},{data:weekSched}]=await Promise.all([
     supa.from('gps_records')
-      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label')
+      .select('session_date,player_id,td,running_high,sprint,accel,rhie,duration,session_type2,session_topic,opponent,session_label,competition')
       .gte('session_date',weekStartStr).lte('session_date',forDate)
       .eq('track', window._trainingMode ? _summaryTrack : 'ALL')
       .order('session_date',{ascending:true}).order('session_label',{ascending:true}),
@@ -14887,12 +14887,46 @@ async function buildWeeklyLoadHtml(forDate){
   // 훈련 데이터 모드일 때 주기화 헤더 추가
   let periodHeader = '';
   if(window._trainingMode) {
-    const {data: bdWeek} = await supa.from('block_days')
-      .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
-      .eq('track', _summaryTrack)
-      .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr);
+    const [{data: bdWeek},{data: bdVariants}] = await Promise.all([
+      supa.from('block_days')
+        .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
+        .eq('track', _summaryTrack)
+        .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr),
+      supa.from('periodization_plan_variants').select('*')
+        .eq('club_id', currentClubId).eq('track', _summaryTrack)
+        .gte('plan_date', weekStartStr).lte('plan_date', weekEndStr),
+    ]);
     const bdMap = {};
     (bdWeek||[]).forEach(r=>{ bdMap[r.plan_date]=r; });
+
+    // 조가 갈린 날 — 목표는 기본 계획 것이므로 실제도 기본 계획을 따른 선수만으로 낸다.
+    // 두 조를 섞어 평균 내면 목표와 성격이 달라 달성률이 어긋난다.
+    // 갈라진 조는 일일 데이터에서 계획별로 본다.
+    const _varByDate = {};
+    (bdVariants||[]).forEach(v=>{ (_varByDate[v.plan_date]=_varByDate[v.plan_date]||[]).push(v); });
+    const _baseComp = d => {
+      const b=bdMap[d]; if(!b) return null;
+      return b.ref_basis?.competition || PLAN_MATCH_COMPETITION[b.ref_basis?.match_type] || null;
+    };
+    const _baseOpp = d => bdMap[d]?.ref_basis?.opponent || null;
+    // 그 행이 기본 계획을 따랐는지 — 추가 계획과 대회구분·상대가 맞으면 아니다
+    const _isBasePlanRow = r => {
+      const vs=_varByDate[r.session_date]; if(!vs||!vs.length) return true;
+      const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
+      if(!comp&&!opp) return true;                       // 구분이 없는 옛 데이터는 기본으로 본다
+      const bc=(_baseComp(r.session_date)||'').trim(), bo=(_baseOpp(r.session_date)||'').trim();
+      if(comp&&bc&&comp===bc&&(!opp||!bo||opp===bo)) return true;
+      return !vs.some(v=>{
+        const vc=(v.competition||'').trim(), vo=(v.opponent||'').trim();
+        return (comp&&vc&&comp===vc&&(!opp||!vo||opp===vo)) || (opp&&vo&&opp===vo);
+      });
+    };
+    const _otherPlanInfo = d => {
+      const vs=_varByDate[d]; if(!vs||!vs.length) return null;
+      const n=(wkGps||[]).filter(r=>r.session_date===d&&!_isBasePlanRow(r))
+        .reduce((s,r)=>s.add(r.player_id), new Set()).size;
+      return n ? {name:vs[0].plan_name||'추가 계획', n} : null;
+    };
     const DOW = ['일','월','화','수','목','금','토'];
 
     // 팀 경기 평균 (accel, rhie 포함)
@@ -14939,8 +14973,9 @@ async function buildWeeklyLoadHtml(forDate){
     // 이번 주 실제 누적:
     // - 오늘(forDate): 선택한 세션 필터 적용 (AM/PM/통합)
     // - 이전 날짜: 항상 전체 세션(통합) — 완료된 하루 전체를 반영
-    const wkAllMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
-    const wkMGps = _wkGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M');
+    // 목표가 기본 계획 것이므로 실제도 기본 계획을 따른 선수만 센다
+    const wkAllMGps = (wkGps||[]).filter(r=>(r.session_type2||'').trim().toUpperCase()==='M'&&_isBasePlanRow(r));
+    const wkMGps = _wkGps.filter(r=>(r.session_type2||'').trim().toUpperCase()==='M'&&_isBasePlanRow(r));
     const wkAllDates = [...new Set(wkAllMGps.map(r=>r.session_date))];
     const wkSum = {td:0,hsr:0,spr:0,acc:0,rhie:0};
     wkAllDates.forEach(dd=>{
@@ -14998,7 +15033,11 @@ async function buildWeeklyLoadHtml(forDate){
       const sessionLbl = [bd.am_session,bd.pm_session].filter(Boolean).join(' / ');
       return '<tr style="'+rowStyle+'">'
         +'<td style="padding:5px 8px;line-height:1.3;white-space:nowrap;width:1%">'+DOW[dObj.getDay()]+' '+(dObj.getMonth()+1)+'/'+(dObj.getDate())+(sessionLbl?'<br><span style="font-size:9px;color:var(--text3);font-weight:400">'+sessionLbl+'</span>':'')+'</td>'
-        +'<td style="padding:5px 8px;text-align:center;font-weight:600;color:#a5b4fc;white-space:nowrap;width:1%">'+mdLbl+'</td>'
+        +'<td style="padding:5px 8px;text-align:center;font-weight:600;color:#a5b4fc;white-space:nowrap;width:1%">'+mdLbl
+          +(()=>{ // 조가 갈린 날 — 아래 숫자는 기본 계획을 따른 선수들만의 값임을 밝힌다
+            const o=_otherPlanInfo(dd); if(!o) return '';
+            return '<div style="font-size:8px;font-weight:600;color:#fbbf24;margin-top:2px" title="이날은 조가 갈렸습니다. 목표·실제는 기본 계획을 따른 선수 기준이며, '+o.name+' '+o.n+'명은 일일 데이터에서 따로 봅니다">+'+o.name+' '+o.n+'명</div>';
+          })()+'</td>'
         +'<td style="padding:5px 8px;text-align:center">'+(isRest?'—':_targetActualCell(bd.td_target,bd,'td',actual?.td,'m'))+'</td>'
         +'<td style="padding:5px 8px;text-align:center">'+(isRest?'—':_targetActualCell(bd.hsr_target,bd,'hsr',actual?.hsr,'m'))+'</td>'
         +'<td style="padding:5px 8px;text-align:center">'+(isRest?'—':_targetActualCell(bd.spr_target,bd,'sprint',actual?.spr,'m'))+'</td>'
@@ -15155,7 +15194,7 @@ async function loadTeamSummary(forceDate, quiet=false){
   // 훈련데이터 모드에서만 트랙 토글 적용, 그 외(팀평균·RPE)는 A팀(ALL) 고정
   const _summaryTrk = window._trainingMode ? _summaryTrack : 'ALL';
 
-  const [{data:gps},{data:sessions},{data:wellness},{data:blockDayRow},{data:matchRef},{data:dailyMatchRows}] = await Promise.all([
+  const [{data:gps},{data:sessions},{data:wellness},{data:blockDayRow},{data:planVariants},{data:matchRef},{data:dailyMatchRows}] = await Promise.all([
     supa.from('gps_records')
       .select('*, player_profiles(name, position, match_max_td, match_max_hsr, match_max_sprint, match_max_accel, match_max_rhie, match_max_speed, match_max_pl)')
       .eq('session_date', date)
@@ -15171,6 +15210,8 @@ async function loadTeamSummary(forceDate, quiet=false){
       .select('plan_date,day_label,td_target,hsr_target,spr_target,acc_target,rhie_target,am_session,pm_session,ref_basis')
       .eq('track',_summaryTrk)
       .eq('plan_date', date).maybeSingle(),
+    supa.from('periodization_plan_variants').select('*')
+      .eq('club_id',currentClubId).eq('track',_summaryTrk).eq('plan_date', date),
     supa.from('match_records')
       .select('match_date,opponent,player_id,duration,td,band4_td,band5_td,accel,rhie,player_load')
       .eq('time_type','FT').eq('is_estimated',false).eq('baseline_excluded',false).in('competition',getBaselineComps()).order('match_date',{ascending:false}).limit(200),
@@ -15469,25 +15510,47 @@ async function loadTeamSummary(forceDate, quiet=false){
     personalMAvg[pid] = avg;
   });
 
-  const bd = blockDayRow || null;
   const PERIOD_TARGET_COL = { td:'td_target', hsr:'hsr_target', sprint:'spr_target', accel:'acc_target', rhie:'rhie_target' };
   // periodPct: 저장된 기준(ref_basis) 우선 → 지난 날은 준비 당시 기준 고정, 없으면 현재 평균 역산
-  const _pp = (targetCol, avgKey) => {
-    if(!bd || bd[targetCol]==null) return null;
-    if(bd.ref_basis){
-      const m = PERIOD_METRICS.find(x=>x.avgKey===avgKey);
-      if(m && bd.ref_basis.pct && bd.ref_basis.pct[m.pctId]!=null) return bd.ref_basis.pct[m.pctId];
-      if(bd.ref_basis.avg && bd.ref_basis.avg[avgKey]) return bd[targetCol]/bd.ref_basis.avg[avgKey]*100;
-    }
-    return teamMAvg[avgKey] ? bd[targetCol]/teamMAvg[avgKey]*100 : null;
+  const _mkPct = p => {
+    const _pp = (targetCol, avgKey) => {
+      if(!p || p[targetCol]==null) return null;
+      if(p.ref_basis){
+        const m = PERIOD_METRICS.find(x=>x.avgKey===avgKey);
+        if(m && p.ref_basis.pct && p.ref_basis.pct[m.pctId]!=null) return p.ref_basis.pct[m.pctId];
+        if(p.ref_basis.avg && p.ref_basis.avg[avgKey]) return p[targetCol]/p.ref_basis.avg[avgKey]*100;
+      }
+      return teamMAvg[avgKey] ? p[targetCol]/teamMAvg[avgKey]*100 : null;
+    };
+    return { td:_pp('td_target','td'), hsr:_pp('hsr_target','hsr'), sprint:_pp('spr_target','sprint'),
+             accel:_pp('acc_target','accel'), rhie:_pp('rhie_target','rhie') };
   };
-  const periodPct = {
-    td:     _pp('td_target','td'),
-    hsr:    _pp('hsr_target','hsr'),
-    sprint: _pp('spr_target','sprint'),
-    accel:  _pp('acc_target','accel'),
-    rhie:   _pp('rhie_target','rhie'),
+
+  // ── 계획별 목표 (기본 계획 + 추가 계획) ──
+  // 같은 날에도 조가 갈리면 목표가 다르다 (예: 일부는 컵대회, 나머지는 다음 리그전 준비).
+  // GPS 업로드 때 세션마다 계획 정보(대회 구분·상대)가 찍히므로 그것으로 선수를 계획에 잇는다.
+  const bd = blockDayRow ? {...blockDayRow, _key:'base', _name:'기본 계획',
+    competition: blockDayRow.ref_basis?.competition || PLAN_MATCH_COMPETITION[blockDayRow.ref_basis?.match_type] || null,
+    opponent: blockDayRow.ref_basis?.opponent || null } : null;
+  const planList = [
+    ...(bd?[bd]:[]),
+    ...(planVariants||[]).map(v=>({...v,_key:`variant:${v.id}`,_name:v.plan_name||'추가 계획'})),
+  ];
+  planList.forEach(p=>{ p._pct=_mkPct(p); });
+
+  const _planOf = r => {
+    if(planList.length<2) return planList[0]||null;
+    const comp=(r.competition||'').trim(), opp=(r.opponent||'').trim();
+    return planList.find(p=>comp&&opp&&(p.competition||'')===comp&&(p.opponent||'')===opp)
+        || planList.find(p=>comp&&(p.competition||'')===comp)
+        || bd || planList[0];
   };
+  const planByPid = {};
+  (gps||[]).forEach(r=>{ if(!planByPid[r.player_id]) planByPid[r.player_id]=_planOf(r); });
+  const planFor = pid => planByPid[pid] || bd || planList[0] || null;
+  const _multiPlan = planList.length>1 && new Set(Object.values(planByPid).map(p=>p?._key)).size>1;
+
+  const periodPct = bd?._pct || _mkPct(null);
   const isTrainingMode = window._trainingMode === true;
 
   // % 배지 — 훈련 데이터 모드: 개인 목표 달성률 / 일반: Match Max 절대 기준
@@ -15497,11 +15560,14 @@ async function loadTeamSummary(forceDate, quiet=false){
     if(!v || isNaN(v)) return '';
     let target = m, usedTarget = false, teamBasis = false, matchAvgBasis = false;
     const pa = personalMAvg[pid];
-    if(isTrainingMode && field && periodPct[field] != null) {
+    // 그 선수가 실제로 따른 계획의 목표를 쓴다 (같은 날에도 조마다 계획이 다를 수 있다)
+    const _pl = planFor(pid);
+    const _plPct = _pl?._pct || {};
+    if(isTrainingMode && field && _plPct[field] != null) {
       if(pa && pa._personal && pa[field] != null){
-        target = pa[field] * periodPct[field] / 100;
+        target = pa[field] * _plPct[field] / 100;
       } else {
-        target = parseFloat(bd?.[PERIOD_TARGET_COL[field]]);
+        target = parseFloat(_pl?.[PERIOD_TARGET_COL[field]]);
         teamBasis = true;
       }
       usedTarget = true;
@@ -15520,7 +15586,8 @@ async function loadTeamSummary(forceDate, quiet=false){
     const tip = usedTarget
       ? `${teamBasis?'팀':'개인'} 목표 ${Math.round(target).toLocaleString()} 대비 ${pct}%`
         + (teamBasis?` · 개인 풀타임 ${personalMAvg[pid]?._count||0}/3경기라 팀 목표 사용`
-                    :` · 개인 최근 풀타임 3경기 평균 × ${Math.round(periodPct[field])}%`)
+                    :` · 개인 최근 풀타임 3경기 평균 × ${Math.round(_plPct[field])}%`)
+        + (_multiPlan&&_pl?` · ${_pl._name}`:'')
       : matchAvgBasis
         ? `개인 최근 풀타임 3경기 평균 ${Math.round(target).toLocaleString()} 대비 ${pct}% · 주기화 목표가 없는 지표`
         : `경기 Max ${Math.round(target).toLocaleString()} 대비 ${pct}%`;
@@ -15575,7 +15642,13 @@ async function loadTeamSummary(forceDate, quiet=false){
     return `
     <tr class="${_pgBreak}" style="border-bottom:1px solid var(--border);cursor:pointer;background:${idx%2?'var(--surface2)':'transparent'}" onclick="selectDashboardPlayer('${r.player_id}')">
       <td style="padding:7px 8px">
-        <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}${rtBadge}</div>
+        <div style="font-weight:600;color:var(--text)">${r.player_profiles?.name||'-'}${rtBadge}${(()=>{
+          // 그날 조가 갈린 경우에만 어느 계획을 따랐는지 표시한다
+          if(!_multiPlan) return '';
+          const _p=planFor(r.player_id);
+          if(!_p||_p._key==='base') return '';
+          return `<span style="font-size:9px;padding:1px 5px;border-radius:3px;background:#1e1b4b;color:#a5b4fc;font-weight:600;margin-left:4px" title="${_p._name}${_p.competition?' · '+_p.competition:''}${_p.opponent?' · '+_p.opponent:''} 기준으로 목표를 계산했습니다">${_p._name}</span>`;
+        })()}</div>
         <div style="font-size:10px;color:var(--text3)">${r.player_profiles?.position||''}</div>
       </td>
       <td style="padding:7px 8px;text-align:right;color:var(--text2)">${r.duration||'-'}</td>
@@ -15626,10 +15699,17 @@ async function loadTeamSummary(forceDate, quiet=false){
   // 그룹 통계 한 줄 텍스트 (M/혼합/서브 공통) — 팀 목표는 팀 훈련 그룹에만 붙인다
   const groupStatChips = (arr, withGoal=false) => {
     if(!arr.length) return '';
+    // 팀 목표는 그 그룹에서 가장 많은 선수가 따른 계획을 기준으로 삼는다.
+    // 계획이 섞인 날은 팀 평균 자체가 여러 계획을 합친 값이라 어느 하나로 딱 나눌 수 없다.
+    const _cnt={};
+    arr.forEach(r=>{ const p=planFor(r.player_id); if(p) _cnt[p._key]=(_cnt[p._key]||0)+1; });
+    const _topKey=Object.entries(_cnt).sort((a,b)=>b[1]-a[1])[0]?.[0];
+    const _gPlan=planList.find(p=>p._key===_topKey) || bd;
+    const _gMixed=Object.keys(_cnt).length>1;
     const chip = (label, field, unit, color, dec=0) => {
       const val = avgGroup(arr, field, dec);
       const valHtml = `<strong style="color:${color}">${val}${unit}</strong>`;
-      const tgt = withGoal ? parseFloat(bd?.[TEAM_TARGET_COL[field]]) : NaN;
+      const tgt = withGoal ? parseFloat(_gPlan?.[TEAM_TARGET_COL[field]]) : NaN;
       if(!tgt || isNaN(tgt) || val==='-') return `${label} ${valHtml}`;
       const pct = Math.round(parseFloat(val)/tgt*100);
       const col = pct>130?'#f87171':pct>=110?'#fb923c':pct>=90?'#4ade80':pct>=70?'#fbbf24':'#f87171';
@@ -15645,17 +15725,20 @@ async function loadTeamSummary(forceDate, quiet=false){
       currentUseRpe?`RPE <strong style="color:#fbbf24">${calcAvgRpe(arr)}</strong>`:'',
       currentUseRpe?`sRPE <strong style="color:#c084fc">${calcAvgSrpe(arr)}</strong>`:''
     ].filter(Boolean);
-    return `<div class="dg-chips" style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.9">팀 평균 · ${parts.join(' · ')}</div>`;
+    const _planNote = withGoal&&_gPlan&&(_gMixed||_gPlan._key!=='base')
+      ? `<span style="font-size:10px;color:#a5b4fc;margin-left:4px">(목표 기준: ${_gPlan._name}${_gMixed?' · 계획 혼재':''})</span>` : '';
+    return `<div class="dg-chips" style="font-size:11px;color:var(--text3);margin-bottom:10px;line-height:1.9">팀 평균${_planNote} · ${parts.join(' · ')}</div>`;
   };
 
   // % 기준 안내 — 훈련 데이터 모드에서만 개인 목표 달성률이 된다
-  const _hasPeriodTarget = ['td','hsr','sprint','accel','rhie'].some(k=>periodPct[k]!=null);
+  const _hasPeriodTarget = planList.some(p=>['td','hsr','sprint','accel','rhie'].some(k=>p._pct?.[k]!=null));
   const _pctLegend = (isTrainingMode && _hasPeriodTarget)
     ? `<div class="dg-legend" style="font-size:10px;color:var(--text3);margin-bottom:8px;padding:6px 9px;background:var(--surface2);border-radius:6px;line-height:1.6">
          ※ 큰 숫자 = 실제 · 작은 숫자 = <strong style="color:var(--text2)">그 선수의 오늘 목표 · 달성률%</strong>
          <br>· <strong style="color:var(--text2)">목표</strong> = 그 선수의 최근 풀타임(80분↑) 3경기 평균 × 주기화 목표% ${['td','hsr','sprint','accel','rhie'].filter(k=>periodPct[k]!=null).map(k=>`${({td:'TD',hsr:'HSR',sprint:'SPR',accel:'ACC',rhie:'RHIE'})[k]} ${Math.round(periodPct[k])}%`).join(' · ')}
          <br>· <strong style="color:var(--text2)">팀목표</strong> = 풀타임 3경기가 없어 개인 기준을 못 만드는 선수 (팀 전체 목표를 그대로 사용)
          <br>· <strong style="color:var(--text2)">경기평균</strong> = 주기화 목표가 없는 지표(P.Load) — 개인 최근 풀타임 3경기 평균과 직접 비교 · 최고속도는 커리어 경기Max 기준 유지
+         ${_multiPlan?`<br>· 이 날은 조가 갈려 <strong style="color:#a5b4fc">계획이 여러 개</strong>입니다. 선수마다 자기가 따른 계획의 목표와 비교하며, 기본 계획이 아닌 선수는 이름 옆에 계획 이름이 붙습니다`:''}
        </div>`
     : '';
 
@@ -15817,14 +15900,18 @@ async function loadTeamSummary(forceDate, quiet=false){
     const _dmSum=(rows,field)=>rows.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
     const _dmMax=(rows,field)=>Math.max(0,...rows.map(r=>parseFloat(r[field])||0));
     const _dmPlayers=Object.values(_dmByPlayer).map(rows=>{
-      const base=rows.find(r=>(r.time_type||'').toUpperCase()==='FT')||rows[0];
-      const hasFT=rows.some(r=>(r.time_type||'').toUpperCase()==='FT');
-      const hasTop=rows.some(r=>(r.time_type||'').toUpperCase()!=='FT');
+      // 구간 표기는 실제 time_type을 그대로 밝힌다.
+      // FT가 아닌 것을 전부 TOP으로 뭉뚱그리면 연장(ET)이 '경기 후 추가훈련'으로 보인다.
+      const _t=rows.map(r=>(r.time_type||'').trim().toUpperCase());
+      const base=rows.find(r=>(r.time_type||'').trim().toUpperCase()==='FT')||rows[0];
+      const hasFT=_t.includes('FT');
+      const hasET=_t.includes('ET');
+      const hasTop=_t.some(x=>x==='TOP'||x==='TOP-UP');
       const duration=_dmSum(rows,'duration');
       const playerSessions=sessMap[base.player_id]||[];
       const rpeVals=playerSessions.map(s=>parseFloat(s.rpe)||0).filter(v=>v>0);
       const srpe=playerSessions.reduce((a,s)=>{const rv=parseFloat(s.rpe)||0;const du=parseFloat(s.duration)||((playerSessions.length===1)?duration:0);return a+(rv&&du?rv*du:0);},0);
-      return {base,label:hasFT&&hasTop?'FT + TOP':hasFT?'FT':'TOP',duration,td:_dmSum(rows,'td'),hsr:_dmSum(rows,'band4_td'),sprint:_dmSum(rows,'band5_td'),accel:_dmSum(rows,'accel'),rhie:_dmSum(rows,'rhie'),maxSpeed:_dmMax(rows,'max_speed'),rpeDisp:rpeVals.length?rpeVals.join('/'):'',srpe:srpe?Math.round(srpe):null};
+      return {base,label:[hasFT&&'FT',hasET&&'ET',hasTop&&'TOP'].filter(Boolean).join(' + ')||(_t[0]||'—'),duration,td:_dmSum(rows,'td'),hsr:_dmSum(rows,'band4_td'),sprint:_dmSum(rows,'band5_td'),accel:_dmSum(rows,'accel'),rhie:_dmSum(rows,'rhie'),maxSpeed:_dmMax(rows,'max_speed'),rpeDisp:rpeVals.length?rpeVals.join('/'):'',srpe:srpe?Math.round(srpe):null};
     }).sort((a,b)=>(a.base.player_profiles?.position||'').localeCompare(b.base.player_profiles?.position||'')||b.td-a.td);
     const _dmOpponent=_dmPlayers[0]?.base?.opponent||'';
     out.innerHTML += `<div style="background:var(--surface);border:0.5px solid rgba(239,68,68,.4);border-radius:10px;padding:14px;margin-top:10px">
@@ -16035,15 +16122,19 @@ function combineIndividualMatchLoads(rows){
     const sum=f=>{const v=recs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);return v||null;};
     const max=f=>{const vals=recs.map(r=>parseFloat(r[f])||0);const v=Math.max(...vals);return v||null;};
     const hasTop=recs.some(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
+    const hasET=recs.some(r=>(r.time_type||'').trim().toUpperCase()==='ET');
+    // 연장(ET)과 경기 후 추가훈련(TOP)은 성격이 다르므로 라벨에서 구분한다
+    const _label=[ft&&'FT',hasET&&'ET',hasTop&&'TOP'].filter(Boolean).join(' + ')
+      ||((recs[0]?.time_type||'').trim().toUpperCase()||'—');
     return {
       _source:'match', session_date:date,
-      load_label:ft&&hasTop?'FT + TOP':ft?'FT':'TOP',
+      load_label:_label,
       td:sum('td'), running_high:sum('band4_td'), sprint:sum('band5_td'),
       accel:sum('accel'), rhie:sum('rhie'), max_speed:max('max_speed'),
       player_load:sum('player_load'), duration:sum('duration'),
       opponent:base.opponent||null, home_away:base.home_away||null,
       result:base.result||null, score:base.score||null,
-      session_topic:ft&&hasTop?'FT + TOP':ft?'FT':'TOP',
+      session_topic:_label,
       cycle:null, periodization:null, session_type2:null,
       fmp_run_medium:null, fmp_run_high:null, fmp_dyn_medium:null, fmp_dyn_high:null,
     };
