@@ -15861,14 +15861,18 @@ async function loadTeamSummary(forceDate, quiet=false){
     const _dmSum=(rows,field)=>rows.reduce((a,r)=>a+(parseFloat(r[field])||0),0);
     const _dmMax=(rows,field)=>Math.max(0,...rows.map(r=>parseFloat(r[field])||0));
     const _dmPlayers=Object.values(_dmByPlayer).map(rows=>{
-      const base=rows.find(r=>(r.time_type||'').toUpperCase()==='FT')||rows[0];
-      const hasFT=rows.some(r=>(r.time_type||'').toUpperCase()==='FT');
-      const hasTop=rows.some(r=>(r.time_type||'').toUpperCase()!=='FT');
+      // 구간 표기는 실제 time_type을 그대로 밝힌다.
+      // FT가 아닌 것을 전부 TOP으로 뭉뚱그리면 연장(ET)이 '경기 후 추가훈련'으로 보인다.
+      const _t=rows.map(r=>(r.time_type||'').trim().toUpperCase());
+      const base=rows.find(r=>(r.time_type||'').trim().toUpperCase()==='FT')||rows[0];
+      const hasFT=_t.includes('FT');
+      const hasET=_t.includes('ET');
+      const hasTop=_t.some(x=>x==='TOP'||x==='TOP-UP');
       const duration=_dmSum(rows,'duration');
       const playerSessions=sessMap[base.player_id]||[];
       const rpeVals=playerSessions.map(s=>parseFloat(s.rpe)||0).filter(v=>v>0);
       const srpe=playerSessions.reduce((a,s)=>{const rv=parseFloat(s.rpe)||0;const du=parseFloat(s.duration)||((playerSessions.length===1)?duration:0);return a+(rv&&du?rv*du:0);},0);
-      return {base,label:hasFT&&hasTop?'FT + TOP':hasFT?'FT':'TOP',duration,td:_dmSum(rows,'td'),hsr:_dmSum(rows,'band4_td'),sprint:_dmSum(rows,'band5_td'),accel:_dmSum(rows,'accel'),rhie:_dmSum(rows,'rhie'),maxSpeed:_dmMax(rows,'max_speed'),rpeDisp:rpeVals.length?rpeVals.join('/'):'',srpe:srpe?Math.round(srpe):null};
+      return {base,label:[hasFT&&'FT',hasET&&'ET',hasTop&&'TOP'].filter(Boolean).join(' + ')||(_t[0]||'—'),duration,td:_dmSum(rows,'td'),hsr:_dmSum(rows,'band4_td'),sprint:_dmSum(rows,'band5_td'),accel:_dmSum(rows,'accel'),rhie:_dmSum(rows,'rhie'),maxSpeed:_dmMax(rows,'max_speed'),rpeDisp:rpeVals.length?rpeVals.join('/'):'',srpe:srpe?Math.round(srpe):null};
     }).sort((a,b)=>(a.base.player_profiles?.position||'').localeCompare(b.base.player_profiles?.position||'')||b.td-a.td);
     const _dmOpponent=_dmPlayers[0]?.base?.opponent||'';
     out.innerHTML += `<div style="background:var(--surface);border:0.5px solid rgba(239,68,68,.4);border-radius:10px;padding:14px;margin-top:10px">
@@ -16079,15 +16083,19 @@ function combineIndividualMatchLoads(rows){
     const sum=f=>{const v=recs.reduce((a,r)=>a+(parseFloat(r[f])||0),0);return v||null;};
     const max=f=>{const vals=recs.map(r=>parseFloat(r[f])||0);const v=Math.max(...vals);return v||null;};
     const hasTop=recs.some(r=>['TOP','TOP-UP'].includes((r.time_type||'').trim().toUpperCase()));
+    const hasET=recs.some(r=>(r.time_type||'').trim().toUpperCase()==='ET');
+    // 연장(ET)과 경기 후 추가훈련(TOP)은 성격이 다르므로 라벨에서 구분한다
+    const _label=[ft&&'FT',hasET&&'ET',hasTop&&'TOP'].filter(Boolean).join(' + ')
+      ||((recs[0]?.time_type||'').trim().toUpperCase()||'—');
     return {
       _source:'match', session_date:date,
-      load_label:ft&&hasTop?'FT + TOP':ft?'FT':'TOP',
+      load_label:_label,
       td:sum('td'), running_high:sum('band4_td'), sprint:sum('band5_td'),
       accel:sum('accel'), rhie:sum('rhie'), max_speed:max('max_speed'),
       player_load:sum('player_load'), duration:sum('duration'),
       opponent:base.opponent||null, home_away:base.home_away||null,
       result:base.result||null, score:base.score||null,
-      session_topic:ft&&hasTop?'FT + TOP':ft?'FT':'TOP',
+      session_topic:_label,
       cycle:null, periodization:null, session_type2:null,
       fmp_run_medium:null, fmp_run_high:null, fmp_dyn_medium:null, fmp_dyn_high:null,
     };
