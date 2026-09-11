@@ -13340,7 +13340,7 @@ async function loadRosterList(){
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button onclick="openPlayerForm('${p.id}')"
               style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">편집</button>
-            <button onclick="resetPlayerPin('${p.id}','${p.name}')" title="선수가 PIN을 잊었을 때 초기화"
+            <button type="button" class="roster-pin-btn" data-pid="${p.id}" data-pname="${p.name}" title="선수가 PIN을 잊었을 때 초기화"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">🔑PIN</button>
             <button type="button" class="roster-transfer-btn" data-pid="${p.id}" data-pname="${p.name}"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #b45309;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">이적</button>
@@ -13380,21 +13380,43 @@ async function loadRosterList(){
       _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
         `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`));
   });
+  listEl.querySelectorAll('.roster-pin-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>openPinEditor(btn));
+  });
+}
+
+// PIN 초기화 — 입력창을 버튼 자리에 띄운다.
+// prompt()는 브라우저가 대화상자를 막으면 아무 반응 없이 취소되어 버린다.
+function openPinEditor(btn){
+  if(btn.dataset.open==='1') return;
+  btn.dataset.open='1';
+  const name=btn.dataset.pname, pid=btn.dataset.pid;
+  const box=document.createElement('span');
+  box.style.cssText='display:inline-flex;gap:4px;align-items:center';
+  box.innerHTML=`<input type="text" inputmode="numeric" maxlength="4" value="0000"
+      style="width:56px;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:12px;text-align:center">
+    <button type="button" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #4ade80;background:transparent;color:#4ade80;cursor:pointer;font-family:inherit">적용</button>
+    <button type="button" style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">취소</button>`;
+  const [inp, ok, cancel]=[box.querySelector('input'), ...box.querySelectorAll('button')];
+  const close=()=>{ box.replaceWith(btn); btn.dataset.open=''; };
+  cancel.addEventListener('click', close);
+  ok.addEventListener('click', async ()=>{
+    const pin=(inp.value||'').trim()||'0000';
+    if(!/^\d{4}$/.test(pin)){ pageToast('PIN은 숫자 4자리여야 합니다', false); inp.focus(); return; }
+    ok.disabled=true; ok.textContent='저장 중...';
+    // 잠금 상태도 함께 해제 (PIN 5회 오류 잠금 풀기)
+    const {error}=await supa.from('player_profiles')
+      .update({pin, failed_logins:0, locked_until:null}).eq('id', pid);
+    if(error){ pageToast('초기화 실패\n'+error.message, false); ok.disabled=false; ok.textContent='적용'; return; }
+    close();
+    pageToast(`✅ ${name} 선수 PIN을 ${pin}(으)로 설정했습니다\n선수에게 알려주고 로그인 후 직접 변경하도록 안내하세요`, true);
+  });
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') ok.click(); if(e.key==='Escape') close(); });
+  btn.replaceWith(box);
+  inp.focus(); inp.select();
 }
 
 // 선수 PIN 초기화 (선수가 PIN을 잊었을 때)
-async function resetPlayerPin(id, name){
-  const input = prompt(`${name} 선수의 새 PIN (숫자 4자리)을 입력하세요.\n비워두고 확인하면 0000으로 초기화됩니다.`, '0000');
-  if(input === null) return; // 취소
-  const pin = input.trim() === '' ? '0000' : input.trim();
-  if(!/^\d{4}$/.test(pin)){ alert('PIN은 숫자 4자리여야 합니다.'); return; }
-  // 잠금 상태도 함께 해제 (PIN 5회 오류 잠금 풀기)
-  const {error} = await supa.from('player_profiles')
-    .update({pin, failed_logins: 0, locked_until: null}).eq('id', id);
-  if(error){ alert('초기화 실패: ' + error.message); return; }
-  alert(`✅ ${name} 선수 PIN이 ${pin}(으)로 설정되었습니다.\n선수에게 알려주시고, 로그인 후 본인이 PIN을 변경하도록 안내하세요.`);
-}
-
 // 이적·복귀 공통 — 실패를 삼키면 버튼이 '안 눌리는 것'처럼 보인다.
 // 저장 결과를 확인해 알려주고, 선수 목록 캐시(_players)를 비워
 // 다른 화면이 다음에 열릴 때 새로 불러오게 한다.
