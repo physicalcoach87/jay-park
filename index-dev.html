@@ -23317,7 +23317,7 @@ async function loadReportMatchSel(){
   const sel=document.getElementById('report-match-sel');
   if(!sel) return;
   const {data}=await supa.from('match_records')
-    .select('match_date,opponent,result')
+    .select('match_date,opponent,result,competition')
     .eq('time_type','FT')
     .order('match_date',{ascending:false});
   // 중복 제거: 같은 opponent+result 조합이 2일 이내면 동일 경기로 판단 → 최신 날짜만 유지
@@ -23340,7 +23340,7 @@ async function loadReportMatchSel(){
     }
   }
   sel.innerHTML='<option value="">경기를 선택하세요</option>'+
-    deduped.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${(r.opponent||'?')} (${(r.result||'—').trim()})</option>`).join('');
+    deduped.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${(r.opponent||'?')} (${(r.result||'—').trim()})${r.competition?' · '+r.competition:''}</option>`).join('');
 }
 
 // ── § 8: 선수 1명 선택 시 상세 차트 + 5분 구간 렌더 ──
@@ -26893,7 +26893,7 @@ async function loadMatchList(){
   out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
 
   const {data:allRows}=await supa.from('match_records')
-    .select('match_date,opponent,home_away,round,score,result,player_id')
+    .select('match_date,opponent,home_away,round,score,result,player_id,competition')
     .eq('time_type','FT')
     .order('match_date',{ascending:false});
 
@@ -26931,6 +26931,7 @@ async function loadMatchList(){
           <tr style="background:var(--surface2)">
             <th style="padding:8px 10px;text-align:left;color:var(--text3)">날짜</th>
             <th style="padding:8px 10px;text-align:left;color:var(--text3)">상대</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">대회</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">H/A</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">스코어</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">결과</th>
@@ -26947,6 +26948,7 @@ async function loadMatchList(){
             return `<tr style="border-bottom:1px solid var(--border)">
               <td style="padding:8px 10px;color:var(--text2);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">${m.match_date}</td>
               <td style="padding:8px 10px;font-weight:600;color:var(--text);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">${m.opponent||'—'}</td>
+              <td style="padding:8px 10px;text-align:center">${matchCompBadge(m.competition)}</td>
               <td style="padding:8px 10px;text-align:center;font-weight:600;color:${haColor(m.home_away)}">${m.home_away||'—'}</td>
               <td style="padding:8px 10px;text-align:center;color:var(--text2)">${m.score||'—'}</td>
               <td style="padding:8px 10px;text-align:center;font-weight:700;color:${resultColor(m.result)}">${m.result||'—'}</td>
@@ -26961,6 +26963,20 @@ async function loadMatchList(){
         </tbody>
       </table>
     </div>`;
+}
+
+// 대회 구분 배지 — 리그·컵대회는 준비 방식과 로테이션이 달라 목록에서 바로 구분되어야 한다
+const MATCH_COMP_STYLE = {
+  '리그':    {c:'#4ade80', bg:'rgba(74,222,128,.12)',  b:'rgba(74,222,128,.35)'},
+  '컵대회':  {c:'#fbbf24', bg:'rgba(251,191,36,.12)',  b:'rgba(251,191,36,.35)'},
+  '연습경기':{c:'#93c5fd', bg:'rgba(147,197,253,.12)', b:'rgba(147,197,253,.35)'},
+  '기타':    {c:'#9ca3af', bg:'rgba(156,163,175,.12)', b:'rgba(156,163,175,.35)'},
+};
+function matchCompBadge(comp){
+  const v=(comp||'').trim();
+  if(!v) return '<span style="color:var(--text3)">—</span>';
+  const st=MATCH_COMP_STYLE[v]||MATCH_COMP_STYLE['기타'];
+  return `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;color:${st.c};background:${st.bg};border:1px solid ${st.b}">${v}</span>`;
 }
 
 // ── 경기 삭제 ──────────────────────────────────────────────────────
