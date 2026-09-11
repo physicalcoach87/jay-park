@@ -13325,14 +13325,26 @@ async function loadRosterList(){
     </div>`;
     // onclick 속성 대신 직접 연결한다 — 이 섹션은 innerHTML로 나중에 덧붙여지는데,
     // 그 경우 전역 함수를 못 찾아 클릭해도 아무 일이 없는 상황이 생긴다.
+    // 확인은 브라우저 대화상자(confirm) 대신 버튼 안에서 두 번 누르는 방식으로 한다.
+    // 대화상자가 차단된 브라우저에서는 confirm이 즉시 취소로 처리돼
+    // 버튼을 눌러도 아무 일이 없는 것처럼 보인다.
     listEl.querySelectorAll('.roster-restore-btn').forEach(btn=>{
+      let armed=false, timer=null;
       btn.addEventListener('click', async ()=>{
-        // 눌린 것이 보이도록 상태를 바꾼다. 아무 반응이 없으면 클릭 자체가 안 닿은 것이다.
-        const old=btn.textContent;
+        if(!armed){
+          armed=true;
+          btn.textContent='한 번 더 누르면 복귀';
+          btn.style.borderColor='#4ade80'; btn.style.color='#4ade80';
+          timer=setTimeout(()=>{ armed=false; btn.textContent='복귀';
+            btn.style.borderColor='var(--border2)'; btn.style.color='var(--text3)'; }, 4000);
+          return;
+        }
+        clearTimeout(timer); armed=false;
         btn.disabled=true; btn.textContent='처리 중...';
-        try{ await confirmRestorePlayer(btn.dataset.pid, btn.dataset.pname); }
-        catch(e){ alert('복귀 처리 중 오류: '+(e.message||e)); }
-        finally{ if(document.body.contains(btn)){ btn.disabled=false; btn.textContent=old; } }
+        try{ await _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
+               `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`); }
+        catch(e){ alert('복귀 처리 중 오류: '+(e.message||e));
+                  btn.disabled=false; btn.textContent='복귀'; }
       });
     });
   }
