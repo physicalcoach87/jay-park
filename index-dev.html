@@ -5657,7 +5657,8 @@ async function loadGymPlayers(){
   const sel=document.getElementById('gym-player-select');
   if(!sel) return;
   try {
-    const {data}=await supa.from('player_profiles').select('id,name').order('name');
+    const {data}=await supa.from('player_profiles').select('id,name')
+      .eq('club_id',currentClubId).neq('status','transferred').order('name');
     sel.innerHTML='<option value="">— 선수 선택 안 함 (일반 처방) —</option>';
     (data||[]).forEach(p=>{
       const opt=document.createElement('option');
@@ -9443,7 +9444,7 @@ function setPlayerView(view){
     if(sel && sel.options.length <= 1 && _players.length){
       _players.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
     } else if(sel && sel.options.length <= 1){
-      supa.from('player_profiles').select('id,name,position').eq('club_id', currentClubId).then(({data})=>{
+      supa.from('player_profiles').select('id,name,position').eq('club_id', currentClubId).neq('status','transferred').then(({data})=>{
         (data||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
       });
     }
@@ -9951,7 +9952,7 @@ function renderSchedPlayerList(){
     : (window._globalPlayers||[]);
   if(!pool.length){
     // 선수 목록 없으면 로드
-    supa.from('player_profiles').select('id,name,position,team').eq('club_id', currentClubId).order('position').order('name').then(({data})=>{
+    supa.from('player_profiles').select('id,name,position,team').eq('club_id', currentClubId).neq('status','transferred').order('position').order('name').then(({data})=>{
       if(data){ window._globalPlayers = data; renderSchedPlayerList(); }
     });
     el.innerHTML = '<span style="font-size:12px;color:var(--text3)">로딩 중...</span>';
@@ -13157,6 +13158,10 @@ function renderExportView(stv){
           <input id="exp-end" type="date" value="${today}" style="width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
         </div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">대상 선수</div>
+      <select id="exp-player" style="width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:14px">
+        <option value="">전체 선수</option>
+      </select>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">포함할 데이터</div>
       <div id="exp-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;font-size:13px">
         ${[['roster','선수명단',1],['gps','GPS 기록',1],['wellness','웰니스',1],['rpe','RPE(sRPE)',1],['match','경기 기록',1],['injury','부상 기록',1],['body','체성분',0],['test','테스트 기록',0]].map(([k,l,on])=>
@@ -13166,6 +13171,15 @@ function renderExportView(stv){
       <div id="exp-status" style="font-size:12px;color:var(--text3);min-height:18px;margin-top:10px;text-align:center"></div>
     </div>
   </div>`;
+
+  // 대상 선수 목록 — 이적선수도 포함한다. 이적한 뒤 그 선수 자료만 뽑는 것이 이 기능의 목적이다.
+  supa.from('player_profiles').select('id,name,status').eq('club_id',currentClubId).order('name')
+    .then(({data})=>{
+      const sel=document.getElementById('exp-player');
+      if(!sel||!data) return;
+      sel.innerHTML='<option value="">전체 선수</option>'
+        +data.map(p=>`<option value="${p.id}">${p.name}${p.status==='transferred'?' (이적)':''}</option>`).join('');
+    });
 }
 
 // supabase 1000행 제한 대응: range 페이지네이션으로 전체 조회
@@ -13195,10 +13209,14 @@ async function exportSeasonData(){
   btn.disabled = true; btn.textContent = '내보내는 중...';
   try{
     st.textContent = '선수 명단 조회 중...';
-    const {data:players} = await supa.from('player_profiles').select('*')
+    const {data:allPlayers} = await supa.from('player_profiles').select('*')
       .eq('club_id', currentClubId).order('name');
-    const nameOf = {}; (players||[]).forEach(p=>nameOf[p.id]=p.name);
-    const pids = (players||[]).map(p=>p.id);
+    // 선수를 고르면 그 선수 자료만 내보낸다 (이적선수 자료를 따로 받을 때 쓴다)
+    const _expPid = document.getElementById('exp-player')?.value || '';
+    const players = _expPid ? (allPlayers||[]).filter(p=>p.id===_expPid) : (allPlayers||[]);
+    const nameOf = {}; (allPlayers||[]).forEach(p=>nameOf[p.id]=p.name);
+    const pids = players.map(p=>p.id);
+    if(_expPid && !pids.length){ st.textContent='선택한 선수를 찾을 수 없습니다'; btn.disabled=false; return; }
 
     // 민감 컬럼은 내보내지 않음
     const OMIT = ['id','club_id','player_id','pin','access_token','auth_user_id','failed_logins','locked_until','created_at','created_by'];
@@ -13230,12 +13248,14 @@ async function exportSeasonData(){
     for(const [key, sheet, table, dateField, clubScoped] of jobs){
       if(!ck(key)) continue;
       st.textContent = sheet + ' 조회 중...';
-      const rows = await _fetchAllRows(table, dateField, start, end, clubScoped, pids);
+      // 특정 선수를 고르면 클럽 단위가 아니라 선수 단위로 조회해야 그 선수 것만 나온다
+      const rows = await _fetchAllRows(table, dateField, start, end, _expPid ? false : clubScoped, pids);
       addSheet(sheet, clean(rows, dateField));
     }
 
     st.textContent = '파일 생성 중...';
-    const fname = `${(currentClubName||'팀')}_시즌데이터_${start}_${end}.xlsx`;
+    const _who = _expPid ? (nameOf[_expPid]||'선수') : (currentClubName||'팀');
+    const fname = `${_who}_시즌데이터_${start}_${end}.xlsx`;
     XLSX.writeFile(wb, fname);
     st.textContent = '✅ 다운로드 완료: ' + fname;
   }catch(e){
@@ -13319,18 +13339,30 @@ async function resetPlayerPin(id, name){
   alert(`✅ ${name} 선수 PIN이 ${pin}(으)로 설정되었습니다.\n선수에게 알려주시고, 로그인 후 본인이 PIN을 변경하도록 안내하세요.`);
 }
 
+// 이적·복귀 공통 — 실패를 삼키면 버튼이 '안 눌리는 것'처럼 보인다.
+// 저장 결과를 확인해 알려주고, 선수 목록 캐시(_players)를 비워
+// 다른 화면이 다음에 열릴 때 새로 불러오게 한다.
+async function _setPlayerStatus(id, name, status, doneMsg){
+  const {error} = await supa.from('player_profiles').update({status}).eq('id',id);
+  if(error){
+    alert(`처리에 실패했습니다.\n\n${error.message||error}\n\n권한이 없거나 연결이 끊겼을 수 있습니다.`);
+    return false;
+  }
+  _players = [];
+  await loadRosterList();
+  if(typeof loadPlayerManagement==='function') loadPlayerManagement();
+  if(doneMsg) alert(doneMsg);
+  return true;
+}
+
 async function confirmTransferPlayer(id, name){
   if(!confirm(`"${name}" 선수를 이적 처리할까요?\n데이터는 보존되고 선수 앱 접속이 차단됩니다.`)) return;
-  await supa.from('player_profiles').update({status:'transferred'}).eq('id',id);
-  loadRosterList();
-  loadPlayerManagement();
+  await _setPlayerStatus(id, name, 'transferred', `✅ ${name} 선수를 이적 처리했습니다.`);
 }
 
 async function confirmRestorePlayer(id, name){
   if(!confirm(`"${name}" 선수를 현역으로 복귀시킬까요?`)) return;
-  await supa.from('player_profiles').update({status:'active'}).eq('id',id);
-  loadRosterList();
-  loadPlayerManagement();
+  await _setPlayerStatus(id, name, 'active', `✅ ${name} 선수가 현역으로 복귀했습니다.`);
 }
 
 // ── 선수 폼 ───────────────────────────────
