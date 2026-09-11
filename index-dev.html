@@ -21561,6 +21561,10 @@ async function loadCardioPeriodizationMd(){
     const plan=block?{md:block.day_label.replace('-',''),title:block.am_session||block.pm_session||'',source:'주기화 블록'}:(sched?{md:(sched.md_stage||'').replace('-',''),title:sched.title||'',source:'팀 일정'}:null);
     _cardioPlannedMd=plan&&/^MD[1-5]$/.test(plan.md)?plan.md:null;
     _cardioMdSourceText=plan?`${plan.source}: ${cardioMdLabel(plan.md)}${plan.title?' · '+plan.title:''}`:'오늘 주기화 MD 계획 없음 · 직접 선택';
+    // 근력 처방과 같이 오늘 계획의 MD 단계를 미리 채워둔다.
+    // 코치가 드롭다운에서 다른 단계로 바꾸면 그 선택이 우선이므로,
+    // 이미 고른 값이 있으면 덮지 않는다.
+    if(_cardioPlannedMd && sel && !sel.value){ sel.value=_cardioPlannedMd; onCardioMdChange(); }
     renderCardioMdGuide();
   }catch(e){_cardioPlannedMd=null;_cardioMdSourceText='주기화 계획을 불러오지 못함 · 직접 선택';renderCardioMdGuide();}
 }
