@@ -13265,6 +13265,49 @@ async function exportSeasonData(){
   }
 }
 
+// 브라우저 알림창(alert/confirm/prompt)이 차단된 환경에서도 결과가 보이도록
+// 화면 안에 띄우는 메시지. 차단 여부와 무관하게 항상 동작한다.
+function pageToast(msg, ok=true){
+  let el=document.getElementById('page-toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='page-toast';
+    el.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:100000;'
+      +'padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;'
+      +'box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:88vw;text-align:center;white-space:pre-line';
+    document.body.appendChild(el);
+  }
+  el.style.background = ok ? '#14532d' : '#7f1d1d';
+  el.style.color      = ok ? '#bbf7d0' : '#fecaca';
+  el.style.border     = '1px solid ' + (ok ? '#22c55e55' : '#ef444455');
+  el.textContent = msg;
+  el.style.display='block';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{ el.style.display='none'; }, ok?3000:6000);
+}
+
+// 명단 버튼 공통 — 한 번 누르면 확인 상태, 다시 누르면 실행.
+// confirm()에 기대지 않으므로 알림창이 차단돼도 동작한다.
+function armRosterBtn(btn, armText, armColor, run){
+  let armed=false, timer=null;
+  const idle=btn.textContent, ib=btn.style.borderColor, ic=btn.style.color;
+  btn.addEventListener('click', async ()=>{
+    if(!armed){
+      armed=true; btn.textContent=armText;
+      btn.style.borderColor=armColor; btn.style.color=armColor;
+      timer=setTimeout(()=>{ armed=false; btn.textContent=idle;
+        btn.style.borderColor=ib; btn.style.color=ic; }, 4000);
+      return;
+    }
+    clearTimeout(timer); armed=false;
+    btn.disabled=true; btn.textContent='처리 중...';
+    try{ await run(); }
+    catch(e){ pageToast('처리 중 오류: '+(e.message||e), false);
+              btn.disabled=false; btn.textContent=idle;
+              btn.style.borderColor=ib; btn.style.color=ic; }
+  });
+}
+
 async function loadRosterList(){
   const listEl = document.getElementById('roster-list');
   if(!listEl) return;
@@ -13299,13 +13342,19 @@ async function loadRosterList(){
               style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">편집</button>
             <button onclick="resetPlayerPin('${p.id}','${p.name}')" title="선수가 PIN을 잊었을 때 초기화"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">🔑PIN</button>
-            <button onclick="confirmTransferPlayer('${p.id}','${p.name}')"
+            <button type="button" class="roster-transfer-btn" data-pid="${p.id}" data-pname="${p.name}"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #b45309;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">이적</button>
             <button onclick="confirmDeletePlayer('${p.id}','${p.name}')"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">삭제</button>
           </div>
         </div>`).join('')}
     </div>`).join('');
+
+  listEl.querySelectorAll('.roster-transfer-btn').forEach(btn=>{
+    armRosterBtn(btn, '한 번 더 누르면 이적', '#fbbf24', ()=>
+      _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'transferred',
+        `✅ ${btn.dataset.pname} 선수를 이적 처리했습니다.`));
+  });
 
   // 이적 선수 섹션
   const transferred = allPlayers.filter(p=>p.status==='transferred');
@@ -13329,23 +13378,9 @@ async function loadRosterList(){
     // 대화상자가 차단된 브라우저에서는 confirm이 즉시 취소로 처리돼
     // 버튼을 눌러도 아무 일이 없는 것처럼 보인다.
     listEl.querySelectorAll('.roster-restore-btn').forEach(btn=>{
-      let armed=false, timer=null;
-      btn.addEventListener('click', async ()=>{
-        if(!armed){
-          armed=true;
-          btn.textContent='한 번 더 누르면 복귀';
-          btn.style.borderColor='#4ade80'; btn.style.color='#4ade80';
-          timer=setTimeout(()=>{ armed=false; btn.textContent='복귀';
-            btn.style.borderColor='var(--border2)'; btn.style.color='var(--text3)'; }, 4000);
-          return;
-        }
-        clearTimeout(timer); armed=false;
-        btn.disabled=true; btn.textContent='처리 중...';
-        try{ await _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
-               `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`); }
-        catch(e){ alert('복귀 처리 중 오류: '+(e.message||e));
-                  btn.disabled=false; btn.textContent='복귀'; }
-      });
+      armRosterBtn(btn, '한 번 더 누르면 복귀', '#4ade80', ()=>
+        _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
+          `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`));
     });
   }
 }
@@ -13369,24 +13404,14 @@ async function resetPlayerPin(id, name){
 async function _setPlayerStatus(id, name, status, doneMsg){
   const {error} = await supa.from('player_profiles').update({status}).eq('id',id);
   if(error){
-    alert(`처리에 실패했습니다.\n\n${error.message||error}\n\n권한이 없거나 연결이 끊겼을 수 있습니다.`);
+    pageToast(`처리에 실패했습니다\n${error.message||error}`, false);
     return false;
   }
   _players = [];
   await loadRosterList();
   if(typeof loadPlayerManagement==='function') loadPlayerManagement();
-  if(doneMsg) alert(doneMsg);
+  if(doneMsg) pageToast(doneMsg, true);
   return true;
-}
-
-async function confirmTransferPlayer(id, name){
-  if(!confirm(`"${name}" 선수를 이적 처리할까요?\n데이터는 보존되고 선수 앱 접속이 차단됩니다.`)) return;
-  await _setPlayerStatus(id, name, 'transferred', `✅ ${name} 선수를 이적 처리했습니다.`);
-}
-
-async function confirmRestorePlayer(id, name){
-  if(!confirm(`"${name}" 선수를 현역으로 복귀시킬까요?`)) return;
-  await _setPlayerStatus(id, name, 'active', `✅ ${name} 선수가 현역으로 복귀했습니다.`);
 }
 
 // ── 선수 폼 ───────────────────────────────
