@@ -5657,7 +5657,8 @@ async function loadGymPlayers(){
   const sel=document.getElementById('gym-player-select');
   if(!sel) return;
   try {
-    const {data}=await supa.from('player_profiles').select('id,name').order('name');
+    const {data}=await supa.from('player_profiles').select('id,name')
+      .eq('club_id',currentClubId).neq('status','transferred').order('name');
     sel.innerHTML='<option value="">— 선수 선택 안 함 (일반 처방) —</option>';
     (data||[]).forEach(p=>{
       const opt=document.createElement('option');
@@ -9443,7 +9444,7 @@ function setPlayerView(view){
     if(sel && sel.options.length <= 1 && _players.length){
       _players.forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
     } else if(sel && sel.options.length <= 1){
-      supa.from('player_profiles').select('id,name,position').eq('club_id', currentClubId).then(({data})=>{
+      supa.from('player_profiles').select('id,name,position').eq('club_id', currentClubId).neq('status','transferred').then(({data})=>{
         (data||[]).forEach(p=>{ const o=document.createElement('option'); o.value=p.id; o.textContent=`${p.name} (${p.position})`; sel.appendChild(o); });
       });
     }
@@ -9951,7 +9952,7 @@ function renderSchedPlayerList(){
     : (window._globalPlayers||[]);
   if(!pool.length){
     // 선수 목록 없으면 로드
-    supa.from('player_profiles').select('id,name,position,team').eq('club_id', currentClubId).order('position').order('name').then(({data})=>{
+    supa.from('player_profiles').select('id,name,position,team').eq('club_id', currentClubId).neq('status','transferred').order('position').order('name').then(({data})=>{
       if(data){ window._globalPlayers = data; renderSchedPlayerList(); }
     });
     el.innerHTML = '<span style="font-size:12px;color:var(--text3)">로딩 중...</span>';
@@ -13157,6 +13158,10 @@ function renderExportView(stv){
           <input id="exp-end" type="date" value="${today}" style="width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit">
         </div>
       </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px">대상 선수</div>
+      <select id="exp-player" style="width:100%;box-sizing:border-box;padding:9px;border-radius:8px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:13px;margin-bottom:14px">
+        <option value="">전체 선수</option>
+      </select>
       <div style="font-size:11px;color:var(--text3);margin-bottom:8px">포함할 데이터</div>
       <div id="exp-checks" style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:16px;font-size:13px">
         ${[['roster','선수명단',1],['gps','GPS 기록',1],['wellness','웰니스',1],['rpe','RPE(sRPE)',1],['match','경기 기록',1],['injury','부상 기록',1],['body','체성분',0],['test','테스트 기록',0]].map(([k,l,on])=>
@@ -13166,6 +13171,15 @@ function renderExportView(stv){
       <div id="exp-status" style="font-size:12px;color:var(--text3);min-height:18px;margin-top:10px;text-align:center"></div>
     </div>
   </div>`;
+
+  // 대상 선수 목록 — 이적선수도 포함한다. 이적한 뒤 그 선수 자료만 뽑는 것이 이 기능의 목적이다.
+  supa.from('player_profiles').select('id,name,status').eq('club_id',currentClubId).order('name')
+    .then(({data})=>{
+      const sel=document.getElementById('exp-player');
+      if(!sel||!data) return;
+      sel.innerHTML='<option value="">전체 선수</option>'
+        +data.map(p=>`<option value="${p.id}">${p.name}${p.status==='transferred'?' (이적)':''}</option>`).join('');
+    });
 }
 
 // supabase 1000행 제한 대응: range 페이지네이션으로 전체 조회
@@ -13195,10 +13209,14 @@ async function exportSeasonData(){
   btn.disabled = true; btn.textContent = '내보내는 중...';
   try{
     st.textContent = '선수 명단 조회 중...';
-    const {data:players} = await supa.from('player_profiles').select('*')
+    const {data:allPlayers} = await supa.from('player_profiles').select('*')
       .eq('club_id', currentClubId).order('name');
-    const nameOf = {}; (players||[]).forEach(p=>nameOf[p.id]=p.name);
-    const pids = (players||[]).map(p=>p.id);
+    // 선수를 고르면 그 선수 자료만 내보낸다 (이적선수 자료를 따로 받을 때 쓴다)
+    const _expPid = document.getElementById('exp-player')?.value || '';
+    const players = _expPid ? (allPlayers||[]).filter(p=>p.id===_expPid) : (allPlayers||[]);
+    const nameOf = {}; (allPlayers||[]).forEach(p=>nameOf[p.id]=p.name);
+    const pids = players.map(p=>p.id);
+    if(_expPid && !pids.length){ st.textContent='선택한 선수를 찾을 수 없습니다'; btn.disabled=false; return; }
 
     // 민감 컬럼은 내보내지 않음
     const OMIT = ['id','club_id','player_id','pin','access_token','auth_user_id','failed_logins','locked_until','created_at','created_by'];
@@ -13230,12 +13248,14 @@ async function exportSeasonData(){
     for(const [key, sheet, table, dateField, clubScoped] of jobs){
       if(!ck(key)) continue;
       st.textContent = sheet + ' 조회 중...';
-      const rows = await _fetchAllRows(table, dateField, start, end, clubScoped, pids);
+      // 특정 선수를 고르면 클럽 단위가 아니라 선수 단위로 조회해야 그 선수 것만 나온다
+      const rows = await _fetchAllRows(table, dateField, start, end, _expPid ? false : clubScoped, pids);
       addSheet(sheet, clean(rows, dateField));
     }
 
     st.textContent = '파일 생성 중...';
-    const fname = `${(currentClubName||'팀')}_시즌데이터_${start}_${end}.xlsx`;
+    const _who = _expPid ? (nameOf[_expPid]||'선수') : (currentClubName||'팀');
+    const fname = `${_who}_시즌데이터_${start}_${end}.xlsx`;
     XLSX.writeFile(wb, fname);
     st.textContent = '✅ 다운로드 완료: ' + fname;
   }catch(e){
@@ -13243,6 +13263,49 @@ async function exportSeasonData(){
   }finally{
     btn.disabled = false; btn.textContent = '📥 엑셀 다운로드';
   }
+}
+
+// 브라우저 알림창(alert/confirm/prompt)이 차단된 환경에서도 결과가 보이도록
+// 화면 안에 띄우는 메시지. 차단 여부와 무관하게 항상 동작한다.
+function pageToast(msg, ok=true){
+  let el=document.getElementById('page-toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='page-toast';
+    el.style.cssText='position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:100000;'
+      +'padding:11px 18px;border-radius:10px;font-size:13px;font-weight:600;font-family:inherit;'
+      +'box-shadow:0 6px 24px rgba(0,0,0,.35);max-width:88vw;text-align:center;white-space:pre-line';
+    document.body.appendChild(el);
+  }
+  el.style.background = ok ? '#14532d' : '#7f1d1d';
+  el.style.color      = ok ? '#bbf7d0' : '#fecaca';
+  el.style.border     = '1px solid ' + (ok ? '#22c55e55' : '#ef444455');
+  el.textContent = msg;
+  el.style.display='block';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{ el.style.display='none'; }, ok?3000:6000);
+}
+
+// 명단 버튼 공통 — 한 번 누르면 확인 상태, 다시 누르면 실행.
+// confirm()에 기대지 않으므로 알림창이 차단돼도 동작한다.
+function armRosterBtn(btn, armText, armColor, run){
+  let armed=false, timer=null;
+  const idle=btn.textContent, ib=btn.style.borderColor, ic=btn.style.color;
+  btn.addEventListener('click', async ()=>{
+    if(!armed){
+      armed=true; btn.textContent=armText;
+      btn.style.borderColor=armColor; btn.style.color=armColor;
+      timer=setTimeout(()=>{ armed=false; btn.textContent=idle;
+        btn.style.borderColor=ib; btn.style.color=ic; }, 4000);
+      return;
+    }
+    clearTimeout(timer); armed=false;
+    btn.disabled=true; btn.textContent='처리 중...';
+    try{ await run(); }
+    catch(e){ pageToast('처리 중 오류: '+(e.message||e), false);
+              btn.disabled=false; btn.textContent=idle;
+              btn.style.borderColor=ib; btn.style.color=ic; }
+  });
 }
 
 async function loadRosterList(){
@@ -13277,9 +13340,9 @@ async function loadRosterList(){
           <div style="display:flex;gap:6px;flex-shrink:0">
             <button onclick="openPlayerForm('${p.id}')"
               style="font-size:12px;padding:6px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent-bg);color:var(--accent2);cursor:pointer;font-family:inherit">편집</button>
-            <button onclick="resetPlayerPin('${p.id}','${p.name}')" title="선수가 PIN을 잊었을 때 초기화"
+            <button type="button" class="roster-pin-btn" data-pid="${p.id}" data-pname="${p.name}" title="선수가 PIN을 잊었을 때 초기화"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit">🔑PIN</button>
-            <button onclick="confirmTransferPlayer('${p.id}','${p.name}')"
+            <button type="button" class="roster-transfer-btn" data-pid="${p.id}" data-pname="${p.name}"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #b45309;background:transparent;color:#fbbf24;cursor:pointer;font-family:inherit">이적</button>
             <button onclick="confirmDeletePlayer('${p.id}','${p.name}')"
               style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #7f1d1d;background:transparent;color:var(--red);cursor:pointer;font-family:inherit">삭제</button>
@@ -13290,7 +13353,7 @@ async function loadRosterList(){
   // 이적 선수 섹션
   const transferred = allPlayers.filter(p=>p.status==='transferred');
   if(transferred.length){
-    listEl.innerHTML += `
+    listEl.insertAdjacentHTML('beforeend', `
     <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">🔄 이적 선수 (${transferred.length}명)</div>
       ${transferred.map(p=>`
@@ -13299,38 +13362,75 @@ async function loadRosterList(){
             <span style="font-size:13px;font-weight:600;color:var(--text3)">${p.name}</span>
             <span style="font-size:11px;color:var(--text3);margin-left:6px">${p.position}</span>
           </div>
-          <button onclick="confirmRestorePlayer('${p.id}','${p.name}')"
+          <button type="button" class="roster-restore-btn" data-pid="${p.id}" data-pname="${p.name}"
             style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">복귀</button>
         </div>`).join('')}
-    </div>`;
+    </div>`);
   }
+
+  // 버튼 연결은 화면을 다 그린 뒤 한 번에 한다.
+  // 중간에 innerHTML을 다시 대입하면 앞서 연결한 버튼의 연결이 끊긴다.
+  listEl.querySelectorAll('.roster-transfer-btn').forEach(btn=>{
+    armRosterBtn(btn, '한 번 더 누르면 이적', '#fbbf24', ()=>
+      _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'transferred',
+        `✅ ${btn.dataset.pname} 선수를 이적 처리했습니다.`));
+  });
+  listEl.querySelectorAll('.roster-restore-btn').forEach(btn=>{
+    armRosterBtn(btn, '한 번 더 누르면 복귀', '#4ade80', ()=>
+      _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
+        `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`));
+  });
+  listEl.querySelectorAll('.roster-pin-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>openPinEditor(btn));
+  });
+}
+
+// PIN 초기화 — 입력창을 버튼 자리에 띄운다.
+// prompt()는 브라우저가 대화상자를 막으면 아무 반응 없이 취소되어 버린다.
+function openPinEditor(btn){
+  if(btn.dataset.open==='1') return;
+  btn.dataset.open='1';
+  const name=btn.dataset.pname, pid=btn.dataset.pid;
+  const box=document.createElement('span');
+  box.style.cssText='display:inline-flex;gap:4px;align-items:center';
+  box.innerHTML=`<input type="text" inputmode="numeric" maxlength="4" value="0000"
+      style="width:56px;padding:5px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--surface);color:var(--text);font-family:inherit;font-size:12px;text-align:center">
+    <button type="button" style="font-size:12px;padding:6px 10px;border-radius:6px;border:1px solid #4ade80;background:transparent;color:#4ade80;cursor:pointer;font-family:inherit">적용</button>
+    <button type="button" style="font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">취소</button>`;
+  const [inp, ok, cancel]=[box.querySelector('input'), ...box.querySelectorAll('button')];
+  const close=()=>{ box.replaceWith(btn); btn.dataset.open=''; };
+  cancel.addEventListener('click', close);
+  ok.addEventListener('click', async ()=>{
+    const pin=(inp.value||'').trim()||'0000';
+    if(!/^\d{4}$/.test(pin)){ pageToast('PIN은 숫자 4자리여야 합니다', false); inp.focus(); return; }
+    ok.disabled=true; ok.textContent='저장 중...';
+    // 잠금 상태도 함께 해제 (PIN 5회 오류 잠금 풀기)
+    const {error}=await supa.from('player_profiles')
+      .update({pin, failed_logins:0, locked_until:null}).eq('id', pid);
+    if(error){ pageToast('초기화 실패\n'+error.message, false); ok.disabled=false; ok.textContent='적용'; return; }
+    close();
+    pageToast(`✅ ${name} 선수 PIN을 ${pin}(으)로 설정했습니다\n선수에게 알려주고 로그인 후 직접 변경하도록 안내하세요`, true);
+  });
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') ok.click(); if(e.key==='Escape') close(); });
+  btn.replaceWith(box);
+  inp.focus(); inp.select();
 }
 
 // 선수 PIN 초기화 (선수가 PIN을 잊었을 때)
-async function resetPlayerPin(id, name){
-  const input = prompt(`${name} 선수의 새 PIN (숫자 4자리)을 입력하세요.\n비워두고 확인하면 0000으로 초기화됩니다.`, '0000');
-  if(input === null) return; // 취소
-  const pin = input.trim() === '' ? '0000' : input.trim();
-  if(!/^\d{4}$/.test(pin)){ alert('PIN은 숫자 4자리여야 합니다.'); return; }
-  // 잠금 상태도 함께 해제 (PIN 5회 오류 잠금 풀기)
-  const {error} = await supa.from('player_profiles')
-    .update({pin, failed_logins: 0, locked_until: null}).eq('id', id);
-  if(error){ alert('초기화 실패: ' + error.message); return; }
-  alert(`✅ ${name} 선수 PIN이 ${pin}(으)로 설정되었습니다.\n선수에게 알려주시고, 로그인 후 본인이 PIN을 변경하도록 안내하세요.`);
-}
-
-async function confirmTransferPlayer(id, name){
-  if(!confirm(`"${name}" 선수를 이적 처리할까요?\n데이터는 보존되고 선수 앱 접속이 차단됩니다.`)) return;
-  await supa.from('player_profiles').update({status:'transferred'}).eq('id',id);
-  loadRosterList();
-  loadPlayerManagement();
-}
-
-async function confirmRestorePlayer(id, name){
-  if(!confirm(`"${name}" 선수를 현역으로 복귀시킬까요?`)) return;
-  await supa.from('player_profiles').update({status:'active'}).eq('id',id);
-  loadRosterList();
-  loadPlayerManagement();
+// 이적·복귀 공통 — 실패를 삼키면 버튼이 '안 눌리는 것'처럼 보인다.
+// 저장 결과를 확인해 알려주고, 선수 목록 캐시(_players)를 비워
+// 다른 화면이 다음에 열릴 때 새로 불러오게 한다.
+async function _setPlayerStatus(id, name, status, doneMsg){
+  const {error} = await supa.from('player_profiles').update({status}).eq('id',id);
+  if(error){
+    pageToast(`처리에 실패했습니다\n${error.message||error}`, false);
+    return false;
+  }
+  _players = [];
+  await loadRosterList();
+  if(typeof loadPlayerManagement==='function') loadPlayerManagement();
+  if(doneMsg) pageToast(doneMsg, true);
+  return true;
 }
 
 // ── 선수 폼 ───────────────────────────────
@@ -19414,7 +19514,7 @@ async function loadNotifyTab(){
   // 탭 진입 시 뱃지 클리어
   const badge = document.getElementById('notify-tab-badge');
   if(badge) badge.style.display = 'none';
-  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('position').order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred').order('position').order('name');
   _players = data||[];
   const msgSel = document.getElementById('msg-player-sel');
   if(msgSel){
@@ -21192,7 +21292,7 @@ function getCardioFitnessType(player){
 async function loadCardioPlayers(){
   const sel = document.getElementById('cardio-player');
   if(!sel) return;
-  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('name');
+  const {data} = await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred').order('name');
   _players = data || [];
   sel.innerHTML = '<option value="">선수를 선택하세요</option>' +
     _players.map(p=>`<option value="${p.id}">${p.name} (${p.position}) — MAS ${p.mas}</option>`).join('');
@@ -23203,7 +23303,9 @@ function updateAsrPreview(){
 }
 async function loadPlayerList(){
   const listEl=document.getElementById('player-list');
-  const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId).order('name');
+  // 이적선수는 설정 > 선수 명단의 '🔄 이적 선수' 섹션에서만 보여준다.
+  // 여기서 섞이면 _players 전역에 담겨 Match Max 등 다른 화면까지 따라간다.
+  const {data}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred').order('name');
   _players=data||[];
   if(!_players.length){listEl.innerHTML='<div style="text-align:center;padding:1.5rem;color:var(--text3);font-size:13px">등록된 선수가 없습니다</div>';return;}
   listEl.innerHTML=_players.map(p=>`
@@ -23317,7 +23419,7 @@ async function loadReportMatchSel(){
   const sel=document.getElementById('report-match-sel');
   if(!sel) return;
   const {data}=await supa.from('match_records')
-    .select('match_date,opponent,result')
+    .select('match_date,opponent,result,competition')
     .eq('time_type','FT')
     .order('match_date',{ascending:false});
   // 중복 제거: 같은 opponent+result 조합이 2일 이내면 동일 경기로 판단 → 최신 날짜만 유지
@@ -23340,7 +23442,7 @@ async function loadReportMatchSel(){
     }
   }
   sel.innerHTML='<option value="">경기를 선택하세요</option>'+
-    deduped.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${(r.opponent||'?')} (${(r.result||'—').trim()})</option>`).join('');
+    deduped.map(r=>`<option value="${r.match_date}||${r.opponent||''}">${r.match_date} vs ${(r.opponent||'?')} (${(r.result||'—').trim()})${r.competition?' · '+r.competition:''}</option>`).join('');
 }
 
 // ── § 8: 선수 1명 선택 시 상세 차트 + 5분 구간 렌더 ──
@@ -23508,9 +23610,9 @@ async function generateMatchReport(){
   const _preFromStr = _reportBlock?.start_date
     ? _reportBlock.start_date
     : _preFallback.toISOString().split('T')[0];
-  const [{data:preGPS},{data:preRPE},{data:prePlans}] = await Promise.all([
+  const [{data:preGPS},{data:preRPE},{data:prePlans},{data:preVariants}] = await Promise.all([
     supa.from('gps_records')
-      .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
+      .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent,plan_key')
       .gte('session_date',_preFromStr)
       .lt('session_date',date)
       .order('session_date',{ascending:true}),
@@ -23524,7 +23626,11 @@ async function generateMatchReport(){
       .gte('plan_date',_preFromStr)
       .lt('plan_date',date)
       .in('track',['ALL','A'])
-      .order('plan_date',{ascending:true})
+      .order('plan_date',{ascending:true}),
+    supa.from('periodization_plan_variants').select('*')
+      .eq('club_id',currentClubId)
+      .gte('plan_date',_preFromStr).lt('plan_date',date)
+      .in('track',['ALL','A'])
   ]);
 
   // 1분 롤링 mpm (§ 7용 — 없으면 § 7 카드 비활성화)
@@ -24033,8 +24139,21 @@ async function generateMatchReport(){
     // MD 표시는 단계 확인용이며, 상대가 다른 훈련을 통과시키는 대체 조건이 아니다.
     const _oppNorm = s => (s||'').trim().toLowerCase().replace(/[^가-힣a-z0-9]/g,'').replace(/^\d+r/,'').replace(/^vs/,'');
     const _tgtOpp  = _oppNorm(opponent);
+    // 같은 경기를 준비하면서 목적만 다른 조(추가 계획)는 준비 흐름에서 뺀다.
+    // 상대 일치만으로는 걸러지지 않는다 — 두 조가 같은 경기를 준비하기 때문이다.
+    // 판별은 다른 화면과 같은 규칙: 기록된 계획(plan_key)이 있으면 그것을 따르고,
+    // 없으면 기본 계획으로 본다 (애매할 때 빼버리면 준비 흐름이 통째로 사라진다).
+    const _preVarByDate={};
+    (preVariants||[]).forEach(v=>{ (_preVarByDate[v.plan_date]=_preVarByDate[v.plan_date]||[]).push(v); });
+    const _isBasePrep = r => {
+      const vs=_preVarByDate[r.session_date]; if(!vs||!vs.length) return true;
+      const pk=(r.plan_key||'').trim();
+      if(pk) return pk==='base' || !vs.some(v=>String(v.id)===pk);
+      return true;   // 계획 기록이 없는 예전 데이터는 기본 계획으로 둔다
+    };
     const _mGPS = (preGPS||[]).filter(r=>{
       if((r.session_type2||'').trim().toUpperCase() !== 'M') return false;
+      if(!_isBasePrep(r)) return false;
       // ① 경기상대 일치 (fuzzy)
       const rOpp = _oppNorm(r.opponent||'');
       const hasOpp = _tgtOpp && rOpp && (rOpp===_tgtOpp || rOpp.includes(_tgtOpp) || _tgtOpp.includes(rOpp));
@@ -26863,7 +26982,7 @@ async function recalcAllMatchMax(){
   if(!pids.length){ alert('재계산할 데이터가 없습니다.'); if(btn){btn.disabled=false;btn.textContent='🔄 전체 재계산';} return; }
   await updateMatchMax(pids);
   // _players 최신화 후 재렌더
-  const {data:fresh}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId);
+  const {data:fresh}=await supa.from('player_profiles').select('*').eq('club_id', currentClubId).neq('status','transferred');
   if(fresh) _players=fresh;
   if(btn){ btn.disabled=false; btn.textContent='🔄 전체 재계산'; }
   loadMatchMax();
@@ -26876,7 +26995,7 @@ async function loadMatchList(){
   out.innerHTML='<div style="color:var(--text3);font-size:12px;padding:8px">불러오는 중...</div>';
 
   const {data:allRows}=await supa.from('match_records')
-    .select('match_date,opponent,home_away,round,score,result,player_id')
+    .select('match_date,opponent,home_away,round,score,result,player_id,competition')
     .eq('time_type','FT')
     .order('match_date',{ascending:false});
 
@@ -26914,6 +27033,7 @@ async function loadMatchList(){
           <tr style="background:var(--surface2)">
             <th style="padding:8px 10px;text-align:left;color:var(--text3)">날짜</th>
             <th style="padding:8px 10px;text-align:left;color:var(--text3)">상대</th>
+            <th style="padding:8px 10px;text-align:center;color:var(--text3)">대회</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">H/A</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">스코어</th>
             <th style="padding:8px 10px;text-align:center;color:var(--text3)">결과</th>
@@ -26930,6 +27050,7 @@ async function loadMatchList(){
             return `<tr style="border-bottom:1px solid var(--border)">
               <td style="padding:8px 10px;color:var(--text2);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">${m.match_date}</td>
               <td style="padding:8px 10px;font-weight:600;color:var(--text);cursor:pointer" onclick="loadMatchDetail('${esc(m.match_date)}','${esc(m.opponent||'')}')">${m.opponent||'—'}</td>
+              <td style="padding:8px 10px;text-align:center">${matchCompBadge(m.competition)}</td>
               <td style="padding:8px 10px;text-align:center;font-weight:600;color:${haColor(m.home_away)}">${m.home_away||'—'}</td>
               <td style="padding:8px 10px;text-align:center;color:var(--text2)">${m.score||'—'}</td>
               <td style="padding:8px 10px;text-align:center;font-weight:700;color:${resultColor(m.result)}">${m.result||'—'}</td>
@@ -26944,6 +27065,20 @@ async function loadMatchList(){
         </tbody>
       </table>
     </div>`;
+}
+
+// 대회 구분 배지 — 리그·컵대회는 준비 방식과 로테이션이 달라 목록에서 바로 구분되어야 한다
+const MATCH_COMP_STYLE = {
+  '리그':    {c:'#4ade80', bg:'rgba(74,222,128,.12)',  b:'rgba(74,222,128,.35)'},
+  '컵대회':  {c:'#fbbf24', bg:'rgba(251,191,36,.12)',  b:'rgba(251,191,36,.35)'},
+  '연습경기':{c:'#93c5fd', bg:'rgba(147,197,253,.12)', b:'rgba(147,197,253,.35)'},
+  '기타':    {c:'#9ca3af', bg:'rgba(156,163,175,.12)', b:'rgba(156,163,175,.35)'},
+};
+function matchCompBadge(comp){
+  const v=(comp||'').trim();
+  if(!v) return '<span style="color:var(--text3)">—</span>';
+  const st=MATCH_COMP_STYLE[v]||MATCH_COMP_STYLE['기타'];
+  return `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;white-space:nowrap;color:${st.c};background:${st.bg};border:1px solid ${st.b}">${v}</span>`;
 }
 
 // ── 경기 삭제 ──────────────────────────────────────────────────────
