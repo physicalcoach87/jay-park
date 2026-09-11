@@ -13319,10 +13319,22 @@ async function loadRosterList(){
             <span style="font-size:13px;font-weight:600;color:var(--text3)">${p.name}</span>
             <span style="font-size:11px;color:var(--text3);margin-left:6px">${p.position}</span>
           </div>
-          <button onclick="confirmRestorePlayer('${p.id}','${p.name}')"
+          <button type="button" class="roster-restore-btn" data-pid="${p.id}" data-pname="${p.name}"
             style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">복귀</button>
         </div>`).join('')}
     </div>`;
+    // onclick 속성 대신 직접 연결한다 — 이 섹션은 innerHTML로 나중에 덧붙여지는데,
+    // 그 경우 전역 함수를 못 찾아 클릭해도 아무 일이 없는 상황이 생긴다.
+    listEl.querySelectorAll('.roster-restore-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        // 눌린 것이 보이도록 상태를 바꾼다. 아무 반응이 없으면 클릭 자체가 안 닿은 것이다.
+        const old=btn.textContent;
+        btn.disabled=true; btn.textContent='처리 중...';
+        try{ await confirmRestorePlayer(btn.dataset.pid, btn.dataset.pname); }
+        catch(e){ alert('복귀 처리 중 오류: '+(e.message||e)); }
+        finally{ if(document.body.contains(btn)){ btn.disabled=false; btn.textContent=old; } }
+      });
+    });
   }
 }
 
