@@ -13350,16 +13350,10 @@ async function loadRosterList(){
         </div>`).join('')}
     </div>`).join('');
 
-  listEl.querySelectorAll('.roster-transfer-btn').forEach(btn=>{
-    armRosterBtn(btn, '한 번 더 누르면 이적', '#fbbf24', ()=>
-      _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'transferred',
-        `✅ ${btn.dataset.pname} 선수를 이적 처리했습니다.`));
-  });
-
   // 이적 선수 섹션
   const transferred = allPlayers.filter(p=>p.status==='transferred');
   if(transferred.length){
-    listEl.innerHTML += `
+    listEl.insertAdjacentHTML('beforeend', `
     <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:16px">
       <div style="font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.05em;margin-bottom:10px">🔄 이적 선수 (${transferred.length}명)</div>
       ${transferred.map(p=>`
@@ -13371,18 +13365,21 @@ async function loadRosterList(){
           <button type="button" class="roster-restore-btn" data-pid="${p.id}" data-pname="${p.name}"
             style="font-size:11px;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit">복귀</button>
         </div>`).join('')}
-    </div>`;
-    // onclick 속성 대신 직접 연결한다 — 이 섹션은 innerHTML로 나중에 덧붙여지는데,
-    // 그 경우 전역 함수를 못 찾아 클릭해도 아무 일이 없는 상황이 생긴다.
-    // 확인은 브라우저 대화상자(confirm) 대신 버튼 안에서 두 번 누르는 방식으로 한다.
-    // 대화상자가 차단된 브라우저에서는 confirm이 즉시 취소로 처리돼
-    // 버튼을 눌러도 아무 일이 없는 것처럼 보인다.
-    listEl.querySelectorAll('.roster-restore-btn').forEach(btn=>{
-      armRosterBtn(btn, '한 번 더 누르면 복귀', '#4ade80', ()=>
-        _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
-          `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`));
-    });
+    </div>`);
   }
+
+  // 버튼 연결은 화면을 다 그린 뒤 한 번에 한다.
+  // 중간에 innerHTML을 다시 대입하면 앞서 연결한 버튼의 연결이 끊긴다.
+  listEl.querySelectorAll('.roster-transfer-btn').forEach(btn=>{
+    armRosterBtn(btn, '한 번 더 누르면 이적', '#fbbf24', ()=>
+      _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'transferred',
+        `✅ ${btn.dataset.pname} 선수를 이적 처리했습니다.`));
+  });
+  listEl.querySelectorAll('.roster-restore-btn').forEach(btn=>{
+    armRosterBtn(btn, '한 번 더 누르면 복귀', '#4ade80', ()=>
+      _setPlayerStatus(btn.dataset.pid, btn.dataset.pname, 'active',
+        `✅ ${btn.dataset.pname} 선수가 현역으로 복귀했습니다.`));
+  });
 }
 
 // 선수 PIN 초기화 (선수가 PIN을 잊었을 때)
