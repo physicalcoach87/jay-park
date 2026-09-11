@@ -23508,9 +23508,9 @@ async function generateMatchReport(){
   const _preFromStr = _reportBlock?.start_date
     ? _reportBlock.start_date
     : _preFallback.toISOString().split('T')[0];
-  const [{data:preGPS},{data:preRPE},{data:prePlans}] = await Promise.all([
+  const [{data:preGPS},{data:preRPE},{data:prePlans},{data:preVariants}] = await Promise.all([
     supa.from('gps_records')
-      .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent')
+      .select('player_id,session_date,td,running_high,sprint,decel,accel,rhie,max_speed,player_load,duration,cycle,periodization,session_type2,session_topic,opponent,plan_key')
       .gte('session_date',_preFromStr)
       .lt('session_date',date)
       .order('session_date',{ascending:true}),
@@ -23524,7 +23524,11 @@ async function generateMatchReport(){
       .gte('plan_date',_preFromStr)
       .lt('plan_date',date)
       .in('track',['ALL','A'])
-      .order('plan_date',{ascending:true})
+      .order('plan_date',{ascending:true}),
+    supa.from('periodization_plan_variants').select('*')
+      .eq('club_id',currentClubId)
+      .gte('plan_date',_preFromStr).lt('plan_date',date)
+      .in('track',['ALL','A'])
   ]);
 
   // 1분 롤링 mpm (§ 7용 — 없으면 § 7 카드 비활성화)
@@ -24033,8 +24037,21 @@ async function generateMatchReport(){
     // MD 표시는 단계 확인용이며, 상대가 다른 훈련을 통과시키는 대체 조건이 아니다.
     const _oppNorm = s => (s||'').trim().toLowerCase().replace(/[^가-힣a-z0-9]/g,'').replace(/^\d+r/,'').replace(/^vs/,'');
     const _tgtOpp  = _oppNorm(opponent);
+    // 같은 경기를 준비하면서 목적만 다른 조(추가 계획)는 준비 흐름에서 뺀다.
+    // 상대 일치만으로는 걸러지지 않는다 — 두 조가 같은 경기를 준비하기 때문이다.
+    // 판별은 다른 화면과 같은 규칙: 기록된 계획(plan_key)이 있으면 그것을 따르고,
+    // 없으면 기본 계획으로 본다 (애매할 때 빼버리면 준비 흐름이 통째로 사라진다).
+    const _preVarByDate={};
+    (preVariants||[]).forEach(v=>{ (_preVarByDate[v.plan_date]=_preVarByDate[v.plan_date]||[]).push(v); });
+    const _isBasePrep = r => {
+      const vs=_preVarByDate[r.session_date]; if(!vs||!vs.length) return true;
+      const pk=(r.plan_key||'').trim();
+      if(pk) return pk==='base' || !vs.some(v=>String(v.id)===pk);
+      return true;   // 계획 기록이 없는 예전 데이터는 기본 계획으로 둔다
+    };
     const _mGPS = (preGPS||[]).filter(r=>{
       if((r.session_type2||'').trim().toUpperCase() !== 'M') return false;
+      if(!_isBasePrep(r)) return false;
       // ① 경기상대 일치 (fuzzy)
       const rOpp = _oppNorm(r.opponent||'');
       const hasOpp = _tgtOpp && rOpp && (rOpp===_tgtOpp || rOpp.includes(_tgtOpp) || _tgtOpp.includes(rOpp));
