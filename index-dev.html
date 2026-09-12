@@ -30829,6 +30829,7 @@ function _blockListLabel(b,dayMap){
     label: ok?res.label:(b.label||''),
     ok,
     matchType: matchRow?getPlanMatchType(matchRow):null,
+    matchDate: matchRow?.plan_date||null,
     hasMatch: !!matchRow,
   };
 }
@@ -30840,12 +30841,24 @@ async function openBlockListModal(){
   // 최근 블록이 위로. _blocksData 자체는 다른 화면이 공유하므로 복사본만 정렬한다.
   const _listed=[..._blocksData].sort((a,b)=>String(b.start_date).localeCompare(String(a.start_date)));
   const _dayMap=await _loadBlockListDayMap(_listed);
+  // 대회 구분은 실제 경기 기록을 우선한다.
+  // 계획(ref_basis.match_type)은 값이 없으면 리그로 간주되어 컵대회가 '리그 경기'로 보인다.
+  const _compByDate={};
+  if(_listed.length){
+    const _from=_listed.map(b=>b.start_date).sort()[0];
+    const _to=_listed.map(b=>b.end_date).sort().slice(-1)[0];
+    const {data:_mc}=await supa.from('match_records')
+      .select('match_date,competition')
+      .gte('match_date',_from).lte('match_date',_to);
+    (_mc||[]).forEach(r=>{ const c=(r.competition||'').trim();
+      if(c && !_compByDate[r.match_date]) _compByDate[r.match_date]=c; });
+  }
   const _badge=(t,c)=>`<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:4px;background:${c}18;border:1px solid ${c}55;color:${c};margin-left:6px;white-space:nowrap">${t}</span>`;
   const html=_listed.length?_listed.map(b=>{
     const _i=_blockListLabel(b,_dayMap);
     // 일정이 없어 다시 계산하지 못한 블록은 경기 유무를 알 수 없으므로 배지를 달지 않는다
     const _tag=!_i.ok?''
-      :_i.hasMatch?_badge(MATCH_TYPE_LABEL[_i.matchType]||'경기','#ef4444')
+      :_i.hasMatch?_badge(_compByDate[_i.matchDate]||MATCH_TYPE_LABEL[_i.matchType]||'경기','#ef4444')
       :_badge('경기 없음','#64748b');
     return `
     <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;border:1px solid var(--border);margin-bottom:6px;background:var(--bg)">
@@ -31870,7 +31883,17 @@ async function openWeekDetail(blockId) {
   }
 
   // block_days 로드
-  const {data:days} = await supa.from('block_days').select('*').eq('track',_periodTrack).in('plan_date', dates);
+  const [{data:days},{data:wdMatches}] = await Promise.all([
+    supa.from('block_days').select('*').eq('track',_periodTrack).in('plan_date', dates),
+    // 계획에 경기로 잡히지 않은 주중 경기(컵대회 등)도 이 블록에서 실제로 치렀다면 표시한다
+    supa.from('match_records').select('match_date,opponent,competition')
+      .gte('match_date', dates[0]).lte('match_date', dates[dates.length-1]),
+  ]);
+  const wdMatchByDate={};
+  (wdMatches||[]).forEach(r=>{
+    if(!r.match_date||wdMatchByDate[r.match_date]) return;
+    wdMatchByDate[r.match_date]={comp:(r.competition||'').trim(), opp:(r.opponent||'').trim()};
+  });
   const dayMap = {};
   (days||[]).forEach(d=>{ dayMap[d.plan_date]=d; });
   renderWeekForecast(block,dayMap);
@@ -31954,7 +31977,12 @@ async function openWeekDetail(blockId) {
     const wdMssBadge=wdMssInfo?`<span style="font-size:9px;font-weight:700;color:${wdMssInfo.color};background:${wdMssInfo.color}22;border:1px solid ${wdMssInfo.color}44;border-radius:3px;padding:0 4px;margin-left:4px">MSS ${wdMssInfo.text}</span>`:'';
     const matchType=getPlanMatchType(dr);
     const badge=dr?.day_label?`<div style="display:inline-flex;align-items:center;margin-top:3px;font-size:10px;font-weight:700;color:${isRest?'#22c55e':block.color};background:${isRest?'rgba(34,197,94,0.15)':block.color+'22'};padding:1px 7px;border-radius:4px;border:1px solid ${isRest?'#22c55e55':block.color+'44'}">${dr.day_label}${matchType?` · ${MATCH_TYPE_LABEL[matchType]}`:''}${wdMssBadge}</div>`:'';
-    hRow += th(`<span style="font-size:13px;font-weight:700;color:${dowColor}">${d.getDate()} ${dow}</span><br>${badge}`,
+    // 계획은 훈련인데 그날 경기 기록이 있는 경우 — 주중 컵대회 등. 조가 갈렸다는 신호다.
+    const _wdM = (lbl!=='MD'&&lbl!=='MATCH') ? wdMatchByDate[ds] : null;
+    const _wdTag = _wdM
+      ? `<div style="margin-top:2px;font-size:9px;font-weight:700;color:#f87171" title="이날 ${_wdM.comp||'경기'}가 있었습니다${_wdM.opp?' (vs '+_wdM.opp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련 계획입니다">🏟️ ${_wdM.comp||'경기'}</div>`
+      : '';
+    hRow += th(`<span style="font-size:13px;font-weight:700;color:${dowColor}">${d.getDate()} ${dow}</span><br>${badge}${_wdTag}`,
       `background:${bgColor};${isToday?'box-shadow:inset 0 -2px 0 '+block.color:''}`)
   });
 
