@@ -16630,6 +16630,19 @@ async function loadPlayerDashboard(){
       session_topic:topics.join(' + ')||null });
   });
 
+  // 최고속도가 그 선수 MSS의 몇 %인지 — 90% 이상이 햄스트링 노출 기준이라
+  // 세션별로 바로 보이면 노출 여부를 표에서 판단할 수 있다.
+  const _mssVal = parseFloat(player.mss)||0;
+  const mssPctCell = v => {
+    const sp = parseFloat(v)||0;
+    if(!sp) return '—';
+    const txt = sp.toFixed(1);
+    if(!_mssVal) return txt;   // MSS 미등록이면 % 를 낼 수 없다
+    const p = Math.round(sp/_mssVal*100);
+    const c = p>=90 ? '#4ade80' : p>=80 ? '#fbbf24' : 'var(--text3)';
+    return `${txt}<span style="font-size:10px;color:${c};font-weight:600;margin-left:3px">${p}%</span>`;
+  };
+
   const sessionRows = dailyRows.map(r=>{
     const isMatch = r._source === 'match';
     const _lbl   = (r.session_label||'AM').toUpperCase();
@@ -16670,7 +16683,7 @@ async function loadPlayerDashboard(){
           <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.sprint?Math.round(r.sprint).toLocaleString():'—'}</td>
           <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.accel||'—'}</td>
           ${currentGpsPlan==='V1'?'': `<td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>`}
-          <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+          <td style="padding:6px 8px;text-align:right;color:#60a5fa">${mssPctCell(r.max_speed)}</td>
           <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
           <td style="padding:6px 8px;text-align:right;color:var(--text3)">—</td>
           <td style="padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap">${wellTd}</td>
@@ -16691,7 +16704,7 @@ async function loadPlayerDashboard(){
         <td style="padding:6px 8px;text-align:right;color:#ef4444">${r.sprint?Math.round(r.sprint).toLocaleString():'—'}</td>
         <td style="padding:6px 8px;text-align:right;color:#fb923c">${r.accel||'—'}</td>
         ${currentGpsPlan==='V1'?'': `<td style="padding:6px 8px;text-align:right;color:#34d399">${r.rhie||'—'}</td>`}
-        <td style="padding:6px 8px;text-align:right;color:#60a5fa">${r.max_speed?parseFloat(r.max_speed).toFixed(1):'—'}</td>
+        <td style="padding:6px 8px;text-align:right;color:#60a5fa">${mssPctCell(r.max_speed)}</td>
         ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:${rpeColor}">${rpeVal||'—'}</td>`:''}
         ${currentUseRpe?`<td style="padding:6px 8px;text-align:right;color:#c084fc">${sRPE||'—'}</td>`:''}
         ${currentUseWellness?`<td style="padding:6px 8px;text-align:left;font-size:11px;white-space:nowrap">${wellTd}</td>`:''}
@@ -16832,7 +16845,7 @@ async function loadPlayerDashboard(){
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">Sprint</th>
               <th style="padding:6px 8px;text-align:right;color:var(--text3)">가속</th>
               ${currentGpsPlan==='V1'?'':'<th style="padding:6px 8px;text-align:right;color:var(--text3)">RHIE</th>'}
-              <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도</th>
+              <th style="padding:6px 8px;text-align:right;color:var(--text3)">최고속도<span style="display:block;font-size:9px;font-weight:400">MSS 대비 %</span></th>
               ${currentUseRpe?'<th style="padding:6px 8px;text-align:right;color:var(--text3)">RPE</th>':''}
               ${currentUseRpe?'<th style="padding:6px 8px;text-align:right;color:var(--text3)">sRPE</th>':''}
               ${currentUseWellness?'<th style="padding:6px 8px;text-align:center;color:#86efac;font-weight:600">웰니스<span style="display:block;font-size:9px;font-weight:400;color:var(--text3)">피/수/스/근</span></th>':''}
