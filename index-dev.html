@@ -30891,7 +30891,7 @@ async function buildPrepCompare(){
       .select('session_date,td,running_high,sprint,accel,rhie,duration,session_type2,track')
       .gte('session_date',from).lte('session_date',to).order('session_date',{ascending:true})),
     _pageAllRows(()=>supa.from('match_records')
-      .select('match_date,opponent,td,band4_td,band5_td,accel,rhie,duration,time_type')
+      .select('match_date,opponent,competition,td,band4_td,band5_td,accel,rhie,duration,time_type')
       .eq('time_type','FT').gte('match_date',from).lte('match_date',to).order('match_date',{ascending:true})),
   ]);
   // 훈련과 경기를 따로 만든다. 합친 값(buildPeriodActualLoads 기본 동작)은 같은 날 경기가 있으면
@@ -30899,8 +30899,12 @@ async function buildPrepCompare(){
   // 부하 예측 쪽은 합산이 맞으므로 그쪽 호출은 그대로 둔다.
   const trainLoads=buildPeriodActualLoads(gps||[],[],_periodTrack);
   const matchLoads=buildPeriodActualLoads([],mts||[],_periodTrack);
-  const matchOpp={};
-  (mts||[]).forEach(r=>{ if(r.match_date&&!matchOpp[r.match_date]) matchOpp[r.match_date]=r.opponent||''; });
+  const matchOpp={}, matchComp={};
+  (mts||[]).forEach(r=>{
+    if(!r.match_date) return;
+    if(!matchOpp[r.match_date])  matchOpp[r.match_date]=r.opponent||'';
+    if(!matchComp[r.match_date]) matchComp[r.match_date]=(r.competition||'').trim();
+  });
 
   const out={}; // {4:{matches:[], md:{4:{td:[...]}}}, 5:…, 6:…, '2G':{weeks:[]}}
   blocks.forEach(b=>{
@@ -30928,6 +30932,7 @@ async function buildPrepCompare(){
           actual:(isMatch?matchLoads[ds]:trainLoads[ds])||null,
           midMatch:!isMatch&&!!matchLoads[ds],
           midOpp:(!isMatch&&matchLoads[ds])?(matchOpp[ds]||''):'',
+          midComp:(!isMatch&&matchLoads[ds])?(matchComp[ds]||''):'',
         };
       });
       const total={};
@@ -30951,7 +30956,10 @@ async function buildPrepCompare(){
     const span=periodDateDiff(firstTraining,matchDate);
     if(span<4||span>6) return;
     const g=out[span]=out[span]||{matches:[],md:{}};
-    const m={date:matchDate,name:b.context||'',type:getPlanMatchType(matchRow),blockId:b.id,days:{}};
+    // 대회 구분은 실제 경기 기록을 우선한다. 계획의 ref_basis.match_type은
+    // 없으면 리그로 간주되므로, 컵대회가 '리그 경기'로 잘못 보일 수 있다.
+    const m={date:matchDate,name:b.context||'',type:getPlanMatchType(matchRow),
+             comp:(matchComp[matchDate]||''),blockId:b.id,days:{}};
     g.matches.push(m);
     periodDateRange(firstTraining,matchDate).forEach(ds=>{
       const row=dayMap[ds]||{};
@@ -30968,6 +30976,7 @@ async function buildPrepCompare(){
         actual:v,
         midMatch,
         midOpp:midMatch?(matchOpp[ds]||''):'',
+        midComp:midMatch?(matchComp[ds]||''):'',
       };
       if(!v) return;                                           // 평균에는 실제값 있는 날만 넣는다
       const slot=g.md[md]=g.md[md]||{td:[],hsr:[],spr:[],acc:[],rhie:[]};
@@ -31009,8 +31018,10 @@ function togglePrepMatch(span,idx){
   const head=mds.map(d=>{
     const mm=m.days[d]?.midMatch;
     const opp=m.days[d]?.midOpp;
-    // 주중 경기가 있던 날 — 숫자는 훈련값이므로 경기가 있었다는 사실을 열 머리에 표시한다
-    const tag=mm?`<div style="font-size:8px;font-weight:700;color:#f87171" title="이날 경기가 있었습니다${opp?' (vs '+opp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련값입니다">경기일</div>`:'';
+    // 주중 경기가 있던 날 — 숫자는 훈련값이므로 경기가 있었다는 사실을 열 머리에 표시한다.
+    // 리그인지 컵대회인지에 따라 준비 성격이 달라 대회 구분을 그대로 보여준다.
+    const comp=m.days[d]?.midComp;
+    const tag=mm?`<div style="font-size:8px;font-weight:700;color:#f87171" title="이날 ${comp||'경기'}가 있었습니다${opp?' (vs '+opp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련값입니다">${comp||'경기일'}</div>`:'';
     return `<th style="padding:3px 5px;text-align:right;color:${d===0?'#f87171':'var(--text3)'};white-space:nowrap">${d===0?'경기':'MD-'+d}${tag}</th>`;
   }).join('');
   const body=rows.map(r=>{
@@ -31098,7 +31109,7 @@ function togglePrepWeek(i){
   ];
   const head=w.days.map(d=>{
     const lbl=d.label||'—';
-    const tag=d.midMatch?`<div style="font-size:8px;font-weight:700;color:#f87171" title="이날 경기가 있었습니다${d.midOpp?' (vs '+d.midOpp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련값입니다">경기일</div>`:'';
+    const tag=d.midMatch?`<div style="font-size:8px;font-weight:700;color:#f87171" title="이날 ${d.midComp||'경기'}가 있었습니다${d.midOpp?' (vs '+d.midOpp+')':''} · 아래 숫자는 경기를 뛰지 않은 선수들의 훈련값입니다">${d.midComp||'경기일'}</div>`:'';
     return `<th style="padding:3px 5px;text-align:right;white-space:nowrap;color:${d.isMatch?'#f87171':'var(--text3)'};font-weight:${d.isMatch?700:600}">
       ${d.isMatch?'경기':lbl}<div style="font-size:8px;font-weight:400;color:var(--text3)">${d.date.slice(5)}</div>${tag}</th>`;
   }).join('');
@@ -31163,7 +31174,7 @@ async function renderPrepCompare(){
         <span id="prep-a-${span}-${i}" style="color:var(--text3);font-size:9px">▸</span>
         <span style="color:var(--text2);font-weight:600">${m.date.slice(5)}</span>
         <span style="color:var(--text2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.name}</span>
-        <span style="font-size:9px;color:#fca5a5;border:1px solid #ef444455;background:#ef444418;border-radius:3px;padding:0 4px;white-space:nowrap">${MATCH_TYPE_LABEL[m.type]||'경기'}</span>
+        <span style="font-size:9px;color:#fca5a5;border:1px solid #ef444455;background:#ef444418;border-radius:3px;padding:0 4px;white-space:nowrap">${m.comp||MATCH_TYPE_LABEL[m.type]||'경기'}</span>
       </div>
       <div id="prep-m-${span}-${i}" style="display:none;padding:0 2px 6px"></div>
     </div>`).join('');
