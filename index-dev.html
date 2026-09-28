@@ -30362,16 +30362,20 @@ function compressPeriodSchedule(tokens){
 function buildBlockScheduleLabel(start,end,matchDate,dayMap){
   if(!start||!end||start>end)return {label:'',unknown:0,tokens:[]};
   const dates=periodDateRange(start,end),tokens=[];
-  // 직전 경기(M) 이후부터 이번 블록 시작 전까지의 REST를 이전 블록에서 가져온다.
-  // 단순히 시작일 전날만 보는 것이 아니라 '이전 경기 이후 휴식'이라는 의미를 보존한다.
+  // 블록 시작일 바로 앞부터 거꾸로 세어, 훈련일(D)이 나오기 전까지의 '연속' 휴식만 센다.
+  // 직전 경기 이후 휴식이 여러 날 흩어져 있어도(예: 휴식-훈련-휴식) 훈련일에서 끊기므로
+  // 블록 라벨의 R은 항상 '이 블록 직전 연속 휴식일수'를 뜻한다.
   const previousMatch=Object.keys(dayMap||{})
     .filter(ds=>ds<start&&normalizePlanMdKey(dayMap[ds]?.day_label)==='MATCH')
     .sort().pop()||null;
   let previousRest=0;
   if(previousMatch){
-    periodDateRange(periodShiftDate(previousMatch,1),periodShiftDate(start,-1)).forEach(ds=>{
-      if((dayMap?.[ds]?.day_label||'').trim().toUpperCase()==='REST')previousRest++;
-    });
+    const boundStart=periodShiftDate(previousMatch,1);
+    let ds=periodShiftDate(start,-1);
+    while(ds>=boundStart&&(dayMap?.[ds]?.day_label||'').trim().toUpperCase()==='REST'){
+      previousRest++;
+      ds=periodShiftDate(ds,-1);
+    }
   }
   for(let i=0;i<previousRest;i++)tokens.push('R');
   let unknown=0;
